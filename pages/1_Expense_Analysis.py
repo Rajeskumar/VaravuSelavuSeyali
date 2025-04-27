@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from __init__ import load_data_from_google_sheet
+from google_sheet_utils import load_data_from_google_sheet
 
 current_dir = os.path.dirname(__file__)  # directory of the current script
 google_sheet_secret_path = os.path.join(current_dir, '..', 'gold-circlet-424313-r7-fe875b4862e6.json')

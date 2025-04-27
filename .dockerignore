@@ -1,0 +1,14 @@
+# Exclude unnecessary files and directories
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite3
+*.env
+*.DS_Store
+*.git
+*.gitignore
+REFERENCE_CODE_DONTUSE.txt
+client_secret_*.json
+gold-circlet-*.json

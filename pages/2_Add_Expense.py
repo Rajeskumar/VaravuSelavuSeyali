@@ -4,8 +4,8 @@ import pandas as pd
 from datetime import date
 from uuid import uuid4
 import os
-from .. import load_data_from_google_sheet
 import gspread
+from google_sheet_utils import load_data_from_google_sheet
 
 # Set Streamlit page config
 st.set_page_config(page_title="📝 Add Expense")

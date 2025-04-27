@@ -4,15 +4,10 @@ FROM --platform=linux/amd64 python:3.9-slim
 # Set the working directory to /app
 WORKDIR /app
 
-# Copy the requirements file
-COPY requirements.txt .
+# Copy the entire project directory into the Docker image
+COPY . /app
 
-# Install the dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Update the application code to reflect the correct file structure
-COPY Home.py .
-COPY pages/ ./pages/
+# Use a .dockerignore file to exclude unnecessary files and directories
 
 # Expose the port
 EXPOSE 8501
