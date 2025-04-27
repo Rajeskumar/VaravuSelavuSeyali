@@ -7,6 +7,7 @@ WORKDIR /app
 # Copy the entire project directory into the Docker image
 COPY . /app
 
+RUN pip install --no-cache-dir -r requirements.txt
 # Use a .dockerignore file to exclude unnecessary files and directories
 
 # Expose the port
