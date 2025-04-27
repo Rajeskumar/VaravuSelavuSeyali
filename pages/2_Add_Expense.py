@@ -2,22 +2,29 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import gspread
 from uuid import uuid4
 import os
-
-current_dir = os.path.dirname(__file__)  # directory of the current script
-google_sheet_secret_path = os.path.join(current_dir, '..', 'gold-circlet-424313-r7-fe875b4862e6.json')
+from .. import load_data_from_google_sheet
+import gspread
 
 # Set Streamlit page config
 st.set_page_config(page_title="📝 Add Expense")
 st.title("📝 Log a New Expense")
 
-# Connect to Google Sheets using service account JSON
-# Make sure this file is in your root directory or provide full path
-gc = gspread.service_account(filename=google_sheet_secret_path)
-sh = gc.open("MyExpenses")  # Google Sheet name
-worksheet = sh.sheet1       # First worksheet
+# Centralize Google Sheets connection logic
+def get_google_sheet_connection():
+    if os.getenv('GOOGLE_CLOUD_PROJECT'):
+        from google.auth import default
+        credentials, _ = default()
+        return gspread.authorize(credentials)
+    else:
+        current_dir = os.path.dirname(__file__)
+        google_sheet_secret_path = os.path.join(current_dir, '..', 'gold-circlet-424313-r7-fe875b4862e6.json')
+        return gspread.service_account(filename=google_sheet_secret_path)
+
+gc = get_google_sheet_connection()
+sh = gc.open("MyExpenses")
+worksheet = sh.sheet1  # First worksheet
 
 # Create form
 st.markdown("Fill in the details below to add a new expense entry:")
