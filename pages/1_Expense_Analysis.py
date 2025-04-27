@@ -1,10 +1,10 @@
 import os
+from calendar import month_name
 
-import streamlit as st
 import pandas as pd
 import plotly.express as px
-from calendar import month_name
-import gspread
+import streamlit as st
+
 from __init__ import load_data_from_google_sheet
 
 current_dir = os.path.dirname(__file__)  # directory of the current script
