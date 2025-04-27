@@ -13,7 +13,7 @@ st.title("📝 Log a New Expense")
 
 # Centralize Google Sheets connection logic
 def get_google_sheet_connection():
-    if os.getenv('GOOGLE_CLOUD_PROJECT'):
+    if "K_SERVICE" in os.environ:
         from google.auth import default
         credentials, _ = default()
         return gspread.authorize(credentials)

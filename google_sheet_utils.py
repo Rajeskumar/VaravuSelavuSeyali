@@ -5,7 +5,7 @@ from google.auth import default
 
 def load_data_from_google_sheet():
     # Check if running in GCP environment
-    if os.getenv('GOOGLE_CLOUD_PROJECT'):
+    if "K_SERVICE" in os.environ:
         # Use default credentials in GCP
         credentials, project = default()
         gc = gspread.authorize(credentials)
