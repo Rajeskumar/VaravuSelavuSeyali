@@ -2,6 +2,7 @@ import os
 import gspread
 import pandas as pd
 from google.auth import default
+import hashlib
 
 def load_data_from_google_sheet():
     # Check if running in GCP environment
@@ -23,3 +24,14 @@ def load_data_from_google_sheet():
     data['month'] = data['date'].dt.month_name()
     data['year'] = data['date'].dt.year
     return data
+
+def hash_password(password):
+    """Hashes a password using SHA-256."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def get_user_data_sheet(sh):
+    """Retrieves or creates the 'user_data' sheet in the Google Sheets document."""
+    try:
+        return sh.worksheet("user_data")
+    except gspread.exceptions.WorksheetNotFound:
+        return sh.add_worksheet(title="user_data", rows="100", cols="4")

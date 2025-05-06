@@ -8,7 +8,7 @@ import streamlit as st
 from google_sheet_utils import load_data_from_google_sheet
 
 current_dir = os.path.dirname(__file__)  # directory of the current script
-google_sheet_secret_path = os.path.join(current_dir, '..', 'gold-circlet-424313-r7-fe875b4862e6.json')
+
 @st.cache_data
 def load_data(file_path):
     data = pd.read_csv(file_path, parse_dates=['date'])
@@ -21,7 +21,15 @@ st.set_page_config(page_title="💰 Insights Dashboard", layout="wide")
 st.title("💰 Personal Expense Insights")
 
 st.sidebar.markdown("### Data Source")
+# Ensure data is filtered for the logged-in user when using Google Sheet
 data_source = st.sidebar.radio("Select Data Source", ("Upload CSV", "Google Sheet"))
+
+# Add a logout button in the sidebar
+if "logged_in_user" in st.session_state:
+    if st.sidebar.button("🔒 Logout"):
+        # Clear session state to log out the user
+        st.session_state.clear()
+        st.experimental_rerun()  # Refresh the app to reflect the logout
 
 if data_source == "Upload CSV":
     file_path = st.sidebar.file_uploader("📤 Upload your expense CSV file", type=["csv"])
@@ -36,7 +44,12 @@ if data_source == "Upload CSV":
 elif data_source == "Google Sheet":
     income = 6200
     try:
-        data = load_data_from_google_sheet()
+        all_expenses = load_data_from_google_sheet()
+        user_id = st.session_state.get("logged_in_user")
+        if user_id is None:
+            st.warning("🔒 Please log in to access this page.")
+            st.stop()
+        data = all_expenses[all_expenses['User ID'] == user_id]
     except Exception as e:
         st.error(f"Failed to load data from Google Sheet: {e}")
         st.stop()

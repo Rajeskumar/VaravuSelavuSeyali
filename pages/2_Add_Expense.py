@@ -5,7 +5,8 @@ from datetime import date
 from uuid import uuid4
 import os
 import gspread
-from google_sheet_utils import load_data_from_google_sheet
+from google_sheet_utils import load_data_from_google_sheet, hash_password, get_user_data_sheet
+import hashlib
 
 # Set Streamlit page config
 st.set_page_config(page_title="📝 Add Expense")
@@ -47,11 +48,12 @@ KEYWORD_TO_CATEGORY = {
     "furniture": ("Home", "Furniture"),
     "services": ("Other", "Services"),
     "electronics": ("Other", "Electronics"),
+    "mobile": ("Home", "TV/Phone/Internet"),
 }
 
 # Define CATEGORY_GROUPS mapping main categories to subcategories
 CATEGORY_GROUPS = {
-    "Home": ["Rent", "Electricity", "Utilities - Other", "Household supplies", "Furniture", "Cleaning", "Heat/gas", "Home - Other"],
+    "Home": ["Rent", "Electricity", "Utilities - Other", "Household supplies", "Furniture", "Cleaning", "Heat/gas", "Home - Other", "TV/Phone/Internet"],
     "Transportation": ["Gas/fuel", "Car", "Parking", "Plane", "Transportation - Other"],
     "Food & Drink": ["Groceries", "Dining out", "Liquor"],
     "Entertainment": ["Movies", "Entertainment", "Other", "Games", "Music", "Sports"],
@@ -88,29 +90,85 @@ st.selectbox(
     key="subcategory"
 )
 
-# Create form for other inputs and submission
-st.markdown("Fill in the details below to add a new expense entry:")
+# Login and Registration logic
+user_data_sheet = get_user_data_sheet(sh)
 
-with st.form("expense_form"):
-    expense_date = st.date_input("Date", value=date.today())
-    description = st.text_input("Description")
-    cost = st.number_input("Cost (USD)", min_value=0.0, format="%.2f")
-    submitted = st.form_submit_button("Add Expense")
+# Login/Register form
+if "logged_in_user" not in st.session_state:
+    st.session_state.logged_in_user = None
 
-# Submit and save to Google Sheets
-if submitted:
-    user_id = "Rajesh"
-    if not user_id:
-        user_id = str(uuid4())  # Generate a unique user ID if not provided
+if st.session_state.logged_in_user is None:
+    st.title("🔒 Login / Register")
+    login_tab, register_tab = st.tabs(["Login", "Register"])
 
-    new_row = [user_id, str(expense_date), description, st.session_state.subcategory, cost]
-    worksheet.append_row(new_row)
-    st.success(f"✅ Expense saved to Google Sheets for user: `{user_id}`")
-    st.markdown("**Details:**")
-    st.write(pd.DataFrame([{
-        "User ID": user_id,
-        "Date": expense_date,
-        "Description": description,
-        "Category": st.session_state.subcategory,
-        "Cost": cost
-    }]))
+    with login_tab:
+        login_email = st.text_input("Email", key="add_expense_login_email")
+        login_password = st.text_input("Password", type="password", key="add_expense_login_password")
+        login_button = st.button("Login")
+
+        if login_button:
+            user_records = user_data_sheet.get_all_records()
+            user = next((u for u in user_records if u["Email"] == login_email and u["Password"] == hash_password(login_password)), None)
+            if user:
+                st.session_state.logged_in_user = user["Email"]
+                st.success("✅ Login successful!")
+                st.rerun()
+            else:
+                st.error("❌ Invalid email or password.")
+
+    with register_tab:
+        reg_name = st.text_input("Name", key="add_expense_reg_name")
+        reg_email = st.text_input("Email", key="add_expense_reg_email")
+        reg_phone = st.text_input("Phone", key="add_expense_reg_phone")
+        reg_password = st.text_input("Password", type="password", key="add_expense_reg_password")
+        register_button = st.button("Register")
+
+        if register_button:
+            user_records = user_data_sheet.get_all_records()
+            if any(u["Email"] == reg_email for u in user_records):
+                st.error("❌ Email already registered.")
+            else:
+                hashed_password = hash_password(reg_password)
+                user_data_sheet.append_row([reg_name, reg_email, reg_phone, hashed_password])
+                st.success("✅ Registration successful! Please login.")
+
+else:
+    st.sidebar.success(f"Logged in as: {st.session_state.logged_in_user}")
+
+    # Add a logout button in the sidebar
+    if "logged_in_user" in st.session_state:
+        if st.sidebar.button("🔒 Logout"):
+            # Clear session state to log out the user
+            st.session_state.clear()
+            st.rerun()  # Refresh the app to reflect the logout
+
+    # Filter expenses by logged-in user
+    user_id = st.session_state.logged_in_user
+    all_expenses = worksheet.get_all_records()
+    user_expenses = [e for e in all_expenses if e["User ID"] == user_id]
+
+    # Display filtered expenses
+    st.markdown("### Your Expenses")
+    # st.write(pd.DataFrame(user_expenses))
+
+    # Existing expense form logic
+    st.markdown("Fill in the details below to add a new expense entry:")
+
+    with st.form("expense_form"):
+        expense_date = st.date_input("Date", value=date.today())
+        description = st.text_input("Description")
+        cost = st.number_input("Cost (USD)", min_value=0.0, format="%.2f")
+        submitted = st.form_submit_button("Add Expense")
+
+    if submitted:
+        new_row = [user_id, str(expense_date), description, st.session_state.subcategory, cost]
+        worksheet.append_row(new_row)
+        st.success(f"✅ Expense saved to Google Sheets for user: `{user_id}`")
+        st.markdown("**Details:**")
+        st.write(pd.DataFrame([{
+            "User ID": user_id,
+            "Date": expense_date,
+            "Description": description,
+            "Category": st.session_state.subcategory,
+            "Cost": cost
+        }]))
