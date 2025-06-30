@@ -88,9 +88,23 @@ if not filtered_data.empty:
         st.markdown("#### 📈 % of Income Spent by Category")
         st.dataframe(category_summary.sort_values(by='cost', ascending=False), use_container_width=True)
 
-    st.markdown("### 🔝 Top 5 Expense Categories")
-    top5 = filtered_data.groupby('category')['cost'].sum().sort_values(ascending=False).head(5)
-    st.bar_chart(top5)
+    # Last 6 Months Expense by Category
+    st.markdown("### 📆 Last 6 Months Expense by Category")
+    # Prepare recent 6 months data
+    from datetime import datetime
+
+    today = pd.to_datetime(datetime.today())
+    six_months_ago = today - pd.DateOffset(months=6)
+    recent = data[data['date'] >= six_months_ago]
+    recent['YearMonth'] = recent['date'].dt.to_period('M').dt.to_timestamp()
+    cat_month = recent.groupby(['YearMonth', 'category'])['cost'].sum().reset_index()
+    fig_last6 = px.line(
+        cat_month, x='YearMonth', y='cost', color='category', markers=True,
+        labels={'YearMonth': 'Month', 'cost': 'Expense ($)'},
+        title='Last 6 Months Expense by Category'
+    )
+    fig_last6.update_layout(xaxis=dict(tickformat='%b %Y'))
+    st.plotly_chart(fig_last6, use_container_width=True)
 
     st.markdown(f"### 📅 Monthly Expense Trend - {selected_year}")
     monthly_expense = filtered_year_data.copy()
