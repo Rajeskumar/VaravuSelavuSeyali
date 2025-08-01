@@ -53,12 +53,13 @@ KEYWORD_TO_CATEGORY = {
 
 # Define CATEGORY_GROUPS mapping main categories to subcategories
 CATEGORY_GROUPS = {
-    "Home": ["Rent", "Electricity", "Utilities - Other", "Household supplies", "Furniture", "Cleaning", "Heat/gas", "Home - Other", "TV/Phone/Internet"],
-    "Transportation": ["Gas/fuel", "Car", "Parking", "Plane", "Transportation - Other"],
-    "Food & Drink": ["Groceries", "Dining out", "Liquor"],
-    "Entertainment": ["Movies", "Entertainment", "Other", "Games", "Music", "Sports"],
-    "Life": ["Medical expenses", "Insurance", "Taxes", "Education", "Life - Other"],
-    "Other": ["Services", "General", "Electronics"]
+    "Home": ["Rent", "Electronics","Furniture", "Household supplies", "Maintenance", "Mortgage", "Other", "Pets", "Services"],
+    "Transportation": ["Gas/fuel", "Car", "Parking", "Plane", "Other", "Bicycle", "Bus/Train", "Taxi", "Hotel"],
+    "Food & Drink": ["Groceries", "Dining out", "Liquor", "Other"],
+    "Entertainment": ["Movies", "Other", "Games", "Music", "Sports"],
+    "Life": ["Medical expenses", "Insurance", "Taxes", "Education", "Childcare", "Clothing", "Gifts", "Other"],
+    "Other": ["Services", "General", "Electronics"],
+    "Utilities": ["Heat/gas", "Electricity", "Water", "Other", "Cleaning", "Trash", "Other", "TV/Phone/Internet"],
 }
 
 # Initialize session state for main category and subcategory if not already set
