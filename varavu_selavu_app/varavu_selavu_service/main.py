@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.routes import router
-from .core.config import Settings
+from varavu_selavu_service.api.routes import router
+from varavu_selavu_service.core.config import Settings
 
 settings = Settings()
 
