@@ -13,7 +13,7 @@ RUN npm ci
 COPY . ./
 
 # Build the React app with increased memory limit
-RUN NODE_OPTIONS="--max_old_space_size=4096" npm run build
+RUN npm run build
 
 # Use nginx to serve the build
 FROM nginx:alpine AS production
