@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException
 
-from varavu_selavu_app.varavu_selavu_service.models.api_models import ExpenseRequest, LoginRequest
+from varavu_selavu_service.models.api_models import LoginRequest, ExpenseRequest
 
 router = APIRouter()
 
