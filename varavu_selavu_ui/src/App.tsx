@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -15,16 +15,27 @@ import HomePage from './pages/HomePage';
 import AddExpensePage from './pages/AddExpensePage';
 import ExpenseAnalysisPage from './pages/ExpenseAnalysisPage';
 import Navbar from './components/layout/Navbar';
+import Button from '@mui/material/Button';
+import LoginIcon from '@mui/icons-material/Login';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [footerValue, setFooterValue] = React.useState(0);
+  const navigate = useNavigate();
   return (
-    <Router>
+    <>
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Varavu Selavu
           </Typography>
+          <Button
+            color="inherit"
+            startIcon={<LoginIcon />}
+            onClick={() => navigate('/')}
+            sx={{ ml: 2 }}
+          >
+            Login
+          </Button>
         </Toolbar>
       </AppBar>
       <Container maxWidth="md" sx={{ minHeight: '80vh', pb: 4 }}>
@@ -67,8 +78,14 @@ const App: React.FC = () => {
           <BottomNavigationAction label="Recent" icon={<RestoreIcon />} />
         </BottomNavigation>
       </Box>
-    </Router>
+    </>
   );
 };
+
+const App: React.FC = () => (
+  <Router>
+    <AppContent />
+  </Router>
+);
 
 export default App;

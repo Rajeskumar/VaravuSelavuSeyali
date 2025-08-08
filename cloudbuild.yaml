@@ -1,0 +1,48 @@
+steps:
+  # Build backend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/${_PROJECT_ID}/varavu-selavu-backend', '.']
+    dir: 'varavu_selavu_app'
+
+  # Build frontend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/${_PROJECT_ID}/varavu-selavu-frontend', '.']
+    dir: 'varavu_selavu_ui'
+
+  # Push backend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/${_PROJECT_ID}/varavu-selavu-backend']
+
+  # Push frontend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/${_PROJECT_ID}/varavu-selavu-frontend']
+
+  # Deploy backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_BACKEND_SERVICE}'
+      - '--image=gcr.io/${_PROJECT_ID}/varavu-selavu-backend'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+  # Deploy frontend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_FRONTEND_SERVICE}'
+      - '--image=gcr.io/${_PROJECT_ID}/varavu-selavu-frontend'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+substitutions:
+  _REGION: 'us-central1'
+  _PROJECT_ID: 'your-gcp-project-id'
+  _BACKEND_SERVICE: 'varavu-selavu-backend'
+  _FRONTEND_SERVICE: 'varavu-selavu-frontend'

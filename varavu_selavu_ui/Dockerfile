@@ -1,27 +1,23 @@
-# Use the official Node.js image
-FROM node:16
+# Use official Node.js 18 image for build stage
+FROM node:18 AS build
 
-# Set the working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy only package files first for better cache
 COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci
 
-# Copy the rest of the application code
+# Copy rest of the app (source, public, config, etc.)
 COPY . ./
 
-# Build the React app
-RUN npm run build
+# Build the React app with increased memory limit
+RUN NODE_OPTIONS="--max_old_space_size=4096" npm run build
 
-# Use a lightweight web server to serve the built app
-FROM nginx:alpine
-COPY --from=0 /app/build /usr/share/nginx/html
+# Use nginx to serve the build
+FROM nginx:alpine AS production
+COPY --from=build /app/build /usr/share/nginx/html
 
-# Expose the port the app runs on
 EXPOSE 80
-
-# Start the server
 CMD ["nginx", "-g", "daemon off;"]

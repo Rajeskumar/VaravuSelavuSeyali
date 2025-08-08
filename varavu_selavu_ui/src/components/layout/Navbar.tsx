@@ -5,11 +5,13 @@ import Tab from '@mui/material/Tab';
 import HomeIcon from '@mui/icons-material/Home';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import InsightsIcon from '@mui/icons-material/Insights';
+import LoginIcon from '@mui/icons-material/Login';
 
 const navItems = [
   { label: 'Dashboard', icon: <HomeIcon />, path: '/home' },
   { label: 'Add Expense', icon: <AddCircleIcon />, path: '/add-expense' },
   { label: 'Analysis', icon: <InsightsIcon />, path: '/analysis' },
+  { label: 'Login', icon: <LoginIcon />, path: '/' },
 ];
 
 const Navbar: React.FC = () => {
