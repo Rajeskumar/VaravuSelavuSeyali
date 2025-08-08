@@ -43,6 +43,6 @@ steps:
 
 substitutions:
   _REGION: 'us-central1'
-  _PROJECT_ID: 'your-gcp-project-id'
+  _PROJECT_ID: 'gold-circlet-424313-r7'
   _BACKEND_SERVICE: 'varavu-selavu-backend'
   _FRONTEND_SERVICE: 'varavu-selavu-frontend'
