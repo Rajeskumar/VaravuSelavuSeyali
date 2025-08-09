@@ -6,7 +6,7 @@ services:
       context: ./varavu_selavu_ui
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "8080:8080"
     depends_on:
       - varavu_selavu_app
 
