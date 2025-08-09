@@ -19,8 +19,10 @@ RUN npm run build
 FROM nginx:alpine AS production
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Change nginx to listen on port 8080
-RUN sed -i 's/listen       80;/listen       8080;/' /etc/nginx/conf.d/default.conf
+# Use custom nginx config for SPA routing
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+RUN sed -i 's/listen       80;/listen       8080;/' /etc/nginx/conf.d/default.conf || true
 
 EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

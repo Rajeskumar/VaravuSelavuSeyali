@@ -1,27 +1,26 @@
 import React from 'react';
 import Plot from 'react-plotly.js';
 
-const LastSixMonthsLineChart: React.FC = () => {
+interface Props {
+  monthlyTrend: { month: string; total: number }[];
+}
+
+const LastSixMonthsLineChart: React.FC<Props> = ({ monthlyTrend }) => {
+  const last6 = monthlyTrend.slice(-6);
+  const x = last6.map(m => m.month);
+  const y = last6.map(m => m.total);
   const data = [
     {
-      x: ['2024-03', '2024-04', '2024-05', '2024-06', '2024-07', '2024-08'],
-      y: [800, 900, 850, 950, 1000, 1100],
+      x,
+      y,
       type: 'scatter' as const,
       mode: 'lines+markers' as const,
       marker: { color: 'blue' },
-      name: 'Food',
-    },
-    {
-      x: ['2024-03', '2024-04', '2024-05', '2024-06', '2024-07', '2024-08'],
-      y: [400, 420, 410, 430, 450, 480],
-      type: 'scatter' as const,
-      mode: 'lines+markers' as const,
-      marker: { color: 'orange' },
-      name: 'Transport',
+      name: 'Total Expense',
     },
   ];
   const layout = {
-    title: '📆 Last 6 Months Expense by Category',
+    title: '📆 Last 6 Months Expense',
     xaxis: { title: 'Month' },
     yaxis: { title: 'Expense ($)' },
   };

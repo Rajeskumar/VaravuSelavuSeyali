@@ -1,38 +1,96 @@
 import React from 'react';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Popover, Box } from '@mui/material';
 
-const rows = [
-  { category: 'Food', cost: 450, percent: 7.3 },
-  { category: 'Transport', cost: 250, percent: 4.0 },
-  { category: 'Shopping', cost: 200, percent: 3.2 },
-  { category: 'Utilities', cost: 150, percent: 2.4 },
-  { category: 'Entertainment', cost: 100, percent: 1.6 },
-];
+interface Props {
+  categoryTotals: { category: string; total: number }[];
+  income: number;
+  details?: Record<string, { date: string; description: string; category: string; cost: number }[]>;
+}
 
-const CategorySummaryTable: React.FC = () => (
-  <TableContainer component={Paper}>
-    <Typography variant="h6" sx={{ m: 2 }}>
-      📈 % of Income Spent by Category
-    </Typography>
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          <TableCell>Category</TableCell>
-          <TableCell align="right">Cost ($)</TableCell>
-          <TableCell align="right">% of Income</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.category}>
-            <TableCell>{row.category}</TableCell>
-            <TableCell align="right">{row.cost}</TableCell>
-            <TableCell align="right">{row.percent.toFixed(1)}%</TableCell>
+const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details = {} }) => {
+  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
+  const [hoverCat, setHoverCat] = React.useState<string | null>(null);
+
+  const openPopover = (event: React.MouseEvent<HTMLElement>, category: string) => {
+    setAnchorEl(event.currentTarget);
+    setHoverCat(category);
+  };
+  const closePopover = () => {
+    setAnchorEl(null);
+    setHoverCat(null);
+  };
+
+  const rowsForCat = hoverCat ? details[hoverCat] || [] : [];
+
+  return (
+    <TableContainer component={Paper}>
+      <Typography variant="h6" sx={{ m: 2 }}>
+        📈 % of Income Spent by Category
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Category</TableCell>
+            <TableCell align="right">Cost ($)</TableCell>
+            <TableCell align="right">% of Income</TableCell>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  </TableContainer>
-);
+        </TableHead>
+        <TableBody>
+          {categoryTotals.map((row) => {
+            const percent = income > 0 ? (row.total / income) * 100 : 0;
+            return (
+              <TableRow
+                key={row.category}
+                onMouseEnter={(e) => openPopover(e as any, row.category)}
+                onMouseLeave={closePopover}
+                sx={{ cursor: rowsForCat.length ? 'pointer' : 'default' }}
+              >
+                <TableCell>{row.category}</TableCell>
+                <TableCell align="right">{row.total.toFixed(2)}</TableCell>
+                <TableCell align="right">{percent.toFixed(1)}%</TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <Popover
+        open={Boolean(anchorEl) && Boolean(hoverCat)}
+        anchorEl={anchorEl}
+        onClose={closePopover}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        disableRestoreFocus
+      >
+        <Box sx={{ p: 2, maxWidth: 420 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+            {hoverCat} — Expenses
+          </Typography>
+          {rowsForCat.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">No expenses</Typography>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Description</TableCell>
+                  <TableCell align="right">Cost</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rowsForCat.map((r, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{r.date}</TableCell>
+                    <TableCell>{r.description}</TableCell>
+                    <TableCell align="right">{r.cost.toFixed(2)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Box>
+      </Popover>
+    </TableContainer>
+  );
+};
 
 export default CategorySummaryTable;

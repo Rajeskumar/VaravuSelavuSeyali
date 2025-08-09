@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
+import { addExpense } from '../../api/expenses';
 
 const CATEGORY_GROUPS = {
     "Home": ["Rent", "Electronics","Furniture", "Household supplies", "Maintenance", "Mortgage", "Other", "Pets", "Services"],
@@ -31,16 +32,35 @@ const AddExpenseForm: React.FC = () => {
         setSubcategory(CATEGORY_GROUPS[newMainCategory as keyof typeof CATEGORY_GROUPS][0]);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<string | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const newExpense = {
-            date: expenseDate,
-            description,
-            cost,
-            category: subcategory
-        };
-        console.log('New Expense:', newExpense);
-        // Here you would typically send the data to your backend API
+        setMessage(null);
+        const user = localStorage.getItem('vs_user');
+        if (!user) {
+            setMessage('Please login first.');
+            return;
+        }
+        try {
+            setSaving(true);
+            await addExpense({
+                user_id: user,
+                date: expenseDate,
+                description,
+                category: subcategory,
+                cost,
+            });
+            setMessage('Expense added successfully.');
+            // reset some fields
+            setDescription('');
+            setCost(0);
+        } catch (err) {
+            setMessage('Failed to add expense.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -109,10 +129,15 @@ const AddExpenseForm: React.FC = () => {
                 </TextField>
               </Grid>
               <Grid size={12}>
-                <Button type="submit" variant="contained" color="primary" fullWidth>
-                  Add Expense
+                <Button type="submit" variant="contained" color="primary" fullWidth disabled={saving}>
+                  {saving ? 'Saving...' : 'Add Expense'}
                 </Button>
               </Grid>
+              {message && (
+                <Grid size={12}>
+                  <Typography align="center">{message}</Typography>
+                </Grid>
+              )}
             </Grid>
           </Box>
         </CardContent>

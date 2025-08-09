@@ -1,13 +1,18 @@
 import React from 'react';
 import { Grid, Card, CardContent, Typography } from '@mui/material';
 
-const ExpenseSummaryCards: React.FC = () => (
+interface Props {
+  totalExpenses: number;
+  income: number;
+}
+
+const ExpenseSummaryCards: React.FC<Props> = ({ totalExpenses, income }) => (
   <Grid container spacing={2}>
     <Grid size={6}>
       <Card>
         <CardContent>
           <Typography variant="h6">💸 Total Expenses</Typography>
-          <Typography variant="h4" color="error">$1,234.56</Typography>
+          <Typography variant="h4" color="error">${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
         </CardContent>
       </Card>
     </Grid>
@@ -15,7 +20,7 @@ const ExpenseSummaryCards: React.FC = () => (
       <Card>
         <CardContent>
           <Typography variant="h6">💰 Income</Typography>
-          <Typography variant="h4" color="success.main">$6,200.00</Typography>
+          <Typography variant="h4" color="success.main">${income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography>
         </CardContent>
       </Card>
     </Grid>

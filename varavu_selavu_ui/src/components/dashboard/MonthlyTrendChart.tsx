@@ -1,11 +1,17 @@
 import React from 'react';
 import Plot from 'react-plotly.js';
 
-const MonthlyTrendChart: React.FC = () => {
+interface Props {
+  monthlyTrend: { month: string; total: number }[];
+}
+
+const MonthlyTrendChart: React.FC<Props> = ({ monthlyTrend }) => {
+  const x = monthlyTrend.map(m => m.month);
+  const y = monthlyTrend.map(m => m.total);
   const data = [
     {
-      x: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-      y: [150, 230, 180, 210, 280, 300],
+      x,
+      y,
       type: 'scatter' as const,
       mode: 'lines+markers' as const,
       marker: { color: 'blue' },

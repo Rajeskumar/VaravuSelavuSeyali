@@ -1,14 +1,20 @@
 import React from 'react';
 import Plot from 'react-plotly.js';
 
-const CategoryBarChart: React.FC = () => {
+interface Props {
+  categoryTotals: { category: string; total: number }[];
+}
+
+const CategoryBarChart: React.FC<Props> = ({ categoryTotals }) => {
+  const x = categoryTotals.map(c => c.category);
+  const y = categoryTotals.map(c => c.total);
   const data = [
     {
-      x: ['Food', 'Transport', 'Shopping', 'Utilities', 'Entertainment'],
-      y: [450, 250, 200, 150, 100],
+      x,
+      y,
       type: 'bar' as const,
       marker: { color: 'orange' },
-      text: [450, 250, 200, 150, 100],
+      text: y,
       textposition: 'outside' as const,
     },
   ];
