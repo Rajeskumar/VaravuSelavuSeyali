@@ -17,6 +17,7 @@ RUN npm run build
 
 # Use nginx to serve the build
 FROM nginx:alpine AS production
+ENV NODE_ENV=production
 COPY --from=build /app/build /usr/share/nginx/html
 
 # Use custom nginx config for SPA routing

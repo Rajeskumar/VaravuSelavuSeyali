@@ -15,7 +15,7 @@ app.include_router(router)
 origins = [
     "http://localhost:3000",     # React dev server
     "http://127.0.0.1:3000",
-    # "https://your-production-domain.com",
+    "https://varavu-selavu-frontend-952416556244.us-central1.run.app", # Production React app
 ]
 
 app.add_middleware(
