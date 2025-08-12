@@ -4,6 +4,7 @@ import ExpenseSummaryCards from '../components/analysis/ExpenseSummaryCards';
 import CategoryBarChart from '../components/analysis/CategoryBarChart';
 import CategorySummaryTable from '../components/analysis/CategorySummaryTable';
 import MonthlyTrendLineChart from '../components/analysis/MonthlyTrendLineChart';
+import AnalysisChat from "../components/analysis/AnalysisChat";
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { useQuery } from '@tanstack/react-query';
 
@@ -39,10 +40,10 @@ const ExpenseAnalysisPage: React.FC = () => {
 
   return (
     <Box sx={{ mt: 4 }}>
-      <Grid container spacing={2}>
+      <Grid container columns={12} spacing={2}>
         {/* Sidebar */}
-        <Grid size={3}>
-          <Paper elevation={3} sx={{ p: 2, position: 'sticky', top: 80 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <Paper elevation={3} sx={{ p: 2, position: { md: 'sticky' }, top: { md: 80 }, mb: { xs: 2, md: 0 } }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Filters</Typography>
             <FormControl fullWidth size="small" sx={{ mb: 2 }}>
               <InputLabel id="year-label">Year</InputLabel>
@@ -76,7 +77,7 @@ const ExpenseAnalysisPage: React.FC = () => {
         </Grid>
 
         {/* Content */}
-        <Grid size={9}>
+        <Grid size={{ xs: 12, md: 9 }}>
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>{title}</Typography>
 
           {data.filter_info && (
@@ -94,8 +95,8 @@ const ExpenseAnalysisPage: React.FC = () => {
 
           <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
             <Typography variant="h6" sx={{ mb: 1 }}>Top Categories</Typography>
-            <Grid container>
-              <Grid size={12}>
+            <Grid container columns={12}>
+              <Grid size={{ xs: 12 }}>
                 <CategoryBarChart categoryTotals={data.category_totals} />
               </Grid>
             </Grid>
@@ -109,19 +110,28 @@ const ExpenseAnalysisPage: React.FC = () => {
           {overallYear ? (
             <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
               <Typography variant="h6" sx={{ mb: 1 }}>Monthly Trend</Typography>
-              <Grid container>
-                <Grid size={12}>
+              <Grid container columns={12}>
+                <Grid size={{ xs: 12 }}>
                   <MonthlyTrendLineChart monthlyTrend={data.monthly_trend} />
                 </Grid>
               </Grid>
             </Paper>
           ) : null}
 
+          <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>Analyze with LLM</Typography>
+            <Grid container columns={12}>
+              <Grid size={{ xs: 12 }}>
+                <AnalysisChat userId={user} year={year} month={overallYear ? null : month} />
+              </Grid>
+            </Grid>
+          </Paper>
+
           {/* Optional: Keep last six months for context if desired; currently hidden for month view to avoid mixing data */}
           {/* <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
             <Typography variant="h6" sx={{ mb: 1 }}>Last 6 Months</Typography>
-            <Grid container>
-              <Grid size={12}>
+            <Grid container columns={12}>
+              <Grid size={{ xs: 12 }}>
                 <LastSixMonthsLineChart monthlyTrend={data.monthly_trend} />
               </Grid>
             </Grid>

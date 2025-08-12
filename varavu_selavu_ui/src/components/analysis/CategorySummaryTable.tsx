@@ -23,11 +23,11 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
   const rowsForCat = hoverCat ? details[hoverCat] || [] : [];
 
   return (
-    <TableContainer component={Paper}>
+    <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto', maxWidth: '100vw' }}>
       <Typography variant="h6" sx={{ m: 2 }}>
-        📈 % of Income Spent by Category
+        % of Income Spent by Category
       </Typography>
-      <Table size="small">
+      <Table size="small" sx={{ minWidth: 320 }}>
         <TableHead>
           <TableRow>
             <TableCell>Category</TableCell>
@@ -43,7 +43,7 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
                 key={row.category}
                 onMouseEnter={(e) => openPopover(e as any, row.category)}
                 onMouseLeave={closePopover}
-                sx={{ cursor: rowsForCat.length ? 'pointer' : 'default' }}
+                sx={{ cursor: rowsForCat.length ? 'pointer' : 'default', '&:hover': { background: '#f5f5f5' } }}
               >
                 <TableCell>{row.category}</TableCell>
                 <TableCell align="right">{row.total.toFixed(2)}</TableCell>
@@ -60,6 +60,7 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         disableRestoreFocus
+        sx={{ maxWidth: '90vw' }}
       >
         <Box sx={{ p: 2, maxWidth: 420 }}>
           <Typography variant="subtitle1" sx={{ mb: 1 }}>
@@ -68,7 +69,7 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
           {rowsForCat.length === 0 ? (
             <Typography variant="body2" color="text.secondary">No expenses</Typography>
           ) : (
-            <Table size="small">
+            <Table size="small" sx={{ minWidth: 280 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Date</TableCell>

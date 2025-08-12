@@ -15,4 +15,17 @@ class ExpenseRequest(BaseModel):
     date: str
     description: str = ""
 
-# Add more API models here as needed
+class ChatRequest(BaseModel):
+    """
+    Payload for the `/analysis/chat` endpoint.
+
+    * `user_id` – the identifier of the user making the request.
+    * `query`   – the user’s chat question.
+    * `year`    – optional year filter for the analysis.
+    * `month`   – optional month filter for the analysis.
+    """
+    user_id: str
+    query: str
+    year: int | None = None
+    month: int | None = None
+

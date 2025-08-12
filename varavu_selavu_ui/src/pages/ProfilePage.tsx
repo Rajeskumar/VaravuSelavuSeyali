@@ -12,15 +12,17 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ mt: 4 }}>
+    <Box sx={{ mt: 4, maxWidth: 400, mx: 'auto', px: { xs: 1, sm: 2 } }}>
       <Card>
         <CardContent>
           <Typography variant="h5" gutterBottom>
             Profile
           </Typography>
-          <Typography variant="body1">Signed in as: {email || 'Guest'}</Typography>
+          <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+            Signed in as: {email || 'Guest'}
+          </Typography>
           {email && (
-            <Button sx={{ mt: 2 }} variant="outlined" color="error" onClick={handleLogout}>
+            <Button sx={{ mt: 2 }} variant="outlined" color="error" fullWidth onClick={handleLogout}>
               Logout
             </Button>
           )}

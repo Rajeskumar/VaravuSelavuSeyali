@@ -41,7 +41,7 @@ const LoginPage: React.FC = () => {
           Login
         </Typography>
         <Box component="form" onSubmit={handleLogin} noValidate sx={{ mt: 2 }}>
-          <Grid container spacing={2}>
+          <Grid container columns={12} spacing={2}>
             {error && (
               <Grid size={12}>
                 <Typography color="error" align="center">{error}</Typography>

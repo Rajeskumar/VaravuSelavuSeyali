@@ -26,7 +26,7 @@ const TopCategoriesChart: React.FC<Props> = ({ categoryTotals }) => {
     yaxis: { title: 'Cost' },
   };
 
-  return <Plot data={data} layout={layout} style={{ width: '100%', height: '100%' }} />;
+  return <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100vw', height: 350 }} />;
 };
 
 export default TopCategoriesChart;

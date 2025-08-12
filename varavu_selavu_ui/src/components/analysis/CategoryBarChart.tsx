@@ -23,7 +23,7 @@ const CategoryBarChart: React.FC<Props> = ({ categoryTotals }) => {
     xaxis: { title: 'Category' },
     yaxis: { title: 'Amount ($)' },
   };
-  return <Plot data={data} layout={layout} style={{ width: '100%', height: 350 }} />;
+  return <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100vw', height: 350 }} />;
 };
 
 export default CategoryBarChart;

@@ -24,7 +24,7 @@ const LastSixMonthsLineChart: React.FC<Props> = ({ monthlyTrend }) => {
     xaxis: { title: 'Month' },
     yaxis: { title: 'Expense ($)' },
   };
-  return <Plot data={data} layout={layout} style={{ width: '100%', height: 350 }} />;
+  return <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100vw', height: 350 }} />;
 };
 
 export default LastSixMonthsLineChart;

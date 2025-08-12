@@ -38,22 +38,22 @@ const HomePage: React.FC = () => {
 
   return (
     <Box sx={{ mt: 4 }}>
-      <Grid container spacing={2} justifyContent="center" alignItems="stretch" sx={{ mb: 2 }}>
-        <Grid size={4}>
+      <Grid container columns={12} spacing={2} justifyContent="center" alignItems="stretch" sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <MetricCard label="💸 Total Expenses (YTD)" value={`$${data.total_expenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
         </Grid>
-        <Grid size = {4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <MetricCard label="📊 Total Categories" value={data.category_totals.length} />
         </Grid>
-        <Grid size={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <MetricCard label="📅 Months Tracked" value={new Set(data.monthly_trend.map(m => m.month)).size} />
         </Grid>
       </Grid>
-      <Grid container spacing={2} justifyContent="center">
-        <Grid size={12}>
+      <Grid container columns={12} spacing={2} justifyContent="center">
+        <Grid size={{ xs: 12 }}>
           <MonthlyTrendChart monthlyTrend={data.monthly_trend} />
         </Grid>
-        <Grid size={12}>
+        <Grid size={{ xs: 12 }}>
           <TopCategoriesChart categoryTotals={data.category_totals} />
         </Grid>
       </Grid>

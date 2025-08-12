@@ -7,8 +7,8 @@ interface Props {
 }
 
 const ExpenseSummaryCards: React.FC<Props> = ({ totalExpenses, income }) => (
-  <Grid container spacing={2}>
-    <Grid size={6}>
+  <Grid container columns={12} spacing={2}>
+    <Grid size={{ xs: 12, sm: 6 }}>
       <Card>
         <CardContent>
           <Typography variant="h6">💸 Total Expenses</Typography>
@@ -16,7 +16,7 @@ const ExpenseSummaryCards: React.FC<Props> = ({ totalExpenses, income }) => (
         </CardContent>
       </Card>
     </Grid>
-    <Grid size={6}>
+    <Grid size={{ xs: 12, sm: 6 }}>
       <Card>
         <CardContent>
           <Typography variant="h6">💰 Income</Typography>
