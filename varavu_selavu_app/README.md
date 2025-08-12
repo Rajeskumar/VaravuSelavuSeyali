@@ -48,3 +48,14 @@ To run the backend using Docker:
 
 ## License
 This project is licensed under the MIT License.
+
+## Chat model configuration
+
+The `/analysis/chat` endpoint selects which LLM to use based on
+environment variables:
+
+- Set `ENV` or `ENVIRONMENT` to `production` and supply an
+  `OPENAI_API_KEY` to route requests to the OpenAI Chat Completions API.
+- For any other environment the service will call a local Ollama
+  instance at `http://localhost:11434` or the URL defined in
+  `OLLAMA_BASE_URL`.
