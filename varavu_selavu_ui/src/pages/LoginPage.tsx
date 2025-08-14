@@ -9,6 +9,8 @@ import Box from '@mui/material/Box';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Link from '@mui/material/Link';
+import Divider from '@mui/material/Divider';
+import GoogleIcon from '@mui/icons-material/Google';
 import { login } from '../api/login';
 import { useNavigate } from 'react-router-dom';
 
@@ -61,7 +63,16 @@ const LoginPage: React.FC = () => {
             <Typography variant="h6" gutterBottom align="center">
               Login
             </Typography>
-            <Box component="form" onSubmit={handleLogin} noValidate sx={{ mt: 2 }}>
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<GoogleIcon />}
+              sx={{ textTransform: 'none', mb: 2 }}
+            >
+              Continue with Google
+            </Button>
+            <Divider sx={{ mb: 2 }}>or</Divider>
+            <Box component="form" onSubmit={handleLogin} noValidate>
               <Grid container columns={12} spacing={2}>
                 {error && (
                   <Grid size={12}>
