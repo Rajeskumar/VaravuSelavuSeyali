@@ -4,7 +4,6 @@ import ExpenseSummaryCards from '../components/analysis/ExpenseSummaryCards';
 import CategoryBarChart from '../components/analysis/CategoryBarChart';
 import CategorySummaryTable from '../components/analysis/CategorySummaryTable';
 import MonthlyTrendLineChart from '../components/analysis/MonthlyTrendLineChart';
-import AnalysisChat from "../components/analysis/AnalysisChat";
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { useQuery } from '@tanstack/react-query';
 
@@ -117,15 +116,6 @@ const ExpenseAnalysisPage: React.FC = () => {
               </Grid>
             </Paper>
           ) : null}
-
-          <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>Analyze with LLM</Typography>
-            <Grid container columns={12}>
-              <Grid size={{ xs: 12 }}>
-                <AnalysisChat userId={user} year={year} month={overallYear ? null : month} />
-              </Grid>
-            </Grid>
-          </Paper>
 
           {/* Optional: Keep last six months for context if desired; currently hidden for month view to avoid mixing data */}
           {/* <Paper elevation={2} sx={{ p: 2, mb: 2 }}>

@@ -14,9 +14,13 @@ export interface AddExpenseResponse {
 }
 
 export async function addExpense(payload: AddExpensePayload): Promise<AddExpenseResponse> {
-  const res = await fetch(`${API_BASE_URL}/add-expense`, {
+  const token = localStorage.getItem('vs_token');
+  const res = await fetch(`${API_BASE_URL}/api/v1/expenses`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error('Failed to add expense');

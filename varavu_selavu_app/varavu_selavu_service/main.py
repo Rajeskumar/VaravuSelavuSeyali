@@ -8,15 +8,11 @@ settings = Settings()
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 
-# Include the API router
+# Include the API router (versioned only)
 app.include_router(router)
 
 # List the origins that should be allowed to make cross-origin requests
-origins = [
-    "http://localhost:3000",     # React dev server
-    "http://127.0.0.1:3000",
-    "https://varavu-selavu-frontend-952416556244.us-central1.run.app", # Production React app
-]
+origins = settings.CORS_ALLOW_ORIGINS
 
 app.add_middleware(
     CORSMiddleware,

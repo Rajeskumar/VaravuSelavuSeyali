@@ -1,30 +1,65 @@
-from fastapi import APIRouter, Request, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response, Depends, status, Query
 
 from varavu_selavu_service.models.api_models import (
     LoginRequest,
     ExpenseRequest,
     LoginResponse,
     ChatRequest,
+    HealthResponse,
+    DashboardResponse,
+    ExpenseCreatedResponse,
+    AnalysisResponse,
+    ChatResponse,
 )
 from varavu_selavu_service.services.auth_service import AuthService
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.chat_service import call_chat_model
-import pandas as pd
-import time
+from varavu_selavu_service.services.analysis_service import AnalysisService
+from varavu_selavu_service.core.config import Settings
 from threading import RLock
+from fastapi import Header
 
-router = APIRouter()
+settings = Settings()
 
+router = APIRouter(prefix="/api/v1")
+
+# Dependency providers
+def get_expense_service() -> ExpenseService:
+    return ExpenseService()
 # Simple in-memory cache for analysis results
-_ANALYSIS_CACHE: dict[tuple[str, int | None, int | None], tuple[float, dict]] = {}
+_ANALYSIS_CACHE: dict[
+    tuple[str, int | None, int | None, str | None, str | None],
+    tuple[float, dict],
+] = {}
 _ANALYSIS_CACHE_TTL_SEC = 60  # adjust as needed
 _CACHE_LOCK = RLock()
 
-@router.get("/health")
+def get_analysis_service() -> AnalysisService:
+    # Reuse a singleton instance to preserve in-memory cache across requests
+    return _analysis_service_singleton
+
+# Create the singleton instance
+_analysis_service_singleton = AnalysisService(ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
+
+@router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
     return {"status": "healthy"}
 
-@router.post("/login")
+@router.get("/readyz", response_model=HealthResponse, tags=["Health"], summary="Readiness probe")
+def readiness_check():
+    # Extend with checks to downstream services (e.g., Google Sheets) if needed
+    return {"status": "healthy"}
+
+# Optional auth dependency: enforce Bearer token in production only
+def require_auth(authorization: str | None = Header(default=None)) -> None:
+    if settings.ENVIRONMENT.lower() in {"prod", "production"}:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+        token = authorization.split(" ", 1)[1]
+        if token != "access-token":
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+@router.post("/auth/login", response_model=LoginResponse, tags=["Auth"], summary="Authenticate and obtain token")
 def login(data: LoginRequest) -> LoginResponse:
     auth = AuthService()
     ok = auth.login(email=data.username, password=data.password)
@@ -33,10 +68,20 @@ def login(data: LoginRequest) -> LoginResponse:
     # For now, return a static token structure expected by frontend
     return LoginResponse(access_token="access-token", token_type="bearer")
 
-@router.post("/add-expense")
-def add_expense(data: ExpenseRequest):
-    svc = ExpenseService()
-    saved = svc.add_expense(
+@router.post(
+    "/expenses",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ExpenseCreatedResponse,
+    tags=["Expenses"],
+    summary="Create a new expense",
+)
+def create_expense(
+    data: ExpenseRequest,
+    expense_service: ExpenseService = Depends(get_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    # _: None = Depends(require_auth),
+):
+    saved = expense_service.add_expense(
         user_id=data.user_id,
         date=data.date,
         description=data.description,
@@ -44,11 +89,19 @@ def add_expense(data: ExpenseRequest):
         cost=data.cost,
     )
     # Invalidate analysis cache on writes
-    with _CACHE_LOCK:
-        _ANALYSIS_CACHE.clear()
-    return {"success": True, "expense": saved}
+    analysis_service.invalidate_cache()
+    # Normalize to response model shape
+    expense_payload = {
+        "user_id": saved.get("User ID", data.user_id),
+        "date": data.date,
+        "description": saved.get("description", data.description),
+        "category": saved.get("category", data.category),
+        "cost": float(saved.get("cost", data.cost)),
+    }
+    return {"success": True, "expense": expense_payload}
 
-@router.get("/dashboard")
+
+@router.get("/dashboard", response_model=DashboardResponse, tags=["Dashboard"], summary="Basic dashboard metrics")
 def dashboard():
     # Dummy dashboard data
     return {
@@ -57,124 +110,40 @@ def dashboard():
         "months_tracked": 5
     }
 
-@router.get("/analysis")
-def analysis(user_id: str, year: int | None = None, month: int | None = None, response: Response = None):
-    """Return simple analysis for a given user from Google Sheets."""
-    # Serve from cache if fresh
-    cache_key = (user_id, int(year) if year is not None else None, int(month) if month is not None else None)
-    now_ts = time.time()
-    with _CACHE_LOCK:
-        entry = _ANALYSIS_CACHE.get(cache_key)
-        if entry and (now_ts - entry[0] < _ANALYSIS_CACHE_TTL_SEC):
-            if response is not None:
-                response.headers["Cache-Control"] = f"public, max-age={_ANALYSIS_CACHE_TTL_SEC}"
-            return entry[1]
-    svc = ExpenseService()
-    df = svc.load_dataframe()
-    if df.empty:
-        return {"top_categories": [], "monthly_trend": []}
-
-    # Normalize column names to snake_case lower for robustness
-    df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
-
-    # Filter by user id/email across likely columns
-    applied_user_filter = None
-    candidate_user_cols = [c for c in df.columns if ("user" in c or "email" in c)]
-    for col in ["user_id", "email", "user"] + candidate_user_cols:
-        if col in df.columns:
-            tmp = df[df[col] == user_id]
-            if not tmp.empty:
-                df = tmp
-                applied_user_filter = col
-                break
-
-    # Ensure expected columns exist with correct types
-    # Detect a date-like column fallback if 'date' is absent
-    date_col = "date" if "date" in df.columns else None
-    if date_col is None:
-        for c in df.columns:
-            if "date" in c:  # e.g., transaction_date, created_at_date
-                date_col = c
-                break
-    if date_col:
-        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-        # If many dates failed to parse, try again with dayfirst to support DD/MM/YYYY inputs
-        if df[date_col].isna().mean() > 0.5:
-            df[date_col] = pd.to_datetime(df[date_col], errors="coerce", dayfirst=True)
-    if "cost" in df.columns:
-        df["cost"] = pd.to_numeric(df["cost"], errors="coerce")
-    # Drop rows missing required analysis fields
-    required_cols = [c for c in [date_col, "cost"] if c]
-    if required_cols:
-        df = df.dropna(subset=required_cols)
-
-    # Optional filters by year/month (only if date available)
-    if date_col:
-        if year is not None:
-            df = df[df[date_col].dt.year == int(year)]
-        if month is not None:
-            df = df[df[date_col].dt.month == int(month)]
-
-    # Top categories by spend and category totals
-    category_totals = []
-    if "category" in df.columns:
-        cat = df.groupby("category")["cost"].sum().sort_values(ascending=False)
-        top_categories = cat.index.tolist()[:5]
-        category_totals = [{"category": k, "total": float(v)} for k, v in cat.items()]
-    else:
-        top_categories = []
-
-    # Monthly trend (sum per month within available data)
-    monthly_trend = []
-    if date_col:
-        trend = (
-            df.assign(YearMonth=df[date_col].dt.to_period("M").dt.to_timestamp())
-            .groupby("YearMonth")["cost"].sum().reset_index()
-        )
-        monthly_trend = [{"month": r["YearMonth"].strftime("%Y-%m"), "total": float(r["cost"])} for _, r in trend.iterrows()]
-
-    total_expenses = float(df["cost"].sum()) if "cost" in df.columns else 0.0
-
-    # If a specific month is selected, return expense details per category for hover UI
-    category_expense_details = {}
-    if month is not None:
-        if "category" in df.columns:
-            for cat_name, g in df.groupby("category"):
-                details = [
-                    {
-                        "date": (r[date_col].strftime("%Y-%m-%d") if date_col and (date_col in r) and not pd.isna(r[date_col]) else ""),
-                        "description": str(r.get("description", "")),
-                        "category": str(r.get("category", "")),
-                        "cost": float(r.get("cost", 0) or 0),
-                    }
-                    for _, r in g.iterrows()
-                ]
-                category_expense_details[cat_name] = details
-
-    result = {
-        "top_categories": top_categories,
-        "category_totals": category_totals,
-        "monthly_trend": monthly_trend,
-        "total_expenses": total_expenses,
-        "category_expense_details": category_expense_details,
-        "filter_info": {
-            "applied_user_col": applied_user_filter,
-            "year": int(year) if year is not None else None,
-            "month": int(month) if month is not None else None,
-            "row_count": int(len(df)),
-        },
-    }
-
-    # Store in cache
-    with _CACHE_LOCK:
-        _ANALYSIS_CACHE[cache_key] = (now_ts, result)
+@router.get(
+    "/analysis",
+    response_model=AnalysisResponse,
+    tags=["Analysis"],
+    summary="Get expense analysis",
+)
+def analysis(
+    user_id: str,
+    year: int | None = Query(default=None, ge=1970, le=2100),
+    month: int | None = Query(default=None, ge=1, le=12),
+    start_date: str | None = None,
+    end_date: str | None = None,
+    response: Response = None,
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+):
+    """Return analysis for a given user via the AnalysisService."""
+    result = analysis_service.analyze(user_id=user_id, year=year, month=month, start_date=start_date, end_date=end_date, use_cache=True)
     if response is not None:
-        response.headers["Cache-Control"] = f"public, max-age={_ANALYSIS_CACHE_TTL_SEC}"
+        # Align Cache-Control header with service TTL
+        response.headers["Cache-Control"] = f"public, max-age={analysis_service.ttl_sec}"
     return result
 
 
-@router.post("/analysis/chat")
-def analysis_chat(request: ChatRequest, response: Response = None):
+@router.post(
+    "/analysis/chat",
+    response_model=ChatResponse,
+    tags=["Analysis"],
+    summary="Ask a question about your expenses",
+)
+def analysis_chat(
+    request: ChatRequest,
+    response: Response = None,
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+):
     """
     Accepts a chat query and returns a response generated by the chat model.
     In production the OpenAI API is used, while locally a running Ollama instance
@@ -183,12 +152,14 @@ def analysis_chat(request: ChatRequest, response: Response = None):
 
     The request body is validated by the `ChatRequest` Pydantic model.
     """
-    # Re‑use the existing analysis logic to get the data for the requested month
-    analysis_result = analysis(
+    # Re‑use the AnalysisService to get the data for the requested month (fresh read for chat)
+    analysis_result = analysis_service.analyze(
         user_id=request.user_id,
         year=request.year,
         month=request.month,
-        response=None,  # we do not want to touch the cache
+        start_date=request.start_date,
+        end_date=request.end_date,
+        use_cache=False,
     )
 
     # Pass the query + analysis to the appropriate chat model

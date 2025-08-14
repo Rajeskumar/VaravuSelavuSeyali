@@ -14,6 +14,7 @@ import Button from '@mui/material/Button';
 import LoginIcon from '@mui/icons-material/Login';
 import UserMenu from './components/layout/UserMenu';
 import ProfilePage from './pages/ProfilePage';
+import AIAnalystPage from './pages/AIAnalystPage';
 
 const AppContent: React.FC = () => {
   // const [footerValue, setFooterValue] = React.useState(0);
@@ -76,8 +77,8 @@ const AppContent: React.FC = () => {
               </>
             }
           />
-          <Route 
-            path="/add-expense" 
+          <Route
+            path="/add-expense"
             element={
               <>
                 <Navbar />
@@ -89,6 +90,12 @@ const AppContent: React.FC = () => {
             <>
               <Navbar />
               <ExpenseAnalysisPage />
+            </>
+          } />
+          <Route path="/ai-analyst" element={
+            <>
+              <Navbar />
+              <AIAnalystPage />
             </>
           } />
           <Route path="/profile" element={
