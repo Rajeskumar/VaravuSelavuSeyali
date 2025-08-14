@@ -15,7 +15,7 @@ export async function getAnalysis(user_id: string, opts?: { year?: number; month
   if (opts?.month !== undefined) params.set('month', String(opts.month));
   // Cache busting to ensure we always get fresh data when filters change
   params.set('_ts', String(Date.now()));
-  const res = await fetch(`${API_BASE_URL}/analysis?${params.toString()}`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/analysis?${params.toString()}`, {
     cache: 'no-store',
     headers: { 'Accept': 'application/json' },
   });

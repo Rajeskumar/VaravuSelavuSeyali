@@ -1,4 +1,5 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
+from datetime import date as date_type
 import warnings
 
 import pandas as pd
@@ -11,12 +12,14 @@ class ExpenseService:
         self.gs = gs_client or GoogleSheetsClient()
         self.expense_ws = self.gs.main_worksheet()
 
-    def add_expense(self, user_id: str, date: str, description: str, category: str, cost: float) -> Dict:
-        new_row = [user_id, date, description, category, cost]
+    def add_expense(self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float) -> Dict:
+        # Ensure we write a string date in ISO format (YYYY-MM-DD)
+        date_str = date.isoformat() if isinstance(date, date_type) else str(date)
+        new_row = [user_id, date_str, description, category, cost]
         self.expense_ws.append_row(new_row)
         return {
             "User ID": user_id,
-            "date": date,
+            "date": date_str,
             "description": description,
             "category": category,
             "cost": cost,

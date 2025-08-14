@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Grid, Paper, Typography, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import ExpenseChat from '../components/chat/ExpenseChat';
+import AIAnalystChat from '../components/ai-analyst/AIAnalystChat';
 
-const ChatPage: React.FC = () => {
+const AIAnalystPage: React.FC = () => {
   const now = useMemo(() => new Date(), []);
   const [period, setPeriod] = useState<'currentYear' | 'last3Years' | 'last3Months' | 'last6Months' | 'specific'>('currentYear');
   const [year, setYear] = useState<number>(now.getFullYear());
@@ -42,7 +42,7 @@ const ChatPage: React.FC = () => {
       <Grid container columns={12} spacing={2}>
         <Grid size={{ xs:12, md:3 }}>
           <Paper elevation={3} sx={{ p:2, position:{ md:'sticky' }, top:{ md:80 }, mb:{ xs:2, md:0 } }}>
-            <Typography variant="h6" sx={{ mb:2 }}>Chat Range</Typography>
+            <Typography variant="h6" sx={{ mb:2 }}>AI Analyst Range</Typography>
             <FormControl fullWidth size="small" sx={{ mb:2 }}>
               <InputLabel id="period-label">Period</InputLabel>
               <Select labelId="period-label" value={period} label="Period" onChange={e => setPeriod(e.target.value as any)}>
@@ -78,7 +78,7 @@ const ChatPage: React.FC = () => {
         </Grid>
         <Grid size={{ xs:12, md:9 }}>
           <Paper elevation={2} sx={{ p:2 }}>
-            <ExpenseChat userId={user} startDate={startDate} endDate={endDate} />
+            <AIAnalystChat userId={user} startDate={startDate} endDate={endDate} />
           </Paper>
         </Grid>
       </Grid>
@@ -86,4 +86,4 @@ const ChatPage: React.FC = () => {
   );
 };
 
-export default ChatPage;
+export default AIAnalystPage;

@@ -5,13 +5,13 @@ import Tab from '@mui/material/Tab';
 import HomeIcon from '@mui/icons-material/Home';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import InsightsIcon from '@mui/icons-material/Insights';
-import ChatIcon from '@mui/icons-material/Chat';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 const navItems = [
   { label: 'Dashboard', icon: <HomeIcon />, path: '/home' },
   { label: 'Add Expense', icon: <AddCircleIcon />, path: '/add-expense' },
   { label: 'Analysis', icon: <InsightsIcon />, path: '/analysis' },
-  { label: 'Chat', icon: <ChatIcon />, path: '/chat' },
+  { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
   // { label: 'Login', icon: <LoginIcon />, path: '/' },
 ];
 
