@@ -29,8 +29,9 @@ def call_ollama(query: str, analysis: dict, model: str | None = None) -> str:
         ],
         "stream": False
     }
+    timeout = float(os.getenv("OLLAMA_TIMEOUT_SEC", "300"))
     try:
-        resp = requests.post(ollama_url, json=payload, timeout=30)
+        resp = requests.post(ollama_url, json=payload, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
         # Ollama returns {"message": {"role":"assistant","content":"..."}}
@@ -80,12 +81,14 @@ def call_openai(query: str, analysis: dict, model: str | None = None) -> str:
             {"role": "user", "content": f"{query}"},
         ],
     }
+    timeout = float(os.getenv("OPENAI_TIMEOUT_SEC", "300"))
+    url = "https://api.openai.com/v1/chat/completions"
     try:
         resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
+            url,
             headers=headers,
             json=payload,
-            timeout=30,
+            timeout=timeout,
         )
         resp.raise_for_status()
         data = resp.json()
