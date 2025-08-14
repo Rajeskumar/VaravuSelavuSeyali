@@ -1,10 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 
 from varavu_selavu_service.api.routes import router
 from varavu_selavu_service.core.config import Settings
 
 settings = Settings()
+
+# Configure root logging early
+logging.basicConfig(
+    level=logging.DEBUG if settings.DEBUG else logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 

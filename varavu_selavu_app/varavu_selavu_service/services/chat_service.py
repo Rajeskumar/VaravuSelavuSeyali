@@ -1,7 +1,9 @@
 import os
 import requests
 from fastapi import HTTPException
+import logging
 
+logger = logging.getLogger("varavu_selavu.chat_service")
 
 # --------------------------------------------------------------------------- #
 # Helper: call local Ollama chat API
@@ -34,6 +36,19 @@ def call_ollama(query: str, analysis: dict, model: str | None = None) -> str:
         # Ollama returns {"message": {"role":"assistant","content":"..."}}
         return data.get("message", {}).get("content", "")
     except requests.RequestException as exc:
+        # Log detailed error context for debugging, with traceback and HTTP details
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        text = getattr(getattr(exc, "response", None), "text", None)
+        logger.exception(
+            "Ollama chat request failed",
+            extra={
+                "provider": "ollama",
+                "base_url": ollama_base_url,
+                "model": model_name,
+                "status": status,
+                "response": text,
+            },
+        )
         raise HTTPException(
             status_code=502,
             detail=f"Error communicating with Ollama: {exc}",
@@ -76,6 +91,17 @@ def call_openai(query: str, analysis: dict, model: str | None = None) -> str:
         data = resp.json()
         return data.get("choices", [{}])[0].get("message", {}).get("content", "")
     except requests.RequestException as exc:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        text = getattr(getattr(exc, "response", None), "text", None)
+        logger.exception(
+            "OpenAI chat request failed",
+            extra={
+                "provider": "openai",
+                "model": model_name,
+                "status": status,
+                "response": text,
+            },
+        )
         raise HTTPException(
             status_code=502,
             detail=f"Error communicating with OpenAI: {exc}",
@@ -92,7 +118,12 @@ def call_chat_model(query: str, analysis: dict, model: str | None = None) -> str
     The environment is determined via the ENV or ENVIRONMENT variables.
     """
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
-    if env.lower() in {"prod", "production"}:
+    provider = "openai" if env.lower() in {"prod", "production"} else "ollama"
+    logger.info(
+        "Dispatching chat request",
+        extra={"provider": provider, "env": env, "model": model},
+    )
+    if provider == "openai":
         return call_openai(query, analysis, model=model)
     return call_ollama(query, analysis, model=model)
 
@@ -119,6 +150,12 @@ def list_openai_models() -> list[str]:
         # Keep as-is for now; UI can filter or let user choose
         return ids
     except requests.RequestException as exc:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        text = getattr(getattr(exc, "response", None), "text", None)
+        logger.exception(
+            "OpenAI model listing failed",
+            extra={"provider": "openai", "status": status, "response": text},
+        )
         raise HTTPException(status_code=502, detail=f"Error listing OpenAI models: {exc}")
 
 
@@ -132,5 +169,11 @@ def list_ollama_models() -> list[str]:
         data = resp.json()  # {"models": [{"name":"llama3:instruct",...}, ...]}
         return [m.get("name") for m in data.get("models", []) if m.get("name")]
     except requests.RequestException as exc:
+        status = getattr(getattr(exc, "response", None), "status_code", None)
+        text = getattr(getattr(exc, "response", None), "text", None)
+        logger.exception(
+            "Ollama model listing failed",
+            extra={"provider": "ollama", "url": url, "status": status, "response": text},
+        )
         raise HTTPException(status_code=502, detail=f"Error listing Ollama models: {exc}")
 
