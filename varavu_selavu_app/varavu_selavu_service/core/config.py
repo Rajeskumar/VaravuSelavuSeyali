@@ -1,3 +1,4 @@
+import os
 from typing import List
 from pydantic.v1 import BaseSettings
 
@@ -6,7 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Varavu Selavu Service"
     VERSION: str = "1.0.0"
     DEBUG: bool = True
-    ENVIRONMENT: str = "local"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
 
     # CORS
     CORS_ALLOW_ORIGINS: List[str] = [
