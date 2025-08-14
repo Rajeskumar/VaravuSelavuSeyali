@@ -10,10 +10,15 @@ from varavu_selavu_service.models.api_models import (
     ExpenseCreatedResponse,
     AnalysisResponse,
     ChatResponse,
+    ModelListResponse,
 )
 from varavu_selavu_service.services.auth_service import AuthService
 from varavu_selavu_service.services.expense_service import ExpenseService
-from varavu_selavu_service.services.chat_service import call_chat_model
+from varavu_selavu_service.services.chat_service import (
+    call_chat_model,
+    list_openai_models,
+    list_ollama_models,
+)
 from varavu_selavu_service.services.analysis_service import AnalysisService
 from varavu_selavu_service.core.config import Settings
 from threading import RLock
@@ -163,7 +168,23 @@ def analysis_chat(
     )
 
     # Pass the query + analysis to the appropriate chat model
-    chat_response = call_chat_model(query=request.query, analysis=analysis_result)
+    chat_response = call_chat_model(query=request.query, analysis=analysis_result, model=request.model)
 
     return {"response": chat_response}
+
+
+@router.get(
+    "/models",
+    response_model=ModelListResponse,
+    tags=["Models"],
+    summary="List available LLM models (OpenAI in prod, Ollama locally)",
+)
+def list_models():
+    """Return provider and available model ids based on environment."""
+    env = settings.ENVIRONMENT or "local"
+    if env.lower() in {"prod", "production"}:
+        models = list_openai_models()
+        return {"provider": "openai", "models": models}
+    models = list_ollama_models()
+    return {"provider": "ollama", "models": models}
 

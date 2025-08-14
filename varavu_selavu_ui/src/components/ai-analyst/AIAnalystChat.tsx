@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import API_BASE_URL from '../../api/apiconfig';
+import { getModels, ModelsResponse } from '../../api/models';
+import { FormControl, InputLabel, MenuItem, Select, Typography } from '@mui/material';
 
 interface AIAnalystChatProps {
   userId: string | null;
@@ -12,6 +14,26 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [provider, setProvider] = useState<string>("");
+  const [model, setModel] = useState<string>("");
+
+  React.useEffect(() => {
+    const ac = new AbortController();
+    getModels(ac.signal)
+      .then((res: ModelsResponse) => {
+        setModels(res.models);
+        setProvider(res.provider);
+        if (res.models.length && !model) {
+          setModel(res.models[0]);
+        }
+      })
+      .catch((e) => {
+        console.error('Failed to load models', e);
+        // Non-fatal; user can still chat with default backend model
+      });
+    return () => ac.abort();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +55,7 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
           query,
           start_date: startDate,
           end_date: endDate,
+          model: model || undefined,
         }),
       });
 
@@ -55,6 +78,23 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
   return (
     <div className="ai-analyst-chat" style={{ maxWidth: 600, margin: '0 auto', padding: 8 }}>
       <h3 style={{ fontSize: 20, marginBottom: 12 }}>Ask the AI Analyst — {scopeLabel}</h3>
+      {models.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <FormControl size="small" fullWidth>
+            <InputLabel id="model-label">Model {provider ? `(${provider})` : ''}</InputLabel>
+            <Select
+              labelId="model-label"
+              value={model}
+              label={`Model ${provider ? `(${provider})` : ''}`}
+              onChange={(e) => setModel(e.target.value)}
+            >
+              {models.map((m) => (
+                <MenuItem key={m} value={m}>{m}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </div>
+      )}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <textarea
           value={query}

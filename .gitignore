@@ -9,3 +9,7 @@ varavu_selavu_app/varavu_selavu_service/core/__pycache__/__init__.cpython-312.py
 varavu_selavu_app/varavu_selavu_service/core/__pycache__/config.cpython-312.pyc
 varavu_selavu_app/varavu_selavu_service/models/__pycache__/__init__.cpython-312.pyc
 varavu_selavu_app/varavu_selavu_service/models/__pycache__/api_models.cpython-312.pyc
+# Backend environment files (do not commit secrets)
+varavu_selavu_app/.env
+varavu_selavu_app/varavu_selavu_service/.env.*
+!varavu_selavu_app/varavu_selavu_service/.env.example

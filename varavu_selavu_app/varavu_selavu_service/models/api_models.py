@@ -34,6 +34,7 @@ class ChatRequest(BaseModel):
     month: int | None = None
     start_date: str | None = None
     end_date: str | None = None
+    model: Optional[str] = None
 
 
 # ---------------------- Response Models ---------------------- #
@@ -102,4 +103,9 @@ class ErrorResponse(BaseModel):
     code: str = Field(default="error")
     message: str
     details: Optional[Dict[str, Any]] = None
+
+
+class ModelListResponse(BaseModel):
+    provider: str
+    models: List[str]
 

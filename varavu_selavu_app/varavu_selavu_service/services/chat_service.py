@@ -7,15 +7,17 @@ from fastapi import HTTPException
 # Helper: call local Ollama chat API
 # --------------------------------------------------------------------------- #
 
-def call_ollama(query: str, analysis: dict) -> str:
+def call_ollama(query: str, analysis: dict, model: str | None = None) -> str:
     """
     Send the user query together with the current analysis data to the
     local Ollama instance and return the generated response.
     """
     ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_url = f"{ollama_base_url.rstrip('/')}/api/chat"  # override via OLLAMA_BASE_URL
+    # Default to a commonly available model name if none provided
+    model_name = model or os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
     payload = {
-        "model": "gpt-oss:20b",
+        "model": model_name,
         "messages": [
             {"role": "system", "content": f"You are a financial analyst. \n\nAnalysis data:\n {analysis}"},
             {
@@ -42,7 +44,7 @@ def call_ollama(query: str, analysis: dict) -> str:
 # Helper: call OpenAI chat completion API
 # --------------------------------------------------------------------------- #
 
-def call_openai(query: str, analysis: dict) -> str:
+def call_openai(query: str, analysis: dict, model: str | None = None) -> str:
     """
     Send the user query together with the current analysis data to the
     OpenAI Chat Completions API and return the generated response.
@@ -55,8 +57,9 @@ def call_openai(query: str, analysis: dict) -> str:
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
+    model_name = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     payload = {
-        "model": "gpt-4o-mini",
+        "model": model_name,
         "messages": [
             {"role": "system", "content": f"You are a financial analyst. \n\nAnalysis data:\n {analysis}"},
             {"role": "user", "content": f"{query}"},
@@ -83,13 +86,51 @@ def call_openai(query: str, analysis: dict) -> str:
 # Public API: choose provider based on environment
 # --------------------------------------------------------------------------- #
 
-def call_chat_model(query: str, analysis: dict) -> str:
+def call_chat_model(query: str, analysis: dict, model: str | None = None) -> str:
     """
     Use OpenAI in production and Ollama locally.
     The environment is determined via the ENV or ENVIRONMENT variables.
     """
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
     if env.lower() in {"prod", "production"}:
-        return call_openai(query, analysis)
-    return call_ollama(query, analysis)
+        return call_openai(query, analysis, model=model)
+    return call_ollama(query, analysis, model=model)
+
+
+# --------------------------------------------------------------------------- #
+# Model listing helpers
+# --------------------------------------------------------------------------- #
+
+def list_openai_models() -> list[str]:
+    """Return a list of model IDs from OpenAI's Models API."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+    try:
+        resp = requests.get(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
+        # Optionally filter to chat-capable models
+        # Keep as-is for now; UI can filter or let user choose
+        return ids
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Error listing OpenAI models: {exc}")
+
+
+def list_ollama_models() -> list[str]:
+    """Return a list of local Ollama model names (from /api/tags)."""
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    url = f"{ollama_base_url.rstrip('/')}/api/tags"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()  # {"models": [{"name":"llama3:instruct",...}, ...]}
+        return [m.get("name") for m in data.get("models", []) if m.get("name")]
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail=f"Error listing Ollama models: {exc}")
 
