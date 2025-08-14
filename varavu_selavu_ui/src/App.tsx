@@ -5,8 +5,9 @@ import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import Container from '@mui/material/Container';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 import LoginPage from './pages/LoginPage';
-import HomePage from './pages/HomePage';
+import DashboardPage from './pages/DashboardPage';
 import AddExpensePage from './pages/AddExpensePage';
 import ExpenseAnalysisPage from './pages/ExpenseAnalysisPage';
 import Navbar from './components/layout/Navbar';
@@ -15,6 +16,7 @@ import LoginIcon from '@mui/icons-material/Login';
 import UserMenu from './components/layout/UserMenu';
 import ProfilePage from './pages/ProfilePage';
 import AIAnalystPage from './pages/AIAnalystPage';
+import theme from './theme';
 
 const AppContent: React.FC = () => {
   // const [footerValue, setFooterValue] = React.useState(0);
@@ -65,15 +67,15 @@ const AppContent: React.FC = () => {
           )}
         </Toolbar>
       </AppBar>
-      <Container maxWidth="md" sx={{ minHeight: '80vh', pb: 4 }}>
+      <Container maxWidth="lg" sx={{ minHeight: '80vh', pb: 4 }}>
         <Routes>
           <Route path="/" element={<LoginPage />} />
           <Route 
-            path="/home" 
+            path="/dashboard" 
             element={ 
               <>
                 <Navbar />
-                <HomePage />
+                <DashboardPage />
               </>
             }
           />
@@ -133,9 +135,12 @@ const queryClient = new QueryClient({
 
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
-    <Router>
-      <AppContent />
-    </Router>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <AppContent />
+      </Router>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

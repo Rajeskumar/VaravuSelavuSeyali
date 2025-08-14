@@ -8,7 +8,7 @@ import InsightsIcon from '@mui/icons-material/Insights';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 const navItems = [
-  { label: 'Dashboard', icon: <HomeIcon />, path: '/home' },
+  { label: 'Dashboard', icon: <HomeIcon />, path: '/dashboard' },
   { label: 'Add Expense', icon: <AddCircleIcon />, path: '/add-expense' },
   { label: 'Analysis', icon: <InsightsIcon />, path: '/analysis' },
   { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
