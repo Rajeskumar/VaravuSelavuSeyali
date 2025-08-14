@@ -8,12 +8,14 @@ interface Props {
 const CategoryBarChart: React.FC<Props> = ({ categoryTotals }) => {
   const x = categoryTotals.map(c => c.category);
   const y = categoryTotals.map(c => c.total);
+  const palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'];
+  const colors = x.map((_, idx) => palette[idx % palette.length]);
   const data = [
     {
       x,
       y,
       type: 'bar' as const,
-      marker: { color: 'orange' },
+      marker: { color: colors },
       text: y,
       textposition: 'outside' as const,
     },
@@ -22,8 +24,18 @@ const CategoryBarChart: React.FC<Props> = ({ categoryTotals }) => {
     title: '📊 Categorywise Spend',
     xaxis: { title: 'Category' },
     yaxis: { title: 'Amount ($)' },
+    autosize: true,
+    margin: { t: 40, l: 40, r: 10, b: 40 },
   };
-  return <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100vw', height: 350 }} />;
+  return (
+    <Plot
+      data={data}
+      layout={layout}
+      style={{ width: '100%', height: 400 }}
+      useResizeHandler
+      config={{ displayModeBar: false }}
+    />
+  );
 };
 
 export default CategoryBarChart;

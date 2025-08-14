@@ -1,18 +1,13 @@
-// varavu_selavu_app/varavu_selavu_ui/src/components/AnalysisChat.tsx
-import React,{useState} from "react";
+import React, { useState } from "react";
 import API_BASE_URL from '../../api/apiconfig';
 
-interface AnalysisChatProps {
+interface ChatProps {
     userId: string | null;
-    year?: number | null;   // optional – can be omitted or null
-    month?: number | null;  // optional – can be omitted or null
+    startDate: string;
+    endDate: string;
 }
 
-export default function AnalysisChat({
-                                         userId,
-                                         year,
-                                         month,
-                                     }: AnalysisChatProps) {
+export default function ExpenseChat({ userId, startDate, endDate }: ChatProps) {
     const [query, setQuery] = useState("");
     const [response, setResponse] = useState("");
     const [loading, setLoading] = useState(false);
@@ -33,8 +28,8 @@ export default function AnalysisChat({
                 body: JSON.stringify({
                     user_id: userId,
                     query,
-                    year,
-                    month,
+                    start_date: startDate,
+                    end_date: endDate,
                 }),
             });
 
@@ -52,8 +47,7 @@ export default function AnalysisChat({
         }
     };
 
-    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const scopeLabel = year ? (month ? `${monthNames[(month ?? 1)-1]} ${year}` : `${year} (year)`) : (month ? `Month ${month}` : 'selected period');
+    const scopeLabel = `${startDate} to ${endDate}`;
 
     return (
         <div className="analysis-chat" style={{ maxWidth: 600, margin: '0 auto', padding: 8 }}>
@@ -62,7 +56,7 @@ export default function AnalysisChat({
                 <textarea
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder={month ? "e.g. What were my top categories this month?" : "e.g. What were my top categories this year?"}
+                    placeholder={"e.g. What were my top categories?"}
                     rows={4}
                     style={{ width: '100%', fontSize: 16, borderRadius: 6, padding: 8, border: '1px solid #ccc', resize: 'vertical' }}
                 />

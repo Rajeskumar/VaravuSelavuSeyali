@@ -16,7 +16,10 @@ from threading import RLock
 router = APIRouter()
 
 # Simple in-memory cache for analysis results
-_ANALYSIS_CACHE: dict[tuple[str, int | None, int | None], tuple[float, dict]] = {}
+_ANALYSIS_CACHE: dict[
+    tuple[str, int | None, int | None, str | None, str | None],
+    tuple[float, dict],
+] = {}
 _ANALYSIS_CACHE_TTL_SEC = 60  # adjust as needed
 _CACHE_LOCK = RLock()
 
@@ -58,10 +61,23 @@ def dashboard():
     }
 
 @router.get("/analysis")
-def analysis(user_id: str, year: int | None = None, month: int | None = None, response: Response = None):
+def analysis(
+    user_id: str,
+    year: int | None = None,
+    month: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    response: Response = None,
+):
     """Return simple analysis for a given user from Google Sheets."""
     # Serve from cache if fresh
-    cache_key = (user_id, int(year) if year is not None else None, int(month) if month is not None else None)
+    cache_key = (
+        user_id,
+        int(year) if year is not None else None,
+        int(month) if month is not None else None,
+        start_date,
+        end_date,
+    )
     now_ts = time.time()
     with _CACHE_LOCK:
         entry = _ANALYSIS_CACHE.get(cache_key)
@@ -110,6 +126,10 @@ def analysis(user_id: str, year: int | None = None, month: int | None = None, re
 
     # Optional filters by year/month (only if date available)
     if date_col:
+        if start_date:
+            df = df[df[date_col] >= pd.to_datetime(start_date)]
+        if end_date:
+            df = df[df[date_col] <= pd.to_datetime(end_date)]
         if year is not None:
             df = df[df[date_col].dt.year == int(year)]
         if month is not None:
@@ -135,21 +155,24 @@ def analysis(user_id: str, year: int | None = None, month: int | None = None, re
 
     total_expenses = float(df["cost"].sum()) if "cost" in df.columns else 0.0
 
-    # If a specific month is selected, return expense details per category for hover UI
+    # Return expense details per category for hover UI
     category_expense_details = {}
-    if month is not None:
-        if "category" in df.columns:
-            for cat_name, g in df.groupby("category"):
-                details = [
-                    {
-                        "date": (r[date_col].strftime("%Y-%m-%d") if date_col and (date_col in r) and not pd.isna(r[date_col]) else ""),
-                        "description": str(r.get("description", "")),
-                        "category": str(r.get("category", "")),
-                        "cost": float(r.get("cost", 0) or 0),
-                    }
-                    for _, r in g.iterrows()
-                ]
-                category_expense_details[cat_name] = details
+    if "category" in df.columns:
+        for cat_name, g in df.groupby("category"):
+            details = [
+                {
+                    "date": (
+                        r[date_col].strftime("%Y-%m-%d")
+                        if date_col and (date_col in r) and not pd.isna(r[date_col])
+                        else ""
+                    ),
+                    "description": str(r.get("description", "")),
+                    "category": str(r.get("category", "")),
+                    "cost": float(r.get("cost", 0) or 0),
+                }
+                for _, r in g.iterrows()
+            ]
+            category_expense_details[cat_name] = details
 
     result = {
         "top_categories": top_categories,
@@ -161,6 +184,8 @@ def analysis(user_id: str, year: int | None = None, month: int | None = None, re
             "applied_user_col": applied_user_filter,
             "year": int(year) if year is not None else None,
             "month": int(month) if month is not None else None,
+            "start_date": start_date,
+            "end_date": end_date,
             "row_count": int(len(df)),
         },
     }
@@ -188,6 +213,8 @@ def analysis_chat(request: ChatRequest, response: Response = None):
         user_id=request.user_id,
         year=request.year,
         month=request.month,
+        start_date=request.start_date,
+        end_date=request.end_date,
         response=None,  # we do not want to touch the cache
     )
 
