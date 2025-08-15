@@ -4,17 +4,19 @@ import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-route
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import Container from '@mui/material/Container';
+import { ThemeProvider, CssBaseline } from '@mui/material';
 import LoginPage from './pages/LoginPage';
-import HomePage from './pages/HomePage';
+import DashboardPage from './pages/DashboardPage';
 import AddExpensePage from './pages/AddExpensePage';
 import ExpenseAnalysisPage from './pages/ExpenseAnalysisPage';
-import Navbar from './components/layout/Navbar';
+import MainLayout from './components/layout/MainLayout';
+import { drawerWidth } from './components/layout/SideNav';
 import Button from '@mui/material/Button';
 import LoginIcon from '@mui/icons-material/Login';
 import UserMenu from './components/layout/UserMenu';
 import ProfilePage from './pages/ProfilePage';
 import AIAnalystPage from './pages/AIAnalystPage';
+import theme from './theme';
 
 const AppContent: React.FC = () => {
   // const [footerValue, setFooterValue] = React.useState(0);
@@ -42,7 +44,18 @@ const AppContent: React.FC = () => {
 
   return (
     <>
-      <AppBar position="static">
+      <AppBar
+        position="fixed"
+        color="default"
+        sx={{
+          zIndex: theme => theme.zIndex.drawer + 1,
+          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          ml: { sm: `${drawerWidth}px` },
+          backdropFilter: 'blur(12px)',
+          backgroundColor: 'rgba(255,255,255,0.6)',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+        }}
+      >
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Varavu Selavu
@@ -65,47 +78,15 @@ const AppContent: React.FC = () => {
           )}
         </Toolbar>
       </AppBar>
-      <Container maxWidth="md" sx={{ minHeight: '80vh', pb: 4 }}>
-        <Routes>
-          <Route path="/" element={<LoginPage />} />
-          <Route 
-            path="/home" 
-            element={ 
-              <>
-                <Navbar />
-                <HomePage />
-              </>
-            }
-          />
-          <Route
-            path="/add-expense"
-            element={
-              <>
-                <Navbar />
-                <AddExpensePage />
-              </>
-            }
-          />
-          <Route path="/analysis" element={
-            <>
-              <Navbar />
-              <ExpenseAnalysisPage />
-            </>
-          } />
-          <Route path="/ai-analyst" element={
-            <>
-              <Navbar />
-              <AIAnalystPage />
-            </>
-          } />
-          <Route path="/profile" element={
-            <>
-              <Navbar />
-              <ProfilePage />
-            </>
-          } />
-        </Routes>
-      </Container>
+      <Toolbar />
+      <Routes>
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/dashboard" element={<MainLayout><DashboardPage /></MainLayout>} />
+        <Route path="/add-expense" element={<MainLayout><AddExpensePage /></MainLayout>} />
+        <Route path="/analysis" element={<MainLayout><ExpenseAnalysisPage /></MainLayout>} />
+        <Route path="/ai-analyst" element={<MainLayout><AIAnalystPage /></MainLayout>} />
+        <Route path="/profile" element={<MainLayout><ProfilePage /></MainLayout>} />
+      </Routes>
       {/*<Box sx={{ width: '100%', position: 'fixed', bottom: 0 }}>*/}
       {/*  <BottomNavigation*/}
       {/*    showLabels*/}
@@ -133,9 +114,12 @@ const queryClient = new QueryClient({
 
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
-    <Router>
-      <AppContent />
-    </Router>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Router>
+        <AppContent />
+      </Router>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
