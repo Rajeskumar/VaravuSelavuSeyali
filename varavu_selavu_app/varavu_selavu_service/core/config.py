@@ -19,5 +19,8 @@ class Settings(BaseSettings):
     # Analysis cache TTL (seconds)
     ANALYSIS_CACHE_TTL_SEC: int = 60
 
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "change-me")
+    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+
     class Config:
         env_file = ".env"

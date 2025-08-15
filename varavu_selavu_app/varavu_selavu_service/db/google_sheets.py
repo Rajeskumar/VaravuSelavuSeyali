@@ -54,8 +54,11 @@ class GoogleSheetsClient:
         return self.spreadsheet.sheet1
 
     def user_data_sheet(self) -> gspread.Worksheet:
-        # Retrieve or create the 'user_data' sheet similar to old util
+        """Retrieve or create the `user_data` worksheet used for user accounts."""
         try:
             return self.spreadsheet.worksheet("user_data")
         except gspread.exceptions.WorksheetNotFound:
-            return self.spreadsheet.add_worksheet(title="user_data", rows="100", cols="4")
+            # legacy sheet may not exist on a fresh spreadsheet
+            ws = self.spreadsheet.add_worksheet(title="user_data", rows="100", cols="4")
+            ws.append_row(["name", "phone", "email", "password"])
+            return ws
