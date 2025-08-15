@@ -46,13 +46,9 @@ const AppContent: React.FC = () => {
     <>
       <AppBar
         position="fixed"
-        color="default"
-        sx={{
-          zIndex: theme => theme.zIndex.drawer + 1,
-          backdropFilter: 'blur(12px)',
-          backgroundColor: 'rgba(255,255,255,0.6)',
-          boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
-        }}
+        sx={{ zIndex: theme => theme.zIndex.drawer + 1 }}
+        color="transparent"
+        elevation={0}
       >
         <Toolbar>
           <AccountBalanceWalletIcon sx={{ mr: 1 }} />

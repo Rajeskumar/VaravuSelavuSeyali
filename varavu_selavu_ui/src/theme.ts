@@ -19,10 +19,10 @@ const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(255,255,255,0.6)',
+          backgroundColor: 'rgba(255,255,255,0.4)',
           backdropFilter: 'blur(12px)',
           backgroundImage: 'none',
-          border: '1px solid rgba(255,255,255,0.4)',
+          border: '1px solid rgba(255,255,255,0.3)',
         },
       },
     },
@@ -51,7 +51,8 @@ const theme = createTheme({
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: 'rgba(255,255,255,0.6)',
+          background: 'linear-gradient(135deg, rgba(79,70,229,0.7), rgba(20,184,166,0.7))',
+          color: '#fff',
           backdropFilter: 'blur(12px)',
           boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
         },
@@ -60,9 +61,10 @@ const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          backgroundColor: 'rgba(255,255,255,0.3)',
+          background: 'linear-gradient(135deg, rgba(79,70,229,0.4), rgba(20,184,166,0.4))',
+          color: '#fff',
           backdropFilter: 'blur(12px)',
-          borderRight: '1px solid rgba(255,255,255,0.4)',
+          borderRight: '1px solid rgba(255,255,255,0.3)',
         },
       },
     },
