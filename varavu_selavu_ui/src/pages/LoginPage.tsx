@@ -41,7 +41,7 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
+    <Box sx={{ minHeight: 'calc(100vh - 64px)', display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
       <Box
         sx={{
           flex: 1,
@@ -53,13 +53,13 @@ const LoginPage: React.FC = () => {
           p: 4,
         }}
       >
-        <Typography variant="h5" sx={{ maxWidth: 280, fontWeight: 700 }}>
+        <Typography variant="h4" sx={{ maxWidth: 280, fontWeight: 700 }}>
           Track, analyze & plan your spending.
         </Typography>
       </Box>
       <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
-        <Card sx={{ width: 420, maxWidth: '100%' }}>
-          <CardContent>
+        <Card sx={{ width: 420, maxWidth: '100%' }} elevation={3}>
+          <CardContent sx={{ p: 4 }}>
             <Typography variant="h6" gutterBottom align="center">
               Login
             </Typography>
