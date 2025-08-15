@@ -5,12 +5,14 @@ import SideNav from './SideNav';
 
 interface Props {
   children: React.ReactNode;
+  mobileOpen: boolean;
+  handleDrawerToggle: () => void;
 }
 
-const MainLayout: React.FC<Props> = ({ children }) => {
+const MainLayout: React.FC<Props> = ({ children, mobileOpen, handleDrawerToggle }) => {
   return (
     <Box sx={{ display: 'flex' }}>
-      <SideNav />
+      <SideNav mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle} />
       <Container maxWidth="lg" sx={{ flexGrow: 1, pb: 4, pt: 3 }}>
         {children}
       </Container>

@@ -1,4 +1,4 @@
-import API_BASE_URL from './apiconfig';
+import { fetchWithAuth } from './api';
 
 export interface ModelsResponse {
   provider: 'openai' | 'ollama' | string;
@@ -6,12 +6,7 @@ export interface ModelsResponse {
 }
 
 export async function getModels(signal?: AbortSignal): Promise<ModelsResponse> {
-  const token = localStorage.getItem('vs_token');
-  const res = await fetch(`${API_BASE_URL}/api/v1/models`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+  const res = await fetchWithAuth(`/api/v1/models`, {
     signal,
   });
   if (!res.ok) {
