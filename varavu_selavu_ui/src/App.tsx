@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { JSX } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter as Router, Route, Routes, useNavigate, Navigate } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
