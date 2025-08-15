@@ -48,6 +48,21 @@ class AuthService:
         # support both hashed (bcrypt) and legacy plain-text passwords
         return verify_password(password, stored) or stored == password
 
+    def reset_password(self, email: str, password: str) -> bool:
+        user = self.get_user(email)
+        if not user:
+            return False
+        
+        # Find the user's row index
+        cell = self.user_ws.find(email)
+        if not cell:
+            return False
+
+        hashed = hash_password(password)
+        # Update the password in the same row. Assuming password is in the 4th column (D)
+        self.user_ws.update_cell(cell.row, 4, hashed)
+        return True
+
     def revoke_refresh_token(self, token: str) -> None:
         _REVOKED_REFRESH_TOKENS.add(token)
 

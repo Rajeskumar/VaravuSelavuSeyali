@@ -10,8 +10,10 @@ import HomeIcon from '@mui/icons-material/Home';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import InsightsIcon from '@mui/icons-material/Insights';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 
-export const drawerWidth = 220;
+export const drawerWidth = 240; // Increased drawer width
 
 const navItems = [
   { label: 'Dashboard', icon: <HomeIcon />, path: '/dashboard' },
@@ -20,30 +22,31 @@ const navItems = [
   { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
 ];
 
-const SideNav: React.FC = () => {
+interface SideNavProps {
+  mobileOpen: boolean;
+  handleDrawerToggle: () => void;
+}
+
+const SideNav: React.FC<SideNavProps> = ({ mobileOpen, handleDrawerToggle }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        [`& .MuiDrawer-paper`]: {
-          width: drawerWidth,
-          boxSizing: 'border-box',
-          p: 1,
-        },
-      }}
-    >
+  const drawerContent = (
+    <>
       <Toolbar />
       <List>
         {navItems.map(item => (
           <ListItemButton
             key={item.path}
             selected={location.pathname.startsWith(item.path)}
-            onClick={() => navigate(item.path)}
+            onClick={() => {
+              navigate(item.path);
+              if (isMobile) {
+                handleDrawerToggle();
+              }
+            }}
             sx={{
               mx: 1,
               my: 0.5,
@@ -63,6 +66,29 @@ const SideNav: React.FC = () => {
           </ListItemButton>
         ))}
       </List>
+    </>
+  );
+
+  return (
+    <Drawer
+      variant={isMobile ? 'temporary' : 'permanent'}
+      open={isMobile ? mobileOpen : true}
+      onClose={handleDrawerToggle}
+      ModalProps={{
+        keepMounted: true, // Better open performance on mobile.
+      }}
+      sx={{
+        display: { xs: isMobile ? 'block' : 'none', md: 'block' },
+        width: drawerWidth,
+        flexShrink: { md: 0 },
+        [`& .MuiDrawer-paper`]: {
+          width: drawerWidth,
+          boxSizing: 'border-box',
+          p: 1,
+        },
+      }}
+    >
+      {drawerContent}
     </Drawer>
   );
 };

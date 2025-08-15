@@ -113,7 +113,7 @@ const LoginPage: React.FC = () => {
                 </Grid>
                 <Grid size={12} sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Link href="/register" variant="body2">Create account</Link>
-                  <Link href="#" variant="body2">Forgot password</Link>
+                  <Link href="/forgot-password" variant="body2">Forgot password</Link>
                 </Grid>
               </Grid>
             </Box>

@@ -4,8 +4,9 @@ import { BrowserRouter as Router, Route, Routes, useNavigate, Navigate } from 'r
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline, useTheme, useMediaQuery, IconButton } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import MenuIcon from '@mui/icons-material/Menu';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -16,22 +17,36 @@ import Button from '@mui/material/Button';
 import LoginIcon from '@mui/icons-material/Login';
 import UserMenu from './components/layout/UserMenu';
 import ProfilePage from './pages/ProfilePage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AIAnalystPage from './pages/AIAnalystPage';
 import theme from './theme';
 import { logout as apiLogout } from './api/auth';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
   const token = localStorage.getItem('vs_token');
-  if (!token) return <Navigate to="/" replace />;
+  if (!token) return <Navigate to="/login" replace />;
   return children;
 };
 
+const Root: React.FC = () => {
+  const token = localStorage.getItem('vs_token');
+  if (token) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <Navigate to="/login" replace />;
+};
+
 const AppContent: React.FC = () => {
-  // const [footerValue, setFooterValue] = React.useState(0);
   const navigate = useNavigate();
   const [user, setUser] = React.useState<string | null>(() => localStorage.getItem('vs_user'));
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Update when localStorage changes from other tabs
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
   React.useEffect(() => {
     const onStorage = () => setUser(localStorage.getItem('vs_user'));
     window.addEventListener('storage', onStorage);
@@ -52,7 +67,7 @@ const AppContent: React.FC = () => {
     localStorage.removeItem('vs_refresh');
     setUser(null);
     window.dispatchEvent(new Event('vs_auth_changed'));
-    navigate('/');
+    navigate('/login');
   };
 
   return (
@@ -64,6 +79,17 @@ const AppContent: React.FC = () => {
         elevation={0}
       >
         <Toolbar>
+          {user && isMobile && (
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{ mr: 2 }}
+            >
+              <MenuIcon />
+            </IconButton>
+          )}
           <AccountBalanceWalletIcon sx={{ mr: 1 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Varavu Selavu
@@ -78,7 +104,7 @@ const AppContent: React.FC = () => {
             <Button
               color="inherit"
               startIcon={<LoginIcon />}
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/login')}
               sx={{ ml: 2 }}
             >
               Login
@@ -88,25 +114,16 @@ const AppContent: React.FC = () => {
       </AppBar>
       <Toolbar />
       <Routes>
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<Root />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/dashboard" element={<RequireAuth><MainLayout><DashboardPage /></MainLayout></RequireAuth>} />
-        <Route path="/add-expense" element={<RequireAuth><MainLayout><AddExpensePage /></MainLayout></RequireAuth>} />
-        <Route path="/analysis" element={<RequireAuth><MainLayout><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
-        <Route path="/ai-analyst" element={<RequireAuth><MainLayout><AIAnalystPage /></MainLayout></RequireAuth>} />
-        <Route path="/profile" element={<RequireAuth><MainLayout><ProfilePage /></MainLayout></RequireAuth>} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/dashboard" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><DashboardPage /></MainLayout></RequireAuth>} />
+        <Route path="/add-expense" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AddExpensePage /></MainLayout></RequireAuth>} />
+        <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
+        <Route path="/ai-analyst" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AIAnalystPage /></MainLayout></RequireAuth>} />
+        <Route path="/profile" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ProfilePage /></MainLayout></RequireAuth>} />
       </Routes>
-      {/*<Box sx={{ width: '100%', position: 'fixed', bottom: 0 }}>*/}
-      {/*  <BottomNavigation*/}
-      {/*    showLabels*/}
-      {/*    value={footerValue}*/}
-      {/*    onChange={(event, newValue) => setFooterValue(newValue)}*/}
-      {/*  >*/}
-      {/*    <BottomNavigationAction label="Home" icon={<HomeIcon />} />*/}
-      {/*    <BottomNavigationAction label="Add" icon={<AddCircleIcon />} />*/}
-      {/*    <BottomNavigationAction label="Recent" icon={<RestoreIcon />} />*/}
-      {/*  </BottomNavigation>*/}
-      {/*</Box>*/}
     </>
   );
 };

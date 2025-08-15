@@ -1,7 +1,7 @@
+import { FormControl, InputLabel, MenuItem, Select } from '@mui/material';
 import React, { useState } from "react";
-import API_BASE_URL from '../../api/apiconfig';
+import { fetchWithAuth } from '../../api/api';
 import { getModels, ModelsResponse } from '../../api/models';
-import { FormControl, InputLabel, MenuItem, Select, Typography } from '@mui/material';
 
 interface AIAnalystChatProps {
   userId: string | null;
@@ -24,9 +24,12 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
       .then((res: ModelsResponse) => {
         setModels(res.models);
         setProvider(res.provider);
-        if (res.models.length && !model) {
-          setModel(res.models[0]);
-        }
+        setModel(currentModel => {
+          if (res.models.length && !currentModel) {
+            return res.models[0];
+          }
+          return currentModel;
+        });
       })
       .catch((e) => {
         console.error('Failed to load models', e);
@@ -43,13 +46,8 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
     setError(null);
     setResponse("");
     try {
-      const token = localStorage.getItem('vs_token');
-      const res = await fetch(`${API_BASE_URL}/api/v1/analysis/chat`, {
+      const res = await fetchWithAuth(`/api/v1/analysis/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify({
           user_id: userId,
           query,

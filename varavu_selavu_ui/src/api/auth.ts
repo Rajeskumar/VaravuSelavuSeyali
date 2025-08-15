@@ -79,3 +79,22 @@ export async function refresh(refresh_token: string): Promise<LoginResponse> {
   }
   return response.json();
 }
+
+export interface ForgotPasswordPayload {
+  email: string;
+  password: string;
+}
+
+export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Forgot password failed');
+  }
+}

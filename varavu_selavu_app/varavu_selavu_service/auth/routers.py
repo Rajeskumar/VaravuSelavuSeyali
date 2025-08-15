@@ -29,6 +29,19 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+@router.post("/forgot-password")
+def forgot_password(data: ForgotPasswordRequest, auth: AuthService = Depends(get_auth_service)):
+    ok = auth.reset_password(data.email, data.password)
+    if not ok:
+        raise HTTPException(status_code=400, detail="User not found")
+    return {"success": True}
+
+
 @router.post("/register")
 def register(data: RegisterRequest, auth: AuthService = Depends(get_auth_service)):
     ok = auth.register_user(data.name, data.phone, data.email, data.password)
