@@ -1,12 +1,13 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate, Navigate } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import AddExpensePage from './pages/AddExpensePage';
 import ExpenseAnalysisPage from './pages/ExpenseAnalysisPage';
@@ -17,6 +18,13 @@ import UserMenu from './components/layout/UserMenu';
 import ProfilePage from './pages/ProfilePage';
 import AIAnalystPage from './pages/AIAnalystPage';
 import theme from './theme';
+import { logout as apiLogout } from './api/auth';
+
+const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
+  const token = localStorage.getItem('vs_token');
+  if (!token) return <Navigate to="/" replace />;
+  return children;
+};
 
 const AppContent: React.FC = () => {
   // const [footerValue, setFooterValue] = React.useState(0);
@@ -35,8 +43,13 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
+    const refresh = localStorage.getItem('vs_refresh');
+    if (refresh) {
+      apiLogout(refresh);
+    }
     localStorage.removeItem('vs_user');
     localStorage.removeItem('vs_token');
+    localStorage.removeItem('vs_refresh');
     setUser(null);
     window.dispatchEvent(new Event('vs_auth_changed'));
     navigate('/');
@@ -76,11 +89,12 @@ const AppContent: React.FC = () => {
       <Toolbar />
       <Routes>
         <Route path="/" element={<LoginPage />} />
-        <Route path="/dashboard" element={<MainLayout><DashboardPage /></MainLayout>} />
-        <Route path="/add-expense" element={<MainLayout><AddExpensePage /></MainLayout>} />
-        <Route path="/analysis" element={<MainLayout><ExpenseAnalysisPage /></MainLayout>} />
-        <Route path="/ai-analyst" element={<MainLayout><AIAnalystPage /></MainLayout>} />
-        <Route path="/profile" element={<MainLayout><ProfilePage /></MainLayout>} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/dashboard" element={<RequireAuth><MainLayout><DashboardPage /></MainLayout></RequireAuth>} />
+        <Route path="/add-expense" element={<RequireAuth><MainLayout><AddExpensePage /></MainLayout></RequireAuth>} />
+        <Route path="/analysis" element={<RequireAuth><MainLayout><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
+        <Route path="/ai-analyst" element={<RequireAuth><MainLayout><AIAnalystPage /></MainLayout></RequireAuth>} />
+        <Route path="/profile" element={<RequireAuth><MainLayout><ProfilePage /></MainLayout></RequireAuth>} />
       </Routes>
       {/*<Box sx={{ width: '100%', position: 'fixed', bottom: 0 }}>*/}
       {/*  <BottomNavigation*/}
