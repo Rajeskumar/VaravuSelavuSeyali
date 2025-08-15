@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Optional
 
 from varavu_selavu_service.db.google_sheets import GoogleSheetsClient
@@ -12,8 +11,8 @@ class AuthService:
     def __init__(self, user_ws=None):
         if user_ws is None:
             gs = GoogleSheetsClient()
-            # use a dedicated users sheet
-            self.user_ws = gs.users_sheet()
+            # use existing `user_data` sheet for user credentials
+            self.user_ws = gs.user_data_sheet()
         else:
             self.user_ws = user_ws
 
@@ -22,20 +21,32 @@ class AuthService:
 
     def get_user(self, email: str) -> Optional[dict]:
         records = self._all_users()
-        return next((u for u in records if u.get("email") == email), None)
+        return next(
+            (u for u in records if (u.get("email") or u.get("Email")) == email),
+            None,
+        )
 
-    def register_user(self, email: str, password: str) -> bool:
+    def register_user(self, name: str, phone: str, email: str, password: str) -> bool:
         if self.get_user(email):
             return False
         hashed = hash_password(password)
-        self.user_ws.append_row([email, hashed, datetime.utcnow().isoformat()])
+        # user_data sheet columns: name, phone, email, password
+        self.user_ws.append_row([name, phone, email, hashed])
         return True
 
     def authenticate_user(self, email: str, password: str) -> bool:
         user = self.get_user(email)
         if not user:
             return False
-        return verify_password(password, user.get("hashed_password") or user.get("Password"))
+        stored = (
+            user.get("hashed_password")
+            or user.get("password")
+            or user.get("Password")
+        )
+        if stored is None:
+            return False
+        # support both hashed (bcrypt) and legacy plain-text passwords
+        return verify_password(password, stored) or stored == password
 
     def revoke_refresh_token(self, token: str) -> None:
         _REVOKED_REFRESH_TOKENS.add(token)

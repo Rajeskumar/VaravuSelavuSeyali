@@ -14,7 +14,7 @@ class FakeSheet:
         return self.rows
 
     def append_row(self, row):
-        self.rows.append({"email": row[0], "hashed_password": row[1], "created_at": row[2]})
+        self.rows.append({"name": row[0], "phone": row[1], "email": row[2], "password": row[3]})
 
 
 def create_app():
@@ -34,7 +34,10 @@ def test_register_login_and_me():
     app, _ = create_app()
     client = TestClient(app)
 
-    resp = client.post("/auth/register", json={"email": "a@b.com", "password": "pw"})
+    resp = client.post(
+        "/auth/register",
+        json={"name": "Alice", "phone": "123", "email": "a@b.com", "password": "pw"},
+    )
     assert resp.status_code == 200
 
     login_resp = client.post(
@@ -58,7 +61,10 @@ def test_refresh_and_logout():
     app, _ = create_app()
     client = TestClient(app)
 
-    client.post("/auth/register", json={"email": "x@y.com", "password": "pw"})
+    client.post(
+        "/auth/register",
+        json={"name": "Bob", "phone": "999", "email": "x@y.com", "password": "pw"},
+    )
     login_resp = client.post(
         "/auth/login",
         data={"username": "x@y.com", "password": "pw"},

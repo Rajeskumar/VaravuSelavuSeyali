@@ -11,7 +11,7 @@ The service uses JWT based authentication with access and refresh tokens.
 - `JWT_EXPIRE_MINUTES` – access token lifetime in minutes (default 30).
 
 ### Auth flow
-1. **Register** – `POST /api/v1/auth/register` with `email` and `password`.
+1. **Register** – `POST /api/v1/auth/register` with `name`, `email`, `phone` and `password`.
 2. **Login** – `POST /api/v1/auth/login` using OAuth2 password form (`username` & `password`). Returns access and refresh tokens.
 3. **Refresh** – `POST /api/v1/auth/refresh` with a refresh token to obtain new tokens.
 4. **Logout** – `POST /api/v1/auth/logout` with a refresh token to invalidate it.
@@ -22,7 +22,7 @@ The service uses JWT based authentication with access and refresh tokens.
 # register
 curl -X POST http://localhost:8000/api/v1/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"email":"user@example.com","password":"secret"}'
+  -d '{"name":"Alice","email":"user@example.com","phone":"1234567890","password":"secret"}'
 
 # login
 curl -X POST http://localhost:8000/api/v1/auth/login \

@@ -13,6 +13,8 @@ def get_auth_service() -> AuthService:
 
 
 class RegisterRequest(BaseModel):
+    name: str
+    phone: str
     email: EmailStr
     password: str
 
@@ -29,7 +31,7 @@ class RefreshRequest(BaseModel):
 
 @router.post("/register")
 def register(data: RegisterRequest, auth: AuthService = Depends(get_auth_service)):
-    ok = auth.register_user(data.email, data.password)
+    ok = auth.register_user(data.name, data.phone, data.email, data.password)
     if not ok:
         raise HTTPException(status_code=400, detail="User already exists")
     return {"success": True}

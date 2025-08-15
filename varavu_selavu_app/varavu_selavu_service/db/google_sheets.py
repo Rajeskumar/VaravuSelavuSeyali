@@ -1,6 +1,5 @@
 import os
 from typing import Optional
-import os
 
 import gspread
 from google.auth import default as google_auth_default
@@ -55,17 +54,11 @@ class GoogleSheetsClient:
         return self.spreadsheet.sheet1
 
     def user_data_sheet(self) -> gspread.Worksheet:
-        # Retrieve or create the 'user_data' sheet similar to old util
+        """Retrieve or create the `user_data` worksheet used for user accounts."""
         try:
             return self.spreadsheet.worksheet("user_data")
         except gspread.exceptions.WorksheetNotFound:
-            return self.spreadsheet.add_worksheet(title="user_data", rows="100", cols="4")
-
-    def users_sheet(self) -> gspread.Worksheet:
-        """Retrieve or create the dedicated users worksheet."""
-        try:
-            return self.spreadsheet.worksheet("users")
-        except gspread.exceptions.WorksheetNotFound:
-            ws = self.spreadsheet.add_worksheet(title="users", rows="100", cols="3")
-            ws.append_row(["email", "hashed_password", "created_at"])
+            # legacy sheet may not exist on a fresh spreadsheet
+            ws = self.spreadsheet.add_worksheet(title="user_data", rows="100", cols="4")
+            ws.append_row(["name", "phone", "email", "password"])
             return ws

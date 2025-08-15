@@ -10,7 +10,9 @@ import Box from '@mui/material/Box';
 import { register } from '../api/auth';
 
 const RegisterPage: React.FC = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,7 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      await register({ email, password });
+      await register({ name, email, phone, password });
       navigate('/');
     } catch {
       setError('Registration failed');
@@ -47,10 +49,29 @@ const RegisterPage: React.FC = () => {
               <Grid size={12}>
                 <TextField
                   fullWidth
+                  label="Name"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid size={12}>
+                <TextField
+                  fullWidth
                   label="Email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                  required
+                />
+              </Grid>
+              <Grid size={12}>
+                <TextField
+                  fullWidth
+                  label="Phone"
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
                   required
                 />
               </Grid>

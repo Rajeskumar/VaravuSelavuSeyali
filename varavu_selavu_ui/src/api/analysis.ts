@@ -15,9 +15,13 @@ export async function getAnalysis(user_id: string, opts?: { year?: number; month
   if (opts?.month !== undefined) params.set('month', String(opts.month));
   // Cache busting to ensure we always get fresh data when filters change
   params.set('_ts', String(Date.now()));
+  const token = localStorage.getItem('vs_token');
   const res = await fetch(`${API_BASE_URL}/api/v1/analysis?${params.toString()}`, {
     cache: 'no-store',
-    headers: { 'Accept': 'application/json' },
+    headers: {
+      'Accept': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   });
   if (!res.ok) throw new Error('Failed to fetch analysis');
   return res.json();
