@@ -4,7 +4,8 @@ import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-route
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import {ThemeProvider, CssBaseline, Avatar} from '@mui/material';
+import SavingsIcon from "@mui/icons-material/Savings";
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AddExpensePage from './pages/AddExpensePage';
@@ -43,10 +44,13 @@ const AppContent: React.FC = () => {
 
   return (
     <>
-      <AppBar position="fixed" sx={{ zIndex: theme => theme.zIndex.drawer + 1 }}>
+      <AppBar position="fixed" sx={{ zIndex: theme => theme.zIndex.drawer + 1 }} >
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Varavu Selavu
+          <Avatar sx={{ bgcolor: "secondary.main", width: 28, height: 28 }}>
+            <SavingsIcon fontSize="small" />
+          </Avatar>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+             Varavu Selavu
           </Typography>
           {user ? (
             <UserMenu
