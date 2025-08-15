@@ -5,12 +5,12 @@ import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { ThemeProvider, CssBaseline } from '@mui/material';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import AddExpensePage from './pages/AddExpensePage';
 import ExpenseAnalysisPage from './pages/ExpenseAnalysisPage';
 import MainLayout from './components/layout/MainLayout';
-import { drawerWidth } from './components/layout/SideNav';
 import Button from '@mui/material/Button';
 import LoginIcon from '@mui/icons-material/Login';
 import UserMenu from './components/layout/UserMenu';
@@ -49,14 +49,13 @@ const AppContent: React.FC = () => {
         color="default"
         sx={{
           zIndex: theme => theme.zIndex.drawer + 1,
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          ml: { sm: `${drawerWidth}px` },
           backdropFilter: 'blur(12px)',
           backgroundColor: 'rgba(255,255,255,0.6)',
           boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
         }}
       >
         <Toolbar>
+          <AccountBalanceWalletIcon sx={{ mr: 1 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Varavu Selavu
           </Typography>
