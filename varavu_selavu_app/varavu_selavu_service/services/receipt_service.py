@@ -30,6 +30,7 @@ class ReceiptService:
             "tip": 0.0,
             "discount": 0.0,
             "description": "Receipt import",
+            "category_name": "",
         }
         items: List[Dict[str, Any]] = []
         lines = [l.strip() for l in text.splitlines() if l.strip()]
@@ -77,9 +78,9 @@ class ReceiptService:
         prompt = (
             "Extract data from this grocery receipt as JSON. Return a `header` object "
             "and an `items` array. The header must include merchant_name, "
-            "purchased_at (ISO 8601), currency, amount, tax, tip, discount and "
-            "description. Each item needs line_no, item_name, quantity, unit, "
-            "unit_price, line_total and optional category_name. Use your own "
+            "purchased_at (ISO 8601), currency, amount (total), tax, tip, discount, "
+            "category_name and description. Each item needs line_no, item_name, "
+            "quantity, unit, unit_price, line_total and category_name. Use your own "
             "knowledge of grocery products to fix any misspellings or partial item "
             "names so they read naturally. All monetary values must be floating point "
             "dollars with no rounding. Respond only with the JSON structure."
@@ -135,11 +136,12 @@ class ReceiptService:
             "prompt": (
                 "Extract data from this grocery receipt image and respond with JSON. "
                 "Provide a `header` with merchant_name, purchased_at (ISO 8601), "
-                "currency, amount, tax, tip, discount and description, plus an `items` "
-                "array of objects containing line_no, item_name, quantity, unit, "
-                "unit_price, line_total and optional category_name. Correct any "
-                "misspelled item names using your knowledge of products. All monetary "
-                "values must be floating point dollars. Image (base64): " + b64
+                "currency, amount (total), tax, tip, discount, category_name and "
+                "description, plus an `items` array of objects containing line_no, "
+                "item_name, quantity, unit, unit_price, line_total and category_name. "
+                "Correct any misspelled item names using your knowledge of products. "
+                "All monetary values must be floating point dollars. Image (base64): "
+                + b64
             ),
             "format": "json",
         }

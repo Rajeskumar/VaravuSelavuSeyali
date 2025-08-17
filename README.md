@@ -57,4 +57,7 @@ for parsing into a header and line items. Parsed data is returned to the UI for
 review and then saved to Google Sheets tabs `expenses` and `expense_items`.
 All monetary values are stored as floating point dollars to match receipt
 totals exactly.
+The model also suggests categories and the overall total. Users can add or
+remove item rows, adjust categories or amounts, and save even if totals appear
+out of balance (the backend will reject unreconciled submissions).
 Tabs are created automatically if missing.

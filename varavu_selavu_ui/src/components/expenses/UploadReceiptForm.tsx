@@ -52,7 +52,7 @@ const UploadReceiptForm: React.FC = () => {
 
   return (
     <Box>
-      <input type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
+      <input data-testid="file-input" type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
       <Button onClick={handleParse} disabled={!file}>Parse</Button>
       {draft && (
         <Box sx={{ mt: 2 }}>
@@ -71,9 +71,24 @@ const UploadReceiptForm: React.FC = () => {
             fullWidth
             sx={{ mb: 1 }}
           />
+          <TextField
+            label="Category"
+            value={draft.header.category_name || ''}
+            onChange={e => setDraft({ ...draft, header: { ...draft.header, category_name: e.target.value } })}
+            fullWidth
+            sx={{ mb: 1 }}
+          />
+          <TextField
+            label="Total ($)"
+            type="number"
+            value={draft.header.amount || 0}
+            onChange={e => setDraft({ ...draft, header: { ...draft.header, amount: parseFloat(e.target.value) || 0 } })}
+            fullWidth
+            sx={{ mb: 1 }}
+          />
           <Typography variant="subtitle1">Items</Typography>
           {draft.items.map((item: any, idx: number) => (
-            <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1 }}>
+            <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
               <TextField
                 label="Name"
                 value={item.item_name}
@@ -93,12 +108,29 @@ const UploadReceiptForm: React.FC = () => {
                   setDraft({ ...draft, items });
                 }}
               />
+              <TextField
+                label="Category"
+                value={item.category_name || ''}
+                onChange={e => {
+                  const items = [...draft.items];
+                  items[idx].category_name = e.target.value;
+                  setDraft({ ...draft, items });
+                }}
+              />
+              <Button onClick={() => {
+                const items = draft.items.filter((_: any, i: number) => i !== idx);
+                setDraft({ ...draft, items });
+              }}>Delete</Button>
             </Box>
           ))}
+          <Button onClick={() => {
+            const items = [...draft.items, { line_no: draft.items.length + 1, item_name: '', line_total: 0, category_name: '' }];
+            setDraft({ ...draft, items });
+          }}>Add Item</Button>
           <Typography color={reconcileOk() ? 'green' : 'red'}>
             {reconcileOk() ? 'Totals match' : 'Totals mismatch'}
           </Typography>
-          <Button onClick={handleSave} disabled={!reconcileOk() || saving}>Save</Button>
+          <Button onClick={handleSave} disabled={saving}>Save</Button>
         </Box>
       )}
       {message && <Typography sx={{ mt: 1 }}>{message}</Typography>}
