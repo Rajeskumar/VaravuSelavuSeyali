@@ -1,5 +1,19 @@
+import os
+from pathlib import Path
 from typing import List
 from pydantic.v1 import BaseSettings
+
+try:  # pragma: no cover - optional dependency
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:  # pragma: no cover - fallback simple loader
+    env_path = Path(__file__).resolve().parents[2] / '.env'
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            if not line or line.strip().startswith('#') or '=' not in line:
+                continue
+            key, val = line.split('=', 1)
+            os.environ.setdefault(key.strip(), val.strip())
 
 
 class Settings(BaseSettings):

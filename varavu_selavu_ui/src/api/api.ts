@@ -4,10 +4,12 @@ import API_BASE_URL from './apiconfig';
 export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('vs_token');
 
-  const headers = {
-    ...options.headers,
-    'Content-Type': 'application/json',
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string>),
   };
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     (headers as any)['Authorization'] = `Bearer ${token}`;

@@ -68,13 +68,12 @@ class ReceiptService:
         return header, items
 
     # ------------------- AI calls -------------------
-    def _call_openai(self, b64: str, content_type: str) -> Dict[str, Any]:
+    def _call_openai(self, data: bytes, content_type: str) -> Dict[str, Any]:
         """Send the receipt bytes to the OpenAI vision endpoint."""
         headers = {
             "Authorization": f"Bearer {self.openai_api_key}",
             "Content-Type": "application/json",
         }
-        # Explicit instructions help the model return structured data with items
         prompt = (
             "Extract merchant_name, purchased_at (ISO 8601), currency, amount_cents, "
             "tax_cents, tip_cents, discount_cents, description and an array of line "
@@ -83,7 +82,31 @@ class ReceiptService:
             "All monetary values must be integers in cents. Respond only with JSON "
             "containing `header` and `items`."
         )
-        image_url = {"url": f"data:{content_type};base64,{b64}"}
+
+        if content_type == "application/pdf":
+            upload_headers = {"Authorization": f"Bearer {self.openai_api_key}"}
+            files = {"file": ("receipt.pdf", data, content_type)}
+            upload_resp = requests.post(
+                f"{self.openai_base_url}/files",
+                headers=upload_headers,
+                files=files,
+                data={"purpose": "vision"},
+                timeout=30,
+            )
+            upload_resp.raise_for_status()
+            file_id = upload_resp.json()["id"]
+            user_content = [
+                {"type": "file", "file_id": file_id},
+                {"type": "text", "text": prompt},
+            ]
+        else:
+            b64 = base64.b64encode(data).decode()
+            image_url = {"url": f"data:{content_type};base64,{b64}"}
+            user_content = [
+                {"type": "image_url", "image_url": image_url},
+                {"type": "text", "text": prompt},
+            ]
+
         body = {
             "model": self.model,
             "messages": [
@@ -93,10 +116,7 @@ class ReceiptService:
                 },
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": image_url},
-                        {"type": "text", "text": prompt},
-                    ],
+                    "content": user_content,
                 },
             ],
             "response_format": {"type": "json_object"},
@@ -134,11 +154,11 @@ class ReceiptService:
             header, items = self._parse_text(text)
             parsed: Dict[str, Any] = {"header": header, "items": items, "ocr_text": text}
         else:
-            b64 = base64.b64encode(data).decode()
             if self.engine == "ollama":
+                b64 = base64.b64encode(data).decode()
                 parsed = self._call_ollama(b64)
             else:
-                parsed = self._call_openai(b64, content_type)
+                parsed = self._call_openai(data, content_type)
 
         header = parsed.get("header", {})
         items = parsed.get("items", [])
