@@ -10,7 +10,10 @@ The service uses JWT based authentication with access and refresh tokens.
 - `JWT_SECRET` – secret used to sign tokens.
 - `JWT_EXPIRE_MINUTES` – access token lifetime in minutes (default 30).
 - `GOOGLE_SHEETS_SPREADSHEET_ID` – id of the Google Sheet used for storage.
-- `OCR_ENGINE` – OCR engine for receipt parsing (default `tesseract`).
+- `OCR_ENGINE` – receipt parsing engine (default `openai`, or `ollama` for local models).
+- `OPENAI_API_KEY` – API key when using the OpenAI engine.
+- `OLLAMA_HOST` – base URL for a local Ollama instance (default `http://localhost:11434`).
+- `OCR_MODEL` – model id for OpenAI/Ollama (default `gpt-4o-mini`).
 - `MAX_UPLOAD_MB` – maximum receipt upload size in MB (default `12`).
 - `ALLOWED_MIME` – comma separated list of allowed MIME types.
 
@@ -48,7 +51,8 @@ All expense and analysis routes now require a valid access token.
 
 ### Receipt ingestion
 
-The `Add Expense` page now supports uploading receipts. Uploaded files are parsed in
-memory and itemized data is saved to two Google Sheet tabs:
-`expenses` (expense headers) and `expense_items` (line items). Tabs are created
-automatically if missing with the expected columns described in the code.
+The `Add Expense` page supports uploading receipt images or PDFs. Files are kept
+entirely in memory and sent to an AI model (OpenAI or a local Ollama instance)
+for parsing into a header and line items. Parsed data is returned to the UI for
+review and then saved to Google Sheets tabs `expenses` and `expense_items`.
+Tabs are created automatically if missing.

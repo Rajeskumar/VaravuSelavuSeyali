@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     ANALYSIS_CACHE_TTL_SEC: int = 60
 
     # OCR / receipts
-    OCR_ENGINE: str = os.getenv("OCR_ENGINE", "tesseract")
+    OCR_ENGINE: str = os.getenv("OCR_ENGINE", "openai")
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "12"))
     ALLOWED_MIME: str = os.getenv("ALLOWED_MIME", "image/png,image/jpeg,application/pdf")
 

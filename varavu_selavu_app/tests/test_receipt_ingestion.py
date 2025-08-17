@@ -37,7 +37,7 @@ class FakeSheetsRepo:
 
 fake_repo = FakeSheetsRepo()
 app.dependency_overrides[get_sheets_repo] = lambda: fake_repo
-app.dependency_overrides[get_receipt_service] = lambda: ReceiptService(engine="text")
+app.dependency_overrides[get_receipt_service] = lambda: ReceiptService(engine="mock")
 client = TestClient(app)
 
 
@@ -52,7 +52,7 @@ SAMPLE_TEXT = (
 
 
 def test_receipt_service_parse():
-    svc = ReceiptService(engine="text")
+    svc = ReceiptService(engine="mock")
     result = svc.parse(SAMPLE_TEXT.encode())
     assert result["header"]["merchant_name"] == "Test Store"
     assert result["items"][0]["item_name"] == "Sample Item"

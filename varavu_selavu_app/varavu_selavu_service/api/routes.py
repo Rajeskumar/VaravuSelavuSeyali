@@ -178,7 +178,6 @@ def analysis_chat(
 )
 def parse_receipt(
     file: UploadFile = File(...),
-    engine: str = "tesseract",
     save_ocr_text: bool = False,
     receipt_service: ReceiptService = Depends(get_receipt_service),
     _: str = Depends(auth_required),

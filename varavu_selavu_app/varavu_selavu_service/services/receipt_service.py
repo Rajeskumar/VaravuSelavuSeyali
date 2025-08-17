@@ -1,35 +1,27 @@
+import base64
 import hashlib
-import io
+import json
+import os
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
-try:
-    from PIL import Image
-    import pytesseract
-except Exception:  # pragma: no cover - optional dependency
-    Image = None
-    pytesseract = None
+import requests
 
 
 class ReceiptService:
-    """Perform OCR (in-memory) and parse receipts into structured data."""
+    """Parse receipts via OpenAI or Ollama; supports mock parsing for tests."""
 
-    def __init__(self, engine: str = "tesseract"):
-        self.engine = engine
+    def __init__(self, engine: Optional[str] = None) -> None:
+        self.engine = engine or os.getenv("OCR_ENGINE", "openai")
+        self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
+        self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.model = os.getenv("OCR_MODEL", "gpt-4o-mini")
 
-    def _ocr(self, data: bytes) -> str:
-        if self.engine == "tesseract" and pytesseract and Image:
-            try:
-                img = Image.open(io.BytesIO(data))
-                return pytesseract.image_to_string(img)
-            except Exception:
-                pass
-        # Fallback: treat as plain text
-        return data.decode("utf-8", errors="ignore")
-
-    # --- Parsing helpers ---
+    # ------------------- mock helpers -------------------
     @staticmethod
     def _parse_text(text: str) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """Very small parser used in tests and mock mode."""
         header: Dict[str, Any] = {
             "merchant_name": "",
             "purchased_at": "",
@@ -42,22 +34,25 @@ class ReceiptService:
         items: List[Dict[str, Any]] = []
         lines = [l.strip() for l in text.splitlines() if l.strip()]
         for line in lines:
-            if line.lower().startswith("merchant:"):
+            lower = line.lower()
+            if lower.startswith("merchant:"):
                 header["merchant_name"] = line.split(":", 1)[1].strip()
-            elif line.lower().startswith("date:"):
+            elif lower.startswith("date:"):
                 header["purchased_at"] = line.split(":", 1)[1].strip()
-            elif line.lower().startswith("subtotal:"):
+            elif lower.startswith("subtotal:") or lower.startswith("total:"):
                 header["amount_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
-            elif line.lower().startswith("tax:"):
+            elif lower.startswith("tax:"):
                 header["tax_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
-            elif line.lower().startswith("tip:"):
+            elif lower.startswith("tip:"):
                 header["tip_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
-            elif line.lower().startswith("discount:"):
+            elif lower.startswith("discount:"):
                 header["discount_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
-            elif line.lower().startswith("total:"):
-                header["amount_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
             else:
-                m = re.match(r"^(\d+)\.\s+(.+)\s+qty\s+([0-9\.]+)\s+(\w+)\s+price\s+([0-9\.]+)\s+total\s+([0-9\.]+)", line, re.I)
+                m = re.match(
+                    r"^(\d+)\.\s+(.+)\s+qty\s+([0-9\.]+)\s+(\w+)\s+price\s+([0-9\.]+)\s+total\s+([0-9\.]+)",
+                    line,
+                    re.I,
+                )
                 if m:
                     items.append(
                         {
@@ -72,19 +67,76 @@ class ReceiptService:
                     )
         return header, items
 
+    # ------------------- AI calls -------------------
+    def _call_openai(self, b64: str) -> Dict[str, Any]:
+        headers = {
+            "Authorization": f"Bearer {self.openai_api_key}",
+            "Content-Type": "application/json",
+        }
+        prompt = "Extract merchant, date, totals and line items from this receipt. Respond in JSON with keys header and items."
+        body = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a receipt parsing assistant that always responds with JSON.",
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_image", "image": b64},
+                        {"type": "text", "text": prompt},
+                    ],
+                },
+            ],
+            "response_format": {"type": "json_object"},
+        }
+        url = f"{self.openai_base_url}/chat/completions"
+        resp = requests.post(url, headers=headers, json=body, timeout=30)
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
+
+    def _call_ollama(self, b64: str) -> Dict[str, Any]:
+        payload = {
+            "model": self.model,
+            "prompt": (
+                "Extract merchant, date, totals and line items from this receipt image. "
+                "Return JSON with keys header and items. Image (base64): " + b64
+            ),
+            "format": "json",
+        }
+        resp = requests.post(f"{self.ollama_host}/api/generate", json=payload, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+        return json.loads(data.get("response", "{}"))
+
+    # ------------------- public API -------------------
     def parse(self, data: bytes, save_ocr_text: bool = False) -> Dict[str, Any]:
-        text = self._ocr(data)
-        header, items = self._parse_text(text)
+        """Parse receipt bytes into structured data."""
+        if self.engine == "mock":
+            text = data.decode("utf-8", errors="ignore")
+            header, items = self._parse_text(text)
+            parsed: Dict[str, Any] = {"header": header, "items": items, "ocr_text": text}
+        else:
+            b64 = base64.b64encode(data).decode()
+            if self.engine == "ollama":
+                parsed = self._call_ollama(b64)
+            else:
+                parsed = self._call_openai(b64)
+
+        header = parsed.get("header", {})
+        items = parsed.get("items", [])
         purchased_at_hour = header.get("purchased_at", "")[:13]
-        top_names = "".join(i["item_name"] for i in items[:3])
+        top_names = "".join(i.get("item_name", "") for i in items[:3])
         fp_source = f"{header.get('merchant_name','')}{purchased_at_hour}{header.get('amount_cents',0)}{top_names}"
         fingerprint = hashlib.sha256(fp_source.encode()).hexdigest()
         result: Dict[str, Any] = {
             "header": header,
             "items": items,
-            "warnings": [],
+            "warnings": parsed.get("warnings", []),
             "fingerprint": fingerprint,
         }
-        if save_ocr_text:
-            result["ocr_text"] = text
+        if save_ocr_text and parsed.get("ocr_text"):
+            result["ocr_text"] = parsed["ocr_text"]
         return result
