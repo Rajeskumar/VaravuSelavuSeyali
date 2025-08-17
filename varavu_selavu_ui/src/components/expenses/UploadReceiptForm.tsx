@@ -28,7 +28,7 @@ const UploadReceiptForm: React.FC = () => {
     const payload = {
       user_email: user,
       header: { ...draft.header, fingerprint: draft.fingerprint },
-      items: draft.items.map((i: any) => ({ ...i, line_total_cents: i.line_total_cents })),
+      items: draft.items.map((i: any) => ({ ...i })),
     };
     try {
       setSaving(true);
@@ -45,9 +45,9 @@ const UploadReceiptForm: React.FC = () => {
 
   const reconcileOk = () => {
     if (!draft) return false;
-    const subtotal = draft.items.reduce((s: number, it: any) => s + (it.line_total_cents || 0), 0);
-    const { tax_cents = 0, tip_cents = 0, discount_cents = 0, amount_cents = 0 } = draft.header;
-    return Math.abs(subtotal + tax_cents + tip_cents - discount_cents - amount_cents) <= 2;
+    const subtotal = draft.items.reduce((s: number, it: any) => s + (it.line_total || 0), 0);
+    const { tax = 0, tip = 0, discount = 0, amount = 0 } = draft.header;
+    return Math.abs(subtotal + tax + tip - discount - amount) <= 0.02;
   };
 
   return (
@@ -86,11 +86,10 @@ const UploadReceiptForm: React.FC = () => {
               <TextField
                 label="Line Total ($)"
                 type="number"
-                value={item.line_total_cents / 100}
+                value={item.line_total}
                 onChange={e => {
                   const items = [...draft.items];
-                  const dollars = parseFloat(e.target.value) || 0;
-                  items[idx].line_total_cents = Math.round(dollars * 100);
+                  items[idx].line_total = parseFloat(e.target.value) || 0;
                   setDraft({ ...draft, items });
                 }}
               />

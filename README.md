@@ -55,4 +55,6 @@ The `Add Expense` page supports uploading receipt images or PDFs. Files are kept
 entirely in memory and sent to an AI model (OpenAI or a local Ollama instance)
 for parsing into a header and line items. Parsed data is returned to the UI for
 review and then saved to Google Sheets tabs `expenses` and `expense_items`.
+All monetary values are stored as floating point dollars to match receipt
+totals exactly.
 Tabs are created automatically if missing.

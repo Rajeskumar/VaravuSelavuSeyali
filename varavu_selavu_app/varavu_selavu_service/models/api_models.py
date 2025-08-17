@@ -34,10 +34,10 @@ class ExpenseItem(BaseModel):
     category_id: str | None = None
     quantity: float | None = None
     unit: str | None = None
-    unit_price_cents: int | None = None
-    line_total_cents: int
-    tax_cents: int | None = 0
-    discount_cents: int | None = 0
+    unit_price: float | None = None
+    line_total: float
+    tax: float | None = 0
+    discount: float | None = 0
     attributes_json: str | None = None
 
 

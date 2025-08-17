@@ -205,18 +205,18 @@ def create_expense_with_items(
 ):
     header = payload.header
     items = [i.dict(exclude_unset=True) for i in payload.items]
-    required_header = ["purchased_at", "amount_cents"]
+    required_header = ["purchased_at", "amount"]
     for field in required_header:
         if field not in header:
             raise HTTPException(status_code=400, detail=f"Missing header field {field}")
     for item in items:
-        if "item_name" not in item or "line_total_cents" not in item:
+        if "item_name" not in item or "line_total" not in item:
             raise HTTPException(status_code=400, detail="Invalid item")
-    subtotal = sum(i.get("line_total_cents", 0) for i in items)
-    tax = header.get("tax_cents", 0)
-    tip = header.get("tip_cents", 0)
-    discount = header.get("discount_cents", 0)
-    if abs(subtotal + tax + tip - discount - header["amount_cents"]) > 2:
+    subtotal = sum(i.get("line_total", 0) for i in items)
+    tax = header.get("tax", 0)
+    tip = header.get("tip", 0)
+    discount = header.get("discount", 0)
+    if abs(subtotal + tax + tip - discount - header["amount"]) > 0.02:
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
     existing = sheets_repo.find_expense_by_fingerprint(payload.user_email, header.get("fingerprint", ""))
     if existing and not force:

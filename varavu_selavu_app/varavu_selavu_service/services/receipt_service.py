@@ -26,9 +26,9 @@ class ReceiptService:
             "merchant_name": "",
             "purchased_at": "",
             "currency": "USD",
-            "tax_cents": 0,
-            "tip_cents": 0,
-            "discount_cents": 0,
+            "tax": 0.0,
+            "tip": 0.0,
+            "discount": 0.0,
             "description": "Receipt import",
         }
         items: List[Dict[str, Any]] = []
@@ -40,13 +40,13 @@ class ReceiptService:
             elif lower.startswith("date:"):
                 header["purchased_at"] = line.split(":", 1)[1].strip()
             elif lower.startswith("subtotal:") or lower.startswith("total:"):
-                header["amount_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
+                header["amount"] = float(line.split(":", 1)[1].strip())
             elif lower.startswith("tax:"):
-                header["tax_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
+                header["tax"] = float(line.split(":", 1)[1].strip())
             elif lower.startswith("tip:"):
-                header["tip_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
+                header["tip"] = float(line.split(":", 1)[1].strip())
             elif lower.startswith("discount:"):
-                header["discount_cents"] = int(float(line.split(":", 1)[1].strip()) * 100)
+                header["discount"] = float(line.split(":", 1)[1].strip())
             else:
                 m = re.match(
                     r"^(\d+)\.\s+(.+)\s+qty\s+([0-9\.]+)\s+(\w+)\s+price\s+([0-9\.]+)\s+total\s+([0-9\.]+)",
@@ -60,8 +60,8 @@ class ReceiptService:
                             "item_name": m.group(2).strip(),
                             "quantity": float(m.group(3)),
                             "unit": m.group(4),
-                            "unit_price_cents": int(float(m.group(5)) * 100),
-                            "line_total_cents": int(float(m.group(6)) * 100),
+                            "unit_price": float(m.group(5)),
+                            "line_total": float(m.group(6)),
                             "category_name": "",
                         }
                     )
@@ -77,13 +77,12 @@ class ReceiptService:
         prompt = (
             "Extract data from this grocery receipt as JSON. Return a `header` object "
             "and an `items` array. The header must include merchant_name, "
-            "purchased_at (ISO 8601), currency, amount_cents, tax_cents, tip_cents, "
-            "discount_cents and description. Each item needs line_no, item_name, "
-            "quantity, unit, unit_price_cents, line_total_cents and optional "
-            "category_name. Use your own knowledge of grocery products to fix any "
-            "misspellings or partial item names so they read naturally. All monetary "
-            "values must be integers in cents with no decimals. Respond only with the "
-            "JSON structure."
+            "purchased_at (ISO 8601), currency, amount, tax, tip, discount and "
+            "description. Each item needs line_no, item_name, quantity, unit, "
+            "unit_price, line_total and optional category_name. Use your own "
+            "knowledge of grocery products to fix any misspellings or partial item "
+            "names so they read naturally. All monetary values must be floating point "
+            "dollars with no rounding. Respond only with the JSON structure."
         )
 
         if content_type == "application/pdf":
@@ -136,12 +135,11 @@ class ReceiptService:
             "prompt": (
                 "Extract data from this grocery receipt image and respond with JSON. "
                 "Provide a `header` with merchant_name, purchased_at (ISO 8601), "
-                "currency, amount_cents, tax_cents, tip_cents, discount_cents and "
-                "description, plus an `items` array of objects containing line_no, "
-                "item_name, quantity, unit, unit_price_cents, line_total_cents and "
-                "optional category_name. Correct any misspelled item names using your "
-                "knowledge of products. All monetary values must be integers in cents. "
-                "Image (base64): " + b64
+                "currency, amount, tax, tip, discount and description, plus an `items` "
+                "array of objects containing line_no, item_name, quantity, unit, "
+                "unit_price, line_total and optional category_name. Correct any "
+                "misspelled item names using your knowledge of products. All monetary "
+                "values must be floating point dollars. Image (base64): " + b64
             ),
             "format": "json",
         }
@@ -173,7 +171,7 @@ class ReceiptService:
         items = parsed.get("items", [])
         purchased_at_hour = header.get("purchased_at", "")[:13]
         top_names = "".join(i.get("item_name", "") for i in items[:3])
-        fp_source = f"{header.get('merchant_name','')}{purchased_at_hour}{header.get('amount_cents',0)}{top_names}"
+        fp_source = f"{header.get('merchant_name','')}{purchased_at_hour}{header.get('amount',0)}{top_names}"
         fingerprint = hashlib.sha256(fp_source.encode()).hexdigest()
         result: Dict[str, Any] = {
             "header": header,

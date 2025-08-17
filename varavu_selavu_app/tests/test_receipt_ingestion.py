@@ -74,18 +74,18 @@ def test_create_expense_with_items():
         "header": {
             "purchased_at": "2025-02-14T18:22:00Z",
             "merchant_name": "Test Store",
-            "amount_cents": 100,
+            "amount": 1.0,
             "currency": "USD",
-            "tax_cents": 0,
-            "tip_cents": 0,
-            "discount_cents": 0,
+            "tax": 0.0,
+            "tip": 0.0,
+            "discount": 0.0,
             "fingerprint": "abc",
         },
         "items": [
             {
                 "line_no": 1,
                 "item_name": "Sample Item",
-                "line_total_cents": 100,
+                "line_total": 1.0,
             }
         ],
     }
