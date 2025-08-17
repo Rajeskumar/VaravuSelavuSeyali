@@ -7,6 +7,10 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
+import Tooltip from '@mui/material/Tooltip';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import { keyframes } from '@mui/system';
 import { addExpense, parseReceipt, addExpenseWithItems } from '../../api/expenses';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
@@ -36,7 +40,20 @@ const AddExpenseForm: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const spin = keyframes`
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  `;
+
+  const glassFieldSx = {
+    '& .MuiInputBase-root': {
+      backdropFilter: 'blur(4px)',
+      background: 'rgba(255,255,255,0.6)',
+    },
+  } as const;
 
   const handleMainCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newMain = e.target.value;
@@ -56,18 +73,38 @@ const AddExpenseForm: React.FC = () => {
   const handleParse = async () => {
     if (!file) return;
     try {
+      setParsing(true);
       const res = await parseReceipt(file);
-      setDraft(res);
       const hdr = res.header || {};
-      setCost(hdr.amount || 0);
-      setDescription(hdr.description || '');
-      if (hdr.purchased_at) setExpenseDate(hdr.purchased_at.split('T')[0]);
       const sub = hdr.category_name || '';
       const main = hdr.main_category_name || findMainCategory(sub);
+
+      let desc = hdr.description || '';
+      const merchant = hdr.merchant_name || hdr.merchant || '';
+      if (!desc) {
+        if (sub === 'Dining out' && hdr.purchased_at) {
+          const hour = new Date(hdr.purchased_at).getHours();
+          const meal = hour >= 17 ? 'Dinner' : hour >= 11 ? 'Lunch' : 'Breakfast';
+          desc = `${meal} at ${merchant || 'restaurant'}`;
+        } else {
+          desc = merchant;
+        }
+      }
+
+      const processed = {
+        ...res,
+        header: { ...res.header, description: desc, main_category_name: main, category_name: sub || CATEGORY_GROUPS[main][0] },
+      };
+      setDraft(processed);
+      setCost(hdr.amount || 0);
+      setDescription(desc);
+      if (hdr.purchased_at) setExpenseDate(hdr.purchased_at.split('T')[0]);
       setMainCategory(main);
       if (sub && CATEGORY_GROUPS[main].includes(sub)) setSubcategory(sub); else setSubcategory(CATEGORY_GROUPS[main][0]);
     } catch (e) {
       setMessage('Failed to parse receipt');
+    } finally {
+      setParsing(false);
     }
   };
 
@@ -125,7 +162,19 @@ const AddExpenseForm: React.FC = () => {
   };
 
   return (
-    <Card sx={{ maxWidth: 600, mx: 'auto', mt: 2, boxShadow: 3 }}>
+    <Card
+      sx={{
+        maxWidth: 600,
+        mx: 'auto',
+        mt: 2,
+        p: 2,
+        backdropFilter: 'blur(10px)',
+        backgroundColor: 'rgba(255,255,255,0.25)',
+        borderRadius: 2,
+        boxShadow: '0 8px 32px rgba(31,38,135,0.37)',
+        border: '1px solid rgba(255,255,255,0.18)',
+      }}
+    >
       <CardContent>
         <Typography variant="h6" gutterBottom>
           Add New Expense
@@ -138,6 +187,7 @@ const AddExpenseForm: React.FC = () => {
                 label="Date"
                 type="date"
                 value={expenseDate}
+                sx={glassFieldSx}
                 onChange={e => {
                   setExpenseDate(e.target.value);
                   if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: e.target.value } });
@@ -152,6 +202,7 @@ const AddExpenseForm: React.FC = () => {
                 label="Cost (USD)"
                 type="number"
                 value={cost}
+                sx={glassFieldSx}
                 onChange={e => {
                   const val = parseFloat(e.target.value);
                   setCost(val);
@@ -166,6 +217,7 @@ const AddExpenseForm: React.FC = () => {
                 fullWidth
                 label="Description"
                 value={description}
+                sx={glassFieldSx}
                 onChange={e => {
                   setDescription(e.target.value);
                   if (draft) setDraft({ ...draft, header: { ...draft.header, description: e.target.value } });
@@ -179,6 +231,7 @@ const AddExpenseForm: React.FC = () => {
                 fullWidth
                 label="Main Category"
                 value={mainCategory}
+                sx={glassFieldSx}
                 onChange={handleMainCategoryChange}
               >
                 {Object.keys(CATEGORY_GROUPS).map(category => (
@@ -194,6 +247,7 @@ const AddExpenseForm: React.FC = () => {
                 fullWidth
                 label="Subcategory"
                 value={subcategory}
+                sx={glassFieldSx}
                 onChange={handleSubcategoryChange}
               >
                 {CATEGORY_GROUPS[mainCategory].map(sub => (
@@ -203,11 +257,26 @@ const AddExpenseForm: React.FC = () => {
                 ))}
               </TextField>
             </Grid>
-            <Grid size={12}>
+            <Grid size={12} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <input data-testid="file-input" type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
-              <Button onClick={handleParse} disabled={!file} sx={{ ml: 1 }}>
-                Parse Receipt
-              </Button>
+              <Tooltip title="Upload a receipt image or PDF to pre-fill and itemize this expense">
+                <span>
+                  <Button
+                    onClick={handleParse}
+                    disabled={!file || parsing}
+                    startIcon={
+                      parsing ? (
+                        <ReceiptLongIcon sx={{ animation: `${spin} 1s linear infinite` }} />
+                      ) : (
+                        <UploadFileIcon />
+                      )
+                    }
+                    sx={{ ml: 1 }}
+                  >
+                    {parsing ? 'Parsing...' : 'Upload Receipt'}
+                  </Button>
+                </span>
+              </Tooltip>
             </Grid>
             {draft && (
               <>
@@ -219,6 +288,7 @@ const AddExpenseForm: React.FC = () => {
                     <TextField
                       label="Name"
                       value={item.item_name}
+                      sx={glassFieldSx}
                       onChange={e => {
                         const items = [...draft.items];
                         items[idx].item_name = e.target.value;
@@ -229,6 +299,7 @@ const AddExpenseForm: React.FC = () => {
                       label="Line Total ($)"
                       type="number"
                       value={item.line_total}
+                      sx={glassFieldSx}
                       onChange={e => {
                         const items = [...draft.items];
                         items[idx].line_total = parseFloat(e.target.value) || 0;
@@ -238,6 +309,7 @@ const AddExpenseForm: React.FC = () => {
                     <TextField
                       label="Category"
                       value={item.category_name || ''}
+                      sx={glassFieldSx}
                       onChange={e => {
                         const items = [...draft.items];
                         items[idx].category_name = e.target.value;

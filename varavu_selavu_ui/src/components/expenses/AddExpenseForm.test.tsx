@@ -11,7 +11,7 @@ const mockDraft = {
     tax: 0,
     tip: 0,
     discount: 0,
-    description: 'Receipt import',
+    description: '',
     main_category_name: 'Food & Drink',
     category_name: 'Groceries',
   },
@@ -25,8 +25,10 @@ test('add and delete items, save enabled on mismatch', async () => {
   render(<AddExpenseForm />);
   const file = new File(['dummy'], 'r.png', { type: 'image/png' });
   fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });
-  fireEvent.click(screen.getByText('Parse Receipt'));
+  fireEvent.click(screen.getByText('Upload Receipt'));
   await waitFor(() => screen.getByText('Items'));
+
+  expect((screen.getByLabelText(/Description/i) as HTMLInputElement).value).toBe('Store');
 
   fireEvent.click(screen.getByText('Add Item'));
   expect(screen.getAllByLabelText('Name').length).toBe(2);
