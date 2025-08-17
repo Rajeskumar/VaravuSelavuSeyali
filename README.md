@@ -51,14 +51,13 @@ All expense and analysis routes now require a valid access token.
 
 ### Receipt ingestion
 
-The `Add Expense` form now contains an optional **Upload Receipt** field. When a
-PNG, JPEG, or PDF is uploaded, the file is held entirely in memory and parsed by
-an AI model (OpenAI or a local Ollama instance). Parsed header data populates
-the existing date, cost, description, and category fields (main and
-subcategory), while line items appear in an editable table where rows can be
-added or removed. After review, the expense header is saved to the `expenses`
-tab and the items to `expense_items`, both scoped by `user_email`.
-All monetary values are stored as floating point dollars to match receipt
-totals exactly. Users may adjust categories or amounts and even save when totals
-appear out of balance (the backend will still enforce reconciliation). Tabs are
-created automatically if missing.
+The `Add Expense` form now includes an optional **Upload Receipt** section with
+both "Choose File" and "Take Photo" actions. Images from mobile cameras
+(including HEIC) are converted to JPEG in the browser so OpenAI can parse them.
+Files are validated client-side and only images or PDFs are accepted. Uploaded
+files remain in memory and are parsed by an AI model (OpenAI or a local Ollama
+instance). Parsed header data populates the existing date, cost, description,
+and category fields (main and subcategory), while line items appear in an
+editable table where rows can be added or removed. After review, the expense
+header is saved to the `expenses` tab and the items to `expense_items`, both
+scoped by `user_email`. Tabs are created automatically if missing.

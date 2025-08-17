@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
@@ -54,6 +54,52 @@ const AddExpenseForm: React.FC = () => {
       background: 'rgba(255,255,255,0.6)',
     },
   } as const;
+
+  const glassButtonSx = {
+    backdropFilter: 'blur(4px)',
+    background: 'rgba(255,255,255,0.3)',
+    border: '1px solid rgba(255,255,255,0.18)',
+  } as const;
+
+  const OPENAI_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f) {
+      if (!(f.type.startsWith('image/') || f.type === 'application/pdf')) {
+        setMessage('Unsupported file type');
+        setFile(null);
+        return;
+      }
+      let processed = f;
+      if (f.type.startsWith('image/') && !OPENAI_IMAGE_TYPES.includes(f.type)) {
+        try {
+          const img = await createImageBitmap(f);
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95));
+          if (blob) {
+            processed = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), {
+              type: 'image/jpeg',
+            });
+          } else {
+            setMessage('Failed to process image');
+            return;
+          }
+        } catch {
+          setMessage('Unsupported image format');
+          return;
+        }
+      }
+      setFile(processed);
+    }
+  };
 
   const handleMainCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newMain = e.target.value;
@@ -257,26 +303,57 @@ const AddExpenseForm: React.FC = () => {
                 ))}
               </TextField>
             </Grid>
-            <Grid size={12} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <input data-testid="file-input" type="file" onChange={e => setFile(e.target.files?.[0] || null)} />
-              <Tooltip title="Upload a receipt image or PDF to pre-fill and itemize this expense">
-                <span>
-                  <Button
-                    onClick={handleParse}
-                    disabled={!file || parsing}
-                    startIcon={
-                      parsing ? (
-                        <ReceiptLongIcon sx={{ animation: `${spin} 1s linear infinite` }} />
-                      ) : (
-                        <UploadFileIcon />
-                      )
-                    }
-                    sx={{ ml: 1 }}
-                  >
-                    {parsing ? 'Parsing...' : 'Upload Receipt'}
-                  </Button>
-                </span>
-              </Tooltip>
+            <Grid size={12}>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                Upload Receipt
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <input
+                  data-testid="file-input"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: 'none' }}
+                  onChange={handleFileChange}
+                />
+                <Button sx={glassButtonSx} onClick={() => fileInputRef.current?.click()}>
+                  Choose File
+                </Button>
+                <Button sx={glassButtonSx} onClick={() => cameraInputRef.current?.click()}>
+                  Take Photo
+                </Button>
+                <Tooltip title="Upload a receipt image or PDF to pre-fill and itemize this expense">
+                  <span>
+                    <Button
+                      onClick={handleParse}
+                      disabled={!file || parsing}
+                      startIcon={
+                        parsing ? (
+                          <ReceiptLongIcon sx={{ animation: `${spin} 1s linear infinite` }} />
+                        ) : (
+                          <UploadFileIcon />
+                        )
+                      }
+                      sx={{ ml: 1 }}
+                    >
+                      {parsing ? 'Parsing...' : 'Upload Receipt'}
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Box>
+              {file && (
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {file.name}
+                </Typography>
+              )}
             </Grid>
             {draft && (
               <>
