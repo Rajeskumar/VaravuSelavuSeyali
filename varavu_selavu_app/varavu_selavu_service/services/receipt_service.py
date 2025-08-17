@@ -94,8 +94,8 @@ class ReceiptService:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_image", "image_url": image_url},
-                        {"type": "input_text", "text": prompt},
+                        {"type": "image_url", "image_url": image_url},
+                        {"type": "text", "text": prompt},
                     ],
                 },
             ],
