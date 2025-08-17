@@ -9,6 +9,10 @@ The service uses JWT based authentication with access and refresh tokens.
 ### Environment variables
 - `JWT_SECRET` – secret used to sign tokens.
 - `JWT_EXPIRE_MINUTES` – access token lifetime in minutes (default 30).
+- `GOOGLE_SHEETS_SPREADSHEET_ID` – id of the Google Sheet used for storage.
+- `OCR_ENGINE` – OCR engine for receipt parsing (default `tesseract`).
+- `MAX_UPLOAD_MB` – maximum receipt upload size in MB (default `12`).
+- `ALLOWED_MIME` – comma separated list of allowed MIME types.
 
 ### Auth flow
 1. **Register** – `POST /api/v1/auth/register` with `name`, `email`, `phone` and `password`.
@@ -41,3 +45,10 @@ curl -X POST http://localhost:8000/api/v1/auth/logout \
 ```
 
 All expense and analysis routes now require a valid access token.
+
+### Receipt ingestion
+
+The `Add Expense` page now supports uploading receipts. Uploaded files are parsed in
+memory and itemized data is saved to two Google Sheet tabs:
+`expenses` (expense headers) and `expense_items` (line items). Tabs are created
+automatically if missing with the expected columns described in the code.

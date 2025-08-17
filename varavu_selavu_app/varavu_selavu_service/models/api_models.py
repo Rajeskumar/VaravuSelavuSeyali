@@ -18,6 +18,39 @@ class ExpenseRequest(BaseModel):
     date: date
     description: str = ""
 
+
+class ReceiptParseResponse(BaseModel):
+    header: Dict[str, Any]
+    items: List[Dict[str, Any]]
+    warnings: List[str]
+    fingerprint: str
+    ocr_text: str | None = None
+
+
+class ExpenseItem(BaseModel):
+    line_no: int
+    item_name: str
+    normalized_name: str | None = None
+    category_id: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price_cents: int | None = None
+    line_total_cents: int
+    tax_cents: int | None = 0
+    discount_cents: int | None = 0
+    attributes_json: str | None = None
+
+
+class ExpenseWithItemsRequest(BaseModel):
+    user_email: str
+    header: Dict[str, Any]
+    items: List[ExpenseItem]
+
+
+class ExpenseWithItemsResponse(BaseModel):
+    expense_id: str
+    item_ids: List[str]
+
 class ChatRequest(BaseModel):
     """
     Payload for the `/analysis/chat` endpoint.

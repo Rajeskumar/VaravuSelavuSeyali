@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Response, Depends, status, Query
+from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
+    ReceiptParseResponse,
+    ExpenseWithItemsRequest,
+    ExpenseWithItemsResponse,
     ChatRequest,
     HealthResponse,
     DashboardResponse,
@@ -11,6 +14,8 @@ from varavu_selavu_service.models.api_models import (
     ModelListResponse,
 )
 from varavu_selavu_service.services.expense_service import ExpenseService
+from varavu_selavu_service.services.receipt_service import ReceiptService
+from varavu_selavu_service.repo.sheets_repo import SheetsRepo
 from varavu_selavu_service.services.chat_service import (
     call_chat_model,
     list_openai_models,
@@ -44,6 +49,14 @@ def get_analysis_service() -> AnalysisService:
 
 # Create the singleton instance
 _analysis_service_singleton = AnalysisService(ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
+
+
+def get_receipt_service() -> ReceiptService:
+    return ReceiptService(engine=settings.OCR_ENGINE)
+
+
+def get_sheets_repo() -> SheetsRepo:
+    return SheetsRepo()
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
@@ -155,6 +168,63 @@ def analysis_chat(
     chat_response = call_chat_model(query=request.query, analysis=analysis_result, model=request.model)
 
     return {"response": chat_response}
+
+
+@router.post(
+    "/ingest/receipt/parse",
+    response_model=ReceiptParseResponse,
+    tags=["Expenses"],
+    summary="OCR and parse a receipt without persisting",
+)
+def parse_receipt(
+    file: UploadFile = File(...),
+    engine: str = "tesseract",
+    save_ocr_text: bool = False,
+    receipt_service: ReceiptService = Depends(get_receipt_service),
+    _: str = Depends(auth_required),
+):
+    data = file.file.read()
+    return receipt_service.parse(data, save_ocr_text=save_ocr_text)
+
+
+@router.post(
+    "/expenses/with_items",
+    response_model=ExpenseWithItemsResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Expenses"],
+    summary="Create an expense with itemized lines",
+)
+def create_expense_with_items(
+    payload: ExpenseWithItemsRequest,
+    sheets_repo: SheetsRepo = Depends(get_sheets_repo),
+    _: str = Depends(auth_required),
+    force: bool = Query(False),
+):
+    header = payload.header
+    items = [i.dict(exclude_unset=True) for i in payload.items]
+    required_header = ["purchased_at", "amount_cents"]
+    for field in required_header:
+        if field not in header:
+            raise HTTPException(status_code=400, detail=f"Missing header field {field}")
+    for item in items:
+        if "item_name" not in item or "line_total_cents" not in item:
+            raise HTTPException(status_code=400, detail="Invalid item")
+    subtotal = sum(i.get("line_total_cents", 0) for i in items)
+    tax = header.get("tax_cents", 0)
+    tip = header.get("tip_cents", 0)
+    discount = header.get("discount_cents", 0)
+    if abs(subtotal + tax + tip - discount - header["amount_cents"]) > 2:
+        raise HTTPException(status_code=400, detail="Totals do not reconcile")
+    existing = sheets_repo.find_expense_by_fingerprint(payload.user_email, header.get("fingerprint", ""))
+    if existing and not force:
+        raise HTTPException(status_code=409, detail={"expense_id": existing.get("id")})
+    expense_id = sheets_repo.append_expense({**header, "user_email": payload.user_email})
+    try:
+        item_ids = sheets_repo.append_items(payload.user_email, expense_id, items)
+    except Exception:
+        sheets_repo.delete_expense(expense_id)
+        raise
+    return {"expense_id": expense_id, "item_ids": item_ids}
 
 
 @router.get(
