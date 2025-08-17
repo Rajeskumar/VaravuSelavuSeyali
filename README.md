@@ -51,13 +51,14 @@ All expense and analysis routes now require a valid access token.
 
 ### Receipt ingestion
 
-The `Add Expense` page supports uploading receipt images or PDFs. Files are kept
-entirely in memory and sent to an AI model (OpenAI or a local Ollama instance)
-for parsing into a header and line items. Parsed data is returned to the UI for
-review and then saved to Google Sheets tabs `expenses` and `expense_items`.
+The `Add Expense` form now contains an optional **Upload Receipt** field. When a
+PNG, JPEG, or PDF is uploaded, the file is held entirely in memory and parsed by
+an AI model (OpenAI or a local Ollama instance). Parsed header data populates
+the existing date, cost, description, and category fields (main and
+subcategory), while line items appear in an editable table where rows can be
+added or removed. After review, the expense header is saved to the `expenses`
+tab and the items to `expense_items`, both scoped by `user_email`.
 All monetary values are stored as floating point dollars to match receipt
-totals exactly.
-The model also suggests categories and the overall total. Users can add or
-remove item rows, adjust categories or amounts, and save even if totals appear
-out of balance (the backend will reject unreconciled submissions).
-Tabs are created automatically if missing.
+totals exactly. Users may adjust categories or amounts and even save when totals
+appear out of balance (the backend will still enforce reconciliation). Tabs are
+created automatically if missing.

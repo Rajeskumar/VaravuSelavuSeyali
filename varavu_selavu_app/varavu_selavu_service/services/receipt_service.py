@@ -7,6 +7,22 @@ from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 
+# Category mapping used to ensure the model returns categories that align with the
+# manual entry lists. These mirror the options available in the frontend.
+CATEGORY_GROUPS = {
+    "Home": ["Rent", "Electronics", "Furniture", "Household supplies", "Maintenance", "Mortgage", "Other", "Pets", "Services"],
+    "Transportation": ["Gas/fuel", "Car", "Parking", "Plane", "Other", "Bicycle", "Bus/Train", "Taxi", "Hotel"],
+    "Food & Drink": ["Groceries", "Dining out", "Liquor", "Other"],
+    "Entertainment": ["Movies", "Other", "Games", "Music", "Sports"],
+    "Life": ["Medical expenses", "Insurance", "Taxes", "Education", "Childcare", "Clothing", "Gifts", "Other"],
+    "Other": ["Services", "General", "Electronics"],
+    "Utilities": ["Heat/gas", "Electricity", "Water", "Other", "Cleaning", "Trash", "Other", "TV/Phone/Internet"],
+}
+
+CATEGORY_PROMPT = "; ".join(
+    f"{main}: {', '.join(subs)}" for main, subs in CATEGORY_GROUPS.items()
+)
+
 
 class ReceiptService:
     """Parse receipts via OpenAI or Ollama; supports mock parsing for tests."""
@@ -30,6 +46,7 @@ class ReceiptService:
             "tip": 0.0,
             "discount": 0.0,
             "description": "Receipt import",
+            "main_category_name": "",
             "category_name": "",
         }
         items: List[Dict[str, Any]] = []
@@ -77,13 +94,16 @@ class ReceiptService:
         }
         prompt = (
             "Extract data from this grocery receipt as JSON. Return a `header` object "
-            "and an `items` array. The header must include merchant_name, "
-            "purchased_at (ISO 8601), currency, amount (total), tax, tip, discount, "
-            "category_name and description. Each item needs line_no, item_name, "
-            "quantity, unit, unit_price, line_total and category_name. Use your own "
-            "knowledge of grocery products to fix any misspellings or partial item "
-            "names so they read naturally. All monetary values must be floating point "
-            "dollars with no rounding. Respond only with the JSON structure."
+            "and an `items` array. The header must include merchant_name, purchased_at "
+            "(ISO 8601), currency, amount (total), tax, tip, discount, description, "
+            "main_category_name and category_name (subcategory). Choose categories "
+            "from this list and ensure the subcategory belongs to the main category: "
+            f"{CATEGORY_PROMPT}. Each item needs line_no, item_name, quantity, unit, "
+            "unit_price, line_total and category_name (one of the subcategories above). "
+            "Use your own knowledge of grocery products to fix any misspellings or "
+            "partial item names so they read naturally. All monetary values must be "
+            "floating point dollars with no rounding. Respond only with the JSON "
+            "structure."
         )
 
         if content_type == "application/pdf":
@@ -135,12 +155,13 @@ class ReceiptService:
             "model": self.model,
             "prompt": (
                 "Extract data from this grocery receipt image and respond with JSON. "
-                "Provide a `header` with merchant_name, purchased_at (ISO 8601), "
-                "currency, amount (total), tax, tip, discount, category_name and "
-                "description, plus an `items` array of objects containing line_no, "
-                "item_name, quantity, unit, unit_price, line_total and category_name. "
-                "Correct any misspelled item names using your knowledge of products. "
-                "All monetary values must be floating point dollars. Image (base64): "
+                "Provide a `header` with merchant_name, purchased_at (ISO 8601), currency, "
+                "amount (total), tax, tip, discount, description, main_category_name and "
+                "category_name (subcategory) using this mapping: "
+                f"{CATEGORY_PROMPT}. Return an `items` array where each object has line_no, "
+                "item_name, quantity, unit, unit_price, line_total and category_name (one of the "
+                "subcategories above). Correct any misspelled item names using your knowledge of "
+                "products. All monetary values must be floating point dollars. Image (base64): "
                 + b64
             ),
             "format": "json",

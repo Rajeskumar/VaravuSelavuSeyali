@@ -1,9 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import AddExpensePage from './AddExpensePage';
 
-test('toggle between manual and upload', () => {
+test('renders add expense form with optional upload', () => {
   render(<AddExpensePage />);
-  expect(screen.getByText('Manual')).toBeInTheDocument();
-  fireEvent.click(screen.getByText('Upload Receipt'));
-  expect(screen.getByText('Parse')).toBeInTheDocument();
+  expect(screen.getByText('Add New Expense')).toBeInTheDocument();
+  expect(screen.getByTestId('file-input')).toBeInTheDocument();
 });
