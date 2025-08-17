@@ -68,12 +68,22 @@ class ReceiptService:
         return header, items
 
     # ------------------- AI calls -------------------
-    def _call_openai(self, b64: str) -> Dict[str, Any]:
+    def _call_openai(self, b64: str, content_type: str) -> Dict[str, Any]:
+        """Send the receipt bytes to the OpenAI vision endpoint."""
         headers = {
             "Authorization": f"Bearer {self.openai_api_key}",
             "Content-Type": "application/json",
         }
-        prompt = "Extract merchant, date, totals and line items from this receipt. Respond in JSON with keys header and items."
+        # Explicit instructions help the model return structured data with items
+        prompt = (
+            "Extract merchant_name, purchased_at (ISO 8601), currency, amount_cents, "
+            "tax_cents, tip_cents, discount_cents, description and an array of line "
+            "items from this grocery receipt. Each item needs line_no, item_name, "
+            "quantity, unit, unit_price_cents, line_total_cents and optional category_name. "
+            "All monetary values must be integers in cents. Respond only with JSON "
+            "containing `header` and `items`."
+        )
+        image_url = {"url": f"data:{content_type};base64,{b64}"}
         body = {
             "model": self.model,
             "messages": [
@@ -84,8 +94,8 @@ class ReceiptService:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_image", "image": b64},
-                        {"type": "text", "text": prompt},
+                        {"type": "input_image", "image_url": image_url},
+                        {"type": "input_text", "text": prompt},
                     ],
                 },
             ],
@@ -112,7 +122,12 @@ class ReceiptService:
         return json.loads(data.get("response", "{}"))
 
     # ------------------- public API -------------------
-    def parse(self, data: bytes, save_ocr_text: bool = False) -> Dict[str, Any]:
+    def parse(
+        self,
+        data: bytes,
+        content_type: str = "image/png",
+        save_ocr_text: bool = False,
+    ) -> Dict[str, Any]:
         """Parse receipt bytes into structured data."""
         if self.engine == "mock":
             text = data.decode("utf-8", errors="ignore")
@@ -123,7 +138,7 @@ class ReceiptService:
             if self.engine == "ollama":
                 parsed = self._call_ollama(b64)
             else:
-                parsed = self._call_openai(b64)
+                parsed = self._call_openai(b64, content_type)
 
         header = parsed.get("header", {})
         items = parsed.get("items", [])

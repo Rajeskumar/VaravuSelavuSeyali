@@ -183,7 +183,11 @@ def parse_receipt(
     _: str = Depends(auth_required),
 ):
     data = file.file.read()
-    return receipt_service.parse(data, save_ocr_text=save_ocr_text)
+    return receipt_service.parse(
+        data,
+        content_type=file.content_type or "image/png",
+        save_ocr_text=save_ocr_text,
+    )
 
 
 @router.post(
