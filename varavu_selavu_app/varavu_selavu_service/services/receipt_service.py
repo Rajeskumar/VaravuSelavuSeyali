@@ -75,12 +75,15 @@ class ReceiptService:
             "Content-Type": "application/json",
         }
         prompt = (
-            "Extract merchant_name, purchased_at (ISO 8601), currency, amount_cents, "
-            "tax_cents, tip_cents, discount_cents, description and an array of line "
-            "items from this grocery receipt. Each item needs line_no, item_name, "
-            "quantity, unit, unit_price_cents, line_total_cents and optional category_name. "
-            "All monetary values must be integers in cents. Respond only with JSON "
-            "containing `header` and `items`."
+            "Extract data from this grocery receipt as JSON. Return a `header` object "
+            "and an `items` array. The header must include merchant_name, "
+            "purchased_at (ISO 8601), currency, amount_cents, tax_cents, tip_cents, "
+            "discount_cents and description. Each item needs line_no, item_name, "
+            "quantity, unit, unit_price_cents, line_total_cents and optional "
+            "category_name. Use your own knowledge of grocery products to fix any "
+            "misspellings or partial item names so they read naturally. All monetary "
+            "values must be integers in cents with no decimals. Respond only with the "
+            "JSON structure."
         )
 
         if content_type == "application/pdf":
@@ -131,8 +134,14 @@ class ReceiptService:
         payload = {
             "model": self.model,
             "prompt": (
-                "Extract merchant, date, totals and line items from this receipt image. "
-                "Return JSON with keys header and items. Image (base64): " + b64
+                "Extract data from this grocery receipt image and respond with JSON. "
+                "Provide a `header` with merchant_name, purchased_at (ISO 8601), "
+                "currency, amount_cents, tax_cents, tip_cents, discount_cents and "
+                "description, plus an `items` array of objects containing line_no, "
+                "item_name, quantity, unit, unit_price_cents, line_total_cents and "
+                "optional category_name. Correct any misspelled item names using your "
+                "knowledge of products. All monetary values must be integers in cents. "
+                "Image (base64): " + b64
             ),
             "format": "json",
         }

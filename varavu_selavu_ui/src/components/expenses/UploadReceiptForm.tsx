@@ -84,12 +84,13 @@ const UploadReceiptForm: React.FC = () => {
                 }}
               />
               <TextField
-                label="Line Total Cents"
+                label="Line Total ($)"
                 type="number"
-                value={item.line_total_cents}
+                value={item.line_total_cents / 100}
                 onChange={e => {
                   const items = [...draft.items];
-                  items[idx].line_total_cents = parseInt(e.target.value, 10);
+                  const dollars = parseFloat(e.target.value) || 0;
+                  items[idx].line_total_cents = Math.round(dollars * 100);
                   setDraft({ ...draft, items });
                 }}
               />
