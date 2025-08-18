@@ -59,5 +59,8 @@ files remain in memory and are parsed by an AI model (OpenAI or a local Ollama
 instance). Parsed header data populates the existing date, cost, description,
 and category fields (main and subcategory), while line items appear in an
 editable table where rows can be added or removed. After review, the expense
-header is saved to the `expenses` tab and the items to `expense_items`, both
-scoped by `user_email`. Tabs are created automatically if missing.
+is also appended to the original sheet used for manual entries and stored in
+the `expenses` tab with line items in `expense_items`, all scoped by
+`user_email`. Any total mismatch shows the dollar difference so it can be
+fixed before saving. On mobile, the **Take Photo** action opens the camera and
+parses the captured image automatically. Tabs are created if missing.

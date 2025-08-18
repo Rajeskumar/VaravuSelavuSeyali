@@ -98,6 +98,10 @@ const AddExpenseForm: React.FC = () => {
         }
       }
       setFile(processed);
+      // Auto-parse when capturing from camera
+      if (e.target === cameraInputRef.current) {
+        await handleParse(processed);
+      }
     }
   };
 
@@ -116,11 +120,12 @@ const AddExpenseForm: React.FC = () => {
     if (draft) setDraft({ ...draft, header: { ...draft.header, category_name: sub } });
   };
 
-  const handleParse = async () => {
-    if (!file) return;
+  const handleParse = async (f?: File) => {
+    const target = f || file;
+    if (!target) return;
     try {
       setParsing(true);
-      const res = await parseReceipt(file);
+      const res = await parseReceipt(target);
       const hdr = res.header || {};
       const sub = hdr.category_name || '';
       const main = hdr.main_category_name || findMainCategory(sub);
@@ -154,12 +159,14 @@ const AddExpenseForm: React.FC = () => {
     }
   };
 
-  const reconcileOk = () => {
-    if (!draft) return true;
+  const reconcileDelta = () => {
+    if (!draft) return 0;
     const subtotal = draft.items.reduce((s: number, it: any) => s + (it.line_total || 0), 0);
     const { tax = 0, tip = 0, discount = 0 } = draft.header;
-    return Math.abs(subtotal + tax + tip - discount - cost) <= 0.02;
+    return subtotal + tax + tip - discount - cost;
   };
+
+  const reconcileOk = () => Math.abs(reconcileDelta()) <= 0.02;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -423,7 +430,9 @@ const AddExpenseForm: React.FC = () => {
                 </Grid>
                 <Grid size={12}>
                   <Typography color={reconcileOk() ? 'green' : 'red'}>
-                    {reconcileOk() ? 'Totals match' : 'Totals mismatch'}
+                    {reconcileOk()
+                      ? 'Totals match'
+                      : `Totals mismatch by $${reconcileDelta().toFixed(2)}`}
                   </Typography>
                 </Grid>
               </>

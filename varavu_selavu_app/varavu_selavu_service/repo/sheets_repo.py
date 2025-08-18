@@ -90,6 +90,19 @@ class SheetsRepo:
         row.update({"id": expense_id, "created_at": _iso_now()})
         values = [row.get(col, "") for col in EXPENSES_COLUMNS]
         ws.append_row(values)
+
+        # Also append to legacy sheet used by manual entry
+        legacy_ws = self.gs.main_worksheet()
+        legacy_ws.append_row(
+            [
+                row.get("user_email", ""),
+                (row.get("purchased_at", "") or "")[:10],
+                row.get("description", ""),
+                row.get("category_name", ""),
+                row.get("amount", ""),
+            ]
+        )
+
         return expense_id
 
     def delete_expense(self, expense_id: str) -> None:

@@ -38,6 +38,8 @@ test('add and delete items, save enabled on mismatch', async () => {
   expect(screen.getAllByLabelText('Name').length).toBe(1);
 
   fireEvent.change(screen.getByLabelText(/Cost \(USD\)/i), { target: { value: '2' } });
-  expect(screen.getByText('Totals mismatch')).toBeInTheDocument();
+  expect(
+    screen.getByText(content => content.startsWith('Totals mismatch by $'))
+  ).toBeInTheDocument();
   expect(screen.getByText('Add Expense')).not.toBeDisabled();
 });
