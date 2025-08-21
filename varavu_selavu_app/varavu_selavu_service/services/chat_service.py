@@ -136,7 +136,10 @@ def call_chat_model(query: str, analysis: dict, model: str | None = None) -> str
 # --------------------------------------------------------------------------- #
 
 def list_openai_models() -> list[str]:
-    """Return a list of model IDs from OpenAI's Models API."""
+    """
+    Return a list of model IDs from OpenAI's Models API, filtered to variants
+    of gpt-4, gpt-5, and 'o' reasoning models.
+    """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
@@ -149,9 +152,13 @@ def list_openai_models() -> list[str]:
         resp.raise_for_status()
         data = resp.json()
         ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
-        # Optionally filter to chat-capable models
-        # Keep as-is for now; UI can filter or let user choose
-        return ids
+        # Filter to variants of gpt-4, gpt-5, and 'o' reasoning models
+        filtered_ids = [
+            id
+            for id in ids
+            if id.startswith("gpt-4") or id.startswith("gpt-5") or id.startswith("o")
+        ]
+        return filtered_ids
     except requests.RequestException as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
         text = getattr(getattr(exc, "response", None), "text", None)
@@ -179,4 +186,3 @@ def list_ollama_models() -> list[str]:
             extra={"provider": "ollama", "url": url, "status": status, "response": text},
         )
         raise HTTPException(status_code=502, detail=f"Error listing Ollama models: {exc}")
-

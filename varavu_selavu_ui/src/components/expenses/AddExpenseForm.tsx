@@ -71,6 +71,8 @@ const AddExpenseForm: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
+  const isMobile = typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     if (f) {
@@ -361,14 +363,16 @@ const AddExpenseForm: React.FC = () => {
                 <Button sx={glassButtonSx} onClick={() => fileInputRef.current?.click()}>
                   Choose File
                 </Button>
-                <Button sx={glassButtonSx} onClick={() => cameraInputRef.current?.click()}>
-                  Take Photo
-                </Button>
+                {isMobile && (
+                  <Button sx={glassButtonSx} onClick={() => cameraInputRef.current?.click()}>
+                    Take Photo
+                  </Button>
+                )}
                 {converting && <CircularProgress size={20} />}
                 <Tooltip title="Upload a receipt image or PDF to pre-fill and itemize this expense">
                   <span>
                     <Button
-                      onClick={handleParse}
+                      onClick={() => handleParse()}
                       disabled={!file || parsing || converting}
                       startIcon={
                         parsing ? (

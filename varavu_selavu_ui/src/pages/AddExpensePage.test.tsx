@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import AddExpensePage from './AddExpensePage';
+import React from 'react';
 
 jest.mock('heic2any', () => ({
   default: jest.fn(async () => new Blob(['converted'], { type: 'image/png' })),
@@ -7,7 +8,7 @@ jest.mock('heic2any', () => ({
 
 test('renders add expense form with optional upload', () => {
   render(<AddExpensePage />);
-  expect(screen.getByText('Add New Expense')).toBeInTheDocument();
+  expect(screen.getByText('Add New Expense')).toBeDefined();
   expect(screen.getAllByText(/Upload Receipt/i).length).toBeGreaterThan(0);
-  expect(screen.getByTestId('file-input')).toBeInTheDocument();
+  expect(screen.getByTestId('file-input')).toBeDefined();
 });
