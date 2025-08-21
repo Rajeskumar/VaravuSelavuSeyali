@@ -33,6 +33,7 @@ class ReceiptService:
         self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.model = os.getenv("OCR_MODEL", "gpt-4o-mini")
+        self.timeout = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
 
     # ------------------- mock helpers -------------------
     @staticmethod
@@ -92,18 +93,17 @@ class ReceiptService:
             "Authorization": f"Bearer {self.openai_api_key}",
             "Content-Type": "application/json",
         }
-        prompt = (
-            "Extract data from this grocery receipt as JSON. Return a `header` object "
-            "and an `items` array. The header must include merchant_name, purchased_at "
-            "(ISO 8601), currency, amount (total), tax, tip, discount, description, "
-            "main_category_name and category_name (subcategory). Choose categories "
-            "from this list and ensure the subcategory belongs to the main category: "
-            f"{CATEGORY_PROMPT}. Each item needs line_no, item_name, quantity, unit, "
-            "unit_price, line_total and category_name (one of the subcategories above). "
-            "Use your own knowledge of grocery products to fix any misspellings or "
-            "partial item names so they read naturally. All monetary values must be "
-            "floating point dollars with no rounding. Respond only with the JSON "
-            "structure."
+        system_prompt = (
+            "You are an expert receipt parsing assistant. Given a grocery receipt, "
+            "return a JSON object with a `header` and an `items` array. The header must "
+            "include merchant_name, purchased_at (ISO 8601), currency, amount (total), "
+            "tax, tip, discount, description, main_category_name, and category_name. "
+            "Choose main and sub categories from: "
+            f"{CATEGORY_PROMPT}. For each line item provide line_no, item_name, "
+            "quantity, unit, unit_price, line_total, and category_name. Correct any "
+            "misspelled or partial item names using your knowledge of grocery products. "
+            "All monetary values must be floating point dollars exactly as shown on the "
+            "receipt with no rounding. Respond only with JSON."
         )
 
         if content_type == "application/pdf":
@@ -114,38 +114,32 @@ class ReceiptService:
                 headers=upload_headers,
                 files=files,
                 data={"purpose": "vision"},
-                timeout=30,
+                timeout=self.timeout,
             )
             upload_resp.raise_for_status()
             file_id = upload_resp.json()["id"]
             user_content = [
                 {"type": "file", "file_id": file_id},
-                {"type": "text", "text": prompt},
+                {"type": "text", "text": "Parse this receipt and return JSON."},
             ]
         else:
             b64 = base64.b64encode(data).decode()
             image_url = {"url": f"data:{content_type};base64,{b64}"}
             user_content = [
                 {"type": "image_url", "image_url": image_url},
-                {"type": "text", "text": prompt},
+                {"type": "text", "text": "Parse this receipt and return JSON."},
             ]
 
         body = {
             "model": self.model,
             "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a receipt parsing assistant that always responds with JSON.",
-                },
-                {
-                    "role": "user",
-                    "content": user_content,
-                },
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
             ],
             "response_format": {"type": "json_object"},
         }
         url = f"{self.openai_base_url}/chat/completions"
-        resp = requests.post(url, headers=headers, json=body, timeout=30)
+        resp = requests.post(url, headers=headers, json=body, timeout=self.timeout)
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
         return json.loads(content)
@@ -154,19 +148,23 @@ class ReceiptService:
         payload = {
             "model": self.model,
             "prompt": (
-                "Extract data from this grocery receipt image and respond with JSON. "
-                "Provide a `header` with merchant_name, purchased_at (ISO 8601), currency, "
-                "amount (total), tax, tip, discount, description, main_category_name and "
-                "category_name (subcategory) using this mapping: "
-                f"{CATEGORY_PROMPT}. Return an `items` array where each object has line_no, "
-                "item_name, quantity, unit, unit_price, line_total and category_name (one of the "
-                "subcategories above). Correct any misspelled item names using your knowledge of "
-                "products. All monetary values must be floating point dollars. Image (base64): "
+                "You are an expert receipt parsing assistant. Given the following "
+                "base64-encoded grocery receipt image, return JSON with a `header` "
+                "and an `items` array. The header must include merchant_name, "
+                "purchased_at (ISO 8601), currency, amount (total), tax, tip, "
+                "discount, description, main_category_name, and category_name. "
+                "Choose categories from: "
+                f"{CATEGORY_PROMPT}. Each item requires line_no, item_name, "
+                "quantity, unit, unit_price, line_total, and category_name. "
+                "Fix any misspelled or partial item names using your knowledge of "
+                "grocery products. All monetary values must be floating point "
+                "dollars exactly as shown on the receipt. Respond only with JSON. "
+                "Image (base64): "
                 + b64
             ),
             "format": "json",
         }
-        resp = requests.post(f"{self.ollama_host}/api/generate", json=payload, timeout=30)
+        resp = requests.post(f"{self.ollama_host}/api/generate", json=payload, timeout=self.timeout)
         resp.raise_for_status()
         data = resp.json()
         return json.loads(data.get("response", "{}"))

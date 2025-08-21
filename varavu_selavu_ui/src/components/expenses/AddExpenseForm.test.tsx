@@ -30,7 +30,7 @@ test('add and delete items, save enabled on mismatch', async () => {
   expect(screen.getAllByText(/Upload Receipt/i).length).toBeGreaterThan(0);
   const file = new File(['dummy'], 'r.png', { type: 'image/png' });
   fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });
-  fireEvent.click(screen.getByRole('button', { name: /Upload Receipt/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Parse Receipt/i }));
   await waitFor(() => screen.getByText('Items'));
 
   expect((screen.getByLabelText(/Description/i) as HTMLInputElement).value).toBe('Store');
@@ -45,5 +45,5 @@ test('add and delete items, save enabled on mismatch', async () => {
   expect(
     screen.getByText(content => content.startsWith('Totals mismatch by $'))
   ).toBeInTheDocument();
-  expect(screen.getByText('Add Expense')).not.toBeDisabled();
+  expect(screen.getByText('Add Expense')).toBeDisabled();
 });

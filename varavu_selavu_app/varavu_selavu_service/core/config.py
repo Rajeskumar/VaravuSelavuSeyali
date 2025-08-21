@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     OCR_ENGINE: str = "openai"
     MAX_UPLOAD_MB: int = 12
     ALLOWED_MIME: str = "image/png,image/jpeg,application/pdf"
+    LLM_TIMEOUT_SEC: int = 180
 
     JWT_SECRET: str = "change-me"
     JWT_EXPIRE_MINUTES: int = 30

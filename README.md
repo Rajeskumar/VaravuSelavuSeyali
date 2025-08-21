@@ -52,15 +52,18 @@ All expense and analysis routes now require a valid access token.
 ### Receipt ingestion
 
 The `Add Expense` form now includes an optional **Upload Receipt** section with
-both "Choose File" and "Take Photo" actions. Images from mobile cameras
-(including HEIC) are converted to PNG in the browser so OpenAI can parse them.
-Files are validated client-side and only images or PDFs are accepted. Uploaded
-files remain in memory and are parsed by an AI model (OpenAI or a local Ollama
-instance). Parsed header data populates the existing date, cost, description,
-and category fields (main and subcategory), while line items appear in an
-editable table where rows can be added or removed. After review, the expense
-is also appended to the original sheet used for manual entries and stored in
-the `expenses` tab with line items in `expense_items`, all scoped by
-`user_email`. Any total mismatch shows the dollar difference so it can be
-fixed before saving. On mobile, the **Take Photo** action opens the camera and
-parses the captured image automatically. Tabs are created if missing.
+"Choose File" and "Take Photo" actions. Images from mobile cameras (including
+HEIC) are converted to PNG in the browser—showing a spinner during conversion—
+so the AI can parse them. After selecting a file, use **Parse Receipt** to send
+it to the backend. Files remain in memory and are parsed by an AI model (OpenAI
+or a local Ollama instance). Parsed header data populates the existing date,
+cost, description, and category fields (main and subcategory), while line items
+appear in an editable table where rows can be added or removed. The Save button
+stays disabled until required fields are filled, parsing/conversion finishes,
+and totals reconcile. Expenses are appended to the original manual-entry sheet
+and stored in `expenses` with line items in `expense_items`, all scoped by
+`user_email`. On mobile, the **Take Photo** action opens the camera and parses
+the captured image automatically. Tabs are created if missing.
+
+Set `LLM_TIMEOUT_SEC` in `.env` to increase the OpenAI/Ollama request timeout
+(default 180 seconds) if calls are slow or time out.

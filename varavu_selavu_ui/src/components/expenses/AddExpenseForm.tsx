@@ -10,6 +10,7 @@ import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import CircularProgress from '@mui/material/CircularProgress';
 import { keyframes } from '@mui/system';
 import heic2any from 'heic2any';
 import { addExpense, parseReceipt, addExpenseWithItems } from '../../api/expenses';
@@ -42,6 +43,7 @@ const AddExpenseForm: React.FC = () => {
   const [draft, setDraft] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const spin = keyframes`
@@ -77,6 +79,7 @@ const AddExpenseForm: React.FC = () => {
         setFile(null);
         return;
       }
+      setConverting(true);
       let processed = f;
       if (f.type.startsWith('image/') && !SUPPORTED_IMAGE_TYPES.includes(f.type)) {
         try {
@@ -102,15 +105,18 @@ const AddExpenseForm: React.FC = () => {
               });
             } else {
               setMessage('Failed to process image');
+              setConverting(false);
               return;
             }
           }
         } catch {
           setMessage('Unsupported image format');
+          setConverting(false);
           return;
         }
       }
       setFile(processed);
+      setConverting(false);
       // Auto-parse when capturing from camera
       if (e.target === cameraInputRef.current) {
         await handleParse(processed);
@@ -180,6 +186,14 @@ const AddExpenseForm: React.FC = () => {
   };
 
   const reconcileOk = () => Math.abs(reconcileDelta()) <= 0.02;
+
+  const saveDisabled = () => {
+    const requiredFilled =
+      description.trim() !== '' && cost > 0 && expenseDate && subcategory && mainCategory;
+    return (
+      saving || parsing || converting || !requiredFilled || (draft ? !reconcileOk() : false)
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,21 +364,24 @@ const AddExpenseForm: React.FC = () => {
                 <Button sx={glassButtonSx} onClick={() => cameraInputRef.current?.click()}>
                   Take Photo
                 </Button>
+                {converting && <CircularProgress size={20} />}
                 <Tooltip title="Upload a receipt image or PDF to pre-fill and itemize this expense">
                   <span>
                     <Button
                       onClick={handleParse}
-                      disabled={!file || parsing}
+                      disabled={!file || parsing || converting}
                       startIcon={
                         parsing ? (
                           <ReceiptLongIcon sx={{ animation: `${spin} 1s linear infinite` }} />
+                        ) : converting ? (
+                          <CircularProgress size={20} />
                         ) : (
                           <UploadFileIcon />
                         )
                       }
                       sx={{ ml: 1 }}
                     >
-                      {parsing ? 'Parsing...' : 'Upload Receipt'}
+                      {parsing ? 'Parsing...' : 'Parse Receipt'}
                     </Button>
                   </span>
                 </Tooltip>
@@ -451,7 +468,7 @@ const AddExpenseForm: React.FC = () => {
               </>
             )}
             <Grid size={12}>
-              <Button type="submit" variant="contained" color="primary" fullWidth disabled={saving}>
+              <Button type="submit" variant="contained" color="primary" fullWidth disabled={saveDisabled()}>
                 {saving ? 'Saving...' : 'Add Expense'}
               </Button>
             </Grid>
