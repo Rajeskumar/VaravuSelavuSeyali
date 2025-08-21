@@ -53,7 +53,7 @@ All expense and analysis routes now require a valid access token.
 
 The `Add Expense` form now includes an optional **Upload Receipt** section with
 both "Choose File" and "Take Photo" actions. Images from mobile cameras
-(including HEIC) are converted to JPEG in the browser so OpenAI can parse them.
+(including HEIC) are converted to PNG in the browser so OpenAI can parse them.
 Files are validated client-side and only images or PDFs are accepted. Uploaded
 files remain in memory and are parsed by an AI model (OpenAI or a local Ollama
 instance). Parsed header data populates the existing date, cost, description,

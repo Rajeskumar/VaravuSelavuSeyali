@@ -2,6 +2,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AddExpenseForm from './AddExpenseForm';
 import * as api from '../../api/expenses';
 
+jest.mock('heic2any', () => ({
+  default: jest.fn(async () => new Blob(['converted'], { type: 'image/png' })),
+}), { virtual: true });
+
 // Ensure parseReceipt mock returns main_category_name and category_name
 const mockDraft = {
   header: {

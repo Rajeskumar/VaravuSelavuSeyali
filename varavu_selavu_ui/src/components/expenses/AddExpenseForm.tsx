@@ -11,6 +11,7 @@ import Tooltip from '@mui/material/Tooltip';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import { keyframes } from '@mui/system';
+import heic2any from 'heic2any';
 import { addExpense, parseReceipt, addExpenseWithItems } from '../../api/expenses';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
@@ -61,7 +62,9 @@ const AddExpenseForm: React.FC = () => {
     border: '1px solid rgba(255,255,255,0.18)',
   } as const;
 
-  const OPENAI_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  // OpenAI only accepts PNG or JPEG. Any other image format (e.g., HEIC) must
+  // be converted in-browser before sending to the backend.
+  const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg'];
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
@@ -75,22 +78,32 @@ const AddExpenseForm: React.FC = () => {
         return;
       }
       let processed = f;
-      if (f.type.startsWith('image/') && !OPENAI_IMAGE_TYPES.includes(f.type)) {
+      if (f.type.startsWith('image/') && !SUPPORTED_IMAGE_TYPES.includes(f.type)) {
         try {
-          const img = await createImageBitmap(f);
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0);
-          const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.95));
-          if (blob) {
-            processed = new File([blob], f.name.replace(/\.[^.]+$/, '.jpg'), {
-              type: 'image/jpeg',
+          // First handle HEIC explicitly via the heic2any library.  This avoids
+          // relying on createImageBitmap, which many browsers do not support
+          // for HEIC images captured on iOS devices.
+          if (f.type === 'image/heic' || f.name.toLowerCase().endsWith('.heic')) {
+            const heicBlob = await heic2any({ blob: f, toType: 'image/png' });
+            processed = new File([heicBlob], f.name.replace(/\.[^.]+$/, '.png'), {
+              type: 'image/png',
             });
           } else {
-            setMessage('Failed to process image');
-            return;
+            const img = await createImageBitmap(f);
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0);
+            const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'));
+            if (blob) {
+              processed = new File([blob], f.name.replace(/\.[^.]+$/, '.png'), {
+                type: 'image/png',
+              });
+            } else {
+              setMessage('Failed to process image');
+              return;
+            }
           }
         } catch {
           setMessage('Unsupported image format');
