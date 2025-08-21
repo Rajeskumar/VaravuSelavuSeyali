@@ -1,5 +1,6 @@
 import os
 from typing import Optional
+import os
 
 import gspread
 from google.auth import default as google_auth_default
@@ -46,7 +47,11 @@ class GoogleSheetsClient:
     @property
     def spreadsheet(self) -> gspread.Spreadsheet:
         if self._sh is None:
-            self._sh = self.gc.open(SPREADSHEET_NAME)
+            sheet_id = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID")
+            if sheet_id:
+                self._sh = self.gc.open_by_key(sheet_id)
+            else:
+                self._sh = self.gc.open(SPREADSHEET_NAME)
         return self._sh
 
     def main_worksheet(self) -> gspread.Worksheet:
