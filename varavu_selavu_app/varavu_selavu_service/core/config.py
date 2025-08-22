@@ -27,6 +27,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://varavu-selavu-frontend-952416556244.us-central1.run.app",
+        "https://cerebroos.com",
     ]
 
     # Analysis cache TTL (seconds)
