@@ -142,7 +142,7 @@ const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Router basename="/expense">
+      <Router>
         <AppContent />
       </Router>
     </ThemeProvider>
