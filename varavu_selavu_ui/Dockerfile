@@ -12,8 +12,6 @@ RUN npm ci
 # Copy rest of the app (source, public, config, etc.)
 COPY . ./
 
-ENV PUBLIC_URL=/expense
-
 # Build the React app with increased memory limit
 RUN npm run build
 
