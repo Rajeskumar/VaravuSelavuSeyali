@@ -46,9 +46,11 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
   return (
     <Card
       sx={{
-        backdropFilter: 'blur(6px)',
-        background: 'rgba(255,255,255,0.4)',
-        border: '1px solid rgba(255,255,255,0.2)',
+        backdropFilter: 'blur(8px)',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(240,255,244,0.75) 100%)',
+        border: '1px solid rgba(255,255,255,0.35)',
+        boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
+        borderRadius: 3,
         animation: 'fadeIn 0.5s ease'
       }}
     >

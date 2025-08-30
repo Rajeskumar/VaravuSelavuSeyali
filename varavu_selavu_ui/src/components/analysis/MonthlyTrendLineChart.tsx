@@ -22,8 +22,10 @@ const MonthlyTrendLineChart: React.FC<Props> = ({ monthlyTrend }) => {
     title: '📅 Monthly Expense Trend',
     xaxis: { title: 'Month' },
     yaxis: { title: 'Total Expense ($)' },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)'
   };
-  return <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100vw', height: 350 }} />;
+  return <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100vw', height: 350 }} config={{ displayModeBar: false }} />;
 };
 
 export default MonthlyTrendLineChart;

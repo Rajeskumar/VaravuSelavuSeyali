@@ -23,7 +23,19 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
   const rowsForCat = hoverCat ? details[hoverCat] || [] : [];
 
   return (
-    <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto', maxWidth: '100vw' }}>
+    <TableContainer
+      component={Paper}
+      sx={{
+        width: '100%',
+        overflowX: 'auto',
+        maxWidth: '100vw',
+        backdropFilter: 'blur(8px)',
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(245,255,248,0.75) 100%)',
+        border: '1px solid rgba(255,255,255,0.35)',
+        boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
+        borderRadius: 3
+      }}
+    >
       <Typography variant="h6" sx={{ m: 2 }}>
         % of Income Spent by Category
       </Typography>
@@ -43,7 +55,7 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
                 key={row.category}
                 onMouseEnter={(e) => openPopover(e as any, row.category)}
                 onMouseLeave={closePopover}
-                sx={{ cursor: rowsForCat.length ? 'pointer' : 'default', '&:hover': { background: '#f5f5f5' } }}
+                sx={{ cursor: rowsForCat.length ? 'pointer' : 'default', '&:hover': { background: 'rgba(0,0,0,0.03)' } }}
               >
                 <TableCell>{row.category}</TableCell>
                 <TableCell align="right">{row.total.toFixed(2)}</TableCell>

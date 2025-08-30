@@ -1,4 +1,4 @@
-import { FormControl, InputLabel, MenuItem, Select } from '@mui/material';
+import { Box, Button, Card, CardContent, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from '@mui/material';
 import React, { useState } from "react";
 import { fetchWithAuth } from '../../api/api';
 import { getModels, ModelsResponse } from '../../api/models';
@@ -104,10 +104,14 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
         return;
       }
       flushTable();
-      const heading = line.match(/^(#{1,6})\s+(.*)$/);
+      const heading = line.match(/^\s*(#{1,6})\s*(.*)$/); // support headings with or without a space
       if (heading) {
         const level = heading[1].length;
         html.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+      } else if (/^\s*[-\*]\s+/.test(line)) {
+        // simple bullet support: wrap each bullet as a paragraph with a dash
+        const item = line.replace(/^\s*[-\*]\s+/, '');
+        html.push(`<p>• ${formatInline(item)}</p>`);
       } else if (line.trim()) {
         html.push(`<p>${formatInline(line)}</p>`);
       }
@@ -117,57 +121,76 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
   };
 
   return (
-    <div className="ai-analyst-chat" style={{ maxWidth: 600, margin: '0 auto', padding: 8 }}>
-      <h3 style={{ fontSize: 20, marginBottom: 12 }}>Ask the AI Analyst — {scopeLabel}</h3>
-      {models.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <FormControl size="small" fullWidth>
-            <InputLabel id="model-label">Model {provider ? `(${provider})` : ''}</InputLabel>
-            <Select
-              labelId="model-label"
-              value={model}
-              label={`Model ${provider ? `(${provider})` : ''}`}
-              onChange={(e) => setModel(e.target.value)}
+    <Box className="ai-analyst-chat" sx={{ maxWidth: 720, mx: 'auto', p: 1 }}>
+      <Card
+        sx={{
+          backdropFilter: 'blur(8px)',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(240,248,255,0.65) 100%)',
+          border: '1px solid rgba(255,255,255,0.35)',
+          boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
+          borderRadius: 3,
+          animation: 'fadeIn 0.5s ease'
+        }}
+      >
+        <CardContent>
+          <Typography variant="h6" sx={{ mb: 1 }}>Ask the AI Analyst — {scopeLabel}</Typography>
+          {models.length > 0 && (
+            <Box sx={{ mb: 1 }}>
+              <FormControl size="small" fullWidth>
+                <InputLabel id="model-label">Model {provider ? `(${provider})` : ''}</InputLabel>
+                <Select
+                  labelId="model-label"
+                  value={model}
+                  label={`Model ${provider ? `(${provider})` : ''}`}
+                  onChange={(e) => setModel(e.target.value)}
+                >
+                  {models.map((m) => (
+                    <MenuItem key={m} value={m}>{m}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+          )}
+          <Box
+            component="form"
+            onSubmit={handleSubmit}
+            sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
+          >
+            <TextField
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={"e.g. What were my top categories?"}
+              multiline
+              minRows={4}
+              fullWidth
+            />
+            <Button type="submit" variant="contained" disabled={loading || !query.trim()}>
+              {loading ? 'Thinking…' : 'Send'}
+            </Button>
+          </Box>
+
+          {error && <Typography color="error" sx={{ mt: 1 }}>{error}</Typography>}
+
+          {response && (
+            <Card
+              variant="outlined"
+              sx={{
+                mt: 2,
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(245,255,248,0.65) 100%)',
+                border: '1px solid rgba(255,255,255,0.35)'
+              }}
             >
-              {models.map((m) => (
-                <MenuItem key={m} value={m}>{m}</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </div>
-      )}
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <textarea
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={"e.g. What were my top categories?"}
-          rows={4}
-          style={{ width: '100%', fontSize: 16, borderRadius: 6, padding: 8, border: '1px solid #ccc', resize: 'vertical' }}
-        />
-        <button type="submit" disabled={loading || !query.trim()} style={{ fontSize: 16, padding: '8px 0', borderRadius: 6, background: '#1976d2', color: 'white', border: 'none', cursor: loading ? 'not-allowed' : 'pointer' }}>
-          {loading ? "Thinking…" : "Send"}
-        </button>
-      </form>
-
-      {error && <p style={{ color: "red", marginTop: 8 }}>{error}</p>}
-
-      {response && (
-        <div
-          style={{
-            marginTop: "1rem",
-            padding: "0.5rem",
-            background: "#f9f9f9",
-            borderRadius: 6,
-            fontSize: 16
-          }}
-        >
-          <strong>Answer:</strong>
-          <div
-            style={{ margin: 0 }}
-            dangerouslySetInnerHTML={{ __html: formatMarkdown(response) }}
-          />
-        </div>
-      )}
-    </div>
+              <CardContent>
+                <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 600 }}>Answer</Typography>
+                <div
+                  style={{ fontSize: 16 }}
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(response) }}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </CardContent>
+      </Card>
+    </Box>
   );
 }

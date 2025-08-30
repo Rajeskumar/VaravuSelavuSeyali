@@ -24,10 +24,17 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ALLOW_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "https://varavu-selavu-frontend-952416556244.us-central1.run.app",
-        "https://cerebroos.com",
+        # Local dev
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+
+    # Direct Cloud Run endpoints
+    "https://varavu-selavu-frontend-952416556244.us-central1.run.app",
+
+    # Your custom domains via Cloudflare
+    "https://cerebroos.com",
+    "https://www.cerebroos.com",
+    "https://expense.cerebroos.com",
     ]
 
     # Analysis cache TTL (seconds)
