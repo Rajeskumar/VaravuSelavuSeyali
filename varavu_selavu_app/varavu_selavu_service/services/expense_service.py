@@ -30,17 +30,31 @@ class ExpenseService:
         records = self.expense_ws.get_all_records()
         results: List[Dict] = []
         for idx, row in enumerate(records, start=2):  # sheet rows start at 1 with header
-            if row.get("User ID") == user_id:
-                results.append(
-                    {
-                        "row_id": idx,
-                        "user_id": user_id,
-                        "date": row.get("date"),
-                        "description": row.get("description"),
-                        "category": row.get("category"),
-                        "cost": float(row.get("cost", 0)),
-                    }
-                )
+            if row.get("User ID") != user_id:
+                continue
+
+            # Normalize the date to ISO format (YYYY-MM-DD).  The sheet may
+            # contain legacy rows with a variety of formats (DD/MM/YYYY,
+            # MM/DD/YYYY, etc.).  Use pandas to coerce the value into a
+            # Timestamp and then render it back to a string.  Skip rows that
+            # cannot be parsed so they don't break the API response model.
+            raw_date = row.get("date")
+            parsed = pd.to_datetime(raw_date, format="%Y-%m-%d", errors="coerce")
+            if pd.isna(parsed):
+                parsed = pd.to_datetime(raw_date, errors="coerce", dayfirst=True)
+            if pd.isna(parsed):
+                continue
+
+            results.append(
+                {
+                    "row_id": idx,
+                    "user_id": user_id,
+                    "date": parsed.date().isoformat(),
+                    "description": row.get("description"),
+                    "category": row.get("category"),
+                    "cost": float(row.get("cost", 0)),
+                }
+            )
         return results
 
     def update_expense(
