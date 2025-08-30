@@ -31,8 +31,22 @@ export interface ExpenseRecord {
   cost: number;
 }
 
-export async function listExpenses(user_id: string): Promise<ExpenseRecord[]> {
-  const res = await fetchWithAuth(`/api/v1/expenses?user_id=${encodeURIComponent(user_id)}`);
+export interface ExpenseListResponse {
+  items: ExpenseRecord[];
+  next_offset?: number;
+}
+
+export async function listExpenses(
+  user_id: string,
+  offset = 0,
+  limit = 30
+): Promise<ExpenseListResponse> {
+  const params = new URLSearchParams({
+    user_id,
+    offset: offset.toString(),
+    limit: limit.toString(),
+  });
+  const res = await fetchWithAuth(`/api/v1/expenses?${params.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch expenses');
   return res.json();
 }

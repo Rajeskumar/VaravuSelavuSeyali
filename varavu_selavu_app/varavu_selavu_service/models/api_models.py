@@ -111,6 +111,12 @@ class ExpenseCreatedResponse(BaseModel):
     expense: Expense
 
 
+class ExpenseListResponse(BaseModel):
+    """Paginated list of expenses."""
+    items: List[ExpenseRow]
+    next_offset: int | None = None
+
+
 class CategoryTotal(BaseModel):
     category: str
     total: float

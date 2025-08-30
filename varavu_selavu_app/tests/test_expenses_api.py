@@ -17,10 +17,21 @@ def test_list_expenses():
                 "description": "Coffee",
                 "category": "Food & Drink",
                 "cost": 3.5,
-            }
+            },
+            {
+                "row_id": 3,
+                "user_id": "u1",
+                "date": "2024-01-02",
+                "description": "Lunch",
+                "category": "Food & Drink",
+                "cost": 12.0,
+            },
         ]
         app.dependency_overrides[routes.get_expense_service] = lambda: svc
         client = TestClient(app)
-        res = client.get("/api/v1/expenses", params={"user_id": "u1"})
+        res = client.get("/api/v1/expenses", params={"user_id": "u1", "limit": 1})
         assert res.status_code == 200
-        assert res.json()[0]["description"] == "Coffee"
+        data = res.json()
+        # Should return most recent first
+        assert data["items"][0]["description"] == "Lunch"
+        assert data["next_offset"] == 1

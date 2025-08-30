@@ -17,9 +17,12 @@ afterEach(() => {
 });
 
 test('shows expenses and opens form', async () => {
-  jest.spyOn(api, 'listExpenses').mockResolvedValue([
-    { row_id: 1, user_id: 'user', date: '2024-01-01', description: 'Coffee', category: 'Food & Drink', cost: 3 },
-  ]);
+  jest.spyOn(api, 'listExpenses').mockResolvedValue({
+    items: [
+      { row_id: 1, user_id: 'user', date: '2024-01-01', description: 'Coffee', category: 'Food & Drink', cost: 3 },
+    ],
+    next_offset: undefined,
+  });
   const qc = new QueryClient();
   render(
     <QueryClientProvider client={qc}>

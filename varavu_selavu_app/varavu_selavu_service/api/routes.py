@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException
-from typing import List
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
@@ -16,6 +15,7 @@ from varavu_selavu_service.models.api_models import (
     AnalysisResponse,
     ChatResponse,
     ModelListResponse,
+    ExpenseListResponse,
 )
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
@@ -127,16 +127,22 @@ def create_expense(
 
 @router.get(
     "/expenses",
-    response_model=List[ExpenseRow],
+    response_model=ExpenseListResponse,
     tags=["Expenses"],
     summary="List expenses for a user",
 )
 def list_expenses(
     user_id: str,
+    limit: int = Query(30, ge=1),
+    offset: int = Query(0, ge=0),
     expense_service: ExpenseService = Depends(get_expense_service),
     _: str = Depends(auth_required),
 ):
-    return expense_service.get_expenses_for_user(user_id)
+    expenses = expense_service.get_expenses_for_user(user_id)
+    expenses.sort(key=lambda r: r["date"], reverse=True)
+    sliced = expenses[offset : offset + limit]
+    next_offset = offset + limit if offset + limit < len(expenses) else None
+    return {"items": sliced, "next_offset": next_offset}
 
 
 @router.put(
