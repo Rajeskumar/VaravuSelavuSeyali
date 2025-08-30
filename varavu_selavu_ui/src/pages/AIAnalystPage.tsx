@@ -41,7 +41,13 @@ const AIAnalystPage: React.FC = () => {
     <Box sx={{ mt:4 }}>
       <Grid container columns={12} spacing={2}>
         <Grid size={{ xs:12, md:3 }}>
-          <Paper elevation={3} sx={{ p:2, position:{ md:'sticky' }, top:{ md:80 }, mb:{ xs:2, md:0 } }}>
+          <Paper elevation={3} sx={{ p:2, position:{ md:'sticky' }, top:{ md:80 }, mb:{ xs:2, md:0 },
+            backdropFilter: 'blur(8px)',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(240,248,255,0.65) 100%)',
+            border: '1px solid rgba(255,255,255,0.35)',
+            boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
+            borderRadius: 3
+          }}>
             <Typography variant="h6" sx={{ mb:2 }}>AI Analyst Range</Typography>
             <FormControl fullWidth size="small" sx={{ mb:2 }}>
               <InputLabel id="period-label">Period</InputLabel>
@@ -77,7 +83,13 @@ const AIAnalystPage: React.FC = () => {
           </Paper>
         </Grid>
         <Grid size={{ xs:12, md:9 }}>
-          <Paper elevation={2} sx={{ p:2 }}>
+          <Paper elevation={2} sx={{ p:2,
+            backdropFilter: 'blur(8px)',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(245,255,248,0.65) 100%)',
+            border: '1px solid rgba(255,255,255,0.35)',
+            boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
+            borderRadius: 3
+          }}>
             <AIAnalystChat userId={user} startDate={startDate} endDate={endDate} />
           </Paper>
         </Grid>

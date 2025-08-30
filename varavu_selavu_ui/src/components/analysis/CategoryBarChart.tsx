@@ -26,6 +26,8 @@ const CategoryBarChart: React.FC<Props> = ({ categoryTotals }) => {
     yaxis: { title: 'Amount ($)' },
     autosize: true,
     margin: { t: 40, l: 40, r: 10, b: 40 },
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)'
   };
   return (
     <Plot
