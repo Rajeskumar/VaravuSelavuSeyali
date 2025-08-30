@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 from varavu_selavu_service.auth.routers import router, get_auth_service
 from varavu_selavu_service.auth.service import AuthService
@@ -79,3 +80,18 @@ def test_refresh_and_logout():
     client.post("/auth/logout", json={"refresh_token": refresh_token})
     invalid = client.post("/auth/refresh", json={"refresh_token": refresh_token})
     assert invalid.status_code == 401
+
+
+def test_google_login():
+    os.environ["JWT_SECRET"] = "test-secret"
+    os.environ["GOOGLE_CLIENT_ID"] = "cid"
+    app, sheet = create_app()
+    client = TestClient(app)
+
+    with patch("google.oauth2.id_token.verify_oauth2_token") as verify:
+        verify.return_value = {"email": "g@x.com", "name": "G"}
+        resp = client.post("/auth/google", json={"id_token": "t"})
+    assert resp.status_code == 200
+    assert sheet.rows[0]["email"] == "g@x.com"
+    data = resp.json()
+    assert data["email"] == "g@x.com"

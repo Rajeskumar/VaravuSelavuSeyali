@@ -10,6 +10,7 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
+  email?: string;
 }
 
 export interface RegisterPayload {
@@ -37,6 +38,22 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
 
   if (!response.ok) {
     throw new Error('Login failed');
+  }
+
+  return response.json();
+}
+
+export async function loginWithGoogle(id_token: string): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/google`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ id_token }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Google login failed');
   }
 
   return response.json();

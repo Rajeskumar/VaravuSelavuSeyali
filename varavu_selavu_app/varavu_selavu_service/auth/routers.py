@@ -1,11 +1,15 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 from .service import AuthService
 from .security import create_access_token, create_refresh_token, auth_required, decode_token
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(tags=["Auth"])
 
 
 def get_auth_service() -> AuthService:
@@ -23,6 +27,7 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    email: str | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -59,7 +64,12 @@ def login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     access = create_access_token({"sub": form_data.username})
     refresh = create_refresh_token({"sub": form_data.username})
-    return {"access_token": access, "refresh_token": refresh, "token_type": "bearer"}
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type": "bearer",
+        "email": form_data.username,
+    }
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -70,7 +80,12 @@ def refresh(data: RefreshRequest, auth: AuthService = Depends(get_auth_service))
     email = payload.get("sub")
     access = create_access_token({"sub": email})
     refresh_token = create_refresh_token({"sub": email})
-    return {"access_token": access, "refresh_token": refresh_token, "token_type": "bearer"}
+    return {
+        "access_token": access,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "email": email,
+    }
 
 
 @router.post("/logout")
@@ -82,4 +97,33 @@ def logout(data: RefreshRequest, auth: AuthService = Depends(get_auth_service)):
 @router.get("/me")
 def me(user: str = Depends(auth_required)):
     return {"email": user}
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_login(data: GoogleLoginRequest, auth: AuthService = Depends(get_auth_service)):
+    try:
+        token_info = id_token.verify_oauth2_token(
+            data.id_token,
+            requests.Request(),
+            os.getenv("GOOGLE_CLIENT_ID"),
+        )
+    except Exception:  # noqa: B902 - broad to return HTTP error
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    email = token_info.get("email")
+    name = token_info.get("name", email)
+    if not auth.get_user(email):
+        auth.register_user(name, "", email, "")
+    access = create_access_token({"sub": email})
+    refresh = create_refresh_token({"sub": email})
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type": "bearer",
+        "email": email,
+    }
 
