@@ -73,6 +73,15 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
 
   const scopeLabel = `${startDate} to ${endDate}`;
 
+  const formatMarkdown = (text: string) => {
+    return text
+      .replace(/\n\n/g, '<br/><br/>')
+      .replace(/\n/g, '<br/>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>');
+  };
+
   return (
     <div className="ai-analyst-chat" style={{ maxWidth: 600, margin: '0 auto', padding: 8 }}>
       <h3 style={{ fontSize: 20, marginBottom: 12 }}>Ask the AI Analyst — {scopeLabel}</h3>
@@ -119,7 +128,10 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
           }}
         >
           <strong>Answer:</strong>
-          <p style={{ margin: 0 }}>{response}</p>
+          <div
+            style={{ margin: 0 }}
+            dangerouslySetInnerHTML={{ __html: formatMarkdown(response) }}
+          />
         </div>
       )}
     </div>

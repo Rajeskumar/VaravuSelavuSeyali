@@ -1,13 +1,14 @@
 import React from 'react';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import Typography from '@mui/material/Typography';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemAvatar from '@mui/material/ListItemAvatar';
-import Avatar from '@mui/material/Avatar';
-import ListItemText from '@mui/material/ListItemText';
-import { parseMMDDYYYY } from '../../utils/date';
+import {
+  Card,
+  CardContent,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow
+} from '@mui/material';
 
 interface Activity {
   date: string;
@@ -21,28 +22,46 @@ interface Props {
 }
 
 const RecentActivityList: React.FC<Props> = ({ items }) => (
-  <Card sx={{ height: '100%' }}>
+  <Card
+    sx={{
+      height: '100%',
+      backdropFilter: 'blur(6px)',
+      background: 'rgba(255,255,255,0.4)',
+      border: '1px solid rgba(255,255,255,0.2)',
+      animation: 'fadeIn 0.5s ease'
+    }}
+  >
     <CardContent>
       <Typography variant="h6" gutterBottom>
-        Recent Activity
+        Recent Transactions
       </Typography>
-      <List dense>
-        {items.map(item => (
-          <ListItem key={`${item.date}-${item.description}`}
-            secondaryAction={
-              <Typography variant="body2">${item.cost.toFixed(2)}</Typography>
-            }
-          >
-            <ListItemAvatar>
-              <Avatar>{item.category.charAt(0)}</Avatar>
-            </ListItemAvatar>
-            <ListItemText primary={item.description} secondary={parseMMDDYYYY(item.date).toLocaleDateString()} />
-          </ListItem>
-        ))}
-        {items.length === 0 && (
-          <Typography color="text.secondary">No recent transactions</Typography>
-        )}
-      </List>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Date</TableCell>
+            <TableCell>Category</TableCell>
+            <TableCell>Description</TableCell>
+            <TableCell align="right">Amount</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {items.map((item) => (
+            <TableRow key={`${item.date}-${item.description}`}>
+              <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
+              <TableCell>{item.category}</TableCell>
+              <TableCell>{item.description}</TableCell>
+              <TableCell align="right">${item.cost.toFixed(2)}</TableCell>
+            </TableRow>
+          ))}
+          {items.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={4} align="center">
+                <Typography color="text.secondary">No recent transactions</Typography>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
     </CardContent>
   </Card>
 );

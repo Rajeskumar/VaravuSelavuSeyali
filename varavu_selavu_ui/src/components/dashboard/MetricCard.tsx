@@ -10,7 +10,19 @@ interface MetricCardProps {
 
 const MetricCard: React.FC<MetricCardProps> = ({ label, value }) => {
   return (
-    <Card sx={{ minWidth: 140, flex: 1, m: { xs: 0.5, md: 1 }, boxShadow: 3, width: '100%', maxWidth: 340 }}>
+    <Card
+      sx={{
+        minWidth: 140,
+        flex: 1,
+        m: { xs: 0.5, md: 1 },
+        width: '100%',
+        maxWidth: 340,
+        backdropFilter: 'blur(6px)',
+        background: 'rgba(255,255,255,0.4)',
+        border: '1px solid rgba(255,255,255,0.2)',
+        animation: 'fadeIn 0.5s ease',
+      }}
+    >
       <CardContent>
         <Typography color="text.secondary" gutterBottom>
           {label}

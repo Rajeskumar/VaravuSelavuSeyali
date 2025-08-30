@@ -37,12 +37,19 @@ const ExpenseAnalysisPage: React.FC = () => {
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const title = overallYear ? `Analysis — ${year} (Year Overview)` : `Analysis — ${monthNames[month-1]} ${year}`;
 
+  const glass = {
+    backdropFilter: 'blur(6px)',
+    background: 'rgba(255,255,255,0.4)',
+    border: '1px solid rgba(255,255,255,0.2)',
+    animation: 'fadeIn 0.5s ease',
+  } as const;
+
   return (
-    <Box sx={{ mt: 4 }}>
+    <Box sx={{ mt: 4, animation: 'fadeIn 0.5s ease' }}>
       <Grid container columns={12} spacing={2}>
         {/* Sidebar */}
         <Grid size={{ xs: 12, md: 3 }}>
-          <Paper elevation={3} sx={{ p: 2, position: { md: 'sticky' }, top: { md: 80 }, mb: { xs: 2, md: 0 } }}>
+          <Paper elevation={3} sx={{ p: 2, position: { md: 'sticky' }, top: { md: 80 }, mb: { xs: 2, md: 0 }, ...glass }}>
             <Typography variant="h6" sx={{ mb: 2 }}>Filters</Typography>
             <FormControl fullWidth size="small" sx={{ mb: 2 }}>
               <InputLabel id="year-label">Year</InputLabel>
@@ -80,19 +87,19 @@ const ExpenseAnalysisPage: React.FC = () => {
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>{title}</Typography>
 
           {data.filter_info && (
-            <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: '#fafafa' }}>
+            <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: '#fafafa', ...glass }}>
               <Typography variant="caption" color="text.secondary">
                 Filters applied — user_col: {data.filter_info.applied_user_col || 'none'}, year: {String(data.filter_info.year || '')}, month: {String(data.filter_info.month || '')}, rows: {String(data.filter_info.row_count || 0)}
               </Typography>
             </Paper>
           )}
 
-          <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+          <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
             <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
             <ExpenseSummaryCards totalExpenses={data.total_expenses} income={income} />
           </Paper>
 
-          <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+          <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
             <Typography variant="h6" sx={{ mb: 1 }}>Top Categories</Typography>
             <Grid container columns={12}>
               <Grid size={{ xs: 12 }}>
@@ -101,13 +108,13 @@ const ExpenseAnalysisPage: React.FC = () => {
             </Grid>
           </Paper>
 
-          <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+          <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
             <Typography variant="h6" sx={{ mb: 1 }}>Category Breakdown</Typography>
             <CategorySummaryTable categoryTotals={data.category_totals} income={income} details={data.category_expense_details || {}} />
           </Paper>
 
           {overallYear ? (
-            <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
+            <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
               <Typography variant="h6" sx={{ mb: 1 }}>Monthly Trend</Typography>
               <Grid container columns={12}>
                 <Grid size={{ xs: 12 }}>
