@@ -68,3 +68,19 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+## Google Login Setup
+
+This app uses Google Identity Services (GSI) for login.
+
+- Set `REACT_APP_GOOGLE_CLIENT_ID` in env files:
+  - Development: `varavu_selavu_ui/.env.development`
+  - Production: `varavu_selavu_ui/.env.production`
+
+Example:
+
+```
+REACT_APP_GOOGLE_CLIENT_ID=1234567890-abc123.apps.googleusercontent.com
+```
+
+If not set, the Login page will show: "Google login not configured" and the button will not initialize. Ensure your OAuth Client ID is of type "Web application" and that your app origin (e.g., `http://localhost:3000`) is listed under Authorized JavaScript origins in Google Cloud Console.

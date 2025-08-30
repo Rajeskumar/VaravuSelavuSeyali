@@ -37,7 +37,7 @@ from varavu_selavu_service.auth.security import auth_required
 settings = Settings()
 
 router = APIRouter(prefix="/api/v1")
-router.include_router(auth_router)
+router.include_router(auth_router, prefix="/auth")
 
 # Dependency providers
 def get_expense_service() -> ExpenseService:
@@ -50,12 +50,15 @@ _ANALYSIS_CACHE: dict[
 _ANALYSIS_CACHE_TTL_SEC = 60  # adjust as needed
 _CACHE_LOCK = RLock()
 
+_analysis_service_singleton: AnalysisService | None = None
+
+
 def get_analysis_service() -> AnalysisService:
     # Reuse a singleton instance to preserve in-memory cache across requests
+    global _analysis_service_singleton
+    if _analysis_service_singleton is None:
+        _analysis_service_singleton = AnalysisService(ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
     return _analysis_service_singleton
-
-# Create the singleton instance
-_analysis_service_singleton = AnalysisService(ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
 
 
 def get_receipt_service() -> ReceiptService:

@@ -59,3 +59,20 @@ environment variables:
 - For any other environment the service will call a local Ollama
   instance at `http://localhost:11434` or the URL defined in
   `OLLAMA_BASE_URL`.
+
+## Google Login (OAuth)
+
+The backend verifies Google ID tokens and requires the OAuth Web Client ID:
+
+- Set `GOOGLE_CLIENT_ID` in the backend environment to the OAuth 2.0 Web Client ID you created in Google Cloud Console.
+
+Local example:
+
+```bash
+export GOOGLE_CLIENT_ID=1234567890-abc123.apps.googleusercontent.com
+poetry run uvicorn varavu_selavu_service.main:app --reload
+```
+
+Notes:
+- Ensure the frontend is also built/run with `REACT_APP_GOOGLE_CLIENT_ID` set (see UI README / env files).
+- In Google Cloud Console, add your app origins (e.g., `http://localhost:3000`, your production domain) to Authorized JavaScript origins.

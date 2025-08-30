@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import TextField from '@mui/material/TextField';
@@ -10,8 +10,7 @@ import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Link from '@mui/material/Link';
 import Divider from '@mui/material/Divider';
-import GoogleIcon from '@mui/icons-material/Google';
-import { login } from '../api/auth';
+import { login, loginWithGoogle } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
 
 const LoginPage: React.FC = () => {
@@ -21,6 +20,50 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [remember, setRemember] = useState(false);
   const navigate = useNavigate();
+  const googleDiv = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+
+    if (!clientId) {
+      // Surface a friendly error rather than letting GSI throw
+      setError('Google login not configured (missing REACT_APP_GOOGLE_CLIENT_ID)');
+      // Helpful hint in console for developers
+      // eslint-disable-next-line no-console
+      console.warn('Set REACT_APP_GOOGLE_CLIENT_ID in .env.development/.env.production');
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const w = window as any;
+      if (!w.google || !googleDiv.current) return;
+      w.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (resp: any) => {
+          try {
+            const data = await loginWithGoogle(resp.credential);
+            localStorage.setItem('vs_token', data.access_token);
+            localStorage.setItem('vs_refresh', data.refresh_token);
+            if (data.email) localStorage.setItem('vs_user', data.email);
+            window.dispatchEvent(new Event('vs_auth_changed'));
+            navigate('/dashboard');
+          } catch {
+            setError('Google login failed');
+          }
+        },
+      });
+      w.google.accounts.id.renderButton(googleDiv.current, {
+        theme: 'outline',
+        size: 'large',
+        width: '100%',
+      });
+    };
+    document.head.appendChild(script);
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +74,7 @@ const LoginPage: React.FC = () => {
       // Persist tokens and user id for subsequent API calls
       localStorage.setItem('vs_token', response.access_token);
       localStorage.setItem('vs_refresh', response.refresh_token);
-      localStorage.setItem('vs_user', email);
+      localStorage.setItem('vs_user', response.email || email);
       window.dispatchEvent(new Event('vs_auth_changed'));
       navigate('/dashboard');
     } catch (err) {
@@ -64,14 +107,7 @@ const LoginPage: React.FC = () => {
             <Typography variant="h6" gutterBottom align="center">
               Login
             </Typography>
-            <Button
-              variant="outlined"
-              fullWidth
-              startIcon={<GoogleIcon />}
-              sx={{ textTransform: 'none', mb: 2 }}
-            >
-              Continue with Google
-            </Button>
+            <div ref={googleDiv} style={{ width: '100%', marginBottom: 16 }} />
             <Divider sx={{ mb: 2 }}>or</Divider>
             <Box component="form" onSubmit={handleLogin} noValidate>
               <Grid container columns={12} spacing={2}>

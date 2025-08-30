@@ -85,16 +85,22 @@ class AnalysisService:
         df = df.copy()
         df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
 
-        # Filter by user
+        # Filter by user. If there is a user-identifying column but no rows
+        # match the current user, return an empty dataset rather than leaking
+        # all rows. If no suitable user column exists, also return empty.
         applied_user_filter = None
         candidate_user_cols = [c for c in df.columns if ("user" in c or "email" in c)]
+        found_col = None
         for col in ["user_id", "email", "user", *candidate_user_cols]:
             if col in df.columns:
+                found_col = col
                 tmp = df[df[col] == user_id]
-                if not tmp.empty:
-                    df = tmp
-                    applied_user_filter = col
-                    break
+                df = tmp  # even if empty, enforce per-user isolation
+                applied_user_filter = col
+                break
+        if found_col is None:
+            # No recognizable user column -> do not return global data
+            df = df.iloc[0:0]
 
         # Determine date column
         date_col: Optional[str] = "date" if "date" in df.columns else None

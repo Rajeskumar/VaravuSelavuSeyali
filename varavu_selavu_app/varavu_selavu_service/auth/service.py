@@ -63,9 +63,26 @@ class AuthService:
         self.user_ws.update_cell(cell.row, 4, hashed)
         return True
 
+    def update_profile(self, email: str, name: Optional[str] = None, phone: Optional[str] = None) -> bool:
+        """Update the user's profile fields in the sheet.
+
+        Columns (1-based):
+        1: name, 2: phone, 3: email, 4: password
+        """
+        user = self.get_user(email)
+        if not user:
+            return False
+        cell = self.user_ws.find(email)
+        if not cell:
+            return False
+        if name is not None:
+            self.user_ws.update_cell(cell.row, 1, name)
+        if phone is not None:
+            self.user_ws.update_cell(cell.row, 2, phone)
+        return True
+
     def revoke_refresh_token(self, token: str) -> None:
         _REVOKED_REFRESH_TOKENS.add(token)
 
     def is_refresh_token_revoked(self, token: str) -> bool:
         return token in _REVOKED_REFRESH_TOKENS
-
