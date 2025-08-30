@@ -26,8 +26,44 @@ class ExpenseService:
         }
 
     def get_expenses_for_user(self, user_id: str) -> List[Dict]:
-        all_expenses = self.expense_ws.get_all_records()
-        return [e for e in all_expenses if e.get("User ID") == user_id]
+        """Return all expenses for a user along with the row id for editing."""
+        records = self.expense_ws.get_all_records()
+        results: List[Dict] = []
+        for idx, row in enumerate(records, start=2):  # sheet rows start at 1 with header
+            if row.get("User ID") == user_id:
+                results.append(
+                    {
+                        "row_id": idx,
+                        "user_id": user_id,
+                        "date": row.get("date"),
+                        "description": row.get("description"),
+                        "category": row.get("category"),
+                        "cost": float(row.get("cost", 0)),
+                    }
+                )
+        return results
+
+    def update_expense(
+        self,
+        row_id: int,
+        user_id: str,
+        date: Union[str, date_type],
+        description: str,
+        category: str,
+        cost: float,
+    ) -> Dict:
+        """Update an existing expense by spreadsheet row id."""
+        date_str = date.isoformat() if isinstance(date, date_type) else str(date)
+        values = [[user_id, date_str, description, category, cost]]
+        cell_range = f"A{row_id}:E{row_id}"
+        self.expense_ws.update(cell_range, values)
+        return {
+            "User ID": user_id,
+            "date": date_str,
+            "description": description,
+            "category": category,
+            "cost": cost,
+        }
 
     def load_dataframe(self) -> pd.DataFrame:
         df = pd.DataFrame(self.expense_ws.get_all_records())

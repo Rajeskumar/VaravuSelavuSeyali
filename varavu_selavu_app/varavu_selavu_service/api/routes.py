@@ -1,14 +1,18 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException
+from typing import List
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
     ReceiptParseResponse,
     ExpenseWithItemsRequest,
     ExpenseWithItemsResponse,
+    CategorizeRequest,
+    CategorizeResponse,
     ChatRequest,
     HealthResponse,
     DashboardResponse,
     ExpenseCreatedResponse,
+    ExpenseRow,
     AnalysisResponse,
     ChatResponse,
     ModelListResponse,
@@ -22,6 +26,7 @@ from varavu_selavu_service.services.chat_service import (
     list_ollama_models,
 )
 from varavu_selavu_service.services.analysis_service import AnalysisService
+from varavu_selavu_service.services.categorization_service import CategorizationService
 from varavu_selavu_service.core.config import Settings
 from threading import RLock
 from varavu_selavu_service.auth.routers import router as auth_router
@@ -58,6 +63,10 @@ def get_receipt_service() -> ReceiptService:
 def get_sheets_repo() -> SheetsRepo:
     return SheetsRepo()
 
+
+def get_categorization_service() -> CategorizationService:
+    return CategorizationService()
+
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
     return {"status": "healthy"}
@@ -66,6 +75,21 @@ def health_check():
 def readiness_check():
     # Extend with checks to downstream services (e.g., Google Sheets) if needed
     return {"status": "healthy"}
+
+
+@router.post(
+    "/expenses/categorize",
+    response_model=CategorizeResponse,
+    tags=["Expenses"],
+    summary="Suggest category and subcategory for a description",
+)
+def categorize_expense(
+    data: CategorizeRequest,
+    categorizer: CategorizationService = Depends(get_categorization_service),
+    _: str = Depends(auth_required),
+):
+    main, sub = categorizer.classify(data.description)
+    return {"main_category": main, "subcategory": sub}
 
 
 @router.post(
@@ -91,6 +115,52 @@ def create_expense(
     # Invalidate analysis cache on writes
     analysis_service.invalidate_cache()
     # Normalize to response model shape
+    expense_payload = {
+        "user_id": saved.get("User ID", data.user_id),
+        "date": data.date,
+        "description": saved.get("description", data.description),
+        "category": saved.get("category", data.category),
+        "cost": float(saved.get("cost", data.cost)),
+    }
+    return {"success": True, "expense": expense_payload}
+
+
+@router.get(
+    "/expenses",
+    response_model=List[ExpenseRow],
+    tags=["Expenses"],
+    summary="List expenses for a user",
+)
+def list_expenses(
+    user_id: str,
+    expense_service: ExpenseService = Depends(get_expense_service),
+    _: str = Depends(auth_required),
+):
+    return expense_service.get_expenses_for_user(user_id)
+
+
+@router.put(
+    "/expenses/{row_id}",
+    response_model=ExpenseCreatedResponse,
+    tags=["Expenses"],
+    summary="Update an existing expense",
+)
+def update_expense(
+    row_id: int,
+    data: ExpenseRequest,
+    expense_service: ExpenseService = Depends(get_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    _: str = Depends(auth_required),
+):
+    saved = expense_service.update_expense(
+        row_id=row_id,
+        user_id=data.user_id,
+        date=data.date,
+        description=data.description,
+        category=data.category,
+        cost=data.cost,
+    )
+    analysis_service.invalidate_cache()
     expense_payload = {
         "user_id": saved.get("User ID", data.user_id),
         "date": data.date,

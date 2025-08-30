@@ -51,6 +51,18 @@ class ExpenseWithItemsResponse(BaseModel):
     expense_id: str
     item_ids: List[str]
 
+
+class CategorizeRequest(BaseModel):
+    """Request payload for expense categorization."""
+    description: str
+
+
+class CategorizeResponse(BaseModel):
+    """Response with suggested main category and subcategory."""
+    main_category: str
+    subcategory: str
+
+
 class ChatRequest(BaseModel):
     """
     Payload for the `/analysis/chat` endpoint.
@@ -88,6 +100,10 @@ class Expense(BaseModel):
     description: str
     category: str
     cost: float
+
+
+class ExpenseRow(Expense):
+    row_id: int
 
 
 class ExpenseCreatedResponse(BaseModel):
