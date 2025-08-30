@@ -2,7 +2,7 @@ import { fetchWithAuth } from './api';
 
 export interface AddExpensePayload {
   user_id: string;
-  date: string; // YYYY-MM-DD
+  date: string; // MM/DD/YYYY
   description: string;
   category: string; // subcategory string
   cost: number;

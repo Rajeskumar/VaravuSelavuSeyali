@@ -1,4 +1,3 @@
-from datetime import date
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, conint
@@ -15,7 +14,7 @@ class ExpenseRequest(BaseModel):
     user_id: str
     cost: float
     category: str
-    date: date
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
     description: str = ""
 
 
@@ -96,7 +95,7 @@ class DashboardResponse(BaseModel):
 
 class Expense(BaseModel):
     user_id: str
-    date: date
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
     description: str
     category: str
     cost: float

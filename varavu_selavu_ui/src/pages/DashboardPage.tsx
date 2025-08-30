@@ -7,6 +7,7 @@ import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
+import { parseMMDDYYYY } from '../utils/date';
 
 const DashboardPage: React.FC = () => {
   const [data, setData] = React.useState<AnalysisResponse | null>(null);
@@ -41,7 +42,9 @@ const DashboardPage: React.FC = () => {
     ? Object.values(data.category_expense_details).flat()
     : [];
   const largest = expenses.reduce((max, e) => (e.cost > max.cost ? e : max), { cost: 0 } as any);
-  const recent = [...expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+  const recent = [...expenses]
+    .sort((a, b) => parseMMDDYYYY(b.date).getTime() - parseMMDDYYYY(a.date).getTime())
+    .slice(0, 5);
 
   return (
     <Box>

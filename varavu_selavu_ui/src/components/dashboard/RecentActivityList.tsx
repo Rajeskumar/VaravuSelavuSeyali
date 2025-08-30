@@ -7,6 +7,7 @@ import ListItem from '@mui/material/ListItem';
 import ListItemAvatar from '@mui/material/ListItemAvatar';
 import Avatar from '@mui/material/Avatar';
 import ListItemText from '@mui/material/ListItemText';
+import { parseMMDDYYYY } from '../../utils/date';
 
 interface Activity {
   date: string;
@@ -35,7 +36,7 @@ const RecentActivityList: React.FC<Props> = ({ items }) => (
             <ListItemAvatar>
               <Avatar>{item.category.charAt(0)}</Avatar>
             </ListItemAvatar>
-            <ListItemText primary={item.description} secondary={new Date(item.date).toLocaleDateString()} />
+            <ListItemText primary={item.description} secondary={parseMMDDYYYY(item.date).toLocaleDateString()} />
           </ListItem>
         ))}
         {items.length === 0 && (

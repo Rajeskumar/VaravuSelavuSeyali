@@ -22,6 +22,7 @@ import {
   ExpenseRecord,
   AddExpensePayload,
 } from '../../api/expenses';
+import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
@@ -50,7 +51,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const defaultMain = Object.keys(CATEGORY_GROUPS)[0];
   const initialSub = existing ? existing.category : CATEGORY_GROUPS[defaultMain][0];
   const initialMain = existing ? findMainCategory(initialSub) : defaultMain;
-  const [expenseDate, setExpenseDate] = useState(existing?.date || new Date().toISOString().split('T')[0]);
+  const [expenseDate, setExpenseDate] = useState(existing ? mmddyyyyToISO(existing.date) : new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState(existing?.description || '');
   const [cost, setCost] = useState(existing?.cost || 0);
   const [mainCategory, setMainCategory] = useState(initialMain);
@@ -108,7 +109,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
 
   useEffect(() => {
     if (existing) {
-      setExpenseDate(existing.date);
+      setExpenseDate(mmddyyyyToISO(existing.date));
       setDescription(existing.description);
       setCost(existing.cost);
       const main = findMainCategory(existing.category);
@@ -254,10 +255,11 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     }
     try {
       setSaving(true);
+      const formattedDate = isoToMMDDYYYY(expenseDate);
       if (existing) {
         const payload: AddExpensePayload = {
           user_id: user,
-          date: expenseDate,
+          date: formattedDate,
           description,
           category: subcategory,
           cost,
@@ -273,7 +275,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             description,
             category_name: subcategory,
             main_category_name: mainCategory,
-            purchased_at: expenseDate,
+            purchased_at: formattedDate,
             fingerprint: draft.fingerprint,
           },
           items: draft.items.map((i: any) => ({ ...i })),
@@ -282,7 +284,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       } else {
         await addExpense({
           user_id: user,
-          date: expenseDate,
+          date: formattedDate,
           description,
           category: subcategory,
           cost,
@@ -329,8 +331,9 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 value={expenseDate}
                 sx={glassFieldSx}
                 onChange={e => {
-                  setExpenseDate(e.target.value);
-                  if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: e.target.value } });
+                  const iso = e.target.value;
+                  setExpenseDate(iso);
+                  if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: isoToMMDDYYYY(iso) } });
                 }}
                 InputLabelProps={{ shrink: true }}
                 required

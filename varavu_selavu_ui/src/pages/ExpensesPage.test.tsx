@@ -19,7 +19,7 @@ afterEach(() => {
 test('shows expenses and opens form', async () => {
   jest.spyOn(api, 'listExpenses').mockResolvedValue({
     items: [
-      { row_id: 1, user_id: 'user', date: '2024-01-01', description: 'Coffee', category: 'Food & Drink', cost: 3 },
+      { row_id: 1, user_id: 'user', date: '01/01/2024', description: 'Coffee', category: 'Food & Drink', cost: 3 },
     ],
     next_offset: undefined,
   });

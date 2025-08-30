@@ -13,7 +13,7 @@ def test_list_expenses():
             {
                 "row_id": 2,
                 "user_id": "u1",
-                "date": "2024-01-01",
+                "date": "01/01/2024",
                 "description": "Coffee",
                 "category": "Food & Drink",
                 "cost": 3.5,
@@ -21,7 +21,7 @@ def test_list_expenses():
             {
                 "row_id": 3,
                 "user_id": "u1",
-                "date": "2024-01-02",
+                "date": "01/02/2024",
                 "description": "Lunch",
                 "category": "Food & Drink",
                 "cost": 12.0,

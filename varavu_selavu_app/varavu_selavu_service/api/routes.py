@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException
+from datetime import datetime
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
@@ -139,7 +140,7 @@ def list_expenses(
     _: str = Depends(auth_required),
 ):
     expenses = expense_service.get_expenses_for_user(user_id)
-    expenses.sort(key=lambda r: r["date"], reverse=True)
+    expenses.sort(key=lambda r: datetime.strptime(r["date"], "%m/%d/%Y"), reverse=True)
     sliced = expenses[offset : offset + limit]
     next_offset = offset + limit if offset + limit < len(expenses) else None
     return {"items": sliced, "next_offset": next_offset}

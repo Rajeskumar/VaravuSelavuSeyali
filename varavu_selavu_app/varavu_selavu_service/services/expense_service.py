@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Union
 from datetime import date as date_type
-import warnings
+from datetime import datetime
 
 import pandas as pd
 
@@ -13,8 +13,15 @@ class ExpenseService:
         self.expense_ws = self.gs.main_worksheet()
 
     def add_expense(self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float) -> Dict:
-        # Ensure we write a string date in ISO format (YYYY-MM-DD)
-        date_str = date.isoformat() if isinstance(date, date_type) else str(date)
+        # Store dates in MM/DD/YYYY format
+        if isinstance(date, date_type):
+            date_str = date.strftime("%m/%d/%Y")
+        else:
+            try:
+                parsed = datetime.strptime(str(date), "%Y-%m-%d")
+                date_str = parsed.strftime("%m/%d/%Y")
+            except ValueError:
+                date_str = str(date)
         new_row = [user_id, date_str, description, category, cost]
         self.expense_ws.append_row(new_row)
         return {
@@ -33,15 +40,8 @@ class ExpenseService:
             if row.get("User ID") != user_id:
                 continue
 
-            # Normalize the date to ISO format (YYYY-MM-DD).  The sheet may
-            # contain legacy rows with a variety of formats (DD/MM/YYYY,
-            # MM/DD/YYYY, etc.).  Use pandas to coerce the value into a
-            # Timestamp and then render it back to a string.  Skip rows that
-            # cannot be parsed so they don't break the API response model.
             raw_date = row.get("date")
-            parsed = pd.to_datetime(raw_date, format="%Y-%m-%d", errors="coerce")
-            if pd.isna(parsed):
-                parsed = pd.to_datetime(raw_date, errors="coerce", dayfirst=True)
+            parsed = pd.to_datetime(raw_date, format="%m/%d/%Y", errors="coerce")
             if pd.isna(parsed):
                 continue
 
@@ -49,7 +49,7 @@ class ExpenseService:
                 {
                     "row_id": idx,
                     "user_id": user_id,
-                    "date": parsed.date().isoformat(),
+                    "date": parsed.strftime("%m/%d/%Y"),
                     "description": row.get("description"),
                     "category": row.get("category"),
                     "cost": float(row.get("cost", 0)),
@@ -67,7 +67,14 @@ class ExpenseService:
         cost: float,
     ) -> Dict:
         """Update an existing expense by spreadsheet row id."""
-        date_str = date.isoformat() if isinstance(date, date_type) else str(date)
+        if isinstance(date, date_type):
+            date_str = date.strftime("%m/%d/%Y")
+        else:
+            try:
+                parsed = datetime.strptime(str(date), "%Y-%m-%d")
+                date_str = parsed.strftime("%m/%d/%Y")
+            except ValueError:
+                date_str = str(date)
         values = [[user_id, date_str, description, category, cost]]
         cell_range = f"A{row_id}:E{row_id}"
         self.expense_ws.update(cell_range, values)
@@ -85,20 +92,7 @@ class ExpenseService:
             return df
         # Normalize columns expected by old implementation
         if "date" in df.columns:
-            # Prefer explicit format used by the app (YYYY-MM-DD) to avoid inference warnings
-            parsed = pd.to_datetime(df["date"], format="%Y-%m-%d", errors="coerce")
-            # Fallback: try general parsing (and dayfirst) for any legacy/misc rows
-            missing_mask = parsed.isna()
-            if missing_mask.any():
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", category=UserWarning)
-                    parsed.loc[missing_mask] = pd.to_datetime(df.loc[missing_mask, "date"], errors="coerce")
-                # Second fallback with dayfirst for DD/MM/YYYY
-                missing_mask = parsed.isna()
-                if missing_mask.any():
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", category=UserWarning)
-                        parsed.loc[missing_mask] = pd.to_datetime(df.loc[missing_mask, "date"], errors="coerce", dayfirst=True)
+            parsed = pd.to_datetime(df["date"], format="%m/%d/%Y", errors="coerce")
             df["date"] = parsed
         if "cost" in df.columns:
             df["cost"] = pd.to_numeric(df["cost"], errors="coerce")
