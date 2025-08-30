@@ -23,12 +23,22 @@ const LoginPage: React.FC = () => {
   const googleDiv = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+
+    if (!clientId) {
+      // Surface a friendly error rather than letting GSI throw
+      setError('Google login not configured (missing REACT_APP_GOOGLE_CLIENT_ID)');
+      // Helpful hint in console for developers
+      // eslint-disable-next-line no-console
+      console.warn('Set REACT_APP_GOOGLE_CLIENT_ID in .env.development/.env.production');
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
       const w = window as any;
       if (!w.google || !googleDiv.current) return;
       w.google.accounts.id.initialize({

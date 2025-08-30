@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -7,7 +7,8 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
-import { register } from '../api/auth';
+import Divider from '@mui/material/Divider';
+import { loginWithGoogle, register } from '../api/auth';
 
 const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -17,6 +18,48 @@ const RegisterPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const googleDiv = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+    if (!clientId) {
+      // Not blocking manual registration if GSI isn't configured
+      // eslint-disable-next-line no-console
+      console.warn('Google signup not configured (missing REACT_APP_GOOGLE_CLIENT_ID)');
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      const w = window as any;
+      if (!w.google || !googleDiv.current) return;
+      w.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (resp: any) => {
+          try {
+            const data = await loginWithGoogle(resp.credential);
+            localStorage.setItem('vs_token', data.access_token);
+            localStorage.setItem('vs_refresh', data.refresh_token);
+            if (data.email) localStorage.setItem('vs_user', data.email);
+            window.dispatchEvent(new Event('vs_auth_changed'));
+            navigate('/dashboard');
+          } catch {
+            setError('Google signup failed');
+          }
+        },
+      });
+      w.google.accounts.id.renderButton(googleDiv.current, {
+        theme: 'outline',
+        size: 'large',
+        width: '100%',
+        text: 'signup_with',
+      });
+    };
+    document.head.appendChild(script);
+  }, [navigate]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +82,8 @@ const RegisterPage: React.FC = () => {
           <Typography variant="h6" gutterBottom align="center">
             Create Account
           </Typography>
+          <div ref={googleDiv} style={{ width: '100%', marginBottom: 16 }} />
+          <Divider sx={{ mb: 2 }}>or</Divider>
           <Box component="form" onSubmit={handleRegister} noValidate>
             <Grid container spacing={2}>
               {error && (

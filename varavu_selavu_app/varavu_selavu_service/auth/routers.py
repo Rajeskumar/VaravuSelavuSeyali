@@ -127,3 +127,32 @@ def google_login(data: GoogleLoginRequest, auth: AuthService = Depends(get_auth_
         "email": email,
     }
 
+
+class ProfileResponse(BaseModel):
+    email: EmailStr
+    name: str | None = None
+    phone: str | None = None
+
+
+class UpdateProfileRequest(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+
+
+@router.get("/profile", response_model=ProfileResponse)
+def get_profile(user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
+    data = auth.get_user(user) or {}
+    name = data.get("name") or data.get("Name") or None
+    phone = data.get("phone") or data.get("Phone") or None
+    return {"email": user, "name": name, "phone": phone}
+
+
+@router.put("/profile", response_model=ProfileResponse)
+def update_profile(payload: UpdateProfileRequest, user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
+    ok = auth.update_profile(email=user, name=payload.name, phone=payload.phone)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Unable to update profile")
+    data = auth.get_user(user) or {}
+    name = payload.name if payload.name is not None else (data.get("name") or data.get("Name") or None)
+    phone = payload.phone if payload.phone is not None else (data.get("phone") or data.get("Phone") or None)
+    return {"email": user, "name": name, "phone": phone}

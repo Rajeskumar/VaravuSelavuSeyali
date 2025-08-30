@@ -1,11 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Card,
-  CardContent,
-  Typography,
-  TextField,
-  Button
-} from '@mui/material';
+import { Card, CardContent, Typography, TextField, Button, MenuItem } from '@mui/material';
 import { addExpense } from '../../api/expenses';
 import { isoToMMDDYYYY } from '../../utils/date';
 
@@ -15,7 +9,19 @@ interface Props {
 
 const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [category, setCategory] = useState('');
+  // Category structure aligned with AddExpenseForm
+  const CATEGORY_GROUPS: Record<string, string[]> = {
+    Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
+    Transportation: ['Gas/fuel', 'Car', 'Parking', 'Plane', 'Other', 'Bicycle', 'Bus/Train', 'Taxi', 'Hotel'],
+    'Food & Drink': ['Groceries', 'Dining out', 'Liquor', 'Other'],
+    Entertainment: ['Movies', 'Other', 'Games', 'Music', 'Sports'],
+    Life: ['Medical expenses', 'Insurance', 'Taxes', 'Education', 'Childcare', 'Clothing', 'Gifts', 'Other'],
+    Other: ['Services', 'General', 'Electronics'],
+    Utilities: ['Heat/gas', 'Electricity', 'Water', 'Other', 'Cleaning', 'Trash', 'Other', 'TV/Phone/Internet'],
+  };
+  const defaultMain = Object.keys(CATEGORY_GROUPS)[0];
+  const [mainCategory, setMainCategory] = useState<string>(defaultMain);
+  const [subcategory, setSubcategory] = useState<string>(CATEGORY_GROUPS[defaultMain][0]);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
@@ -29,10 +35,11 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
         user_id: user,
         date: isoToMMDDYYYY(date),
         description,
-        category,
+        category: subcategory,
         cost: parseFloat(amount) || 0,
       });
-      setCategory('');
+      setMainCategory(defaultMain);
+      setSubcategory(CATEGORY_GROUPS[defaultMain][0]);
       setDescription('');
       setAmount('');
       onAdded?.();
@@ -59,7 +66,36 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
           Quick Add Expense
         </Typography>
         <TextField size="small" type="date" value={date} onChange={e => setDate(e.target.value)} />
-        <TextField size="small" label="Category" value={category} onChange={e => setCategory(e.target.value)} />
+        <TextField
+          select
+          size="small"
+          label="Main Category"
+          value={mainCategory}
+          onChange={e => {
+            const m = e.target.value;
+            setMainCategory(m);
+            setSubcategory(CATEGORY_GROUPS[m][0]);
+          }}
+        >
+          {Object.keys(CATEGORY_GROUPS).map(category => (
+            <MenuItem key={category} value={category}>
+              {category}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Subcategory"
+          value={subcategory}
+          onChange={e => setSubcategory(e.target.value)}
+        >
+          {CATEGORY_GROUPS[mainCategory].map(sub => (
+            <MenuItem key={sub} value={sub}>
+              {sub}
+            </MenuItem>
+          ))}
+        </TextField>
         <TextField size="small" label="Description" value={description} onChange={e => setDescription(e.target.value)} />
         <TextField size="small" label="Amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
         <Button variant="contained" onClick={handleAdd} disabled={saving || !user}>
