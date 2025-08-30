@@ -12,9 +12,10 @@ interface Props {
 }
 
 const CategoryBreakdownSunburst: React.FC<Props> = ({ data }) => {
-  const labels = data.map(d => d.category);
-  const parents = labels.map(() => '');
-  const values = data.map(d => d.total);
+  const total = data.reduce((sum, d) => sum + d.total, 0);
+  const labels = ['Total', ...data.map(d => d.category)];
+  const parents = ['', ...data.map(() => 'Total')];
+  const values = [total, ...data.map(d => d.total)];
   return (
     <Card
       sx={{
@@ -31,7 +32,7 @@ const CategoryBreakdownSunburst: React.FC<Props> = ({ data }) => {
         </Typography>
         <Plot
           data={[{ type: 'sunburst', labels, parents, values, branchvalues: 'total' }]}
-          layout={{ margin: { l: 0, r: 0, t: 0, b: 0 }, height: 250 }}
+          layout={{ margin: { l: 0, r: 0, t: 0, b: 0 }, height: 400 }}
           style={{ width: '100%' }}
         />
       </CardContent>

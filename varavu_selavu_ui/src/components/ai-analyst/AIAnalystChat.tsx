@@ -74,12 +74,46 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
   const scopeLabel = `${startDate} to ${endDate}`;
 
   const formatMarkdown = (text: string) => {
-    return text
-      .replace(/\n\n/g, '<br/><br/>')
-      .replace(/\n/g, '<br/>')
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>');
+    const lines = text.split('\n');
+    let html: string[] = [];
+    let table: string[] = [];
+
+    const formatInline = (line: string) =>
+      line
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    const flushTable = () => {
+      if (table.length === 0) return;
+      const [header, separator, ...rows] = table;
+      const headers = header.split('|').filter(Boolean).map(h => h.trim());
+      let tableHtml = '<table><thead><tr>' + headers.map(h => `<th>${formatInline(h)}</th>`).join('') + '</tr></thead><tbody>';
+      rows.forEach(r => {
+        const cells = r.split('|').filter(Boolean).map(c => c.trim());
+        tableHtml += '<tr>' + cells.map(c => `<td>${formatInline(c)}</td>`).join('') + '</tr>';
+      });
+      tableHtml += '</tbody></table>';
+      html.push(tableHtml);
+      table = [];
+    };
+
+    lines.forEach(line => {
+      if (/^\s*\|.*\|\s*$/.test(line)) {
+        table.push(line);
+        return;
+      }
+      flushTable();
+      const heading = line.match(/^(#{1,6})\s+(.*)$/);
+      if (heading) {
+        const level = heading[1].length;
+        html.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+      } else if (line.trim()) {
+        html.push(`<p>${formatInline(line)}</p>`);
+      }
+    });
+    flushTable();
+    return html.join('');
   };
 
   return (

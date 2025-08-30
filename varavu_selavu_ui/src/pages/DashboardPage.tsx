@@ -85,12 +85,12 @@ const DashboardPage: React.FC = () => {
       </Grid>
       <Grid container columns={12} spacing={2} sx={{ mt: 1 }}>
         <Grid size={{ xs: 12, md: 8 }}>
-          <RecentActivityList items={recent} />
+          <CategoryBreakdownSunburst data={sunburstData} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <Grid container columns={12} spacing={2}>
             <Grid size={{ xs: 12 }}>
-              <CategoryBreakdownSunburst data={sunburstData} />
+              <RecentActivityList items={recent} />
             </Grid>
             <Grid size={{ xs: 12 }}>
               <QuickAddExpenseCard onAdded={fetchData} />
