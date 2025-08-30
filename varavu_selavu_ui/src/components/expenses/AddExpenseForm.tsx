@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
@@ -13,7 +13,16 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CircularProgress from '@mui/material/CircularProgress';
 import { keyframes } from '@mui/system';
 import heic2any from 'heic2any';
-import { addExpense, parseReceipt, addExpenseWithItems } from '../../api/expenses';
+import {
+  addExpense,
+  updateExpense,
+  parseReceipt,
+  addExpenseWithItems,
+  suggestCategory,
+  ExpenseRecord,
+  AddExpensePayload,
+} from '../../api/expenses';
+import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
@@ -32,19 +41,29 @@ const findMainCategory = (sub: string): string => {
   );
 };
 
-const AddExpenseForm: React.FC = () => {
+interface AddExpenseFormProps {
+  existing?: ExpenseRecord | null;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}
+
+const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSuccess, onCancel }) => {
   const defaultMain = Object.keys(CATEGORY_GROUPS)[0];
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
-  const [description, setDescription] = useState('');
-  const [cost, setCost] = useState(0);
-  const [mainCategory, setMainCategory] = useState(defaultMain);
-  const [subcategory, setSubcategory] = useState(CATEGORY_GROUPS[defaultMain][0]);
+  const initialSub = existing ? existing.category : CATEGORY_GROUPS[defaultMain][0];
+  const initialMain = existing ? findMainCategory(initialSub) : defaultMain;
+  const [expenseDate, setExpenseDate] = useState(existing ? mmddyyyyToISO(existing.date) : new Date().toISOString().split('T')[0]);
+  const [description, setDescription] = useState(existing?.description || '');
+  const [cost, setCost] = useState(existing?.cost || 0);
+  const [mainCategory, setMainCategory] = useState(initialMain);
+  const [subcategory, setSubcategory] = useState(initialSub);
+  const [userPickedCategory, setUserPickedCategory] = useState(!!existing);
   const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [converting, setConverting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const typingRef = useRef<NodeJS.Timeout | null>(null);
 
   const spin = keyframes`
     from { transform: rotate(0deg); }
@@ -72,6 +91,42 @@ const AddExpenseForm: React.FC = () => {
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   const isMobile = typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent);
+
+  const fetchCategory = async () => {
+    if (!description.trim() || userPickedCategory) return;
+    try {
+      const res = await suggestCategory(description.trim());
+      if (CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) {
+        setMainCategory(res.main_category);
+        setSubcategory(res.subcategory);
+      }
+    } catch {
+      /* ignore errors */
+    }
+  };
+
+  const scheduleFetch = () => {
+    if (typingRef.current) clearTimeout(typingRef.current);
+    typingRef.current = setTimeout(fetchCategory, 3000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typingRef.current) clearTimeout(typingRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (existing) {
+      setExpenseDate(mmddyyyyToISO(existing.date));
+      setDescription(existing.description);
+      setCost(existing.cost);
+      const main = findMainCategory(existing.category);
+      setMainCategory(main);
+      setSubcategory(existing.category);
+      setUserPickedCategory(true);
+    }
+  }, [existing]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
@@ -130,6 +185,7 @@ const AddExpenseForm: React.FC = () => {
     const newMain = e.target.value;
     setMainCategory(newMain);
     setSubcategory(CATEGORY_GROUPS[newMain][0]);
+    setUserPickedCategory(true);
     if (draft) {
       setDraft({ ...draft, header: { ...draft.header, main_category_name: newMain, category_name: CATEGORY_GROUPS[newMain][0] } });
     }
@@ -138,7 +194,24 @@ const AddExpenseForm: React.FC = () => {
   const handleSubcategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const sub = e.target.value;
     setSubcategory(sub);
+    setUserPickedCategory(true);
     if (draft) setDraft({ ...draft, header: { ...draft.header, category_name: sub } });
+  };
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDescription(val);
+    setUserPickedCategory(false);
+    if (draft) setDraft({ ...draft, header: { ...draft.header, description: val } });
+    scheduleFetch();
+  };
+
+  const handleDescriptionBlur = () => {
+    if (typingRef.current) {
+      clearTimeout(typingRef.current);
+      typingRef.current = null;
+    }
+    fetchCategory();
   };
 
   const handleParse = async (f?: File) => {
@@ -207,7 +280,18 @@ const AddExpenseForm: React.FC = () => {
     }
     try {
       setSaving(true);
-      if (draft && draft.items.length > 0) {
+      const formattedDate = isoToMMDDYYYY(expenseDate);
+      if (existing) {
+        const payload: AddExpensePayload = {
+          user_id: user,
+          date: formattedDate,
+          description,
+          category: subcategory,
+          cost,
+        };
+        await updateExpense(existing.row_id, payload);
+        setMessage('Expense updated successfully.');
+      } else if (draft && draft.items.length > 0) {
         const payload = {
           user_email: user,
           header: {
@@ -216,7 +300,7 @@ const AddExpenseForm: React.FC = () => {
             description,
             category_name: subcategory,
             main_category_name: mainCategory,
-            purchased_at: expenseDate,
+            purchased_at: formattedDate,
             fingerprint: draft.fingerprint,
           },
           items: draft.items.map((i: any) => ({ ...i })),
@@ -225,17 +309,18 @@ const AddExpenseForm: React.FC = () => {
       } else {
         await addExpense({
           user_id: user,
-          date: expenseDate,
+          date: formattedDate,
           description,
           category: subcategory,
           cost,
         });
+        setMessage('Expense added successfully.');
+        setDescription('');
+        setCost(0);
+        setDraft(null);
+        setFile(null);
       }
-      setMessage('Expense added successfully.');
-      setDescription('');
-      setCost(0);
-      setDraft(null);
-      setFile(null);
+      onSuccess?.();
     } catch (err) {
       setMessage('Failed to add expense.');
     } finally {
@@ -271,8 +356,9 @@ const AddExpenseForm: React.FC = () => {
                 value={expenseDate}
                 sx={glassFieldSx}
                 onChange={e => {
-                  setExpenseDate(e.target.value);
-                  if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: e.target.value } });
+                  const iso = e.target.value;
+                  setExpenseDate(iso);
+                  if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: isoToMMDDYYYY(iso) } });
                 }}
                 InputLabelProps={{ shrink: true }}
                 required
@@ -300,10 +386,8 @@ const AddExpenseForm: React.FC = () => {
                 label="Description"
                 value={description}
                 sx={glassFieldSx}
-                onChange={e => {
-                  setDescription(e.target.value);
-                  if (draft) setDraft({ ...draft, header: { ...draft.header, description: e.target.value } });
-                }}
+                onChange={handleDescriptionChange}
+                onBlur={handleDescriptionBlur}
                 required
               />
             </Grid>
@@ -473,8 +557,13 @@ const AddExpenseForm: React.FC = () => {
             )}
             <Grid size={12}>
               <Button type="submit" variant="contained" color="primary" fullWidth disabled={saveDisabled()}>
-                {saving ? 'Saving...' : 'Add Expense'}
+                {saving ? 'Saving...' : existing ? 'Update Expense' : 'Add Expense'}
               </Button>
+              {onCancel && (
+                <Button onClick={onCancel} fullWidth sx={{ mt: 1 }}>
+                  Cancel
+                </Button>
+              )}
             </Grid>
             {message && (
               <Grid size={12}>

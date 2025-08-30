@@ -1,4 +1,3 @@
-from datetime import date
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, conint
@@ -15,7 +14,7 @@ class ExpenseRequest(BaseModel):
     user_id: str
     cost: float
     category: str
-    date: date
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
     description: str = ""
 
 
@@ -51,6 +50,18 @@ class ExpenseWithItemsResponse(BaseModel):
     expense_id: str
     item_ids: List[str]
 
+
+class CategorizeRequest(BaseModel):
+    """Request payload for expense categorization."""
+    description: str
+
+
+class CategorizeResponse(BaseModel):
+    """Response with suggested main category and subcategory."""
+    main_category: str
+    subcategory: str
+
+
 class ChatRequest(BaseModel):
     """
     Payload for the `/analysis/chat` endpoint.
@@ -84,15 +95,29 @@ class DashboardResponse(BaseModel):
 
 class Expense(BaseModel):
     user_id: str
-    date: date
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
     description: str
     category: str
     cost: float
 
 
+class ExpenseRow(Expense):
+    row_id: int
+
+
 class ExpenseCreatedResponse(BaseModel):
     success: bool
     expense: Expense
+
+
+class ExpenseDeleteResponse(BaseModel):
+    """Simple success flag for deletions."""
+    success: bool
+
+class ExpenseListResponse(BaseModel):
+    """Paginated list of expenses."""
+    items: List[ExpenseRow]
+    next_offset: int | None = None
 
 
 class CategoryTotal(BaseModel):

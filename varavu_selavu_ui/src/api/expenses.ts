@@ -2,7 +2,7 @@ import { fetchWithAuth } from './api';
 
 export interface AddExpensePayload {
   user_id: string;
-  date: string; // YYYY-MM-DD
+  date: string; // MM/DD/YYYY
   description: string;
   category: string; // subcategory string
   cost: number;
@@ -20,6 +20,51 @@ export async function addExpense(payload: AddExpensePayload): Promise<AddExpense
   });
   if (!res.ok) throw new Error('Failed to add expense');
   return res.json();
+}
+
+export interface ExpenseRecord {
+  row_id: number;
+  user_id: string;
+  date: string;
+  description: string;
+  category: string;
+  cost: number;
+}
+
+export interface ExpenseListResponse {
+  items: ExpenseRecord[];
+  next_offset?: number;
+}
+
+export async function listExpenses(
+  user_id: string,
+  offset = 0,
+  limit = 30
+): Promise<ExpenseListResponse> {
+  const params = new URLSearchParams({
+    user_id,
+    offset: offset.toString(),
+    limit: limit.toString(),
+  });
+  const res = await fetchWithAuth(`/api/v1/expenses?${params.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch expenses');
+  return res.json();
+}
+
+export async function updateExpense(row_id: number, payload: AddExpensePayload): Promise<AddExpenseResponse> {
+  const res = await fetchWithAuth(`/api/v1/expenses/${row_id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to update expense');
+  return res.json();
+}
+
+export async function deleteExpense(row_id: number): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/expenses/${row_id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete expense');
 }
 
 export interface ReceiptParseDraft {
@@ -47,5 +92,19 @@ export async function addExpenseWithItems(payload: any) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error('Failed to save expense');
+  return res.json();
+}
+
+export interface CategorySuggestion {
+  main_category: string;
+  subcategory: string;
+}
+
+export async function suggestCategory(description: string): Promise<CategorySuggestion> {
+  const res = await fetchWithAuth(`/api/v1/expenses/categorize`, {
+    method: 'POST',
+    body: JSON.stringify({ description }),
+  });
+  if (!res.ok) throw new Error('Failed to classify expense');
   return res.json();
 }

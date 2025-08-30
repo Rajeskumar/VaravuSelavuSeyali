@@ -7,7 +7,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Toolbar from '@mui/material/Toolbar';
 import HomeIcon from '@mui/icons-material/Home';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import InsightsIcon from '@mui/icons-material/Insights';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import { useTheme } from '@mui/material/styles';
@@ -17,7 +17,7 @@ export const drawerWidth = 240; // Increased drawer width
 
 const navItems = [
   { label: 'Dashboard', icon: <HomeIcon />, path: '/dashboard' },
-  { label: 'Add Expense', icon: <AddCircleIcon />, path: '/add-expense' },
+  { label: 'Expenses', icon: <ListAltIcon />, path: '/expenses' },
   { label: 'Analysis', icon: <InsightsIcon />, path: '/analysis' },
   { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
 ];

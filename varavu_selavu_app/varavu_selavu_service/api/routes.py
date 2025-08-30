@@ -1,17 +1,23 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException
+from datetime import datetime
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
     ReceiptParseResponse,
     ExpenseWithItemsRequest,
     ExpenseWithItemsResponse,
+    CategorizeRequest,
+    CategorizeResponse,
     ChatRequest,
     HealthResponse,
     DashboardResponse,
     ExpenseCreatedResponse,
+    ExpenseRow,
     AnalysisResponse,
     ChatResponse,
     ModelListResponse,
+    ExpenseListResponse,
+    ExpenseDeleteResponse,
 )
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
@@ -22,6 +28,7 @@ from varavu_selavu_service.services.chat_service import (
     list_ollama_models,
 )
 from varavu_selavu_service.services.analysis_service import AnalysisService
+from varavu_selavu_service.services.categorization_service import CategorizationService
 from varavu_selavu_service.core.config import Settings
 from threading import RLock
 from varavu_selavu_service.auth.routers import router as auth_router
@@ -58,6 +65,10 @@ def get_receipt_service() -> ReceiptService:
 def get_sheets_repo() -> SheetsRepo:
     return SheetsRepo()
 
+
+def get_categorization_service() -> CategorizationService:
+    return CategorizationService()
+
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
     return {"status": "healthy"}
@@ -66,6 +77,21 @@ def health_check():
 def readiness_check():
     # Extend with checks to downstream services (e.g., Google Sheets) if needed
     return {"status": "healthy"}
+
+
+@router.post(
+    "/expenses/categorize",
+    response_model=CategorizeResponse,
+    tags=["Expenses"],
+    summary="Suggest category and subcategory for a description",
+)
+def categorize_expense(
+    data: CategorizeRequest,
+    categorizer: CategorizationService = Depends(get_categorization_service),
+    _: str = Depends(auth_required),
+):
+    main, sub = categorizer.classify(data.description)
+    return {"main_category": main, "subcategory": sub}
 
 
 @router.post(
@@ -99,6 +125,75 @@ def create_expense(
         "cost": float(saved.get("cost", data.cost)),
     }
     return {"success": True, "expense": expense_payload}
+
+
+@router.get(
+    "/expenses",
+    response_model=ExpenseListResponse,
+    tags=["Expenses"],
+    summary="List expenses for a user",
+)
+def list_expenses(
+    user_id: str,
+    limit: int = Query(30, ge=1),
+    offset: int = Query(0, ge=0),
+    expense_service: ExpenseService = Depends(get_expense_service),
+    _: str = Depends(auth_required),
+):
+    expenses = expense_service.get_expenses_for_user(user_id)
+    expenses.sort(key=lambda r: datetime.strptime(r["date"], "%m/%d/%Y"), reverse=True)
+    sliced = expenses[offset : offset + limit]
+    next_offset = offset + limit if offset + limit < len(expenses) else None
+    return {"items": sliced, "next_offset": next_offset}
+
+
+@router.put(
+    "/expenses/{row_id}",
+    response_model=ExpenseCreatedResponse,
+    tags=["Expenses"],
+    summary="Update an existing expense",
+)
+def update_expense(
+    row_id: int,
+    data: ExpenseRequest,
+    expense_service: ExpenseService = Depends(get_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    _: str = Depends(auth_required),
+):
+    saved = expense_service.update_expense(
+        row_id=row_id,
+        user_id=data.user_id,
+        date=data.date,
+        description=data.description,
+        category=data.category,
+        cost=data.cost,
+    )
+    analysis_service.invalidate_cache()
+    expense_payload = {
+        "user_id": saved.get("User ID", data.user_id),
+        "date": data.date,
+        "description": saved.get("description", data.description),
+        "category": saved.get("category", data.category),
+        "cost": float(saved.get("cost", data.cost)),
+    }
+    return {"success": True, "expense": expense_payload}
+
+
+@router.delete(
+    "/expenses/{row_id}",
+    response_model=ExpenseDeleteResponse,
+    tags=["Expenses"],
+    summary="Delete an expense",
+)
+def delete_expense(
+    row_id: int,
+    expense_service: ExpenseService = Depends(get_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    _: str = Depends(auth_required),
+):
+    expense_service.delete_expense(row_id)
+    analysis_service.invalidate_cache()
+    return {"success": True}
 
 
 @router.get("/dashboard", response_model=DashboardResponse, tags=["Dashboard"], summary="Basic dashboard metrics")

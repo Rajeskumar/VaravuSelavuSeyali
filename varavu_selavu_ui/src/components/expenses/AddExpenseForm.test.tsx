@@ -27,6 +27,10 @@ const mockDraft = {
 
 test('add and delete items, save enabled on mismatch', async () => {
   jest.spyOn(api, 'parseReceipt').mockResolvedValue(mockDraft);
+  jest.spyOn(api, 'suggestCategory').mockResolvedValue({
+    main_category: 'Food & Drink',
+    subcategory: 'Groceries',
+  });
   render(<AddExpenseForm />);
   expect(screen.getAllByText(/Upload Receipt/i).length).toBeGreaterThan(0);
   const file = new File(['dummy'], 'r.png', { type: 'image/png' });
