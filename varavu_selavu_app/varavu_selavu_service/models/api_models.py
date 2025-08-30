@@ -110,6 +110,10 @@ class ExpenseCreatedResponse(BaseModel):
     expense: Expense
 
 
+class ExpenseDeleteResponse(BaseModel):
+    """Simple success flag for deletions."""
+    success: bool
+
 class ExpenseListResponse(BaseModel):
     """Paginated list of expenses."""
     items: List[ExpenseRow]

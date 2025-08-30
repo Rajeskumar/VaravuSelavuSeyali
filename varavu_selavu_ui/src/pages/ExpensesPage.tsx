@@ -15,9 +15,10 @@ import {
   CircularProgress,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import AddExpenseForm from '../components/expenses/AddExpenseForm';
-import { listExpenses, ExpenseRecord } from '../api/expenses';
+import { listExpenses, deleteExpense, ExpenseRecord } from '../api/expenses';
 
 const ExpensesPage: React.FC = () => {
   const user = localStorage.getItem('vs_user') || '';
@@ -37,6 +38,11 @@ const ExpensesPage: React.FC = () => {
   const expenses = data?.pages.flatMap(p => p.items) ?? [];
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ExpenseRecord | null>(null);
+
+  const handleDelete = async (row_id: number) => {
+    await deleteExpense(row_id);
+    queryClient.invalidateQueries({ queryKey: ['expenses', user] });
+  };
 
   const handleClose = () => {
     setOpen(false);
@@ -89,6 +95,12 @@ const ExpensesPage: React.FC = () => {
                     }}
                   >
                     <EditIcon />
+                  </IconButton>
+                  <IconButton
+                    aria-label="delete"
+                    onClick={() => handleDelete(exp.row_id)}
+                  >
+                    <DeleteIcon />
                   </IconButton>
                 </TableCell>
               </TableRow>

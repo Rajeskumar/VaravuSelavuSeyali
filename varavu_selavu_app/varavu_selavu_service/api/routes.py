@@ -17,6 +17,7 @@ from varavu_selavu_service.models.api_models import (
     ChatResponse,
     ModelListResponse,
     ExpenseListResponse,
+    ExpenseDeleteResponse,
 )
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
@@ -176,6 +177,23 @@ def update_expense(
         "cost": float(saved.get("cost", data.cost)),
     }
     return {"success": True, "expense": expense_payload}
+
+
+@router.delete(
+    "/expenses/{row_id}",
+    response_model=ExpenseDeleteResponse,
+    tags=["Expenses"],
+    summary="Delete an expense",
+)
+def delete_expense(
+    row_id: int,
+    expense_service: ExpenseService = Depends(get_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    _: str = Depends(auth_required),
+):
+    expense_service.delete_expense(row_id)
+    analysis_service.invalidate_cache()
+    return {"success": True}
 
 
 @router.get("/dashboard", response_model=DashboardResponse, tags=["Dashboard"], summary="Basic dashboard metrics")

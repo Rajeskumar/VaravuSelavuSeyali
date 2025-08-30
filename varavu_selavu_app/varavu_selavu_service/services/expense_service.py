@@ -32,6 +32,10 @@ class ExpenseService:
             "cost": cost,
         }
 
+    def delete_expense(self, row_id: int) -> None:
+        """Delete an expense by spreadsheet row id."""
+        self.expense_ws.delete_rows(row_id)
+
     def get_expenses_for_user(self, user_id: str) -> List[Dict]:
         """Return all expenses for a user along with the row id for editing."""
         records = self.expense_ws.get_all_records()

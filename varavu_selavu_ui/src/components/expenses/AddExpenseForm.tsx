@@ -63,6 +63,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [parsing, setParsing] = useState(false);
   const [converting, setConverting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const typingRef = useRef<NodeJS.Timeout | null>(null);
 
   const spin = keyframes`
     from { transform: rotate(0deg); }
@@ -91,21 +92,29 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
 
   const isMobile = typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent);
 
-  useEffect(() => {
+  const fetchCategory = async () => {
     if (!description.trim() || userPickedCategory) return;
-    const handle = setTimeout(async () => {
-      try {
-        const res = await suggestCategory(description.trim());
-        if (CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) {
-          setMainCategory(res.main_category);
-          setSubcategory(res.subcategory);
-        }
-      } catch {
-        /* ignore errors */
+    try {
+      const res = await suggestCategory(description.trim());
+      if (CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) {
+        setMainCategory(res.main_category);
+        setSubcategory(res.subcategory);
       }
-    }, 500);
-    return () => clearTimeout(handle);
-  }, [description, userPickedCategory]);
+    } catch {
+      /* ignore errors */
+    }
+  };
+
+  const scheduleFetch = () => {
+    if (typingRef.current) clearTimeout(typingRef.current);
+    typingRef.current = setTimeout(fetchCategory, 3000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typingRef.current) clearTimeout(typingRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (existing) {
@@ -187,6 +196,22 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     setSubcategory(sub);
     setUserPickedCategory(true);
     if (draft) setDraft({ ...draft, header: { ...draft.header, category_name: sub } });
+  };
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDescription(val);
+    setUserPickedCategory(false);
+    if (draft) setDraft({ ...draft, header: { ...draft.header, description: val } });
+    scheduleFetch();
+  };
+
+  const handleDescriptionBlur = () => {
+    if (typingRef.current) {
+      clearTimeout(typingRef.current);
+      typingRef.current = null;
+    }
+    fetchCategory();
   };
 
   const handleParse = async (f?: File) => {
@@ -361,10 +386,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 label="Description"
                 value={description}
                 sx={glassFieldSx}
-                onChange={e => {
-                  setDescription(e.target.value);
-                  if (draft) setDraft({ ...draft, header: { ...draft.header, description: e.target.value } });
-                }}
+                onChange={handleDescriptionChange}
+                onBlur={handleDescriptionBlur}
                 required
               />
             </Grid>

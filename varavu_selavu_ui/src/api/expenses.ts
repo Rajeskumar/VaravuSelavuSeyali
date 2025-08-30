@@ -60,6 +60,13 @@ export async function updateExpense(row_id: number, payload: AddExpensePayload):
   return res.json();
 }
 
+export async function deleteExpense(row_id: number): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/expenses/${row_id}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete expense');
+}
+
 export interface ReceiptParseDraft {
   header: Record<string, any>;
   items: Record<string, any>[];
