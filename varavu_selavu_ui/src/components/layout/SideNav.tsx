@@ -10,6 +10,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import InsightsIcon from '@mui/icons-material/Insights';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
+import AutorenewIcon from '@mui/icons-material/Autorenew';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -20,6 +21,7 @@ const navItems = [
   { label: 'Expenses', icon: <ListAltIcon />, path: '/expenses' },
   { label: 'Analysis', icon: <InsightsIcon />, path: '/analysis' },
   { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
+  { label: 'Recurring', icon: <AutorenewIcon />, path: '/recurring' },
 ];
 
 interface SideNavProps {

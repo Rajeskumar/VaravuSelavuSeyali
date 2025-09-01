@@ -12,6 +12,8 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import ExpensesPage from './pages/ExpensesPage';
 import ExpenseAnalysisPage from './pages/ExpenseAnalysisPage';
+import HomePage from './pages/HomePage';
+import RecurringPage from './pages/RecurringPage';
 import MainLayout from './components/layout/MainLayout';
 import Button from '@mui/material/Button';
 import LoginIcon from '@mui/icons-material/Login';
@@ -21,6 +23,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AIAnalystPage from './pages/AIAnalystPage';
 import theme from './theme';
 import { logout as apiLogout } from './api/auth';
+import RecurringPrompt from './components/expenses/RecurringPrompt';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
   const token = localStorage.getItem('vs_token');
@@ -28,13 +31,8 @@ const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
   return children;
 };
 
-const Root: React.FC = () => {
-  const token = localStorage.getItem('vs_token');
-  if (token) {
-    return <Navigate to="/dashboard" replace />;
-  }
-  return <Navigate to="/login" replace />;
-};
+// Home is now the default route and is public
+const Root: React.FC = () => <HomePage />;
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
@@ -91,7 +89,12 @@ const AppContent: React.FC = () => {
             </IconButton>
           )}
           <AccountBalanceWalletIcon sx={{ mr: 1 }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{ flexGrow: 1, cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
             Varavu Selavu
           </Typography>
           {user ? (
@@ -121,9 +124,12 @@ const AppContent: React.FC = () => {
         <Route path="/dashboard" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><DashboardPage /></MainLayout></RequireAuth>} />
         <Route path="/expenses" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpensesPage /></MainLayout></RequireAuth>} />
         <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
+        <Route path="/recurring" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><RecurringPage /></MainLayout></RequireAuth>} />
         <Route path="/ai-analyst" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AIAnalystPage /></MainLayout></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ProfilePage /></MainLayout></RequireAuth>} />
       </Routes>
+      {/* Recurring expenses prompt appears after login */}
+      {user && <RecurringPrompt />}
     </>
   );
 };

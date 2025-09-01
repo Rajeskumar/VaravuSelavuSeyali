@@ -29,10 +29,17 @@ from varavu_selavu_service.services.chat_service import (
 )
 from varavu_selavu_service.services.analysis_service import AnalysisService
 from varavu_selavu_service.services.categorization_service import CategorizationService
+from varavu_selavu_service.services.recurring_service import RecurringService
 from varavu_selavu_service.core.config import Settings
 from threading import RLock
 from varavu_selavu_service.auth.routers import router as auth_router
 from varavu_selavu_service.auth.security import auth_required
+from varavu_selavu_service.models.api_models import (
+    RecurringTemplateDTO,
+    UpsertRecurringTemplateRequest,
+    DueOccurrenceDTO,
+    ConfirmRecurringRequest,
+)
 
 settings = Settings()
 
@@ -71,6 +78,9 @@ def get_sheets_repo() -> SheetsRepo:
 
 def get_categorization_service() -> CategorizationService:
     return CategorizationService()
+
+def get_recurring_service() -> RecurringService:
+    return RecurringService()
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
@@ -343,3 +353,226 @@ def list_models():
     models = list_ollama_models()
     return {"provider": "ollama", "models": models}
 
+
+# ---------------------- Recurring ---------------------- #
+
+@router.get(
+    "/recurring/templates",
+    response_model=list[RecurringTemplateDTO],
+    tags=["Recurring"],
+    summary="List recurring templates for the authenticated user",
+)
+def list_recurring_templates(
+    svc: RecurringService = Depends(get_recurring_service),
+    user_id: str = Depends(auth_required),
+):
+    return svc.list_templates(user_id)
+
+
+@router.post(
+    "/recurring/upsert",
+    response_model=RecurringTemplateDTO,
+    tags=["Recurring"],
+    summary="Create or update a recurring template",
+)
+def upsert_recurring_template(
+    data: UpsertRecurringTemplateRequest,
+    svc: RecurringService = Depends(get_recurring_service),
+    user_id: str = Depends(auth_required),
+):
+    return svc.upsert_template(
+        user_id=user_id,
+        description=data.description,
+        category=data.category,
+        day_of_month=int(data.day_of_month),
+        default_cost=float(data.default_cost),
+        start_date_iso=data.start_date_iso,
+    )
+
+
+@router.get(
+    "/recurring/due",
+    response_model=list[DueOccurrenceDTO],
+    tags=["Recurring"],
+    summary="Get due recurring occurrences up to as_of date (excludes months already added)",
+)
+def get_recurring_due(
+    as_of: str | None = None,
+    svc: RecurringService = Depends(get_recurring_service),
+    expense_service: ExpenseService = Depends(get_expense_service),
+    user_id: str = Depends(auth_required),
+):
+    # Compute due months from templates
+    due = svc.compute_due(user_id=user_id, as_of_iso=as_of)
+    # Build set of (yyyy-mm, desc, category) that already exist in expenses
+    existing = expense_service.get_expenses_for_user(user_id)
+    existing_keys: set[str] = set()
+    from datetime import datetime as _dt
+    for e in existing:
+        try:
+            d = _dt.strptime(e["date"], "%m/%d/%Y")
+            existing_keys.add(f"{d.strftime('%Y-%m')}__{e.get('description')}__{e.get('category')}")
+        except Exception:
+            continue
+    # Filter out due entries that already exist for that month
+    filtered: list[dict] = []
+    for d in due:
+        try:
+            dt = _dt.strptime(d["date_iso"], "%Y-%m-%d")
+            key = f"{dt.strftime('%Y-%m')}__{d.get('description')}__{d.get('category')}"
+            if key in existing_keys:
+                continue
+            filtered.append(d)
+        except Exception:
+            filtered.append(d)
+    return filtered
+
+
+@router.post(
+    "/recurring/confirm",
+    response_model=dict,
+    tags=["Recurring"],
+    summary="Confirm due recurring occurrences and create expenses",
+)
+def confirm_recurring(
+    payload: ConfirmRecurringRequest,
+    svc: RecurringService = Depends(get_recurring_service),
+    expense_service: ExpenseService = Depends(get_expense_service),
+    user_id: str = Depends(auth_required),
+):
+    # Reload due occurrences to map template data
+    due_list = svc.compute_due(user_id)
+    due_map = {f"{d['template_id']}__{d['date_iso']}": d for d in due_list}
+    # Build idempotency set from existing expenses for this user
+    existing = expense_service.get_expenses_for_user(user_id)
+    existing_keys = set()
+    from datetime import datetime as _dt
+    for e in existing:
+        # e['date'] is MM/DD/YYYY
+        key = f"{e['date']}__{e['description']}__{e['category']}"
+        existing_keys.add(key)
+
+    def iso_to_mmddyyyy(iso: str) -> str:
+        try:
+            return _dt.strptime(iso, "%Y-%m-%d").strftime("%m/%d/%Y")
+        except Exception:
+            return iso
+
+    processed: list[dict] = []
+    for it in (payload.items or []):
+        key = f"{it.get('template_id')}__{it.get('date_iso')}"
+        d = due_map.get(key)
+        if not d:
+            continue
+        date_mmdd = iso_to_mmddyyyy(str(it.get('date_iso')))
+        dup_key = f"{date_mmdd}__{d['description']}__{d['category']}"
+        if dup_key in existing_keys:
+            # Already added — skip adding but still mark processed
+            processed.append({"template_id": d['template_id'], "date_iso": d['date_iso']})
+            continue
+        try:
+            cost = float(it.get('cost', d.get('suggested_cost', 0)))
+        except Exception:
+            cost = d.get('suggested_cost', 0)  # type: ignore
+        if cost <= 0:
+            continue
+        expense_service.add_expense(
+            user_id=user_id,
+            date=str(it.get('date_iso')),
+            description=d['description'],
+            category=d['category'],
+            cost=cost,
+        )
+        existing_keys.add(dup_key)
+        processed.append({"template_id": d['template_id'], "date_iso": d['date_iso']})
+    if processed:
+        svc.mark_processed(user_id, processed)
+    return {"success": True, "processed": len(processed)}
+
+@router.post(
+    "/recurring/execute_now",
+    response_model=dict,
+    tags=["Recurring"],
+    summary="Execute a template for the current month immediately and mark processed",
+)
+def execute_recurring_now(
+    payload: dict,
+    svc: RecurringService = Depends(get_recurring_service),
+    expense_service: ExpenseService = Depends(get_expense_service),
+    user_id: str = Depends(auth_required),
+):
+    from datetime import datetime as _dt
+    template_id: str = str(payload.get("template_id"))
+    if not template_id:
+        return {"success": False, "created": False, "error": "template_id required"}
+    cost = payload.get("cost")
+    try:
+        cost = float(cost) if cost is not None else None
+    except Exception:
+        cost = None
+    # Find template
+    tpls = svc.list_templates(user_id)
+    tpl = next((t for t in tpls if t.get("id") == template_id), None)
+    if not tpl:
+        return {"success": False, "created": False, "error": "template not found"}
+
+    now = _dt.utcnow()
+    y, m0 = now.year, now.month - 1
+    # scheduled date within this month (clamped)
+    def _last_day_of_month(y: int, m0: int) -> int:
+        from datetime import datetime, timedelta
+        first_next = datetime(y + (1 if m0 == 11 else 0), (m0 + 1) % 12 + 1, 1)
+        return (first_next - timedelta(days=1)).day
+
+    dom = min(int(tpl["day_of_month"]), _last_day_of_month(y, m0))
+    scheduled_iso = _dt(y, m0 + 1, dom).strftime("%Y-%m-%d")
+    expense_date_iso = payload.get("date_iso") or _dt.utcnow().strftime("%Y-%m-%d")
+    use_cost = cost if cost is not None else float(tpl.get("default_cost", 0))
+    if use_cost <= 0:
+        return {"success": False, "created": False, "error": "invalid cost"}
+
+    # Idempotency: if an expense exists in this month with same description+category, skip creating
+    existing = expense_service.get_expenses_for_user(user_id)
+    # month key YYYY-MM
+    month_key = f"{y}-{str(m0+1).zfill(2)}"
+    import pandas as pd
+    already = False
+    for e in existing:
+        try:
+            d = pd.to_datetime(e["date"], format="%m/%d/%Y", errors="coerce")
+            if pd.isna(d):
+                continue
+            if d.strftime("%Y-%m") == month_key and e.get("description") == tpl["description"] and e.get("category") == tpl["category"]:
+                already = True
+                break
+        except Exception:
+            continue
+
+    created = False
+    if not already:
+        expense_service.add_expense(
+            user_id=user_id,
+            date=expense_date_iso,
+            description=tpl["description"],
+            category=tpl["category"],
+            cost=use_cost,
+        )
+        created = True
+
+    # Mark current month as processed so auto prompt won't add later
+    svc.mark_processed(user_id, [{"template_id": tpl["id"], "date_iso": scheduled_iso}])
+    return {"success": True, "created": created, "processed_date": scheduled_iso}
+
+@router.delete(
+    "/recurring/templates/{template_id}",
+    response_model=dict,
+    tags=["Recurring"],
+    summary="Delete a recurring template",
+)
+def delete_recurring_template(
+    template_id: str,
+    svc: RecurringService = Depends(get_recurring_service),
+    user_id: str = Depends(auth_required),
+):
+    ok = svc.delete_template(user_id, template_id)
+    return {"success": bool(ok)}
