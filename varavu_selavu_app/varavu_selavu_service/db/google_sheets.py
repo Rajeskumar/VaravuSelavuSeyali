@@ -67,3 +67,32 @@ class GoogleSheetsClient:
             ws = self.spreadsheet.add_worksheet(title="user_data", rows="100", cols="4")
             ws.append_row(["name", "phone", "email", "password"])
             return ws
+
+    def recurring_sheet(self) -> gspread.Worksheet:
+        """Retrieve or create the `recurring` worksheet used for recurring templates.
+
+        Columns:
+        - user_id
+        - description
+        - category
+        - day_of_month
+        - default_cost
+        - start_date_iso (YYYY-MM-DD)
+        - last_processed_iso (YYYY-MM-DD or empty)
+        - template_id (stable id string)
+        """
+        try:
+            return self.spreadsheet.worksheet("recurring")
+        except gspread.exceptions.WorksheetNotFound:
+            ws = self.spreadsheet.add_worksheet(title="recurring", rows="500", cols="8")
+            ws.append_row([
+                "user_id",
+                "description",
+                "category",
+                "day_of_month",
+                "default_cost",
+                "start_date_iso",
+                "last_processed_iso",
+                "template_id",
+            ])
+            return ws

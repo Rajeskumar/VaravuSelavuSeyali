@@ -8,6 +8,9 @@ import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
+import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
+import CloseIcon from '@mui/icons-material/Close';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -23,6 +26,8 @@ import {
   AddExpensePayload,
 } from '../../api/expenses';
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
+import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
+import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
@@ -45,9 +50,10 @@ interface AddExpenseFormProps {
   existing?: ExpenseRecord | null;
   onSuccess?: () => void;
   onCancel?: () => void;
+  onError?: (message: string) => void;
 }
 
-const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSuccess, onCancel }) => {
+const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSuccess, onCancel, onError }) => {
   const defaultMain = Object.keys(CATEGORY_GROUPS)[0];
   const initialSub = existing ? existing.category : CATEGORY_GROUPS[defaultMain][0];
   const initialMain = existing ? findMainCategory(initialSub) : defaultMain;
@@ -63,6 +69,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [parsing, setParsing] = useState(false);
   const [converting, setConverting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [recurring, setRecurring] = useState(false);
+  const [repeatDay, setRepeatDay] = useState<number>(new Date().getDate());
   const typingRef = useRef<NodeJS.Timeout | null>(null);
 
   const spin = keyframes`
@@ -125,6 +133,20 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       setMainCategory(main);
       setSubcategory(existing.category);
       setUserPickedCategory(true);
+      // load recurring template if any (server-backed)
+      (async () => {
+        try {
+          const tpls = await listRecurringTemplates();
+          const tpl = tpls.find(t => t.description === existing.description && t.category === existing.category);
+          if (tpl) {
+            setRecurring(true);
+            setRepeatDay(tpl.day_of_month);
+            return;
+          }
+        } catch {/* ignore */}
+        const d = new Date(mmddyyyyToISO(existing.date));
+        setRepeatDay(d.getDate());
+      })();
     }
   }, [existing]);
 
@@ -291,6 +313,15 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
         };
         await updateExpense(existing.row_id, payload);
         setMessage('Expense updated successfully.');
+        if (recurring) {
+          await upsertRecurringTemplate({
+            description,
+            category: subcategory,
+            day_of_month: repeatDay,
+            default_cost: cost,
+            start_date_iso: mmddyyyyToISO(existing.date),
+          });
+        }
       } else if (draft && draft.items.length > 0) {
         const payload = {
           user_email: user,
@@ -315,6 +346,15 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           cost,
         });
         setMessage('Expense added successfully.');
+        if (recurring) {
+          await upsertRecurringTemplate({
+            description,
+            category: subcategory,
+            day_of_month: repeatDay,
+            default_cost: cost,
+            start_date_iso: expenseDate,
+          });
+        }
         setDescription('');
         setCost(0);
         setDraft(null);
@@ -322,7 +362,9 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       }
       onSuccess?.();
     } catch (err) {
-      setMessage('Failed to add expense.');
+      const msg = existing ? 'Failed to update expense.' : 'Failed to add expense.';
+      setMessage(msg);
+      onError?.(msg);
     } finally {
       setSaving(false);
     }
@@ -343,11 +385,32 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       }}
     >
       <CardContent>
-        <Typography variant="h6" gutterBottom>
-          Add New Expense
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            {existing ? 'Edit Expense' : 'Add Expense'}
+          </Typography>
+          {onCancel && (
+            <IconButton aria-label="close" onClick={onCancel} size="small">
+              <CloseIcon />
+            </IconButton>
+          )}
+        </Box>
+        <Divider sx={{ mb: 2 }} />
         <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 2 }}>
           <Grid container spacing={2}>
+            {/* Primary details */}
+            <Grid size={12}>
+              <TextField
+                fullWidth
+                label="Description"
+                value={description}
+                sx={glassFieldSx}
+                onChange={handleDescriptionChange}
+                onBlur={handleDescriptionBlur}
+                placeholder="e.g., Electricity bill, Grocery at Costco"
+                required
+              />
+            </Grid>
             <Grid size={6}>
               <TextField
                 fullWidth
@@ -359,6 +422,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   const iso = e.target.value;
                   setExpenseDate(iso);
                   if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: isoToMMDDYYYY(iso) } });
+                  const d = new Date(iso);
+                  if (!isNaN(d.getTime())) setRepeatDay(d.getDate());
                 }}
                 InputLabelProps={{ shrink: true }}
                 required
@@ -378,19 +443,33 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 }}
                 required
                 inputProps={{ min: 0, step: 0.01 }}
+                InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
               />
             </Grid>
-            <Grid size={6}>
-              <TextField
-                fullWidth
-                label="Description"
-                value={description}
-                sx={glassFieldSx}
-                onChange={handleDescriptionChange}
-                onBlur={handleDescriptionBlur}
-                required
+            {/* Recurring toggle */}
+            <Grid size={12}>
+              <FormControlLabel
+                control={<Switch checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />}
+                label="Repeat monthly"
               />
+              {recurring && (
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mt: 1 }}>
+                  <TextField
+                    label="Repeat on day"
+                    type="number"
+                    value={repeatDay}
+                    onChange={e => setRepeatDay(Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))))}
+                    size="small"
+                    sx={{ width: 160, ...glassFieldSx }}
+                    helperText="We’ll prompt you on this day each month"
+                    inputProps={{ min: 1, max: 31 }}
+                  />
+                  <Typography variant="caption" color="text.secondary">You can adjust the amount each month before confirming.</Typography>
+                </Box>
+              )}
             </Grid>
+            <Divider sx={{ width: '100%', my: 1 }} />
+            {/* Category selection */}
             <Grid size={6}>
               <TextField
                 select
@@ -423,6 +502,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 ))}
               </TextField>
             </Grid>
+            <Divider sx={{ width: '100%', my: 1.5 }} />
             <Grid size={12}>
               <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
                 Upload Receipt
@@ -556,14 +636,14 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               </>
             )}
             <Grid size={12}>
-              <Button type="submit" variant="contained" color="primary" fullWidth disabled={saveDisabled()}>
-                {saving ? 'Saving...' : existing ? 'Update Expense' : 'Add Expense'}
-              </Button>
-              {onCancel && (
-                <Button onClick={onCancel} fullWidth sx={{ mt: 1 }}>
-                  Cancel
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
+                {onCancel && (
+                  <Button onClick={onCancel}>Cancel</Button>
+                )}
+                <Button type="submit" variant="contained" color="primary" disabled={saveDisabled()}>
+                  {saving ? 'Saving...' : existing ? 'Update Expense' : 'Add Expense'}
                 </Button>
-              )}
+              </Box>
             </Grid>
             {message && (
               <Grid size={12}>

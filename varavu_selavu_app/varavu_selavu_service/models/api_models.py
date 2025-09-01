@@ -167,3 +167,34 @@ class ModelListResponse(BaseModel):
     provider: str
     models: List[str]
 
+
+# ---------------------- Recurring ---------------------- #
+
+class RecurringTemplateDTO(BaseModel):
+    id: str
+    description: str
+    category: str
+    day_of_month: conint(ge=1, le=31)  # type: ignore
+    default_cost: float
+    start_date_iso: str
+    last_processed_iso: str | None = None
+
+
+class UpsertRecurringTemplateRequest(BaseModel):
+    description: str
+    category: str
+    day_of_month: conint(ge=1, le=31)  # type: ignore
+    default_cost: float
+    start_date_iso: str | None = None
+
+
+class DueOccurrenceDTO(BaseModel):
+    template_id: str
+    date_iso: str
+    description: str
+    category: str
+    suggested_cost: float
+
+
+class ConfirmRecurringRequest(BaseModel):
+    items: List[Dict[str, str | float]]
