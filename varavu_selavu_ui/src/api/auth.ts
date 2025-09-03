@@ -43,13 +43,37 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
   return response.json();
 }
 
+// Attempt to help backend map fields correctly by also sending decoded email/name
+function decodeGoogleIdToken(idToken: string): { email?: string; name?: string } {
+  try {
+    const parts = idToken.split('.');
+    if (parts.length < 2) return {};
+    // Base64URL decode payload
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'))
+    );
+    const email = typeof payload.email === 'string' ? payload.email : undefined;
+    const name =
+      typeof payload.name === 'string'
+        ? payload.name
+        : typeof payload.given_name === 'string' || typeof payload.family_name === 'string'
+        ? `${payload.given_name || ''} ${payload.family_name || ''}`.trim() || undefined
+        : undefined;
+    return { email, name };
+  } catch {
+    return {};
+  }
+}
+
 export async function loginWithGoogle(id_token: string): Promise<LoginResponse> {
+  const decoded = decodeGoogleIdToken(id_token);
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/google`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ id_token }),
+    // Include email/name to avoid backend mis-mapping (e.g., into phone column)
+    body: JSON.stringify({ id_token, email: decoded.email, name: decoded.name }),
   });
 
   if (!response.ok) {

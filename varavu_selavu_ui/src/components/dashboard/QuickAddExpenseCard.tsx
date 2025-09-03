@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, Typography, TextField, Button, MenuItem } from '@mui/material';
-import { addExpense } from '../../api/expenses';
+import { addExpense, suggestCategory } from '../../api/expenses';
 import { isoToMMDDYYYY } from '../../utils/date';
 
 interface Props {
@@ -25,6 +25,8 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [saving, setSaving] = useState(false);
+  const [userPickedCategory, setUserPickedCategory] = useState(false);
+  const typingRef = useRef<NodeJS.Timeout | null>(null);
   const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
 
   const handleAdd = async () => {
@@ -42,6 +44,7 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
       setSubcategory(CATEGORY_GROUPS[defaultMain][0]);
       setDescription('');
       setAmount('');
+      setUserPickedCategory(false);
       onAdded?.();
     } catch {
       // ignore errors for quick add
@@ -49,6 +52,27 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
       setSaving(false);
     }
   };
+
+  // Auto-categorize using backend when user types description
+  const fetchCategory = async () => {
+    if (!description.trim() || userPickedCategory) return;
+    try {
+      const res = await suggestCategory(description.trim());
+      if (CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) {
+        setMainCategory(res.main_category);
+        setSubcategory(res.subcategory);
+      }
+    } catch {
+      // ignore errors for quick add
+    }
+  };
+
+  const scheduleFetch = () => {
+    if (typingRef.current) clearTimeout(typingRef.current);
+    typingRef.current = setTimeout(fetchCategory, 1500);
+  };
+
+  useEffect(() => () => { if (typingRef.current) clearTimeout(typingRef.current); }, []);
 
   return (
     <Card
@@ -75,6 +99,7 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
             const m = e.target.value;
             setMainCategory(m);
             setSubcategory(CATEGORY_GROUPS[m][0]);
+            setUserPickedCategory(true);
           }}
         >
           {Object.keys(CATEGORY_GROUPS).map(category => (
@@ -88,7 +113,7 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
           size="small"
           label="Subcategory"
           value={subcategory}
-          onChange={e => setSubcategory(e.target.value)}
+          onChange={e => { setSubcategory(e.target.value); setUserPickedCategory(true); }}
         >
           {CATEGORY_GROUPS[mainCategory].map(sub => (
             <MenuItem key={sub} value={sub}>
@@ -96,7 +121,13 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
             </MenuItem>
           ))}
         </TextField>
-        <TextField size="small" label="Description" value={description} onChange={e => setDescription(e.target.value)} />
+        <TextField
+          size="small"
+          label="Description"
+          value={description}
+          onChange={e => { setDescription(e.target.value); scheduleFetch(); }}
+          onBlur={fetchCategory}
+        />
         <TextField size="small" label="Amount" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
         <Button variant="contained" onClick={handleAdd} disabled={saving || !user}>
           {saving ? 'Adding...' : 'Add'}

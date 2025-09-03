@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, Typography } from '@mui/material';
 import Plot from 'react-plotly.js';
+import CategoryDetailsDrawer, { ExpenseItem } from '../common/CategoryDetailsDrawer';
 
 interface CategoryTotal {
   category: string;
@@ -9,13 +10,18 @@ interface CategoryTotal {
 
 interface Props {
   data: CategoryTotal[];
+  title?: string;
+  details?: Record<string, ExpenseItem[]>; // mapping label -> items
 }
 
-const CategoryBreakdownSunburst: React.FC<Props> = ({ data }) => {
+const CategoryBreakdownSunburst: React.FC<Props> = ({ data, title = 'Category Breakdown', details }) => {
   const total = data.reduce((sum, d) => sum + d.total, 0);
   const labels = ['Total', ...data.map(d => d.category)];
   const parents = ['', ...data.map(() => 'Total')];
   const values = [total, ...data.map(d => d.total)];
+  const [open, setOpen] = React.useState(false);
+  const [currentLabel, setCurrentLabel] = React.useState<string>('');
+  const items = currentLabel && details ? (details[currentLabel] || []) : [];
   return (
     <Card
       sx={{
@@ -28,9 +34,7 @@ const CategoryBreakdownSunburst: React.FC<Props> = ({ data }) => {
       }}
     >
       <CardContent>
-        <Typography variant="h6" gutterBottom>
-          Category Breakdown
-        </Typography>
+        <Typography variant="h6" gutterBottom>{title}</Typography>
         <Plot
           data={[
             {
@@ -40,7 +44,7 @@ const CategoryBreakdownSunburst: React.FC<Props> = ({ data }) => {
               values,
               branchvalues: 'total',
               maxdepth: 2,
-              hovertemplate: '<b>%{label}</b><br>$%{value:,.2f} (%{percentParent:.1%})<extra></extra>',
+              hovertemplate: '<b>%{label}</b><br>$%{value:,.2f} (%{percentParent:.1%})<br><i>Click to view items</i><extra></extra>',
               insidetextorientation: 'radial',
               textinfo: 'label+percent parent',
               marker: { line: { width: 2, color: 'rgba(255,255,255,0.9)' } },
@@ -56,8 +60,23 @@ const CategoryBreakdownSunburst: React.FC<Props> = ({ data }) => {
             extendsunburstcolors: true,
             uniformtext: { minsize: 12, mode: 'hide' }
           }}
+          onClick={(evt: any) => {
+            const p = evt?.points?.[0];
+            const label = p?.label as string;
+            if (!label || label === 'Total') return;
+            if (details && (details[label]?.length ?? 0) >= 0) {
+              setCurrentLabel(label);
+              setOpen(true);
+            }
+          }}
           config={{ displayModeBar: false, responsive: true }}
           style={{ width: '100%' }}
+        />
+        <CategoryDetailsDrawer
+          open={open}
+          title={`${title}: ${currentLabel}`}
+          items={items}
+          onClose={() => setOpen(false)}
         />
       </CardContent>
     </Card>

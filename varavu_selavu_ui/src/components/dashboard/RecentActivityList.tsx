@@ -10,6 +10,7 @@ import {
   TableRow,
   TableContainer
 } from '@mui/material';
+import { formatAppDate } from '../../utils/date';
 
 interface Activity {
   date: string;
@@ -37,8 +38,14 @@ const RecentActivityList: React.FC<Props> = ({ items }) => (
       <Typography variant="h6" gutterBottom>
         Recent Transactions
       </Typography>
-      <TableContainer sx={{ maxHeight: 420 }}>
-        <Table size="small" stickyHeader>
+      <TableContainer sx={{ overflowX: 'hidden' }}>
+        <Table size="small" sx={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '22%' }} />
+            <col style={{ width: '20%' }} />
+            <col style={{ width: '43%' }} />
+            <col style={{ width: '15%' }} />
+          </colgroup>
           <TableHead>
             <TableRow>
               <TableCell>Date</TableCell>
@@ -50,10 +57,10 @@ const RecentActivityList: React.FC<Props> = ({ items }) => (
           <TableBody>
             {items.map((item) => (
               <TableRow key={`${item.date}-${item.description}`}>
-                <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                <TableCell>{item.category}</TableCell>
-                <TableCell sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{item.description}</TableCell>
-                <TableCell align="right">${item.cost.toFixed(2)}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatAppDate(item.date)}</TableCell>
+                <TableCell sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{item.category}</TableCell>
+                <TableCell sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.description}</TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }} align="right">${item.cost.toFixed(2)}</TableCell>
               </TableRow>
             ))}
             {items.length === 0 && (

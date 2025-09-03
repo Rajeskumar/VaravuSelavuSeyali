@@ -31,7 +31,7 @@ class AuthService:
             return False
         hashed = hash_password(password)
         # user_data sheet columns: name, phone, email, password
-        self.user_ws.append_row([name, phone, email, hashed])
+        self.user_ws.append_row([name, email, phone, hashed])
         return True
 
     def authenticate_user(self, email: str, password: str) -> bool:

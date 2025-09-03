@@ -105,7 +105,7 @@ const ExpenseAnalysisPage: React.FC = () => {
             <Typography variant="h6" sx={{ mb: 1 }}>Top Categories</Typography>
             <Grid container columns={12}>
               <Grid size={{ xs: 12 }}>
-                <CategoryBarChart categoryTotals={data.category_totals} />
+                <CategoryBarChart categoryTotals={data.category_totals} details={data.category_expense_details || {}} />
               </Grid>
             </Grid>
           </Paper>

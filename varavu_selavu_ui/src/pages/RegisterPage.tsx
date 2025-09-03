@@ -8,6 +8,8 @@ import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import Divider from '@mui/material/Divider';
+import Backdrop from '@mui/material/Backdrop';
+import CircularProgress from '@mui/material/CircularProgress';
 import { loginWithGoogle, register } from '../api/auth';
 
 const RegisterPage: React.FC = () => {
@@ -17,6 +19,7 @@ const RegisterPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
   const googleDiv = useRef<HTMLDivElement>(null);
 
@@ -40,6 +43,7 @@ const RegisterPage: React.FC = () => {
         client_id: clientId,
         callback: async (resp: any) => {
           try {
+            setGoogleLoading(true);
             const data = await loginWithGoogle(resp.credential);
             localStorage.setItem('vs_token', data.access_token);
             localStorage.setItem('vs_refresh', data.refresh_token);
@@ -48,6 +52,8 @@ const RegisterPage: React.FC = () => {
             navigate('/dashboard');
           } catch {
             setError('Google signup failed');
+          } finally {
+            setGoogleLoading(false);
           }
         },
       });
@@ -77,6 +83,12 @@ const RegisterPage: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
+      <Backdrop open={googleLoading} sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+          <CircularProgress color="inherit" />
+          <Typography>Completing Google sign up…</Typography>
+        </Box>
+      </Backdrop>
       <Card sx={{ width: 420, maxWidth: '100%' }} elevation={3}>
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h6" gutterBottom align="center">
@@ -98,6 +110,7 @@ const RegisterPage: React.FC = () => {
                   value={name}
                   onChange={e => setName(e.target.value)}
                   required
+                  disabled={googleLoading || loading}
                 />
               </Grid>
               <Grid size={12}>
@@ -108,6 +121,7 @@ const RegisterPage: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
+                  disabled={googleLoading || loading}
                 />
               </Grid>
               <Grid size={12}>
@@ -118,6 +132,7 @@ const RegisterPage: React.FC = () => {
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   required
+                  disabled={googleLoading || loading}
                 />
               </Grid>
               <Grid size={12}>
@@ -128,10 +143,11 @@ const RegisterPage: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
+                  disabled={googleLoading || loading}
                 />
               </Grid>
               <Grid size={12}>
-                <Button type="submit" variant="contained" fullWidth disabled={loading}>
+                <Button type="submit" variant="contained" fullWidth disabled={loading || googleLoading}>
                   {loading ? 'Creating...' : 'Create Account'}
                 </Button>
               </Grid>
