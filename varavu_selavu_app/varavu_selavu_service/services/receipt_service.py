@@ -225,12 +225,11 @@ class ReceiptService:
     def _paddle_ocr(self, data: bytes, content_type: str) -> Tuple[str, float]:
         if self._paddle is None:
             from paddleocr import PaddleOCR
-            # Some PaddleOCR versions expose angle classification via the
-            # ``use_angle_cls`` flag only at initialization. Older releases
-            # may not support passing this flag through to the prediction
-            # routine, which results in "unexpected keyword" errors. To keep
-            # compatibility across versions we avoid enabling it here.
-            self._paddle = PaddleOCR(lang="en")
+            # Enable angle classification during initialization so PaddleOCR
+            # can correctly rotate detected regions.  We avoid forwarding the
+            # flag at prediction time (which caused TypeError on some
+            # versions) by setting it only here.
+            self._paddle = PaddleOCR(lang="en", use_angle_cls=True)
         import numpy as np
         import cv2
         from tempfile import NamedTemporaryFile
@@ -241,22 +240,21 @@ class ReceiptService:
             with NamedTemporaryFile(suffix=".pdf") as tmp:
                 tmp.write(data)
                 tmp.flush()
-                # ``ocr`` will perform both detection and recognition in a
-                # single call. We do not pass ``cls=True`` to avoid forwarding
-                # unsupported keyword arguments to the underlying predictor.
-                result = ocr.ocr(tmp.name)
+                # Perform detection + recognition with angle classification.
+                result = ocr.ocr(tmp.name, cls=True)
         else:
             np_img = np.frombuffer(data, np.uint8)
             img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-            result = ocr.ocr(img)
+            result = ocr.ocr(img, cls=True)
         lines: List[str] = []
         confidences: List[float] = []
-        for line in result:
-            for item in line:
-                txt = item[1][0]
+        for page in result:
+            for item in page:
+                txt = item[1][0].strip()
                 conf = float(item[1][1])
-                lines.append(txt)
-                confidences.append(conf)
+                if txt:
+                    lines.append(txt)
+                    confidences.append(conf)
         text = "\n".join(lines)
         avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
         return text, avg_conf
