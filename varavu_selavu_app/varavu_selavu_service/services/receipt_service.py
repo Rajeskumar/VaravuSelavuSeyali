@@ -225,7 +225,12 @@ class ReceiptService:
     def _paddle_ocr(self, data: bytes, content_type: str) -> Tuple[str, float]:
         if self._paddle is None:
             from paddleocr import PaddleOCR
-            self._paddle = PaddleOCR(lang="en", use_angle_cls=True)
+            # Some PaddleOCR versions expose angle classification via the
+            # ``use_angle_cls`` flag only at initialization. Older releases
+            # may not support passing this flag through to the prediction
+            # routine, which results in "unexpected keyword" errors. To keep
+            # compatibility across versions we avoid enabling it here.
+            self._paddle = PaddleOCR(lang="en")
         import numpy as np
         import cv2
         from tempfile import NamedTemporaryFile
@@ -236,11 +241,14 @@ class ReceiptService:
             with NamedTemporaryFile(suffix=".pdf") as tmp:
                 tmp.write(data)
                 tmp.flush()
-                result = ocr.ocr(tmp.name, cls=True)
+                # ``ocr`` will perform both detection and recognition in a
+                # single call. We do not pass ``cls=True`` to avoid forwarding
+                # unsupported keyword arguments to the underlying predictor.
+                result = ocr.ocr(tmp.name)
         else:
             np_img = np.frombuffer(data, np.uint8)
             img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-            result = ocr.ocr(img, cls=True)
+            result = ocr.ocr(img)
         lines: List[str] = []
         confidences: List[float] = []
         for line in result:
