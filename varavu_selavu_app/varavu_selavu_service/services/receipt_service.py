@@ -6,6 +6,7 @@ import re
 from typing import Any, Dict, List, Tuple, Optional
 
 import requests
+from fastapi import HTTPException
 
 # Category mapping used to ensure the model returns categories that align with the
 # manual entry lists. These mirror the options available in the frontend.
@@ -34,6 +35,8 @@ class ReceiptService:
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.model = os.getenv("OCR_MODEL", "gpt-4o-mini")
         self.timeout = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
+        self.ocr_provider = os.getenv("RECEIPT_OCR_PROVIDER", "paddle")
+        self._paddle = None
 
     # ------------------- mock helpers -------------------
     @staticmethod
@@ -169,6 +172,87 @@ class ReceiptService:
         data = resp.json()
         return json.loads(data.get("response", "{}"))
 
+    def _call_openai_text(self, text: str) -> Dict[str, Any]:
+        headers = {
+            "Authorization": f"Bearer {self.openai_api_key}",
+            "Content-Type": "application/json",
+        }
+        system_prompt = (
+            "You are an expert receipt parsing assistant. Given the OCR-extracted text of "
+            "a grocery receipt, return a JSON object with a `header` and an `items` array. "
+            "The header must include merchant_name, purchased_at (ISO 8601), currency, amount "
+            "(total), tax, tip, discount, description, main_category_name, and category_name. "
+            "Choose main and sub categories from: "
+            f"{CATEGORY_PROMPT}. For each line item provide line_no, item_name, quantity, unit, "
+            "unit_price, line_total, and category_name. All monetary values must be floating point "
+            "dollars exactly as shown on the receipt with no rounding. Respond only with JSON."
+        )
+        body = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+            "response_format": {"type": "json_object"},
+        }
+        url = f"{self.openai_base_url}/chat/completions"
+        resp = requests.post(url, headers=headers, json=body, timeout=self.timeout)
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
+
+    def _call_ollama_text(self, text: str) -> Dict[str, Any]:
+        payload = {
+            "model": self.model,
+            "prompt": (
+                "You are an expert receipt parsing assistant. Given the following receipt text, "
+                "return JSON with a `header` and an `items` array. The header must include "
+                "merchant_name, purchased_at (ISO 8601), currency, amount (total), tax, tip, "
+                "discount, description, main_category_name, and category_name. Choose categories from: "
+                f"{CATEGORY_PROMPT}. Each item requires line_no, item_name, quantity, unit, unit_price, "
+                "line_total, and category_name. Fix any misspelled or partial item names using your "
+                "knowledge of grocery products. All monetary values must be floating point dollars "
+                "exactly as shown on the receipt. Receipt text: "
+                + text
+            ),
+            "format": "json",
+        }
+        resp = requests.post(f"{self.ollama_host}/api/generate", json=payload, timeout=self.timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        return json.loads(data.get("response", "{}"))
+
+    def _paddle_ocr(self, data: bytes, content_type: str) -> Tuple[str, float]:
+        if self._paddle is None:
+            from paddleocr import PaddleOCR
+            self._paddle = PaddleOCR(lang="en", use_angle_cls=True)
+        import numpy as np
+        import cv2
+        from tempfile import NamedTemporaryFile
+
+        ocr = self._paddle
+        result = []
+        if content_type == "application/pdf":
+            with NamedTemporaryFile(suffix=".pdf") as tmp:
+                tmp.write(data)
+                tmp.flush()
+                result = ocr.ocr(tmp.name, cls=True)
+        else:
+            np_img = np.frombuffer(data, np.uint8)
+            img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+            result = ocr.ocr(img, cls=True)
+        lines: List[str] = []
+        confidences: List[float] = []
+        for line in result:
+            for item in line:
+                txt = item[1][0]
+                conf = float(item[1][1])
+                lines.append(txt)
+                confidences.append(conf)
+        text = "\n".join(lines)
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
+        return text, avg_conf
+
     # ------------------- public API -------------------
     def parse(
         self,
@@ -177,16 +261,27 @@ class ReceiptService:
         save_ocr_text: bool = False,
     ) -> Dict[str, Any]:
         """Parse receipt bytes into structured data."""
+        confidence = 1.0
         if self.engine == "mock":
             text = data.decode("utf-8", errors="ignore")
             header, items = self._parse_text(text)
             parsed: Dict[str, Any] = {"header": header, "items": items, "ocr_text": text}
         else:
-            if self.engine == "ollama":
-                b64 = base64.b64encode(data).decode()
-                parsed = self._call_ollama(b64)
+            if self.ocr_provider == "paddle":
+                text, confidence = self._paddle_ocr(data, content_type)
+                if not text.strip():
+                    raise HTTPException(status_code=422, detail="No text found in receipt")
+                if self.engine == "ollama":
+                    parsed = self._call_ollama_text(text)
+                else:
+                    parsed = self._call_openai_text(text)
+                parsed["ocr_text"] = text
             else:
-                parsed = self._call_openai(data, content_type)
+                if self.engine == "ollama":
+                    b64 = base64.b64encode(data).decode()
+                    parsed = self._call_ollama(b64)
+                else:
+                    parsed = self._call_openai(data, content_type)
 
         header = parsed.get("header", {})
         items = parsed.get("items", [])
@@ -199,6 +294,7 @@ class ReceiptService:
             "items": items,
             "warnings": parsed.get("warnings", []),
             "fingerprint": fingerprint,
+            "meta": {"confidence": confidence},
         }
         if save_ocr_text and parsed.get("ocr_text"):
             result["ocr_text"] = parsed["ocr_text"]
