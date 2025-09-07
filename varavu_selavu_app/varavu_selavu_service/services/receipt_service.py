@@ -35,8 +35,9 @@ class ReceiptService:
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.model = os.getenv("OCR_MODEL", "gpt-4o-mini")
         self.timeout = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
-        self.ocr_provider = os.getenv("RECEIPT_OCR_PROVIDER", "paddle")
-        self._paddle = None
+        self.ocr_provider = os.getenv("RECEIPT_OCR_PROVIDER", "docai")
+        self._docai_client = None
+        self._docai_name = None
 
     # ------------------- mock helpers -------------------
     @staticmethod
@@ -222,40 +223,25 @@ class ReceiptService:
         data = resp.json()
         return json.loads(data.get("response", "{}"))
 
-    def _paddle_ocr(self, data: bytes, content_type: str) -> Tuple[str, float]:
-        if self._paddle is None:
-            from paddleocr import PaddleOCR
-            # Enable angle classification during initialization so PaddleOCR
-            # can correctly rotate detected regions.  We avoid forwarding the
-            # flag at prediction time (which caused TypeError on some
-            # versions) by setting it only here.
-            self._paddle = PaddleOCR(lang="en", use_angle_cls=True)
-        import numpy as np
-        import cv2
-        from tempfile import NamedTemporaryFile
-
-        ocr = self._paddle
-        result = []
-        if content_type == "application/pdf":
-            with NamedTemporaryFile(suffix=".pdf") as tmp:
-                tmp.write(data)
-                tmp.flush()
-                # Perform detection + recognition with angle classification.
-                result = ocr.ocr(tmp.name, cls=True)
-        else:
-            np_img = np.frombuffer(data, np.uint8)
-            img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-            result = ocr.ocr(img, cls=True)
-        lines: List[str] = []
+    def _docai_ocr(self, data: bytes, content_type: str) -> Tuple[str, float]:
+        if self._docai_client is None:
+            from google.cloud import documentai_v1 as documentai
+            self._docai_client = documentai.DocumentProcessorServiceClient()
+            project_id = os.getenv("DOC_AI_PROJECT_ID", "")
+            location = os.getenv("DOC_AI_LOCATION", "us")
+            processor_id = os.getenv("DOC_AI_PROCESSOR_ID", "")
+            self._docai_name = self._docai_client.processor_path(project_id, location, processor_id)
+        from google.cloud import documentai_v1 as documentai
+        raw_document = documentai.RawDocument(content=data, mime_type=content_type)
+        request = documentai.ProcessRequest(name=self._docai_name, raw_document=raw_document)
+        result = self._docai_client.process_document(request=request)
+        doc = result.document
+        text = doc.text or ""
         confidences: List[float] = []
-        for page in result:
-            for item in page:
-                txt = item[1][0].strip()
-                conf = float(item[1][1])
-                if txt:
-                    lines.append(txt)
-                    confidences.append(conf)
-        text = "\n".join(lines)
+        for page in doc.pages:
+            for token in page.tokens:
+                if token.layout.confidence is not None:
+                    confidences.append(token.layout.confidence)
         avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
         return text, avg_conf
 
@@ -273,8 +259,8 @@ class ReceiptService:
             header, items = self._parse_text(text)
             parsed: Dict[str, Any] = {"header": header, "items": items, "ocr_text": text}
         else:
-            if self.ocr_provider == "paddle":
-                text, confidence = self._paddle_ocr(data, content_type)
+            if self.ocr_provider == "docai":
+                text, confidence = self._docai_ocr(data, content_type)
                 if not text.strip():
                     raise HTTPException(status_code=422, detail="No text found in receipt")
                 if self.engine == "ollama":

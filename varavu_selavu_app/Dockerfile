@@ -8,8 +8,7 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock /app/
 
 # Install Poetry
-RUN pip install poetry && poetry config virtualenvs.create false && poetry install \
-    && pip install --no-cache-dir paddlepaddle paddleocr
+RUN pip install poetry && poetry config virtualenvs.create false && poetry install
 
 # Copy the application code
 COPY . /app
