@@ -73,7 +73,7 @@ def call_openai(query: str, analysis: dict, model: str | None = None) -> str:
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    model_name = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model_name = model or os.getenv("OPENAI_MODEL", "gpt-5-mini")
     payload = {
         "model": model_name,
         "messages": [
@@ -137,8 +137,8 @@ def call_chat_model(query: str, analysis: dict, model: str | None = None) -> str
 
 def list_openai_models() -> list[str]:
     """
-    Return a list of model IDs from OpenAI's Models API, filtered to variants
-    of gpt-4, gpt-5, and 'o' reasoning models.
+    Return a list of model IDs from OpenAI's Models API, filtered to
+    gpt-5, gpt-5.2, and gpt-5-mini (if they exist).
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -151,13 +151,12 @@ def list_openai_models() -> list[str]:
         )
         resp.raise_for_status()
         data = resp.json()
-        ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
-        # Filter to variants of gpt-4, gpt-5, and 'o' reasoning models
-        filtered_ids = [
-            id
-            for id in ids
-            if id.startswith("gpt-4") or id.startswith("gpt-5") or id.startswith("o")
-        ]
+        remote_ids = {m.get("id") for m in data.get("data", []) if m.get("id")}
+
+        # Only include these models if they are returned by the API
+        target_models = ["gpt-5-mini", "gpt-5.2", "gpt-5"]
+
+        filtered_ids = [mid for mid in target_models if mid in remote_ids]
         return filtered_ids
     except requests.RequestException as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
