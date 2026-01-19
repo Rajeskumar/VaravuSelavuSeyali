@@ -73,7 +73,7 @@ def call_openai(query: str, analysis: dict, model: str | None = None) -> str:
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    model_name = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model_name = model or os.getenv("OPENAI_MODEL", "gpt-5 mini")
     payload = {
         "model": model_name,
         "messages": [
@@ -137,36 +137,11 @@ def call_chat_model(query: str, analysis: dict, model: str | None = None) -> str
 
 def list_openai_models() -> list[str]:
     """
-    Return a list of model IDs from OpenAI's Models API, filtered to variants
-    of gpt-4, gpt-5, and 'o' reasoning models.
+    Return a list of model IDs for the backend API.
+    Requested models: gpt-5 mini, gpt-5.2, gpt-5, gpt-5.2 pro.
+    Default to gpt-5 mini.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
-    try:
-        resp = requests.get(
-            "https://api.openai.com/v1/models",
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=20,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
-        # Filter to variants of gpt-4, gpt-5, and 'o' reasoning models
-        filtered_ids = [
-            id
-            for id in ids
-            if id.startswith("gpt-4") or id.startswith("gpt-5") or id.startswith("o")
-        ]
-        return filtered_ids
-    except requests.RequestException as exc:
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-        text = getattr(getattr(exc, "response", None), "text", None)
-        logger.exception(
-            "OpenAI model listing failed",
-            extra={"provider": "openai", "status": status, "response": text},
-        )
-        raise HTTPException(status_code=502, detail=f"Error listing OpenAI models: {exc}")
+    return ["gpt-5 mini", "gpt-5.2", "gpt-5", "gpt-5.2 pro"]
 
 
 def list_ollama_models() -> list[str]:
