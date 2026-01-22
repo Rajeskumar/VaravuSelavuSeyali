@@ -67,3 +67,7 @@ the captured image automatically. Tabs are created if missing.
 
 Set `LLM_TIMEOUT_SEC` in `.env` to increase the OpenAI/Ollama request timeout
 (default 180 seconds) if calls are slow or time out.
+
+## Mobile Application
+
+A native mobile application (Android/iOS) roadmap is available. See [MOBILE_APP_ROADMAP.md](./MOBILE_APP_ROADMAP.md) for detailed implementation steps using React Native and Expo.
