@@ -35,13 +35,25 @@ graph LR
 
 ### Phase 1: Project Initialization
 
-1.  **Initialize Expo Project:**
+1.  **Repository Structure:**
+    It is recommended to use a **Monorepo** approach. Keep the mobile app code in the same repository as the backend and frontend to facilitate easier code sharing and version control.
+
+    *Recommended Directory Layout:*
+    ```
+    root/
+    ├── varavu_selavu_app/    (Backend)
+    ├── varavu_selavu_ui/     (Web Frontend)
+    └── varavu_selavu_mobile/ (Mobile App - New)
+    ```
+
+2.  **Initialize Expo Project:**
+    Run this command from the root of the repository:
     ```bash
     npx create-expo-app@latest varavu_selavu_mobile --template blank-typescript
     cd varavu_selavu_mobile
     ```
 
-2.  **Install Core Dependencies:**
+3.  **Install Core Dependencies:**
     ```bash
     # Navigation
     npm install @react-navigation/native @react-navigation/native-stack @react-navigation/bottom-tabs
