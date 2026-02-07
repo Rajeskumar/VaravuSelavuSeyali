@@ -291,6 +291,11 @@ def parse_receipt(
     _: str = Depends(auth_required),
 ):
     data = file.file.read()
+    settings = Settings()
+    if file.content_type not in settings.ALLOWED_MIME.split(","):
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+    if len(data) > settings.MAX_UPLOAD_MB * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large")
     return receipt_service.parse(
         data,
         content_type=file.content_type or "image/png",

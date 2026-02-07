@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from varavu_selavu_service.main import app
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.api.routes import get_receipt_service, get_sheets_repo
+from varavu_selavu_service.auth.security import auth_required
 
 
 class FakeSheetsRepo:
@@ -38,6 +39,7 @@ class FakeSheetsRepo:
 fake_repo = FakeSheetsRepo()
 app.dependency_overrides[get_sheets_repo] = lambda: fake_repo
 app.dependency_overrides[get_receipt_service] = lambda: ReceiptService(engine="mock")
+app.dependency_overrides[auth_required] = lambda: "test"
 client = TestClient(app)
 
 
@@ -61,11 +63,12 @@ def test_receipt_service_parse():
 def test_parse_endpoint():
     resp = client.post(
         "/api/v1/ingest/receipt/parse",
-        files={"file": ("r.txt", SAMPLE_TEXT.encode(), "text/plain")},
+        files={"file": ("r.png", SAMPLE_TEXT.encode(), "image/png")},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["header"]["merchant_name"] == "Test Store"
+    assert "confidence" in data["meta"]
 
 
 def test_create_expense_with_items():

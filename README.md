@@ -10,11 +10,13 @@ The service uses JWT based authentication with access and refresh tokens.
 - `JWT_SECRET` – secret used to sign tokens.
 - `JWT_EXPIRE_MINUTES` – access token lifetime in minutes (default 30).
 - `GOOGLE_SHEETS_SPREADSHEET_ID` – id of the Google Sheet used for storage.
-- `OCR_ENGINE` – receipt parsing engine (default `openai`, or `ollama` for local models).
-- `OPENAI_API_KEY` – API key when using the OpenAI engine.
+ - `OCR_ENGINE` – receipt parsing engine (default `openai`, or `ollama` for local models).
+ - `RECEIPT_OCR_PROVIDER` – OCR provider for receipt text extraction (default `docai` for Google DocumentAI).
+ - `DOC_AI_PROJECT_ID`, `DOC_AI_LOCATION`, `DOC_AI_PROCESSOR_ID` – configuration for DocumentAI when using the `docai` provider.
+ - `OPENAI_API_KEY` – API key when using the OpenAI engine.
 - `OLLAMA_HOST` – base URL for a local Ollama instance (default `http://localhost:11434`).
 - `OCR_MODEL` – model id for OpenAI/Ollama (default `gpt-4o-mini`).
-- `MAX_UPLOAD_MB` – maximum receipt upload size in MB (default `12`).
+- `MAX_UPLOAD_MB` – maximum receipt upload size in MB (default `10`).
 - `ALLOWED_MIME` – comma separated list of allowed MIME types.
 
 ### Auth flow

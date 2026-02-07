@@ -42,7 +42,11 @@ class Settings(BaseSettings):
 
     # OCR / receipts
     OCR_ENGINE: str = "openai"
-    MAX_UPLOAD_MB: int = 12
+    RECEIPT_OCR_PROVIDER: str = "docai"
+    DOC_AI_PROJECT_ID: str = ""
+    DOC_AI_LOCATION: str = "us"
+    DOC_AI_PROCESSOR_ID: str = ""
+    MAX_UPLOAD_MB: int = 10
     ALLOWED_MIME: str = "image/png,image/jpeg,application/pdf"
     LLM_TIMEOUT_SEC: int = 180
 

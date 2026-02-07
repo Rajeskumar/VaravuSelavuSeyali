@@ -23,6 +23,7 @@ class ReceiptParseResponse(BaseModel):
     items: List[Dict[str, Any]]
     warnings: List[str]
     fingerprint: str
+    meta: Dict[str, Any] = Field(default_factory=dict)
     ocr_text: str | None = None
 
 
