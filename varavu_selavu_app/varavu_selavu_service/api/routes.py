@@ -387,6 +387,7 @@ def upsert_recurring_template(
         day_of_month=int(data.day_of_month),
         default_cost=float(data.default_cost),
         start_date_iso=data.start_date_iso,
+        status=data.status,
     )
 
 
