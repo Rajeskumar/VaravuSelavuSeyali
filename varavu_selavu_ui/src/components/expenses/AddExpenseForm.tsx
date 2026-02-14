@@ -28,6 +28,7 @@ import {
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
+import ReceiptVerificationModal from './ReceiptVerificationModal';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
@@ -65,6 +66,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [userPickedCategory, setUserPickedCategory] = useState(!!existing);
   const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<any | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [converting, setConverting] = useState(false);
@@ -143,7 +145,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             setRepeatDay(tpl.day_of_month);
             return;
           }
-        } catch {/* ignore */}
+        } catch {/* ignore */ }
         const d = new Date(mmddyyyyToISO(existing.date));
         setRepeatDay(d.getDate());
       })();
@@ -262,18 +264,35 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
         ...res,
         header: { ...res.header, description: desc, main_category_name: main, category_name: sub || CATEGORY_GROUPS[main][0] },
       };
+      // Instead of setting inline draft, open the modal
       setDraft(processed);
-      setCost(hdr.amount || 0);
-      setDescription(desc);
-      if (hdr.purchased_at) setExpenseDate(hdr.purchased_at.split('T')[0]);
-      setMainCategory(main);
-      if (sub && CATEGORY_GROUPS[main].includes(sub)) setSubcategory(sub); else setSubcategory(CATEGORY_GROUPS[main][0]);
+      setModalOpen(true);
+
     } catch (e) {
       setMessage('Failed to parse receipt');
     } finally {
       setParsing(false);
     }
   };
+
+  const handleModalSave = async (finalData: any) => {
+    setModalOpen(false);
+    setDraft(null);
+    setFile(null);
+    try {
+      setSaving(true);
+      await addExpenseWithItems(finalData);
+      setMessage('Expense verified and saved successfully.');
+      onSuccess?.();
+    } catch (err) {
+      console.error(err);
+      setMessage('Failed to save verified expense.');
+      onError?.('Failed to save verified expense.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
 
   const reconcileDelta = () => {
     if (!draft) return 0;
@@ -560,81 +579,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 </Typography>
               )}
             </Grid>
-            {draft && (
-              <>
-                <Grid size={12}>
-                  <Typography variant="subtitle1">Items</Typography>
-                </Grid>
-                {draft.items.map((item: any, idx: number) => (
-                  <Grid key={idx} size={12} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
-                    <TextField
-                      label="Name"
-                      value={item.item_name}
-                      sx={glassFieldSx}
-                      onChange={e => {
-                        const items = [...draft.items];
-                        items[idx].item_name = e.target.value;
-                        setDraft({ ...draft, items });
-                      }}
-                    />
-                    <TextField
-                      label="Line Total ($)"
-                      type="number"
-                      value={item.line_total}
-                      sx={glassFieldSx}
-                      onChange={e => {
-                        const items = [...draft.items];
-                        items[idx].line_total = parseFloat(e.target.value) || 0;
-                        setDraft({ ...draft, items });
-                      }}
-                    />
-                    <TextField
-                      label="Category"
-                      value={item.category_name || ''}
-                      sx={glassFieldSx}
-                      onChange={e => {
-                        const items = [...draft.items];
-                        items[idx].category_name = e.target.value;
-                        setDraft({ ...draft, items });
-                      }}
-                    />
-                    <Button
-                      onClick={() => {
-                        const items = draft.items.filter((_: any, i: number) => i !== idx);
-                        setDraft({ ...draft, items });
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </Grid>
-                ))}
-                <Grid size={12}>
-                  <Button
-                    onClick={() => {
-                      const items = [
-                        ...draft.items,
-                        {
-                          line_no: draft.items.length + 1,
-                          item_name: '',
-                          line_total: 0,
-                          category_name: '',
-                        },
-                      ];
-                      setDraft({ ...draft, items });
-                    }}
-                  >
-                    Add Item
-                  </Button>
-                </Grid>
-                <Grid size={12}>
-                  <Typography color={reconcileOk() ? 'green' : 'red'}>
-                    {reconcileOk()
-                      ? 'Totals match'
-                      : `Totals mismatch by $${reconcileDelta().toFixed(2)}`}
-                  </Typography>
-                </Grid>
-              </>
-            )}
+            {/* Inline draft editing removed in favor of Modal */}
+            {/* {draft && ( ... )} */}
             <Grid size={12}>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
                 {onCancel && (
@@ -653,7 +599,15 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           </Grid>
         </Box>
       </CardContent>
-    </Card>
+      {/* Verification Modal */}
+      <ReceiptVerificationModal
+        open={modalOpen}
+        draft={draft}
+        categoryGroups={CATEGORY_GROUPS}
+        onClose={() => setModalOpen(false)}
+        onSave={handleModalSave}
+      />
+    </Card >
   );
 };
 
