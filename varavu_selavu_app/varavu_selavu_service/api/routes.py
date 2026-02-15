@@ -18,7 +18,9 @@ from varavu_selavu_service.models.api_models import (
     ModelListResponse,
     ExpenseListResponse,
     ExpenseDeleteResponse,
+    IdeaSubmissionRequest,
 )
+from varavu_selavu_service.services.email_service import EmailService
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.repo.sheets_repo import SheetsRepo
@@ -81,6 +83,10 @@ def get_categorization_service() -> CategorizationService:
 
 def get_recurring_service() -> RecurringService:
     return RecurringService()
+
+
+def get_email_service() -> EmailService:
+    return EmailService(settings=settings)
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
@@ -298,6 +304,42 @@ def parse_receipt(
     )
 
 
+
+@router.post(
+    "/ideas",
+    tags=["Ideas"],
+    summary="Submit an idea",
+)
+def submit_idea(
+    data: IdeaSubmissionRequest,
+    email_service: EmailService = Depends(get_email_service),
+):
+    # Construct the email body
+    sender_name = data.name or "Anonymous"
+    sender_email = data.contact_email or "unknown@gmail.com"
+    
+    subject = f"New Idea Submission from {sender_name}: {data.title}"
+    
+    body = (
+        f"New idea submitted!\n\n"
+        f"From: {sender_name} <{sender_email}>\n"
+        f"Title: {data.title}\n"
+        f"Summary: {data.summary}\n"
+        f"Consent: {data.consent}\n"
+        f"Time_To_Complete: {data.time_taken}\n"
+        f"Submitted At: {data.submitted_at}\n"
+    )
+    
+    email_service.send_email(
+        subject=subject,
+        body=body,
+        to_email="cereberoos@gmail.com",
+        reply_to=data.contact_email,
+        from_email=sender_email if data.contact_email else None
+    )
+    return {"success": True}
+
+
 @router.post(
     "/expenses/with_items",
     response_model=ExpenseWithItemsResponse,
@@ -387,6 +429,7 @@ def upsert_recurring_template(
         day_of_month=int(data.day_of_month),
         default_cost=float(data.default_cost),
         start_date_iso=data.start_date_iso,
+        status=data.status,
     )
 
 

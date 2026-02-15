@@ -6,6 +6,7 @@ import Grid from '@mui/material/Grid';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import EditIcon from '@mui/icons-material/Edit';
+import PauseIcon from '@mui/icons-material/Pause';
 
 const RecurringPage: React.FC = () => {
   const qc = useQueryClient();
@@ -14,12 +15,20 @@ const RecurringPage: React.FC = () => {
     queryFn: () => listRecurringTemplates(),
   });
 
-  const [form, setForm] = React.useState({
+  const [form, setForm] = React.useState<{
+    description: string;
+    category: string;
+    day_of_month: number;
+    default_cost: number;
+    start_date_iso: string;
+    status: 'active' | 'paused';
+  }>({
     description: '',
     category: '',
     day_of_month: new Date().getDate(),
     default_cost: 0,
     start_date_iso: new Date().toISOString().split('T')[0],
+    status: 'active',
   });
 
   const [editing, setEditing] = React.useState<RecurringTemplateDTO | null>(null);
@@ -38,7 +47,8 @@ const RecurringPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
       setEditing(null);
-      setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0] });
+      setEditing(null);
+      setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'active' });
       setToast({ open: true, message: 'Template saved', severity: 'success' });
     },
     onError: () => {
@@ -55,6 +65,22 @@ const RecurringPage: React.FC = () => {
     },
     onError: () => setToast({ open: true, message: 'Failed to delete template', severity: 'error' }),
     onSettled: () => setDeletingId(null),
+  });
+
+  const togglePause = useMutation({
+    mutationFn: (t: RecurringTemplateDTO) => upsertRecurringTemplate({
+      description: t.description,
+      category: t.category,
+      day_of_month: t.day_of_month,
+      default_cost: t.default_cost,
+      start_date_iso: t.start_date_iso,
+      status: t.status === 'active' ? 'paused' : 'active'
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recurring-templates'] });
+      setToast({ open: true, message: 'Template status updated', severity: 'success' });
+    },
+    onError: () => setToast({ open: true, message: 'Failed to update status', severity: 'error' }),
   });
 
   const templates = data || [];
@@ -85,7 +111,7 @@ const RecurringPage: React.FC = () => {
             <Grid size={{ xs: 12, md: 3 }}>
               <Button variant="contained" onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !form.description || !form.category || form.default_cost <= 0}>Save</Button>
               {editing && (
-                <Button sx={{ ml: 1 }} onClick={() => { setEditing(null); setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0] }); }}>Cancel</Button>
+                <Button sx={{ ml: 1 }} onClick={() => { setEditing(null); setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'active' }); }}>Cancel</Button>
               )}
             </Grid>
           </Grid>
@@ -101,6 +127,7 @@ const RecurringPage: React.FC = () => {
               <TableCell>Day</TableCell>
               <TableCell>Default Cost</TableCell>
               <TableCell>Start</TableCell>
+              <TableCell>Status</TableCell>
               <TableCell>Last Processed</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -119,9 +146,15 @@ const RecurringPage: React.FC = () => {
                 <TableCell>{t.day_of_month}</TableCell>
                 <TableCell>${t.default_cost.toFixed(2)}</TableCell>
                 <TableCell>{t.start_date_iso}</TableCell>
+                <TableCell>
+                  {t.status === 'paused' ? <Typography variant="caption" color="text.secondary">Paused</Typography> : <Typography variant="caption" color="success.main">Active</Typography>}
+                </TableCell>
                 <TableCell>{t.last_processed_iso || '-'}</TableCell>
                 <TableCell align="right">
-                  <IconButton onClick={() => { setEditing(t); setForm({ description: t.description, category: t.category, day_of_month: t.day_of_month, default_cost: t.default_cost, start_date_iso: t.start_date_iso }); }}><EditIcon /></IconButton>
+                  <IconButton onClick={() => togglePause.mutate(t)} title={t.status === 'paused' ? "Resume" : "Pause"}>
+                    {t.status === 'paused' ? <PlayArrowIcon /> : <PauseIcon />}
+                  </IconButton>
+                  <IconButton onClick={() => { setEditing(t); setForm({ description: t.description, category: t.category, day_of_month: t.day_of_month, default_cost: t.default_cost, start_date_iso: t.start_date_iso, status: t.status || 'active' }); }}><EditIcon /></IconButton>
                   <IconButton onClick={() => { setPendingExec(t); setExecAmount(t.default_cost); setExecuteOpen(true); }} disabled={executingId === t.id}>
                     {executingId === t.id ? <CircularProgress size={18} /> : <PlayArrowIcon />}
                   </IconButton>

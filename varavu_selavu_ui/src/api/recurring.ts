@@ -8,6 +8,7 @@ export interface RecurringTemplateDTO {
   default_cost: number;
   start_date_iso: string; // YYYY-MM-DD
   last_processed_iso?: string;
+  status: 'active' | 'paused';
 }
 
 export interface UpsertRecurringTemplatePayload {
@@ -16,6 +17,7 @@ export interface UpsertRecurringTemplatePayload {
   day_of_month: number;
   default_cost: number;
   start_date_iso?: string;
+  status?: 'active' | 'paused';
 }
 
 export async function upsertRecurringTemplate(payload: UpsertRecurringTemplatePayload): Promise<RecurringTemplateDTO> {
@@ -48,7 +50,7 @@ export async function getRecurringDue(asOfISO?: string): Promise<DueOccurrenceDT
   return res.json();
 }
 
-export async function confirmRecurring(items: { template_id: string; date_iso: string; cost: number }[]): Promise<{ success: boolean }>{
+export async function confirmRecurring(items: { template_id: string; date_iso: string; cost: number }[]): Promise<{ success: boolean }> {
   const res = await fetchWithAuth('/api/v1/recurring/confirm', {
     method: 'POST',
     body: JSON.stringify({ items }),
@@ -57,7 +59,7 @@ export async function confirmRecurring(items: { template_id: string; date_iso: s
   return res.json();
 }
 
-export async function deleteRecurringTemplate(template_id: string): Promise<{ success: boolean }>{
+export async function deleteRecurringTemplate(template_id: string): Promise<{ success: boolean }> {
   const res = await fetchWithAuth(`/api/v1/recurring/templates/${template_id}`, {
     method: 'DELETE',
   });
@@ -65,7 +67,7 @@ export async function deleteRecurringTemplate(template_id: string): Promise<{ su
   return res.json();
 }
 
-export async function executeRecurringNow(template_id: string, cost?: number): Promise<{ success: boolean; created?: boolean }>{
+export async function executeRecurringNow(template_id: string, cost?: number): Promise<{ success: boolean; created?: boolean }> {
   const res = await fetchWithAuth('/api/v1/recurring/execute_now', {
     method: 'POST',
     body: JSON.stringify({ template_id, cost }),
