@@ -8,21 +8,3 @@ expense_ux_design.png
 
 # Python cache
 **/__pycache__/
-varavu_selavu_app/__pycache__/__init__.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/__pycache__/__init__.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/__pycache__/main.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/api/__pycache__/__init__.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/api/__pycache__/routes.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/core/__pycache__/__init__.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/core/__pycache__/config.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/models/__pycache__/__init__.cpython-312.pyc
-varavu_selavu_app/varavu_selavu_service/models/__pycache__/api_models.cpython-312.pyc
-**/__pycache__/**
-.DS_Store
-
-
-varavu_selavu_mobile/node_modules/
-varavu_selavu_mobile/android/
-varavu_selavu_mobile/ios/
-varavu_selavu_mobile/.expo/
-.DS_Store

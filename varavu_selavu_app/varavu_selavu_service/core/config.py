@@ -46,14 +46,6 @@ class Settings(BaseSettings):
     ALLOWED_MIME: str = "image/png,image/jpeg,application/pdf"
     LLM_TIMEOUT_SEC: int = 180
 
-    # Email
-    MAIL_USERNAME: str
-    MAIL_PASSWORD: str
-    MAIL_FROM: str = "unknown_user"
-    MAIL_PORT: int = 587
-    MAIL_SERVER: str = "smtp.gmail.com"
-
-
     JWT_SECRET: str = "change-me"
     JWT_EXPIRE_MINUTES: int = 30
 

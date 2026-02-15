@@ -1,4 +1,3 @@
-// src/api/expenses.ts
 import API_BASE_URL from './apiconfig';
 
 export interface ExpensePayload {
@@ -7,6 +6,20 @@ export interface ExpensePayload {
   sub_category?: string;
   date: string; // YYYY-MM-DD
   cost: number;
+}
+
+export interface ExpenseRecord {
+  row_id: number;
+  user_id: string;
+  date: string;
+  description: string;
+  category: string;
+  cost: number;
+}
+
+export interface ExpenseListResponse {
+  items: ExpenseRecord[];
+  next_offset?: number;
 }
 
 export async function addExpense(payload: ExpensePayload, token: string): Promise<void> {
@@ -24,9 +37,56 @@ export async function addExpense(payload: ExpensePayload, token: string): Promis
   }
 }
 
+export async function listExpenses(token: string, offset = 0, limit = 30): Promise<ExpenseListResponse> {
+  const params = new URLSearchParams({
+    offset: offset.toString(),
+    limit: limit.toString(),
+  });
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/expenses?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch expenses');
+  }
+
+  return response.json();
+}
+
+export async function deleteExpense(rowId: number, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${rowId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to delete expense');
+  }
+}
+
+export async function updateExpense(rowId: number, payload: ExpensePayload, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${rowId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to update expense');
+  }
+}
+
 export async function uploadReceipt(uri: string, token: string): Promise<any> {
     const formData = new FormData();
-    // React Native's FormData requires a special object for files
     const file = {
       uri,
       name: 'receipt.jpg',

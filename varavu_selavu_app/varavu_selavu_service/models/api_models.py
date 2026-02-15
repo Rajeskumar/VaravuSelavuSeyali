@@ -15,16 +15,7 @@ class ExpenseRequest(BaseModel):
     cost: float
     category: str
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
-
-class IdeaSubmissionRequest(BaseModel):
-    title: str
-    summary: str
-    consent: bool
-    time_taken: int
-    name: Optional[str] = None
-    contact_email: Optional[str] = None
-    submitted_at: Optional[str] = None
-
+    description: str = ""
 
 
 class ReceiptParseResponse(BaseModel):
@@ -187,7 +178,6 @@ class RecurringTemplateDTO(BaseModel):
     default_cost: float
     start_date_iso: str
     last_processed_iso: str | None = None
-    status: str = "active"
 
 
 class UpsertRecurringTemplateRequest(BaseModel):
@@ -196,7 +186,6 @@ class UpsertRecurringTemplateRequest(BaseModel):
     day_of_month: conint(ge=1, le=31)  # type: ignore
     default_cost: float
     start_date_iso: str | None = None
-    status: str = "active"
 
 
 class DueOccurrenceDTO(BaseModel):
