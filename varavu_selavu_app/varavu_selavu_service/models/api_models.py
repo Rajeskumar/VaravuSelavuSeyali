@@ -15,7 +15,15 @@ class ExpenseRequest(BaseModel):
     cost: float
     category: str
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
-    description: str = ""
+
+class IdeaSubmissionRequest(BaseModel):
+    title: str
+    summary: str
+    consent: bool
+    t: int
+    name: Optional[str] = None
+    contact_email: Optional[str] = None
+
 
 
 class ReceiptParseResponse(BaseModel):
