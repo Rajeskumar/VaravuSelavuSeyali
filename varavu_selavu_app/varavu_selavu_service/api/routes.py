@@ -326,7 +326,8 @@ def submit_idea(
         f"Title: {data.title}\n"
         f"Summary: {data.summary}\n"
         f"Consent: {data.consent}\n"
-        f"Timestamp: {data.t}\n"
+        f"Time_To_Complete: {data.time_taken}\n"
+        f"Submitted At: {data.submitted_at}\n"
     )
     
     email_service.send_email(

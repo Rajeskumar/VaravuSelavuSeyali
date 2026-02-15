@@ -20,9 +20,10 @@ class IdeaSubmissionRequest(BaseModel):
     title: str
     summary: str
     consent: bool
-    t: int
+    time_taken: int
     name: Optional[str] = None
     contact_email: Optional[str] = None
+    submitted_at: Optional[str] = None
 
 
 
