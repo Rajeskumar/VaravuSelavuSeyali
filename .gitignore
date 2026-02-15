@@ -8,3 +8,9 @@ expense_ux_design.png
 
 # Python cache
 **/__pycache__/
+
+varavu_selavu_mobile/node_modules/
+varavu_selavu_mobile/android/
+varavu_selavu_mobile/ios/
+varavu_selavu_mobile/.expo/
+.DS_Store
