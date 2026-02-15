@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import AddExpenseScreen from './src/screens/AddExpenseScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -26,7 +27,7 @@ function MainTabs() {
   return (
     <Tab.Navigator>
       <Tab.Screen name="Dashboard" component={HomeScreen} />
-      {/* Add more tabs like "Expenses", "Profile" here */}
+      <Tab.Screen name="Add Expense" component={AddExpenseScreen} />
     </Tab.Navigator>
   );
 }

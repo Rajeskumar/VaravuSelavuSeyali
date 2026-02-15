@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Button, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
 import API_BASE_URL from '../api/apiconfig';
 
 interface DashboardData {
@@ -13,13 +13,18 @@ interface DashboardData {
 export default function HomeScreen() {
   const { userEmail, accessToken, signOut } = useAuth();
   const navigation = useNavigation<any>();
+  const isFocused = useIsFocused(); // Hook to detect if screen is focused
   const [data, setData] = useState<DashboardData>({ income: 0, expenses: 0, balance: 0 });
   const [loading, setLoading] = useState(true);
 
-  // Fetch dashboard data
+  // Fetch dashboard data whenever the screen comes into focus or token changes
   useEffect(() => {
     const fetchDashboardData = async () => {
+      // Don't fetch if we don't have a token yet or screen is not focused
+      if (!accessToken || !isFocused) return;
+
       try {
+        setLoading(true);
         const response = await fetch(`${API_BASE_URL}/api/v1/analysis/monthly`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -28,8 +33,6 @@ export default function HomeScreen() {
 
         if (response.ok) {
           const result = await response.json();
-          // Assuming the API returns something like { total_income: 100, total_expenses: 50 }
-          // If not, adjust based on actual API response structure
           setData({
             income: result.total_income || 0,
             expenses: result.total_expense || 0,
@@ -44,13 +47,14 @@ export default function HomeScreen() {
     };
 
     fetchDashboardData();
-  }, [accessToken]);
+  }, [accessToken, isFocused]);
 
   const formatCurrency = (amount: number) => {
     return `$${amount.toFixed(2)}`;
   };
 
-  if (loading) {
+  if (loading && !data.income && !data.expenses) {
+     // Only show full loader if we have no data at all
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" />
@@ -84,7 +88,10 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.actions}>
-        <Button title="Add Expense" onPress={() => Alert.alert("Coming Soon", "Expense entry form to be implemented.")} />
+        <Button
+            title="Add Expense"
+            onPress={() => navigation.navigate('Add Expense')}
+        />
       </View>
 
       <View style={styles.logoutContainer}>
