@@ -72,40 +72,6 @@ Set `LLM_TIMEOUT_SEC` in `.env` to increase the OpenAI/Ollama request timeout
 
 A native mobile application (Android/iOS) is available in the `varavu_selavu_mobile` directory.
 
-### Prerequisites
-
-*   **Node.js** (v18+)
-*   **Expo Go App:** Install this on your Android or iOS device to scan the QR code and run the app during development.
-*   **Emulators (Optional):** Android Studio for Android Emulator, Xcode for iOS Simulator (Mac only).
-
-### Quick Start
-
-1.  **Start the Backend:**
-    The backend must be running for the mobile app to function.
-    ```bash
-    make start-backend
-    ```
-    *Note: The backend runs on `0.0.0.0:8000` to be accessible from emulators/devices.*
-
-2.  **Install Dependencies:**
-    ```bash
-    make install-mobile
-    ```
-
-3.  **Generate Assets:**
-    Required for the first run to prevent missing icon errors.
-    ```bash
-    make generate-mobile-assets
-    ```
-
-4.  **Run the App:**
-    *   **Android:** `make start-mobile-android`
-    *   **iOS:** `make start-mobile-ios`
-    *   **QR Code (for physical device):** `cd varavu_selavu_mobile && npx expo start`
-
-### Configuration
-
-*   **API URL:** The app attempts to connect to `http://10.0.2.2:8000` (Android Emulator default) or `localhost` (iOS Simulator).
-    If running on a physical device, update `varavu_selavu_mobile/src/api/apiconfig.ts` with your computer's LAN IP (e.g., `http://192.168.1.5:8000`).
+See [varavu_selavu_mobile/README.md](varavu_selavu_mobile/README.md) for detailed setup and running instructions.
 
 See [MOBILE_APP_ROADMAP.md](./MOBILE_APP_ROADMAP.md) for detailed architecture and implementation steps.
