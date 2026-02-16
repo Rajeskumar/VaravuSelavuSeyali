@@ -1,6 +1,7 @@
 import API_BASE_URL from './apiconfig';
 
 export interface ExpensePayload {
+  user_id: string;
   description: string;
   category: string;
   sub_category?: string;
@@ -23,7 +24,7 @@ export interface ExpenseListResponse {
 }
 
 export async function addExpense(payload: ExpensePayload, token: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/expenses/`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/expenses`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -33,12 +34,15 @@ export async function addExpense(payload: ExpensePayload, token: string): Promis
   });
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Add expense error:', response.status, errorText);
     throw new Error('Failed to add expense');
   }
 }
 
-export async function listExpenses(token: string, offset = 0, limit = 30): Promise<ExpenseListResponse> {
+export async function listExpenses(token: string, userEmail: string, offset = 0, limit = 30): Promise<ExpenseListResponse> {
   const params = new URLSearchParams({
+    user_id: userEmail,
     offset: offset.toString(),
     limit: limit.toString(),
   });
@@ -51,6 +55,8 @@ export async function listExpenses(token: string, offset = 0, limit = 30): Promi
   });
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error('List expenses error:', response.status, errorText);
     throw new Error('Failed to fetch expenses');
   }
 
@@ -86,27 +92,28 @@ export async function updateExpense(rowId: number, payload: ExpensePayload, toke
 }
 
 export async function uploadReceipt(uri: string, token: string): Promise<any> {
-    const formData = new FormData();
-    const file = {
-      uri,
-      name: 'receipt.jpg',
-      type: 'image/jpeg',
-    } as any;
+  const formData = new FormData();
+  const file = {
+    uri,
+    name: 'receipt.jpg',
+    type: 'image/jpeg',
+  } as any;
 
-    formData.append('file', file);
+  formData.append('file', file);
 
-    const response = await fetch(`${API_BASE_URL}/api/v1/ocr/parse`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
-      },
-      body: formData,
-    });
+  // Backend endpoint is /api/v1/ingest/receipt/parse (not /ocr/parse)
+  const response = await fetch(`${API_BASE_URL}/api/v1/ingest/receipt/parse`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data',
+    },
+    body: formData,
+  });
 
-    if (!response.ok) {
-      throw new Error('Failed to parse receipt');
-    }
+  if (!response.ok) {
+    throw new Error('Failed to parse receipt');
+  }
 
-    return response.json();
+  return response.json();
 }

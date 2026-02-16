@@ -96,3 +96,15 @@ class GoogleSheetsClient:
                 "template_id",
             ])
             return ws
+
+
+# ── Module-level singleton ──────────────────────────────────────────
+_singleton: GoogleSheetsClient | None = None
+
+
+def get_sheets_client() -> GoogleSheetsClient:
+    """Return a process-wide singleton so we reuse the gspread connection."""
+    global _singleton
+    if _singleton is None:
+        _singleton = GoogleSheetsClient()
+    return _singleton

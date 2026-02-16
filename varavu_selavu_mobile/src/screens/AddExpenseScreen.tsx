@@ -17,11 +17,10 @@ export default function AddExpenseScreen() {
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState<string | null>(null);
 
-  const { accessToken } = useAuth();
+  const { accessToken, userEmail, getValidToken } = useAuth();
   const navigation = useNavigation<any>();
 
   const handlePickImage = async () => {
-    // Request permission (implicit in Expo usually, but good practice)
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (permissionResult.granted === false) {
@@ -42,43 +41,45 @@ export default function AddExpenseScreen() {
   };
 
   const handleTakePhoto = async () => {
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
-      if (permissionResult.granted === false) {
-        Alert.alert("Permission to access camera is required!");
-        return;
-      }
+    if (permissionResult.granted === false) {
+      Alert.alert("Permission to access camera is required!");
+      return;
+    }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImage(result.assets[0].uri);
-        await parseReceipt(result.assets[0].uri);
-      }
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setImage(result.assets[0].uri);
+      await parseReceipt(result.assets[0].uri);
+    }
   };
 
   const parseReceipt = async (uri: string) => {
     if (!accessToken) return;
     setLoading(true);
     try {
-        Alert.alert("Processing", "Uploading and analyzing receipt...");
-        const data = await uploadReceipt(uri, accessToken);
-        // Auto-fill fields from OCR result
-        if (data.cost) setAmount(String(data.cost));
-        if (data.description) setDescription(data.description);
-        if (data.category) setCategory(data.category);
-        if (data.sub_category) setSubCategory(data.sub_category);
-        if (data.date) setDate(data.date);
-        Alert.alert("Success", "Receipt parsed successfully!");
+      Alert.alert("Processing", "Uploading and analyzing receipt...");
+      const token = await getValidToken();
+      if (!token) return;
+      const data = await uploadReceipt(uri, token);
+      // Auto-fill fields from OCR result
+      if (data.cost) setAmount(String(data.cost));
+      if (data.description) setDescription(data.description);
+      if (data.category) setCategory(data.category);
+      if (data.sub_category) setSubCategory(data.sub_category);
+      if (data.date) setDate(data.date);
+      Alert.alert("Success", "Receipt parsed successfully!");
     } catch (error) {
-        Alert.alert("Error", "Failed to parse receipt. Please enter details manually.");
-        console.error(error);
+      Alert.alert("Error", "Failed to parse receipt. Please enter details manually.");
+      console.error(error);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -88,20 +89,23 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    if (!accessToken) {
-        Alert.alert('Error', 'Not authenticated');
-        return;
+    if (!accessToken || !userEmail) {
+      Alert.alert('Error', 'Not authenticated');
+      return;
     }
 
     setLoading(true);
     try {
+      const token = await getValidToken();
+      if (!token) return;
       await addExpense({
+        user_id: userEmail,
         description,
         cost: parseFloat(amount),
         category,
         sub_category: subCategory,
         date,
-      }, accessToken);
+      }, token);
 
       Alert.alert('Success', 'Expense added successfully!');
       // Reset form
@@ -124,13 +128,13 @@ export default function AddExpenseScreen() {
     <ScrollView style={styles.container}>
       <Text style={styles.label}>Receipt (Optional)</Text>
       <View style={styles.imageButtons}>
-          <Button title="Pick from Gallery" onPress={handlePickImage} />
-          <View style={{width: 10}} />
-          <Button title="Take Photo" onPress={handleTakePhoto} />
+        <Button title="Pick from Gallery" onPress={handlePickImage} />
+        <View style={{ width: 10 }} />
+        <Button title="Take Photo" onPress={handleTakePhoto} />
       </View>
 
       {image && (
-          <Image source={{ uri: image }} style={styles.previewImage} />
+        <Image source={{ uri: image }} style={styles.previewImage} />
       )}
 
       <Text style={styles.label}>Amount *</Text>
@@ -176,9 +180,9 @@ export default function AddExpenseScreen() {
 
       <View style={styles.submitContainer}>
         {loading ? (
-            <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" />
         ) : (
-            <Button title="Save Expense" onPress={handleSubmit} />
+          <Button title="Save Expense" onPress={handleSubmit} />
         )}
       </View>
     </ScrollView>
@@ -205,20 +209,20 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   imageButtons: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   previewImage: {
-      width: '100%',
-      height: 200,
-      resizeMode: 'contain',
-      marginBottom: 10,
-      borderWidth: 1,
-      borderColor: '#ddd',
+    width: '100%',
+    height: 200,
+    resizeMode: 'contain',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   submitContainer: {
-      marginTop: 20,
-      marginBottom: 40,
+    marginTop: 20,
+    marginBottom: 40,
   }
 });

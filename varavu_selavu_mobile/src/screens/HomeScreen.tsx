@@ -5,7 +5,7 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 
 export default function HomeScreen() {
-  const { userEmail, accessToken, signOut } = useAuth();
+  const { userEmail, accessToken, signOut, getValidToken } = useAuth();
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const [data, setData] = useState<AnalysisResponse | null>(null);
@@ -14,13 +14,15 @@ export default function HomeScreen() {
   // Fetch dashboard data
   useEffect(() => {
     const fetchData = async () => {
-      if (!accessToken || !isFocused) return;
+      if (!accessToken || !isFocused || !userEmail) return;
 
       try {
         setLoading(true);
-        const result = await getAnalysis(accessToken, {
-            year: new Date().getFullYear(),
-            month: new Date().getMonth() + 1
+        const token = await getValidToken();
+        if (!token) return; // signed out during refresh
+        const result = await getAnalysis(token, userEmail, {
+          year: new Date().getFullYear(),
+          month: new Date().getMonth() + 1
         });
         setData(result);
       } catch (error) {
@@ -31,7 +33,7 @@ export default function HomeScreen() {
     };
 
     fetchData();
-  }, [accessToken, isFocused]);
+  }, [isFocused]);
 
   const formatCurrency = (amount: number) => {
     return `$${amount.toFixed(2)}`;
@@ -77,30 +79,30 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          <Button title="View All" onPress={() => navigation.navigate('Expenses')} />
+        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <Button title="View All" onPress={() => navigation.navigate('Expenses')} />
       </View>
 
       <View style={styles.recentList}>
-          {recentExpenses.length === 0 ? (
-              <Text style={{textAlign: 'center', padding: 20, color: '#888'}}>No recent activity</Text>
-          ) : (
-              recentExpenses.map((expense, index) => (
-                  <View key={index} style={styles.expenseItem}>
-                      <View>
-                          <Text style={styles.expenseDesc}>{expense.description}</Text>
-                          <Text style={styles.expenseDate}>{expense.date} • {expense.category}</Text>
-                      </View>
-                      <Text style={styles.expenseCost}>-{formatCurrency(expense.cost)}</Text>
-                  </View>
-              ))
-          )}
+        {recentExpenses.length === 0 ? (
+          <Text style={{ textAlign: 'center', padding: 20, color: '#888' }}>No recent activity</Text>
+        ) : (
+          recentExpenses.map((expense, index) => (
+            <View key={index} style={styles.expenseItem}>
+              <View>
+                <Text style={styles.expenseDesc}>{expense.description}</Text>
+                <Text style={styles.expenseDate}>{expense.date} • {expense.category}</Text>
+              </View>
+              <Text style={styles.expenseCost}>-{formatCurrency(expense.cost)}</Text>
+            </View>
+          ))
+        )}
       </View>
 
       <View style={styles.actions}>
         <Button
-            title="Add Expense"
-            onPress={() => navigation.navigate('Add Expense')}
+          title="Add Expense"
+          onPress={() => navigation.navigate('Add Expense')}
         />
       </View>
 
@@ -159,41 +161,41 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   sectionHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
   },
   sectionTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   recentList: {
-      backgroundColor: 'white',
-      borderRadius: 10,
-      padding: 10,
-      marginBottom: 20,
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 20,
   },
   expenseItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 10,
-      borderBottomWidth: 1,
-      borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   expenseDesc: {
-      fontWeight: '500',
-      fontSize: 16,
+    fontWeight: '500',
+    fontSize: 16,
   },
   expenseDate: {
-      color: '#888',
-      fontSize: 12,
-      marginTop: 2,
+    color: '#888',
+    fontSize: 12,
+    marginTop: 2,
   },
   expenseCost: {
-      color: 'red',
-      fontWeight: 'bold',
+    color: 'red',
+    fontWeight: 'bold',
   },
   actions: {
     marginBottom: 10,
