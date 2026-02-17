@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SEC: int = 180
 
     # Email
-    MAIL_USERNAME: str
-    MAIL_PASSWORD: str
+    MAIL_USERNAME: str = ""
+    MAIL_PASSWORD: str = ""
     MAIL_FROM: str = "unknown_user"
     MAIL_PORT: int = 587
     MAIL_SERVER: str = "smtp.gmail.com"
