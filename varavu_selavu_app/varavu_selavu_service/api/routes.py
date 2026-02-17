@@ -46,14 +46,9 @@ settings = Settings()
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router, prefix="/auth")
 
-# Dependency providers — all share a singleton GoogleSheetsClient so we
-# reuse the gspread connection instead of opening the spreadsheet per request.
-from varavu_selavu_service.db.google_sheets import get_sheets_client as _gs
-
-
+# Dependency providers
 def get_expense_service() -> ExpenseService:
-    return ExpenseService(gs_client=_gs())
-
+    return ExpenseService()
 # Simple in-memory cache for analysis results
 _ANALYSIS_CACHE: dict[
     tuple[str, int | None, int | None, str | None, str | None],
@@ -78,14 +73,14 @@ def get_receipt_service() -> ReceiptService:
 
 
 def get_sheets_repo() -> SheetsRepo:
-    return SheetsRepo(client=_gs())
+    return SheetsRepo()
 
 
 def get_categorization_service() -> CategorizationService:
     return CategorizationService()
 
 def get_recurring_service() -> RecurringService:
-    return RecurringService(gs_client=_gs())
+    return RecurringService()
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():

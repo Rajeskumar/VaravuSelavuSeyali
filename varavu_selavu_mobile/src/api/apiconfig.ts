@@ -8,10 +8,10 @@ import Constants from 'expo-constants';
 // - Physical Device: Your computer's LAN IP (e.g., 192.168.1.X)
 
 // Default to Android Emulator IP for development if not configured
-const DEV_API_URL = 'https://varavu-selavu-backend-952416556244.us-central1.run.app';
+const DEV_API_URL = 'http://10.0.2.2:8000';
 
 const API_BASE_URL = __DEV__
   ? (process.env.EXPO_PUBLIC_API_URL || DEV_API_URL)
-  : 'https://varavu-selavu-backend-952416556244.us-central1.run.app';
+  : 'https://your-production-api.com';
 
 export default API_BASE_URL;
