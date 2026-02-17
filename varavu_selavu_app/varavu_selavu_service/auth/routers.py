@@ -13,9 +13,7 @@ router = APIRouter(tags=["Auth"])
 
 
 def get_auth_service() -> AuthService:
-    from varavu_selavu_service.db.google_sheets import get_sheets_client
-    gs = get_sheets_client()
-    return AuthService(user_ws=gs.user_data_sheet())
+    return AuthService()
 
 
 class RegisterRequest(BaseModel):

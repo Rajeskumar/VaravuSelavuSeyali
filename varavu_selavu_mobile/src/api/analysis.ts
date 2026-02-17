@@ -9,14 +9,8 @@ export interface AnalysisResponse {
   filter_info?: { applied_user_col?: string | null; year?: number | null; month?: number | null; row_count?: number };
 }
 
-export async function getAnalysis(
-  token: string,
-  userEmail: string,
-  opts?: { year?: number; month?: number },
-): Promise<AnalysisResponse> {
+export async function getAnalysis(token: string, opts?: { year?: number; month?: number }): Promise<AnalysisResponse> {
   const params = new URLSearchParams();
-  // Backend requires user_id to filter data for this user
-  params.set('user_id', userEmail);
   if (opts?.year !== undefined) params.set('year', String(opts.year));
   if (opts?.month !== undefined) params.set('month', String(opts.month));
   // Cache busting
@@ -31,9 +25,7 @@ export async function getAnalysis(
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('Analysis API error:', response.status, errorText);
-    throw new Error(`Failed to fetch analysis data: ${response.status}`);
+    throw new Error('Failed to fetch analysis data');
   }
 
   return response.json();

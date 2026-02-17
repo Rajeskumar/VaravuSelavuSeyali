@@ -18,17 +18,9 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      console.log('[Login] Attempting login for:', email);
       await signIn({ username: email, password });
-      console.log('[Login] Login succeeded');
-    } catch (error: any) {
-      console.error('[Login] Login failed:', error?.message || error);
-      const msg = error?.message?.includes('Network')
-        ? 'Network error. Please check your internet connection.'
-        : error?.message?.includes('401') || error?.message?.includes('credentials')
-          ? 'Invalid email or password.'
-          : `Login failed: ${error?.message || 'Unknown error'}`;
-      Alert.alert('Login Failed', msg);
+    } catch (error) {
+      Alert.alert('Login Failed', 'Check your credentials and network connection.');
     } finally {
       setLoading(false);
     }
