@@ -67,3 +67,11 @@ the captured image automatically. Tabs are created if missing.
 
 Set `LLM_TIMEOUT_SEC` in `.env` to increase the OpenAI/Ollama request timeout
 (default 180 seconds) if calls are slow or time out.
+
+## Mobile Application
+
+A native mobile application (Android/iOS) is available in the `varavu_selavu_mobile` directory.
+
+See [varavu_selavu_mobile/README.md](varavu_selavu_mobile/README.md) for detailed setup and running instructions.
+
+See [MOBILE_APP_ROADMAP.md](./MOBILE_APP_ROADMAP.md) for detailed architecture and implementation steps.

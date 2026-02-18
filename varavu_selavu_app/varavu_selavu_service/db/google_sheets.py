@@ -82,20 +82,9 @@ class GoogleSheetsClient:
         - template_id (stable id string)
         """
         try:
-            ws = self.spreadsheet.worksheet("recurring")
-            # Check for missing headers (schema migration)
-            try:
-                headers = ws.row_values(1)
-                if "status" not in headers:
-                    # Append "status" column header
-                    col_idx = len(headers) + 1
-                    ws.update_cell(1, col_idx, "status")
-                    # If "paused" existed, we might want to migrate data, but for now just add status
-            except Exception:
-                pass  # validation failed or sheet empty, ignore
-            return ws
+            return self.spreadsheet.worksheet("recurring")
         except gspread.exceptions.WorksheetNotFound:
-            ws = self.spreadsheet.add_worksheet(title="recurring", rows="500", cols="9")
+            ws = self.spreadsheet.add_worksheet(title="recurring", rows="500", cols="8")
             ws.append_row([
                 "user_id",
                 "description",
@@ -105,6 +94,16 @@ class GoogleSheetsClient:
                 "start_date_iso",
                 "last_processed_iso",
                 "template_id",
-                "status",
             ])
             return ws
+
+
+_singleton: GoogleSheetsClient | None = None
+
+
+def get_sheets_client() -> GoogleSheetsClient:
+    """Return a process-wide singleton so we reuse the gspread connection."""
+    global _singleton
+    if _singleton is None:
+        _singleton = GoogleSheetsClient()
+    return _singleton
