@@ -1,9 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, Modal, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, Modal, ActivityIndicator, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
 import { theme } from '../theme';
+import Card from '../components/Card';
+import CustomInput from '../components/CustomInput';
+import CustomButton from '../components/CustomButton';
+import { showToast } from '../components/Toast';
+import { ListSkeleton } from '../components/SkeletonLoader';
+
+// Category emoji mapping
+const categoryEmojis: Record<string, string> = {
+    food: '🍕', groceries: '🛒', transport: '🚗', entertainment: '🎬',
+    shopping: '🛍️', health: '🏥', utilities: '💡', rent: '🏠',
+    travel: '✈️', education: '📚', subscription: '📱', other: '📋',
+};
+
+function getCategoryEmoji(category: string): string {
+    return categoryEmojis[category?.toLowerCase().trim()] || '💳';
+}
 
 export default function ExpensesScreen() {
     const { accessToken, userEmail } = useAuth();
@@ -14,13 +30,14 @@ export default function ExpensesScreen() {
     const [offset, setOffset] = useState(0);
     const [hasMore, setHasMore] = useState(true);
 
-    // Edit Mode
+    // Edit Modal State
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [editingExpense, setEditingExpense] = useState<ExpenseRecord | null>(null);
     const [editDescription, setEditDescription] = useState('');
     const [editAmount, setEditAmount] = useState('');
     const [editCategory, setEditCategory] = useState('');
     const [editDate, setEditDate] = useState('');
+
     const fetchExpenses = async (reset = false) => {
         if (!accessToken || !userEmail) return;
         if (reset) {
@@ -32,9 +49,16 @@ export default function ExpensesScreen() {
             const currentOffset = reset ? 0 : offset;
             const data = await listExpenses(accessToken, userEmail, currentOffset, 20);
 
-            // ... (rest of function)
+            if (reset) {
+                setExpenses(data.items || []);
+            } else {
+                setExpenses((prev) => [...prev, ...(data.items || [])]);
+            }
+
+            setOffset(currentOffset + (data.items?.length || 0));
+            setHasMore(!!data.next_offset);
         } catch (error) {
-            console.error("Failed to fetch expenses", error);
+            console.error('Failed to fetch expenses', error);
         } finally {
             setLoading(false);
         }
@@ -47,26 +71,23 @@ export default function ExpensesScreen() {
     }, [isFocused, accessToken, userEmail]);
 
     const handleDelete = (rowId: number) => {
-        Alert.alert(
-            "Delete Expense",
-            "Are you sure you want to delete this expense?",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Delete",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            if (!accessToken) return;
-                            await deleteExpense(rowId, accessToken);
-                            fetchExpenses(true);
-                        } catch (error) {
-                            Alert.alert("Error", "Failed to delete expense");
-                        }
+        Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                    try {
+                        if (!accessToken) return;
+                        await deleteExpense(rowId, accessToken);
+                        showToast({ message: 'Expense deleted', type: 'success' });
+                        fetchExpenses(true);
+                    } catch (error) {
+                        showToast({ message: 'Failed to delete expense', type: 'error' });
                     }
-                }
-            ]
-        );
+                },
+            },
+        ]);
     };
 
     const handleEdit = (expense: ExpenseRecord) => {
@@ -81,93 +102,147 @@ export default function ExpensesScreen() {
     const saveEdit = async () => {
         if (!editingExpense || !accessToken) return;
         try {
-            await updateExpense(editingExpense.row_id, {
-                description: editDescription,
-                cost: parseFloat(editAmount),
-                category: editCategory,
-                date: editDate,
-                sub_category: '',
-            }, accessToken);
+            await updateExpense(
+                editingExpense.row_id,
+                {
+                    description: editDescription,
+                    cost: parseFloat(editAmount),
+                    category: editCategory,
+                    date: editDate,
+                    sub_category: '',
+                },
+                accessToken,
+            );
             setEditModalVisible(false);
+            showToast({ message: 'Expense updated!', type: 'success' });
             fetchExpenses(true);
         } catch (error) {
-            Alert.alert("Error", "Failed to update expense");
+            showToast({ message: 'Failed to update expense', type: 'error' });
         }
     };
 
     const renderItem = ({ item }: { item: ExpenseRecord }) => (
-        <View style={styles.card}>
-            <View style={styles.cardLeft}>
-                <View style={styles.dateBox}>
-                    <Text style={styles.dateDay}>{item.date.split('-')[2]}</Text>
-                    <Text style={styles.dateMonth}>{new Date(item.date).toLocaleString('default', { month: 'short' })}</Text>
+        <Card style={styles.card}>
+            <View style={styles.cardRow}>
+                {/* Category Icon */}
+                <View style={styles.iconContainer}>
+                    <Text style={styles.iconText}>{getCategoryEmoji(item.category)}</Text>
                 </View>
+
+                {/* Info */}
                 <View style={styles.info}>
-                    <Text style={styles.desc}>{item.description}</Text>
-                    <Text style={styles.category}>{item.category}</Text>
+                    <Text style={styles.desc} numberOfLines={1}>{item.description}</Text>
+                    <View style={styles.metaRow}>
+                        <View style={styles.categoryBadge}>
+                            <Text style={styles.categoryText}>{item.category}</Text>
+                        </View>
+                        <Text style={styles.dateText}>{item.date}</Text>
+                    </View>
+                </View>
+
+                {/* Cost & Actions */}
+                <View style={styles.cardRight}>
+                    <Text style={styles.cost}>-${item.cost.toFixed(2)}</Text>
+                    <View style={styles.actions}>
+                        <TouchableOpacity onPress={() => handleEdit(item)} style={styles.actionBtn} activeOpacity={0.7}>
+                            <Text style={styles.editText}>✏️</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => handleDelete(item.row_id)}
+                            style={[styles.actionBtn, styles.deleteBtn]}
+                            activeOpacity={0.7}
+                        >
+                            <Text style={styles.deleteText}>🗑️</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
-            <View style={styles.cardRight}>
-                <Text style={styles.cost}>-${item.cost.toFixed(2)}</Text>
-                <View style={styles.actions}>
-                    <TouchableOpacity onPress={() => handleEdit(item)} style={styles.editBtn}>
-                        <Text style={styles.btnText}>Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(item.row_id)} style={[styles.editBtn, styles.deleteBtn]}>
-                        <Text style={[styles.btnText, { color: '#fff' }]}>Del</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        </View>
+        </Card>
     );
 
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <Text style={theme.typography.h2}>History</Text>
+                <Text style={styles.headerSubtitle}>
+                    {expenses.length} transaction{expenses.length !== 1 ? 's' : ''}
+                </Text>
             </View>
-            <FlatList
-                data={expenses}
-                renderItem={renderItem}
-                keyExtractor={(item) => String(item.row_id)}
-                onRefresh={() => fetchExpenses(true)}
-                refreshing={loading}
-                onEndReached={() => {
-                    if (hasMore && !loading) fetchExpenses(false);
-                }}
-                onEndReachedThreshold={0.5}
-                ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No expenses found.</Text>
-                    </View>
-                }
-                contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-            />
 
+            {loading && expenses.length === 0 ? (
+                <View style={{ paddingHorizontal: 20 }}>
+                    <ListSkeleton count={5} />
+                </View>
+            ) : (
+                <FlatList
+                    data={expenses}
+                    renderItem={renderItem}
+                    keyExtractor={(item) => String(item.row_id)}
+                    onRefresh={() => fetchExpenses(true)}
+                    refreshing={loading}
+                    onEndReached={() => {
+                        if (hasMore && !loading) fetchExpenses(false);
+                    }}
+                    onEndReachedThreshold={0.5}
+                    ListEmptyComponent={
+                        <Card style={styles.emptyCard}>
+                            <Text style={styles.emptyIcon}>📭</Text>
+                            <Text style={styles.emptyTitle}>No expenses yet</Text>
+                            <Text style={styles.emptySubtitle}>Start tracking your spending</Text>
+                        </Card>
+                    }
+                    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
+                    showsVerticalScrollIndicator={false}
+                />
+            )}
+
+            {/* Edit Modal */}
             <Modal visible={editModalVisible} animationType="fade" transparent>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Edit Transaction</Text>
 
-                        <Text style={styles.label}>Amount</Text>
-                        <TextInput style={styles.input} value={editAmount} onChangeText={setEditAmount} keyboardType="numeric" />
-
-                        <Text style={styles.label}>Description</Text>
-                        <TextInput style={styles.input} value={editDescription} onChangeText={setEditDescription} />
-
-                        <Text style={styles.label}>Category</Text>
-                        <TextInput style={styles.input} value={editCategory} onChangeText={setEditCategory} />
-
-                        <Text style={styles.label}>Date</Text>
-                        <TextInput style={styles.input} value={editDate} onChangeText={setEditDate} placeholder="YYYY-MM-DD" />
+                        <CustomInput
+                            label="Amount"
+                            icon="💰"
+                            value={editAmount}
+                            onChangeText={setEditAmount}
+                            keyboardType="numeric"
+                        />
+                        <CustomInput
+                            label="Description"
+                            icon="📝"
+                            value={editDescription}
+                            onChangeText={setEditDescription}
+                        />
+                        <CustomInput
+                            label="Category"
+                            icon="📂"
+                            value={editCategory}
+                            onChangeText={setEditCategory}
+                        />
+                        <CustomInput
+                            label="Date"
+                            icon="📅"
+                            value={editDate}
+                            onChangeText={setEditDate}
+                            placeholder="YYYY-MM-DD"
+                        />
 
                         <View style={styles.modalButtons}>
-                            <TouchableOpacity onPress={() => setEditModalVisible(false)} style={styles.cancelButton}>
-                                <Text style={{ color: '#666' }}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={saveEdit} style={styles.saveButton}>
-                                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Save Changes</Text>
-                            </TouchableOpacity>
+                            <CustomButton
+                                title="Cancel"
+                                variant="ghost"
+                                onPress={() => setEditModalVisible(false)}
+                                fullWidth={false}
+                                style={{ flex: 1, marginRight: 10 }}
+                            />
+                            <CustomButton
+                                title="Save Changes"
+                                onPress={saveEdit}
+                                fullWidth={false}
+                                style={{ flex: 1 }}
+                            />
                         </View>
                     </View>
                 </View>
@@ -180,155 +255,137 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: theme.colors.background,
-        paddingTop: Platform.OS === 'android' ? 40 : 20,
+        paddingTop: Platform.OS === 'android' ? 50 : 56,
     },
     header: {
         paddingHorizontal: 20,
-        marginBottom: 10,
+        marginBottom: 16,
+    },
+    headerSubtitle: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+        marginTop: 2,
     },
     card: {
-        backgroundColor: '#fff',
-        borderRadius: 16,
-        padding: 15,
-        marginBottom: 12,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 5,
-        elevation: 2,
+        marginBottom: 10,
+        padding: 16,
     },
-    cardLeft: {
+    cardRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        flex: 1,
     },
-    dateBox: {
-        backgroundColor: '#F3E5F5',
-        borderRadius: 10,
-        padding: 8,
-        alignItems: 'center',
+    iconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        backgroundColor: theme.colors.primarySurface,
         justifyContent: 'center',
-        marginRight: 15,
-        minWidth: 50,
+        alignItems: 'center',
     },
-    dateDay: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: theme.colors.primary,
-    },
-    dateMonth: {
-        fontSize: 10,
-        color: theme.colors.primaryLight,
-        textTransform: 'uppercase',
+    iconText: {
+        fontSize: 22,
     },
     info: {
         flex: 1,
+        marginLeft: 14,
     },
     desc: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#333',
-        marginBottom: 2,
+        color: theme.colors.text,
+        marginBottom: 4,
     },
-    category: {
-        fontSize: 12,
-        color: '#888',
-        backgroundColor: '#f5f5f5',
-        alignSelf: 'flex-start',
-        paddingHorizontal: 6,
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    categoryBadge: {
+        backgroundColor: theme.colors.primarySurface,
+        paddingHorizontal: 8,
         paddingVertical: 2,
-        borderRadius: 4,
-        overflow: 'hidden',
+        borderRadius: 6,
+    },
+    categoryText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: theme.colors.primary,
+        textTransform: 'capitalize',
+    },
+    dateText: {
+        fontSize: 12,
+        color: theme.colors.textTertiary,
     },
     cardRight: {
         alignItems: 'flex-end',
+        marginLeft: 8,
     },
     cost: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#D32F2F',
+        fontSize: 17,
+        fontWeight: '700',
+        color: theme.colors.error,
         marginBottom: 8,
     },
     actions: {
         flexDirection: 'row',
+        gap: 6,
     },
-    editBtn: {
-        backgroundColor: '#E3F2FD',
-        paddingVertical: 4,
-        paddingHorizontal: 10,
-        borderRadius: 12,
-        marginLeft: 8,
+    actionBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#F1F5F9',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     deleteBtn: {
-        backgroundColor: '#FFEBEE',
+        backgroundColor: theme.colors.errorSurface,
     },
-    btnText: {
-        fontSize: 10,
-        color: '#1565C0',
-        fontWeight: 'bold',
-    },
-    emptyState: {
-        alignItems: 'center',
-        marginTop: 50,
-    },
-    emptyText: {
-        color: '#888',
+    editText: {
         fontSize: 16,
+    },
+    deleteText: {
+        fontSize: 16,
+    },
+    emptyCard: {
+        alignItems: 'center',
+        paddingVertical: 40,
+        marginTop: 20,
+    },
+    emptyIcon: {
+        fontSize: 48,
+        marginBottom: 12,
+    },
+    emptyTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: theme.colors.text,
+        marginBottom: 4,
+    },
+    emptySubtitle: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
     },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.6)',
+        backgroundColor: theme.colors.overlay,
         justifyContent: 'center',
         padding: 20,
     },
     modalContent: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 25,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 10,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 24,
+        padding: 28,
+        ...theme.shadows.lg,
     },
     modalTitle: {
         fontSize: 22,
-        fontWeight: 'bold',
-        marginBottom: 20,
-        color: '#333',
-    },
-    label: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginTop: 10,
-        marginBottom: 5,
-        color: '#666',
-        textTransform: 'uppercase',
-    },
-    input: {
-        borderBottomWidth: 1,
-        borderBottomColor: '#ddd',
-        paddingVertical: 8,
-        fontSize: 16,
-        color: '#333',
-        marginBottom: 5,
+        fontWeight: '800',
+        marginBottom: 24,
+        color: theme.colors.text,
     },
     modalButtons: {
         flexDirection: 'row',
-        justifyContent: 'flex-end',
-        marginTop: 30,
-    },
-    cancelButton: {
-        padding: 10,
-        marginRight: 10,
-    },
-    saveButton: {
-        backgroundColor: theme.colors.primary,
-        paddingVertical: 10,
-        paddingHorizontal: 20,
-        borderRadius: 25,
+        marginTop: 12,
     },
 });

@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, Alert,
-  ActivityIndicator, ScrollView, TouchableOpacity, Image, Platform
+  View, Text, StyleSheet, Alert,
+  ScrollView, TouchableOpacity, Image, Platform
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { addExpense, uploadReceipt } from '../api/expenses';
 import { theme } from '../theme';
+import ScreenWrapper from '../components/ScreenWrapper';
+import Card from '../components/Card';
+import CustomInput from '../components/CustomInput';
+import CustomButton from '../components/CustomButton';
+import { showToast } from '../components/Toast';
 
+const CATEGORIES = ['Food', 'Groceries', 'Transport', 'Entertainment', 'Shopping', 'Health', 'Utilities', 'Rent', 'Travel', 'Education', 'Other'];
 
 export default function AddExpenseScreen() {
   const [description, setDescription] = useState('');
@@ -24,9 +30,8 @@ export default function AddExpenseScreen() {
 
   const handlePickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
     if (permissionResult.granted === false) {
-      Alert.alert("Permission to access camera roll is required!");
+      showToast({ message: 'Permission to access photos is required', type: 'warning' });
       return;
     }
 
@@ -44,9 +49,8 @@ export default function AddExpenseScreen() {
 
   const handleTakePhoto = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
     if (permissionResult.granted === false) {
-      Alert.alert("Permission to access camera is required!");
+      showToast({ message: 'Permission to access camera is required', type: 'warning' });
       return;
     }
 
@@ -66,24 +70,24 @@ export default function AddExpenseScreen() {
     if (!accessToken) return;
     setLoading(true);
     try {
-      Alert.alert("Processing", "Uploading and analyzing receipt...");
+      showToast({ message: 'Analyzing receipt...', type: 'info' });
       const data = await uploadReceipt(uri, accessToken);
       if (data.cost) setAmount(String(data.cost));
       if (data.description) setDescription(data.description);
       if (data.category) setCategory(data.category);
       if (data.sub_category) setSubCategory(data.sub_category);
       if (data.date) setDate(data.date);
-      Alert.alert("Success", "Receipt parsed successfully!");
+      showToast({ message: 'Receipt parsed successfully!', type: 'success' });
     } catch (error) {
-      Alert.alert("Error", "Failed to parse receipt. Please enter details manually.");
+      showToast({ message: 'Could not parse receipt. Enter details manually.', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
-  // ... (lines 23-89)
+
   const handleSubmit = async () => {
     if (!description || !amount || !category) {
-      Alert.alert('Error', 'Please fill in required fields');
+      showToast({ message: 'Please fill in required fields', type: 'warning' });
       return;
     }
 
@@ -91,16 +95,19 @@ export default function AddExpenseScreen() {
 
     setLoading(true);
     try {
-      await addExpense({
-        description,
-        cost: parseFloat(amount),
-        category,
-        sub_category: subCategory,
-        date,
-        user_id: userEmail,
-      }, accessToken);
+      await addExpense(
+        {
+          description,
+          cost: parseFloat(amount),
+          category,
+          sub_category: subCategory,
+          date,
+          user_id: userEmail,
+        },
+        accessToken,
+      );
 
-      Alert.alert('Success', 'Expense added successfully!');
+      showToast({ message: 'Expense added successfully! 🎉', type: 'success' });
       setDescription('');
       setAmount('');
       setCategory('');
@@ -108,157 +115,178 @@ export default function AddExpenseScreen() {
       setImage(null);
       navigation.goBack();
     } catch (error) {
-      Alert.alert('Error', 'Failed to save expense');
+      showToast({ message: 'Failed to save expense', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
-      <View style={styles.header}>
-        <Text style={theme.typography.h2}>Add Expense</Text>
-      </View>
+    <ScreenWrapper scroll>
+      <Text style={theme.typography.h2}>Add Expense</Text>
+      <Text style={styles.subtitle}>Track your spending</Text>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Receipt (Optional)</Text>
-
+      {/* Receipt Upload Card */}
+      <Card style={styles.receiptCard}>
+        <Text style={styles.cardLabel}>RECEIPT (OPTIONAL)</Text>
         {image ? (
-          <View style={styles.imagePreviewContainer}>
+          <View style={styles.imagePreview}>
             <Image source={{ uri: image }} style={styles.previewImage} />
-            <TouchableOpacity onPress={() => setImage(null)} style={styles.removeImageBtn}>
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>X</Text>
+            <TouchableOpacity
+              onPress={() => setImage(null)}
+              style={styles.removeImageBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.removeX}>✕</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.uploadRow}>
-            <TouchableOpacity style={styles.uploadBtn} onPress={handlePickImage}>
-              <Text style={styles.uploadText}>Upload</Text>
+            <TouchableOpacity
+              style={styles.uploadBtn}
+              onPress={handlePickImage}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.uploadEmoji}>🖼️</Text>
+              <Text style={styles.uploadLabel}>Gallery</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.uploadBtn} onPress={handleTakePhoto}>
-              <Text style={styles.uploadText}>Camera</Text>
+            <TouchableOpacity
+              style={styles.uploadBtn}
+              onPress={handleTakePhoto}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.uploadEmoji}>📷</Text>
+              <Text style={styles.uploadLabel}>Camera</Text>
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </Card>
 
-      <View style={styles.formContainer}>
-        <Text style={styles.label}>Amount</Text>
-        <TextInput
-          style={styles.input}
+      {/* Expense Form */}
+      <Card>
+        <CustomInput
+          label="Amount"
+          icon="💰"
           placeholder="0.00"
           keyboardType="numeric"
           value={amount}
           onChangeText={setAmount}
-          placeholderTextColor="#999"
         />
 
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Grocery, Taxi, etc."
+        <CustomInput
+          label="Description"
+          icon="📝"
+          placeholder="What was this expense for?"
           value={description}
           onChangeText={setDescription}
-          placeholderTextColor="#999"
         />
 
-        <View style={styles.row}>
-          <View style={{ flex: 1, marginRight: 10 }}>
-            <Text style={styles.label}>Category</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Food"
-              value={category}
-              onChangeText={setCategory}
-              placeholderTextColor="#999"
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Sub Category</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Optional"
-              value={subCategory}
-              onChangeText={setSubCategory}
-              placeholderTextColor="#999"
-            />
-          </View>
-        </View>
+        {/* Category Chips */}
+        <Text style={styles.chipLabel}>CATEGORY</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipScroll}
+          contentContainerStyle={styles.chipContainer}
+        >
+          {CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[
+                styles.chip,
+                category === cat && styles.chipActive,
+              ]}
+              onPress={() => setCategory(cat)}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  category === cat && styles.chipTextActive,
+                ]}
+              >
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-        <Text style={styles.label}>Date</Text>
-        <TextInput
-          style={styles.input}
+        <CustomInput
+          label="Sub Category"
+          icon="📂"
+          placeholder="Optional"
+          value={subCategory}
+          onChangeText={setSubCategory}
+        />
+
+        <CustomInput
+          label="Date"
+          icon="📅"
           placeholder="YYYY-MM-DD"
           value={date}
           onChangeText={setDate}
-          placeholderTextColor="#999"
         />
 
-        <TouchableOpacity
-          style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+        <CustomButton
+          title="Save Expense"
           onPress={handleSubmit}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Expense</Text>}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          loading={loading}
+          icon="💾"
+          style={{ marginTop: 8 }}
+        />
+      </Card>
+    </ScreenWrapper>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-    padding: 20,
-    paddingTop: Platform.OS === 'android' ? 40 : 20,
-  },
-  header: {
+  subtitle: {
+    fontSize: 15,
+    color: theme.colors.textSecondary,
+    marginTop: 4,
     marginBottom: 20,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
+  receiptCard: {
     alignItems: 'center',
+    paddingVertical: 24,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 15,
-    textTransform: 'uppercase',
+  cardLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.colors.textSecondary,
     letterSpacing: 1,
+    marginBottom: 16,
   },
   uploadRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 15,
-    width: '100%',
+    gap: 16,
   },
   uploadBtn: {
-    backgroundColor: '#F3E5F5',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 25,
-    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderRadius: 16,
+    backgroundColor: theme.colors.primarySurface,
+    borderWidth: 1.5,
     borderColor: theme.colors.primaryLight,
+    borderStyle: 'dashed',
+    minWidth: 100,
   },
-  uploadText: {
-    color: theme.colors.primary,
+  uploadEmoji: {
+    fontSize: 28,
+    marginBottom: 6,
+  },
+  uploadLabel: {
+    fontSize: 13,
     fontWeight: '600',
+    color: theme.colors.primary,
   },
-  imagePreviewContainer: {
+  imagePreview: {
     position: 'relative',
     width: '100%',
     height: 200,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   previewImage: {
@@ -271,57 +299,52 @@ const styles = StyleSheet.create({
     top: 10,
     right: 10,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  formContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 15,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: theme.colors.textSecondary,
-    marginBottom: 8,
-    marginLeft: 5,
-  },
-  input: {
-    backgroundColor: '#F9F9F9',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 20,
-  },
-  submitBtn: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 16,
-    borderRadius: 30,
-    alignItems: 'center',
-    marginTop: 10,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  submitText: {
+  removeX: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  }
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  chipLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+    marginBottom: 10,
+    marginLeft: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  chipScroll: {
+    marginBottom: 18,
+    marginLeft: -4,
+  },
+  chipContainer: {
+    gap: 8,
+    paddingLeft: 4,
+    paddingRight: 16,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    minHeight: 40,
+    justifyContent: 'center',
+  },
+  chipActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.colors.textSecondary,
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
+  },
 });
