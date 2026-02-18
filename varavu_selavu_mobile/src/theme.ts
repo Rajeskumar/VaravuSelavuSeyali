@@ -79,7 +79,7 @@ export const theme = {
       elevation: 10,
     },
   },
-};
+} as const;
 
 export const globalStyles = StyleSheet.create({
   container: {

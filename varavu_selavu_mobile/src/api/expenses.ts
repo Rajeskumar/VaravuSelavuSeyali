@@ -6,6 +6,7 @@ export interface ExpensePayload {
   sub_category?: string;
   date: string; // YYYY-MM-DD
   cost: number;
+  user_id?: string;
 }
 
 export interface ExpenseRecord {
@@ -37,8 +38,9 @@ export async function addExpense(payload: ExpensePayload, token: string): Promis
   }
 }
 
-export async function listExpenses(token: string, offset = 0, limit = 30): Promise<ExpenseListResponse> {
+export async function listExpenses(token: string, userId: string, offset = 0, limit = 30): Promise<ExpenseListResponse> {
   const params = new URLSearchParams({
+    user_id: userId,
     offset: offset.toString(),
     limit: limit.toString(),
   });
@@ -86,27 +88,27 @@ export async function updateExpense(rowId: number, payload: ExpensePayload, toke
 }
 
 export async function uploadReceipt(uri: string, token: string): Promise<any> {
-    const formData = new FormData();
-    const file = {
-      uri,
-      name: 'receipt.jpg',
-      type: 'image/jpeg',
-    } as any;
+  const formData = new FormData();
+  const file = {
+    uri,
+    name: 'receipt.jpg',
+    type: 'image/jpeg',
+  } as any;
 
-    formData.append('file', file);
+  formData.append('file', file);
 
-    const response = await fetch(`${API_BASE_URL}/api/v1/ocr/parse`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'multipart/form-data',
-      },
-      body: formData,
-    });
+  const response = await fetch(`${API_BASE_URL}/api/v1/ocr/parse`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'multipart/form-data',
+    },
+    body: formData,
+  });
 
-    if (!response.ok) {
-      throw new Error('Failed to parse receipt');
-    }
+  if (!response.ok) {
+    throw new Error('Failed to parse receipt');
+  }
 
-    return response.json();
+  return response.json();
 }

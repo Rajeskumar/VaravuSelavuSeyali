@@ -15,12 +15,12 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = async () => {
-    if (!accessToken) return;
+    if (!accessToken || !userEmail) return;
 
     try {
-      const result = await getAnalysis(accessToken, {
-          year: new Date().getFullYear(),
-          month: new Date().getMonth() + 1
+      const result = await getAnalysis(accessToken, userEmail, {
+        year: new Date().getFullYear(),
+        month: new Date().getMonth() + 1
       });
       setData(result);
     } catch (error) {
@@ -33,10 +33,10 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (isFocused) {
-        setLoading(true);
-        fetchData();
+      setLoading(true);
+      fetchData();
     }
-  }, [isFocused, accessToken]);
+  }, [isFocused]);
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -66,17 +66,17 @@ export default function HomeScreen() {
 
   return (
     <ScrollView
-        style={styles.container}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerStyle={{ paddingBottom: 80 }}
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={{ paddingBottom: 80 }}
     >
       <View style={styles.header}>
         <View>
-            <Text style={theme.typography.caption}>Welcome back,</Text>
-            <Text style={theme.typography.h2}>{userEmail?.split('@')[0]}</Text>
+          <Text style={theme.typography.caption}>Welcome back,</Text>
+          <Text style={theme.typography.h2}>{userEmail?.split('@')[0]}</Text>
         </View>
         <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
-            <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       </View>
 
@@ -89,62 +89,62 @@ export default function HomeScreen() {
         <Text style={styles.heroLabel}>Total Spent This Year</Text>
         <Text style={styles.heroAmount}>{formatCurrency(data?.total_expenses || 0)}</Text>
         <View style={styles.heroFooter}>
-            <View>
-                <Text style={styles.heroSubLabel}>This Month</Text>
-                <Text style={styles.heroSubAmount}>{formatCurrency(thisMonthTotal)}</Text>
-            </View>
-            <View>
-                <Text style={styles.heroSubLabel}>Avg/Month</Text>
-                <Text style={styles.heroSubAmount}>{formatCurrency((data?.total_expenses || 0) / 12)}</Text>
-            </View>
+          <View>
+            <Text style={styles.heroSubLabel}>This Month</Text>
+            <Text style={styles.heroSubAmount}>{formatCurrency(thisMonthTotal)}</Text>
+          </View>
+          <View>
+            <Text style={styles.heroSubLabel}>Avg/Month</Text>
+            <Text style={styles.heroSubAmount}>{formatCurrency((data?.total_expenses || 0) / 12)}</Text>
+          </View>
         </View>
       </LinearGradient>
 
       <View style={styles.sectionHeader}>
-          <Text style={theme.typography.h3}>Recent Activity</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Expenses')}>
-              <Text style={{ color: theme.colors.primary }}>View All</Text>
-          </TouchableOpacity>
+        <Text style={theme.typography.h3}>Recent Activity</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Expenses')}>
+          <Text style={{ color: theme.colors.primary }}>View All</Text>
+        </TouchableOpacity>
       </View>
 
       <View>
-          {recentExpenses.length === 0 ? (
-              <View style={styles.emptyState}>
-                  <Text style={theme.typography.caption}>No recent activity found.</Text>
+        {recentExpenses.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={theme.typography.caption}>No recent activity found.</Text>
+          </View>
+        ) : (
+          recentExpenses.map((expense, index) => (
+            <View key={index} style={styles.expenseItem}>
+              <View style={styles.iconPlaceholder}>
+                <Text style={styles.iconText}>{expense.category.charAt(0).toUpperCase()}</Text>
               </View>
-          ) : (
-              recentExpenses.map((expense, index) => (
-                  <View key={index} style={styles.expenseItem}>
-                      <View style={styles.iconPlaceholder}>
-                          <Text style={styles.iconText}>{expense.category.charAt(0).toUpperCase()}</Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 15 }}>
-                          <Text style={styles.expenseDesc} numberOfLines={1}>{expense.description}</Text>
-                          <Text style={styles.expenseDate}>{expense.date}</Text>
-                      </View>
-                      <Text style={styles.expenseCost}>-{formatCurrency(expense.cost)}</Text>
-                  </View>
-              ))
-          )}
+              <View style={{ flex: 1, marginLeft: 15 }}>
+                <Text style={styles.expenseDesc} numberOfLines={1}>{expense.description}</Text>
+                <Text style={styles.expenseDate}>{expense.date}</Text>
+              </View>
+              <Text style={styles.expenseCost}>-{formatCurrency(expense.cost)}</Text>
+            </View>
+          ))
+        )}
       </View>
 
       <View style={styles.quickActions}>
-          <Text style={theme.typography.h3}>Quick Actions</Text>
-          <View style={{ flexDirection: 'row', marginTop: 10 }}>
-            <TouchableOpacity
-                style={[styles.actionCard, { backgroundColor: '#E3F2FD' }]}
-                onPress={() => navigation.navigate('Add Expense')}
-            >
-                <Text style={[styles.actionText, { color: '#1565C0' }]}>Add New</Text>
-            </TouchableOpacity>
-            <View style={{ width: 10 }} />
-            <TouchableOpacity
-                style={[styles.actionCard, { backgroundColor: '#F3E5F5' }]}
-                onPress={() => navigation.navigate('Analysis')}
-            >
-                <Text style={[styles.actionText, { color: '#7B1FA2' }]}>Analytics</Text>
-            </TouchableOpacity>
-          </View>
+        <Text style={theme.typography.h3}>Quick Actions</Text>
+        <View style={{ flexDirection: 'row', marginTop: 10 }}>
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: '#E3F2FD' }]}
+            onPress={() => navigation.navigate('Add Expense')}
+          >
+            <Text style={[styles.actionText, { color: '#1565C0' }]}>Add New</Text>
+          </TouchableOpacity>
+          <View style={{ width: 10 }} />
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: '#F3E5F5' }]}
+            onPress={() => navigation.navigate('Analysis')}
+          >
+            <Text style={[styles.actionText, { color: '#7B1FA2' }]}>Analytics</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
     </ScrollView>
@@ -266,23 +266,23 @@ const styles = StyleSheet.create({
     color: '#D32F2F',
   },
   emptyState: {
-      padding: 20,
-      alignItems: 'center',
-      backgroundColor: '#fff',
-      borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 15,
   },
   quickActions: {
-      marginTop: 20,
+    marginTop: 20,
   },
   actionCard: {
-      flex: 1,
-      padding: 15,
-      borderRadius: 15,
-      alignItems: 'center',
-      justifyContent: 'center',
+    flex: 1,
+    padding: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionText: {
-      fontWeight: 'bold',
-      marginTop: 5,
+    fontWeight: 'bold',
+    marginTop: 5,
   }
 });

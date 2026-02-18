@@ -16,7 +16,6 @@ class ExpenseRequest(BaseModel):
     category: str
     description: str
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
-    description: str = ""
 
 
 class ReceiptParseResponse(BaseModel):

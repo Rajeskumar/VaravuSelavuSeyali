@@ -47,8 +47,10 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router, prefix="/auth")
 
 # Dependency providers
+from varavu_selavu_service.db.google_sheets import get_sheets_client as _gs
+
 def get_expense_service() -> ExpenseService:
-    return ExpenseService()
+    return ExpenseService(gs_client=_gs())
 # Simple in-memory cache for analysis results
 _ANALYSIS_CACHE: dict[
     tuple[str, int | None, int | None, str | None, str | None],
@@ -73,14 +75,14 @@ def get_receipt_service() -> ReceiptService:
 
 
 def get_sheets_repo() -> SheetsRepo:
-    return SheetsRepo()
+    return SheetsRepo(client=_gs())
 
 
 def get_categorization_service() -> CategorizationService:
     return CategorizationService()
 
 def get_recurring_service() -> RecurringService:
-    return RecurringService()
+    return RecurringService(gs_client=_gs())
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():

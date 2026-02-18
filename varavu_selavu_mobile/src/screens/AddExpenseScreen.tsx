@@ -8,7 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
 import { addExpense, uploadReceipt } from '../api/expenses';
 import { theme } from '../theme';
-import { Ionicons } from '@expo/vector-icons'; // Assuming Ionicons is available in Expo by default
+
 
 export default function AddExpenseScreen() {
   const [description, setDescription] = useState('');
@@ -19,7 +19,7 @@ export default function AddExpenseScreen() {
   const [loading, setLoading] = useState(false);
   const [image, setImage] = useState<string | null>(null);
 
-  const { accessToken } = useAuth();
+  const { accessToken, userEmail } = useAuth();
   const navigation = useNavigation();
 
   const handlePickImage = async () => {
@@ -43,51 +43,51 @@ export default function AddExpenseScreen() {
   };
 
   const handleTakePhoto = async () => {
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
-      if (permissionResult.granted === false) {
-        Alert.alert("Permission to access camera is required!");
-        return;
-      }
+    if (permissionResult.granted === false) {
+      Alert.alert("Permission to access camera is required!");
+      return;
+    }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImage(result.assets[0].uri);
-        await parseReceipt(result.assets[0].uri);
-      }
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setImage(result.assets[0].uri);
+      await parseReceipt(result.assets[0].uri);
+    }
   };
 
   const parseReceipt = async (uri: string) => {
     if (!accessToken) return;
     setLoading(true);
     try {
-        Alert.alert("Processing", "Uploading and analyzing receipt...");
-        const data = await uploadReceipt(uri, accessToken);
-        if (data.cost) setAmount(String(data.cost));
-        if (data.description) setDescription(data.description);
-        if (data.category) setCategory(data.category);
-        if (data.sub_category) setSubCategory(data.sub_category);
-        if (data.date) setDate(data.date);
-        Alert.alert("Success", "Receipt parsed successfully!");
+      Alert.alert("Processing", "Uploading and analyzing receipt...");
+      const data = await uploadReceipt(uri, accessToken);
+      if (data.cost) setAmount(String(data.cost));
+      if (data.description) setDescription(data.description);
+      if (data.category) setCategory(data.category);
+      if (data.sub_category) setSubCategory(data.sub_category);
+      if (data.date) setDate(data.date);
+      Alert.alert("Success", "Receipt parsed successfully!");
     } catch (error) {
-        Alert.alert("Error", "Failed to parse receipt. Please enter details manually.");
+      Alert.alert("Error", "Failed to parse receipt. Please enter details manually.");
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
-
+  // ... (lines 23-89)
   const handleSubmit = async () => {
     if (!description || !amount || !category) {
       Alert.alert('Error', 'Please fill in required fields');
       return;
     }
 
-    if (!accessToken) return;
+    if (!accessToken || !userEmail) return;
 
     setLoading(true);
     try {
@@ -97,6 +97,7 @@ export default function AddExpenseScreen() {
         category,
         sub_category: subCategory,
         date,
+        user_id: userEmail,
       }, accessToken);
 
       Alert.alert('Success', 'Expense added successfully!');
@@ -123,83 +124,83 @@ export default function AddExpenseScreen() {
         <Text style={styles.sectionTitle}>Receipt (Optional)</Text>
 
         {image ? (
-            <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: image }} style={styles.previewImage} />
-                <TouchableOpacity onPress={() => setImage(null)} style={styles.removeImageBtn}>
-                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>X</Text>
-                </TouchableOpacity>
-            </View>
+          <View style={styles.imagePreviewContainer}>
+            <Image source={{ uri: image }} style={styles.previewImage} />
+            <TouchableOpacity onPress={() => setImage(null)} style={styles.removeImageBtn}>
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>X</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
-            <View style={styles.uploadRow}>
-                <TouchableOpacity style={styles.uploadBtn} onPress={handlePickImage}>
-                    <Text style={styles.uploadText}>Upload</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.uploadBtn} onPress={handleTakePhoto}>
-                    <Text style={styles.uploadText}>Camera</Text>
-                </TouchableOpacity>
-            </View>
+          <View style={styles.uploadRow}>
+            <TouchableOpacity style={styles.uploadBtn} onPress={handlePickImage}>
+              <Text style={styles.uploadText}>Upload</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.uploadBtn} onPress={handleTakePhoto}>
+              <Text style={styles.uploadText}>Camera</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
 
       <View style={styles.formContainer}>
-          <Text style={styles.label}>Amount</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="0.00"
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-            placeholderTextColor="#999"
-          />
+        <Text style={styles.label}>Amount</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="0.00"
+          keyboardType="numeric"
+          value={amount}
+          onChangeText={setAmount}
+          placeholderTextColor="#999"
+        />
 
-          <Text style={styles.label}>Description</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Grocery, Taxi, etc."
-            value={description}
-            onChangeText={setDescription}
-            placeholderTextColor="#999"
-          />
+        <Text style={styles.label}>Description</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Grocery, Taxi, etc."
+          value={description}
+          onChangeText={setDescription}
+          placeholderTextColor="#999"
+        />
 
-          <View style={styles.row}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.label}>Category</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Food"
-                    value={category}
-                    onChangeText={setCategory}
-                    placeholderTextColor="#999"
-                />
-            </View>
-            <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Sub Category</Text>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Optional"
-                    value={subCategory}
-                    onChangeText={setSubCategory}
-                    placeholderTextColor="#999"
-                />
-            </View>
+        <View style={styles.row}>
+          <View style={{ flex: 1, marginRight: 10 }}>
+            <Text style={styles.label}>Category</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Food"
+              value={category}
+              onChangeText={setCategory}
+              placeholderTextColor="#999"
+            />
           </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>Sub Category</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Optional"
+              value={subCategory}
+              onChangeText={setSubCategory}
+              placeholderTextColor="#999"
+            />
+          </View>
+        </View>
 
-          <Text style={styles.label}>Date</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="YYYY-MM-DD"
-            value={date}
-            onChangeText={setDate}
-            placeholderTextColor="#999"
-          />
+        <Text style={styles.label}>Date</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="YYYY-MM-DD"
+          value={date}
+          onChangeText={setDate}
+          placeholderTextColor="#999"
+        />
 
-          <TouchableOpacity
-            style={[styles.submitBtn, loading && { opacity: 0.7 }]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Expense</Text>}
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.submitBtn, loading && { opacity: 0.7 }]}
+          onPress={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save Expense</Text>}
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -236,91 +237,91 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   uploadRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 15,
-      width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 15,
+    width: '100%',
   },
   uploadBtn: {
-      backgroundColor: '#F3E5F5',
-      paddingVertical: 12,
-      paddingHorizontal: 25,
-      borderRadius: 25,
-      borderWidth: 1,
-      borderColor: theme.colors.primaryLight,
+    backgroundColor: '#F3E5F5',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: theme.colors.primaryLight,
   },
   uploadText: {
-      color: theme.colors.primary,
-      fontWeight: '600',
+    color: theme.colors.primary,
+    fontWeight: '600',
   },
   imagePreviewContainer: {
-      position: 'relative',
-      width: '100%',
-      height: 200,
-      borderRadius: 12,
-      overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   previewImage: {
-      width: '100%',
-      height: '100%',
-      resizeMode: 'cover',
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   removeImageBtn: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      backgroundColor: 'rgba(0,0,0,0.6)',
-      width: 30,
-      height: 30,
-      borderRadius: 15,
-      justifyContent: 'center',
-      alignItems: 'center',
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   formContainer: {
-      backgroundColor: '#fff',
-      borderRadius: 20,
-      padding: 25,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.1,
-      shadowRadius: 10,
-      elevation: 5,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
   },
   row: {
-      flexDirection: 'row',
-      marginBottom: 15,
+    flexDirection: 'row',
+    marginBottom: 15,
   },
   label: {
-      fontSize: 12,
-      fontWeight: 'bold',
-      color: theme.colors.textSecondary,
-      marginBottom: 8,
-      marginLeft: 5,
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: theme.colors.textSecondary,
+    marginBottom: 8,
+    marginLeft: 5,
   },
   input: {
-      backgroundColor: '#F9F9F9',
-      borderRadius: 12,
-      paddingVertical: 12,
-      paddingHorizontal: 15,
-      fontSize: 16,
-      color: '#333',
-      marginBottom: 20,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 20,
   },
   submitBtn: {
-      backgroundColor: theme.colors.primary,
-      paddingVertical: 16,
-      borderRadius: 30,
-      alignItems: 'center',
-      marginTop: 10,
-      shadowColor: theme.colors.primary,
-      shadowOffset: { width: 0, height: 5 },
-      shadowOpacity: 0.3,
-      shadowRadius: 10,
-      elevation: 5,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 16,
+    borderRadius: 30,
+    alignItems: 'center',
+    marginTop: 10,
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   submitText: {
-      color: '#fff',
-      fontSize: 18,
-      fontWeight: 'bold',
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   }
 });
