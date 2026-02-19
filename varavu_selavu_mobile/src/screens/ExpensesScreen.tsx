@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, Modal, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, Modal, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
+import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
 import { theme } from '../theme';
 import Card from '../components/Card';
 import CustomInput from '../components/CustomInput';
@@ -35,7 +36,8 @@ export default function ExpensesScreen() {
     const [editingExpense, setEditingExpense] = useState<ExpenseRecord | null>(null);
     const [editDescription, setEditDescription] = useState('');
     const [editAmount, setEditAmount] = useState('');
-    const [editCategory, setEditCategory] = useState('');
+    const [editMainCategory, setEditMainCategory] = useState(MAIN_CATEGORIES[0]);
+    const [editSubcategory, setEditSubcategory] = useState(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
     const [editDate, setEditDate] = useState('');
 
     const fetchExpenses = async (reset = false) => {
@@ -94,7 +96,9 @@ export default function ExpensesScreen() {
         setEditingExpense(expense);
         setEditDescription(expense.description);
         setEditAmount(String(expense.cost));
-        setEditCategory(expense.category);
+        const mc = findMainCategory(expense.category);
+        setEditMainCategory(mc);
+        setEditSubcategory(expense.category);
         setEditDate(expense.date);
         setEditModalVisible(true);
     };
@@ -107,9 +111,9 @@ export default function ExpensesScreen() {
                 {
                     description: editDescription,
                     cost: parseFloat(editAmount),
-                    category: editCategory,
+                    category: editSubcategory,
                     date: editDate,
-                    sub_category: '',
+                    sub_category: editSubcategory,
                 },
                 accessToken,
             );
@@ -215,12 +219,38 @@ export default function ExpensesScreen() {
                             value={editDescription}
                             onChangeText={setEditDescription}
                         />
-                        <CustomInput
-                            label="Category"
-                            icon="📂"
-                            value={editCategory}
-                            onChangeText={setEditCategory}
-                        />
+                        {/* Main Category Picker */}
+                        <Text style={styles.pickerLabel}>📁  Main Category</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll} contentContainerStyle={styles.pickerContent}>
+                            {MAIN_CATEGORIES.map((mc) => (
+                                <TouchableOpacity
+                                    key={mc}
+                                    style={[styles.pickerChip, editMainCategory === mc && styles.pickerChipActive]}
+                                    onPress={() => {
+                                        setEditMainCategory(mc);
+                                        setEditSubcategory(CATEGORY_GROUPS[mc][0]);
+                                    }}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.pickerChipText, editMainCategory === mc && styles.pickerChipTextActive]}>{mc}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+
+                        {/* Subcategory Picker */}
+                        <Text style={styles.pickerLabel}>📂  Subcategory</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll} contentContainerStyle={styles.pickerContent}>
+                            {(CATEGORY_GROUPS[editMainCategory] || []).map((sub) => (
+                                <TouchableOpacity
+                                    key={sub}
+                                    style={[styles.pickerChip, editSubcategory === sub && styles.pickerChipActive]}
+                                    onPress={() => setEditSubcategory(sub)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.pickerChipText, editSubcategory === sub && styles.pickerChipTextActive]}>{sub}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
                         <CustomInput
                             label="Date"
                             icon="📅"
@@ -387,5 +417,28 @@ const styles = StyleSheet.create({
     modalButtons: {
         flexDirection: 'row',
         marginTop: 12,
+    },
+    pickerLabel: {
+        fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,
+        marginBottom: 6, marginLeft: 4, marginTop: 4,
+    },
+    pickerScroll: {
+        marginBottom: 12,
+    },
+    pickerContent: {
+        gap: 8, paddingRight: 8,
+    },
+    pickerChip: {
+        paddingHorizontal: 14, paddingVertical: 8,
+        borderRadius: 16, backgroundColor: '#F1F5F9',
+    },
+    pickerChipActive: {
+        backgroundColor: theme.colors.primary,
+    },
+    pickerChipText: {
+        fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,
+    },
+    pickerChipTextActive: {
+        color: '#FFFFFF',
     },
 });
