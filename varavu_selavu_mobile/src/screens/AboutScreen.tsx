@@ -12,7 +12,7 @@ export default function AboutScreen() {
                 <View style={styles.iconCircle}>
                     <Text style={styles.iconEmoji}>💰</Text>
                 </View>
-                <Text style={styles.appName}>Varavu Selavu</Text>
+                <Text style={styles.appName}>TrackSpense</Text>
                 <Text style={styles.tagline}>Smart Expense Tracking</Text>
                 <View style={styles.versionBadge}>
                     <Text style={styles.versionText}>v1.0.0</Text>
@@ -23,7 +23,7 @@ export default function AboutScreen() {
             <Card>
                 <Text style={styles.sectionTitle}>About</Text>
                 <Text style={styles.body}>
-                    Varavu Selavu is a comprehensive expense tracking application designed to help you manage your
+                    TrackSpense by Cereberoos is a comprehensive expense tracking application designed to help you manage your
                     personal finances with ease. Track daily expenses, analyze spending patterns with beautiful
                     charts, set up recurring expenses, and get AI-powered insights — all in one app.
                 </Text>
@@ -56,7 +56,7 @@ export default function AboutScreen() {
                     Built with ❤️ using React Native, Expo, and FastAPI.
                 </Text>
                 <Text style={[styles.body, { marginTop: 4, color: theme.colors.textTertiary }]}>
-                    © {new Date().getFullYear()} Varavu Selavu. All rights reserved.
+                    © {new Date().getFullYear()} TrackSpense by Cereberoos. All rights reserved.
                 </Text>
             </Card>
         </ScreenWrapper>

@@ -45,7 +45,7 @@ export default function LoginScreen() {
         end={{ x: 1, y: 1 }}
       >
         <Text style={styles.brandIcon}>💰</Text>
-        <Text style={styles.brandName}>Varavu Selavu</Text>
+        <Text style={styles.brandName}>TrackSpense</Text>
         <Text style={styles.brandTagline}>Smart expense tracking</Text>
       </LinearGradient>
 

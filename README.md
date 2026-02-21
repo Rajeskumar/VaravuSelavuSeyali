@@ -1,4 +1,4 @@
-# Varavu Selavu Seyali
+# TrackSpense by Cereberoos
 
 This project provides a FastAPI backend and a React frontend to track and analyse personal expenses.
 

@@ -67,7 +67,7 @@ def send_email(
                 <td style="padding:8px">{subject}</td></tr>
         </table>
         <div style="margin-top:16px;padding:16px;background:#f8fafc;border-radius:8px;white-space:pre-wrap">{message_body}</div>
-        <p style="margin-top:24px;font-size:12px;color:#94a3b8">Sent from Varavu Selavu App</p>
+        <p style="margin-top:24px;font-size:12px;color:#94a3b8">Sent from TrackSpense App</p>
     </div>
     """
     html_part = MIMEText(html_body, "html")

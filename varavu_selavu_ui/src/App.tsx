@@ -95,7 +95,7 @@ const AppContent: React.FC = () => {
             sx={{ flexGrow: 1, cursor: 'pointer' }}
             onClick={() => navigate('/')}
           >
-            Varavu Selavu
+            TrackSpense
           </Typography>
           {user ? (
             <UserMenu

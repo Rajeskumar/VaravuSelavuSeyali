@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - fallback simple loader
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Varavu Selavu Service"
+    PROJECT_NAME: str = "TrackSpense Service"
     VERSION: str = "1.0.0"
     DEBUG: bool = True
     ENVIRONMENT: str = "local"

@@ -68,7 +68,7 @@ const HomePage: React.FC = () => {
             <Grid size={{ xs: 12, md: 6 }}>
               <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
                 <Typography variant="h2" component="h1" sx={{ fontWeight: 800, letterSpacing: -0.5, mb: 1 }}>
-                  Varavu Selavu
+                  TrackSpense
                 </Typography>
                 <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.9)' }}>
                   Track less. Understand more. Make better money decisions.
@@ -186,7 +186,7 @@ const HomePage: React.FC = () => {
         },
       }}>
         <Container maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, textAlign: 'center' }}>How Varavu Selavu stands out</Typography>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, textAlign: 'center' }}>How TrackSpense stands out</Typography>
           <Grid container columns={12} spacing={3}>
             {[{
               title: 'Frictionless input',

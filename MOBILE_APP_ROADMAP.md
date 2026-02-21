@@ -1,6 +1,6 @@
 # Mobile Application Implementation Roadmap
 
-This document outlines the strategy and steps to extend the Varavu Selavu Seyali application to mobile platforms (Android & iOS).
+This document outlines the strategy and steps to extend the TrackSpense application to mobile platforms (Android & iOS).
 
 ## 1. Executive Summary
 

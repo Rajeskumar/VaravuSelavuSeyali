@@ -207,7 +207,7 @@ function CustomDrawer({
                     <Text style={{ fontSize: 26 }}>💰</Text>
                   </View>
                   <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={drawerStyles.appName}>Varavu Selavu</Text>
+                    <Text style={drawerStyles.appName}>TrackSpense</Text>
                     <Text style={drawerStyles.userEmail} numberOfLines={1}>
                       {userEmail || 'Expense Tracker'}
                     </Text>

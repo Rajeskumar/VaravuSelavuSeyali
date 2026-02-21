@@ -1,6 +1,6 @@
-# Varavu Selavu Mobile
+# TrackSpense by Cereberoos
 
-This directory contains the React Native (Expo) mobile application for the Varavu Selavu expense tracker.
+This directory contains the React Native (Expo) mobile application for the TrackSpense expense tracker.
 
 ## Prerequisites
 

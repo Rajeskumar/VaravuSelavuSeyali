@@ -32,4 +32,4 @@ app.add_middleware(
 # Add a root endpoint for clarity
 @app.get("/")
 def root():
-    return {"message": "Welcome to the Varavu Selavu Service!"}
+    return {"message": "Welcome to the TrackSpense Service!"}
