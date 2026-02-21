@@ -1,7 +1,7 @@
 [project]
 name = "varavu-selavu-app"
 version = "0.1.0"
-description = "FastAPI backend for Varavu Selavu"
+description = "FastAPI backend for TrackSpense by Cereberoos"
 authors = [
     {name = "Rajesh Kumar Ganesan"}
 ]
@@ -18,7 +18,9 @@ dependencies = [
     "bcrypt (>=4.1.2,<5.0.0)",
     "python-jose (>=3.3.0,<4.0.0)",
     "email-validator (>=2.2.0,<3.0.0)",
-    "python-multipart (>=0.0.20,<0.0.21)"
+    "python-multipart (>=0.0.20,<0.0.21)",
+    "pytest (<9.0.0)",
+    "httpx (>=0.28.1,<0.29.0)"
 ]
 
 

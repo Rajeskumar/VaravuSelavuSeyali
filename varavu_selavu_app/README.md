@@ -1,6 +1,6 @@
-# Varavu Selavu Backend
+# TrackSpense Backend
 
-This is the backend application for the Varavu Selavu project, built using FastAPI.
+This is the backend application for the TrackSpense project, built using FastAPI.
 
 ## Features
 - **Health Check Endpoint**: `/health` to check the backend's health status.

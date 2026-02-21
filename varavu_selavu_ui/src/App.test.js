@@ -6,6 +6,6 @@ jest.mock('heic2any', () => ({
 
 test('renders app title', () => {
   render(<App />);
-  const title = screen.getByText(/Varavu Selavu/i);
+  const title = screen.getByText(/TrackSpense/i);
   expect(title).toBeInTheDocument();
 });
