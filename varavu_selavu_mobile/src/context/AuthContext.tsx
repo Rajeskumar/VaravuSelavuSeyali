@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { login as apiLogin, LoginPayload, register as apiRegister, RegisterPayload, logout as apiLogout } from '../api/auth';
+import { setLogoutCallback } from '../api/apiFetch';
 
 interface AuthState {
   accessToken: string | null;
@@ -23,7 +24,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     userEmail: null,
   });
 
+  const signOut = async () => {
+    try {
+      const refreshToken = await SecureStore.getItemAsync('refresh_token');
+      if (refreshToken) {
+        await apiLogout(refreshToken);
+      }
+    } catch (e) {
+      console.warn("Logout API call failed", e);
+    }
+
+    await SecureStore.deleteItemAsync('access_token');
+    await SecureStore.deleteItemAsync('refresh_token');
+    await SecureStore.deleteItemAsync('user_email');
+
+    setState({
+      accessToken: null,
+      isLoading: false,
+      userEmail: null,
+    });
+  };
+
   useEffect(() => {
+    // Register the logout callback so apiFetch can force-logout on 401
+    setLogoutCallback(() => {
+      // Clear state synchronously to trigger navigation reset
+      SecureStore.deleteItemAsync('access_token');
+      SecureStore.deleteItemAsync('refresh_token');
+      SecureStore.deleteItemAsync('user_email');
+      setState({
+        accessToken: null,
+        isLoading: false,
+        userEmail: null,
+      });
+    });
+
     const bootstrapAsync = async () => {
       let accessToken;
       let userEmail;
@@ -31,7 +66,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         accessToken = await SecureStore.getItemAsync('access_token');
         userEmail = await SecureStore.getItemAsync('user_email');
       } catch (e) {
-        // Restoring token failed
         console.error('Failed to restore token', e);
       }
       setState({ accessToken: accessToken || null, isLoading: false, userEmail: userEmail || null });
@@ -46,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await SecureStore.setItemAsync('access_token', response.access_token);
       await SecureStore.setItemAsync('refresh_token', response.refresh_token);
 
-      const email = payload.username; // Or extract from token
+      const email = payload.username;
       await SecureStore.setItemAsync('user_email', email);
 
       setState({
@@ -62,28 +96,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (payload: RegisterPayload) => {
     await apiRegister(payload);
-    // Optionally auto-login or require separate login
-  };
-
-  const signOut = async () => {
-    try {
-        const refreshToken = await SecureStore.getItemAsync('refresh_token');
-        if (refreshToken) {
-            await apiLogout(refreshToken);
-        }
-    } catch (e) {
-        console.warn("Logout API call failed", e);
-    }
-
-    await SecureStore.deleteItemAsync('access_token');
-    await SecureStore.deleteItemAsync('refresh_token');
-    await SecureStore.deleteItemAsync('user_email');
-
-    setState({
-      accessToken: null,
-      isLoading: false,
-      userEmail: null
-    });
   };
 
   return (

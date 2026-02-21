@@ -198,3 +198,19 @@ class DueOccurrenceDTO(BaseModel):
 
 class ConfirmRecurringRequest(BaseModel):
     items: List[Dict[str, str | float]]
+
+
+# ---------------------- Email ---------------------- #
+
+class SendEmailRequest(BaseModel):
+    form_type: str  # e.g. 'feature_request', 'contact_us'
+    user_email: str
+    subject: str
+    message_body: str
+    name: Optional[str] = None
+
+
+class SendEmailResponse(BaseModel):
+    success: bool
+    message: str = "Email sent"
+

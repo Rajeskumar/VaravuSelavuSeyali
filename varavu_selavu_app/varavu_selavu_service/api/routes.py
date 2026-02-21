@@ -39,6 +39,8 @@ from varavu_selavu_service.models.api_models import (
     UpsertRecurringTemplateRequest,
     DueOccurrenceDTO,
     ConfirmRecurringRequest,
+    SendEmailRequest,
+    SendEmailResponse,
 )
 
 settings = Settings()
@@ -578,3 +580,29 @@ def delete_recurring_template(
 ):
     ok = svc.delete_template(user_id, template_id)
     return {"success": bool(ok)}
+
+
+# ---------------------- Email ---------------------- #
+
+@router.post(
+    "/email/send",
+    response_model=SendEmailResponse,
+    tags=["Email"],
+    summary="Send a generic email (feature request, contact us, etc.)",
+)
+def send_email_route(
+    data: SendEmailRequest,
+    _: str = Depends(auth_required),
+):
+    from varavu_selavu_service.services.email_service import send_email
+    try:
+        send_email(
+            form_type=data.form_type,
+            user_email=data.user_email,
+            subject=data.subject,
+            message_body=data.message_body,
+            name=data.name,
+        )
+        return {"success": True, "message": "Email sent successfully"}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
