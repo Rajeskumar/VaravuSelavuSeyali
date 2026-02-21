@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity,
     Modal, FlatList, ActivityIndicator,
 } from 'react-native';
-import { PieChart } from 'react-native-chart-kit';
+import { PieChart, LineChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { theme } from '../theme';
@@ -17,6 +17,7 @@ const CHART_COLORS = [
 ];
 
 const screenWidth = Dimensions.get('window').width;
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export default function AnalysisScreen() {
     const { accessToken, userEmail } = useAuth();
@@ -24,6 +25,10 @@ export default function AnalysisScreen() {
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [drillDownVisible, setDrillDownVisible] = useState(false);
+
+    // Category trend chart state
+    const [trendData, setTrendData] = useState<{ labels: string[]; values: number[] } | null>(null);
+    const [trendLoading, setTrendLoading] = useState(false);
 
     useEffect(() => {
         const fetchAnalysis = async () => {
@@ -44,9 +49,52 @@ export default function AnalysisScreen() {
         fetchAnalysis();
     }, []);
 
+    // Fetch 4-month trend for a specific category
+    const fetchCategoryTrend = useCallback(async (category: string) => {
+        if (!accessToken || !userEmail) return;
+        setTrendLoading(true);
+        setTrendData(null);
+        try {
+            const now = new Date();
+            const promises: Promise<AnalysisResponse>[] = [];
+            const monthLabels: string[] = [];
+
+            for (let i = 3; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                monthLabels.push(MONTH_ABBR[d.getMonth()]);
+                promises.push(
+                    getAnalysis(accessToken, userEmail, {
+                        year: d.getFullYear(),
+                        month: d.getMonth() + 1,
+                    })
+                );
+            }
+
+            const results = await Promise.all(promises);
+            const values = results.map((r) => {
+                const ct = r.category_totals.find(
+                    (c) => c.category.toLowerCase() === category.toLowerCase()
+                );
+                return ct ? ct.total : 0;
+            });
+
+            setTrendData({ labels: monthLabels, values });
+        } catch (error) {
+            console.error('Category trend fetch error', error);
+        } finally {
+            setTrendLoading(false);
+        }
+    }, [accessToken, userEmail]);
+
     const openDrillDown = (category: string) => {
         setSelectedCategory(category);
         setDrillDownVisible(true);
+        fetchCategoryTrend(category);
+    };
+
+    const closeDrillDown = () => {
+        setDrillDownVisible(false);
+        setTrendData(null);
     };
 
     const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
@@ -83,6 +131,31 @@ export default function AnalysisScreen() {
     const drillDownItems = selectedCategory && data.category_expense_details
         ? data.category_expense_details[selectedCategory] || []
         : [];
+
+    const trendChartConfig = {
+        backgroundGradientFrom: theme.colors.surface,
+        backgroundGradientTo: theme.colors.surface,
+        color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
+        labelColor: () => theme.colors.textSecondary,
+        strokeWidth: 3,
+        decimalPlaces: 0,
+        propsForBackgroundLines: {
+            strokeDasharray: '6 4',
+            stroke: theme.colors.borderLight,
+            strokeWidth: 1,
+        },
+        propsForDots: {
+            r: '5',
+            strokeWidth: '2',
+            stroke: theme.colors.primary,
+            fill: theme.colors.surface,
+        },
+        fillShadowGradientFrom: theme.colors.primary,
+        fillShadowGradientTo: theme.colors.primarySurface,
+        fillShadowGradientFromOpacity: 0.4,
+        fillShadowGradientToOpacity: 0.05,
+        useShadowColorFromDataset: false,
+    };
 
     return (
         <ScreenWrapper scroll>
@@ -152,7 +225,7 @@ export default function AnalysisScreen() {
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>{selectedCategory}</Text>
-                            <TouchableOpacity onPress={() => setDrillDownVisible(false)} activeOpacity={0.7}>
+                            <TouchableOpacity onPress={closeDrillDown} activeOpacity={0.7}>
                                 <Text style={styles.modalClose}>✕</Text>
                             </TouchableOpacity>
                         </View>
@@ -160,25 +233,56 @@ export default function AnalysisScreen() {
                             {drillDownItems.length} transaction{drillDownItems.length !== 1 ? 's' : ''} •{' '}
                             {formatCurrency(drillDownItems.reduce((sum, e) => sum + e.cost, 0))} total
                         </Text>
-                        <FlatList
-                            data={drillDownItems}
-                            keyExtractor={(item, index) => `${item.date}-${item.description}-${item.cost}-${index}`}
-                            renderItem={({ item }) => (
-                                <View style={styles.drillDownRow}>
-                                    <View style={styles.drillDownInfo}>
-                                        <Text style={styles.drillDownDesc} numberOfLines={1}>
-                                            {item.description}
-                                        </Text>
-                                        <Text style={styles.drillDownDate}>{item.date}</Text>
-                                    </View>
-                                    <Text style={styles.drillDownCost}>{formatCurrency(item.cost)}</Text>
-                                </View>
-                            )}
-                            ListEmptyComponent={
+
+                        <ScrollView showsVerticalScrollIndicator={false} style={{ flexShrink: 1 }}>
+                            {/* Transaction list */}
+                            {drillDownItems.length === 0 ? (
                                 <Text style={styles.drillDownEmpty}>No transactions found</Text>
-                            }
-                            style={{ maxHeight: 400 }}
-                        />
+                            ) : (
+                                drillDownItems.map((item, index) => (
+                                    <View key={`${item.date}-${item.description}-${item.cost}-${index}`} style={styles.drillDownRow}>
+                                        <View style={styles.drillDownInfo}>
+                                            <Text style={styles.drillDownDesc} numberOfLines={1}>
+                                                {item.description}
+                                            </Text>
+                                            <Text style={styles.drillDownDate}>{item.date}</Text>
+                                        </View>
+                                        <Text style={styles.drillDownCost}>{formatCurrency(item.cost)}</Text>
+                                    </View>
+                                ))
+                            )}
+
+                            {/* Category Trend Line Chart */}
+                            <View style={styles.trendSection}>
+                                <Text style={styles.trendTitle}>📈 Spending Trend (4 months)</Text>
+                                {trendLoading ? (
+                                    <View style={styles.trendLoader}>
+                                        <ActivityIndicator size="small" color={theme.colors.primary} />
+                                        <Text style={styles.trendLoaderText}>Loading trend data...</Text>
+                                    </View>
+                                ) : trendData && trendData.values.some((v) => v > 0) ? (
+                                    <View style={styles.trendChartWrapper}>
+                                        <LineChart
+                                            data={{
+                                                labels: trendData.labels,
+                                                datasets: [{ data: trendData.values }],
+                                            }}
+                                            width={screenWidth - 96}
+                                            height={180}
+                                            chartConfig={trendChartConfig}
+                                            bezier
+                                            withInnerLines={true}
+                                            withOuterLines={false}
+                                            withVerticalLines={false}
+                                            fromZero
+                                            style={styles.trendChart}
+                                        />
+                                    </View>
+                                ) : (
+                                    <Text style={styles.trendEmpty}>No trend data available for this period</Text>
+                                )}
+                            </View>
+                        </ScrollView>
                     </View>
                 </View>
             </Modal>
@@ -212,7 +316,7 @@ const styles = StyleSheet.create({
     },
     modalContent: {
         backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        padding: 24, paddingBottom: 40, maxHeight: '70%',
+        padding: 24, paddingBottom: 24, maxHeight: '80%', flexShrink: 1,
     },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
     modalTitle: { fontSize: 22, fontWeight: '700', color: theme.colors.text },
@@ -227,4 +331,43 @@ const styles = StyleSheet.create({
     drillDownDate: { fontSize: 12, color: theme.colors.textTertiary, marginTop: 2 },
     drillDownCost: { fontSize: 16, fontWeight: '700', color: theme.colors.error },
     drillDownEmpty: { textAlign: 'center', color: theme.colors.textSecondary, paddingVertical: 30, fontSize: 15 },
+    // Trend chart section
+    trendSection: {
+        marginTop: 24,
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
+    },
+    trendTitle: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: theme.colors.text,
+        marginBottom: 16,
+    },
+    trendChartWrapper: {
+        alignItems: 'center',
+        backgroundColor: theme.colors.surface,
+        borderRadius: 16,
+        paddingVertical: 12,
+    },
+    trendChart: {
+        borderRadius: 16,
+    },
+    trendLoader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 30,
+        gap: 10,
+    },
+    trendLoaderText: {
+        fontSize: 14,
+        color: theme.colors.textSecondary,
+    },
+    trendEmpty: {
+        textAlign: 'center',
+        color: theme.colors.textTertiary,
+        paddingVertical: 24,
+        fontSize: 14,
+    },
 });

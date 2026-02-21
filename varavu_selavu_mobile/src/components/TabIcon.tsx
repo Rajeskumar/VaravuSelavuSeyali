@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../theme';
 
 interface TabIconProps {
@@ -11,15 +12,25 @@ interface TabIconProps {
 
 /**
  * TabIcon — custom tab bar icon with emoji glyphs.
- * Supports a special "center" variant for the floating Add button.
+ * Supports a special "center" variant for the floating Add FAB.
  */
 export default function TabIcon({ icon, label, focused, isCenter = false }: TabIconProps) {
     if (isCenter) {
         return (
             <View style={styles.centerContainer}>
-                <View style={[styles.centerButton, focused && styles.centerButtonActive]}>
+                <LinearGradient
+                    colors={
+                        focused
+                            ? [theme.colors.primaryDark, theme.colors.primary]
+                            : [theme.colors.primary, theme.colors.primaryLight]
+                    }
+                    style={styles.centerButton}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                >
                     <Text style={styles.centerIcon}>{icon}</Text>
-                </View>
+                </LinearGradient>
+                <Text style={styles.centerLabel}>{label}</Text>
             </View>
         );
     }
@@ -38,7 +49,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingTop: 6,
-        minWidth: 48,
+        minWidth: 56,
         minHeight: 44,
     },
     icon: {
@@ -68,26 +79,28 @@ const styles = StyleSheet.create({
     centerContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        top: -18,
+        top: -22,
     },
     centerButton: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        backgroundColor: theme.colors.primary,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
         alignItems: 'center',
         justifyContent: 'center',
         shadowColor: theme.colors.primary,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
-        elevation: 8,
-    },
-    centerButtonActive: {
-        backgroundColor: theme.colors.primaryDark,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 10,
     },
     centerIcon: {
-        fontSize: 26,
+        fontSize: 28,
         color: '#fff',
+    },
+    centerLabel: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: theme.colors.primary,
+        marginTop: 4,
     },
 });

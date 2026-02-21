@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
@@ -8,6 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
+import CategoryDonutChart from '../components/CategoryDonutChart';
+import TrendLineChart from '../components/TrendLineChart';
 
 const categoryEmojis: Record<string, string> = {
   food: '🍕', groceries: '🛒', transport: '🚗', entertainment: '🎬',
@@ -21,7 +23,7 @@ function getCategoryEmoji(category: string): string {
 }
 
 export default function HomeScreen() {
-  const { userEmail, accessToken, signOut } = useAuth();
+  const { userEmail, accessToken } = useAuth();
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const [yearlyData, setYearlyData] = useState<AnalysisResponse | null>(null);
@@ -65,6 +67,27 @@ export default function HomeScreen() {
   const yearlyTotal = yearlyData?.total_expenses || 0;
   const monthlyTotal = monthlyData?.total_expenses || 0;
 
+  // Build donut chart data from monthly analysis
+  const donutData = useMemo(() => {
+    if (!monthlyData?.category_totals) return [];
+    return monthlyData.category_totals.map((ct) => {
+      // Try to extract subcategory info from category_expense_details
+      const details = monthlyData.category_expense_details?.[ct.category] || [];
+      const subMap: Record<string, number> = {};
+      details.forEach((d) => {
+        // The category field in details may hold subcategory info
+        const subKey = d.category || 'Other';
+        subMap[subKey] = (subMap[subKey] || 0) + d.cost;
+      });
+      const subcategories = Object.entries(subMap).map(([name, total]) => ({ name, total }));
+      return {
+        category: ct.category,
+        total: ct.total,
+        subcategories: subcategories.length > 1 ? subcategories : undefined,
+      };
+    });
+  }, [monthlyData]);
+
   // Use monthly data for recent expenses (more relevant)
   const recentExpenses = monthlyData?.category_expense_details
     ? Object.values(monthlyData.category_expense_details)
@@ -101,9 +124,6 @@ export default function HomeScreen() {
           <Text style={styles.welcomeLabel}>Welcome back,</Text>
           <Text style={theme.typography.h2}>{userEmail?.split('@')[0]}</Text>
         </View>
-        <TouchableOpacity onPress={signOut} style={styles.logoutBtn} activeOpacity={0.7}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Hero Spending Card — Yearly total */}
@@ -132,7 +152,19 @@ export default function HomeScreen() {
         </LinearGradient>
       </View>
 
+      {/* Analytics Dashboard Cards */}
       <View style={styles.bodyContent}>
+        <View style={styles.sectionHeader}>
+          <Text style={theme.typography.h3}>Analytics</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Analysis')} activeOpacity={0.7}>
+            <Text style={styles.viewAllText}>Details →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Analytics Charts — vertically stacked */}
+        <CategoryDonutChart data={donutData} title="Category Breakdown" />
+        <TrendLineChart title="Expense Trend (6 mo)" />
+
         <View style={styles.sectionHeader}>
           <Text style={theme.typography.h3}>Recent Activity</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Expenses')} activeOpacity={0.7}>
@@ -200,10 +232,8 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 100, paddingBottom: 20 },
   welcomeLabel: { fontSize: 14, color: theme.colors.textSecondary, fontWeight: '500', marginBottom: 2 },
-  logoutBtn: { backgroundColor: theme.colors.errorSurface, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, minHeight: 36, justifyContent: 'center' },
-  logoutText: { color: theme.colors.error, fontWeight: '700', fontSize: 13 },
   heroWrapper: { paddingHorizontal: 20 },
   heroCard: { borderRadius: 24, padding: 28, marginBottom: 28, ...theme.shadows.colored },
   heroLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500', marginBottom: 6 },
@@ -215,6 +245,8 @@ const styles = StyleSheet.create({
   bodyContent: { paddingHorizontal: 20 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   viewAllText: { color: theme.colors.primary, fontWeight: '600', fontSize: 14 },
+
+  // Expense list
   expenseCard: { marginBottom: 10, padding: 16 },
   expenseRow: { flexDirection: 'row', alignItems: 'center' },
   expenseIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.colors.primarySurface, justifyContent: 'center', alignItems: 'center' },
