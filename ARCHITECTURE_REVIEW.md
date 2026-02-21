@@ -3,6 +3,8 @@
 ## Executive Summary
 This document provides a rigorous, production-readiness review of the "Trackspense" application (currently `varavu_selavu`). The current architecture, while suitable for a proof-of-concept or single-user prototype, is **unfit for public production release**. It contains critical bottlenecks in data storage, backend processing, and mobile performance that will lead to system failure under even moderate concurrent load.
 
+> **Note:** A detailed feasibility study on the "Bring Your Own Google Sheet" architecture is available in `FEASIBILITY_STUDY.md`.
+
 ---
 
 ## 1. Backend Scalability & GCP Cloud Run Optimization
@@ -168,3 +170,5 @@ There is no application-level rate limiting. The dependency is solely on Google 
 
 ## Conclusion
 The current codebase is a functional prototype but essentially an "Excel wrapper." For a public launch targeting high scalability and performance, the **migration away from Google Sheets to a real SQL database is the single most critical step.** Without this, the application will not survive production traffic.
+
+However, if the strategic goal is to prioritize **User Privacy** over raw performance, a "Bring Your Own Database" architecture using OAuth 2.0 to connect to users' private Google Sheets is technically feasible. This alternative approach is detailed in `FEASIBILITY_STUDY.md`.
