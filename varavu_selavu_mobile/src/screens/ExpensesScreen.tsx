@@ -104,7 +104,7 @@ export default function ExpensesScreen() {
     };
 
     const saveEdit = async () => {
-        if (!editingExpense || !accessToken) return;
+        if (!editingExpense || !accessToken || !userEmail) return;
         try {
             await updateExpense(
                 editingExpense.row_id,
@@ -114,6 +114,7 @@ export default function ExpensesScreen() {
                     category: editSubcategory,
                     date: editDate,
                     sub_category: editSubcategory,
+                    user_id: userEmail,
                 },
                 accessToken,
             );
@@ -256,7 +257,7 @@ export default function ExpensesScreen() {
                             icon="📅"
                             value={editDate}
                             onChangeText={setEditDate}
-                            placeholder="YYYY-MM-DD"
+                            placeholder="MM/DD/YYYY"
                         />
 
                         <View style={styles.modalButtons}>
