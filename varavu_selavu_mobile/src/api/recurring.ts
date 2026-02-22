@@ -10,6 +10,7 @@ export interface RecurringTemplateDTO {
     default_cost: number;
     start_date_iso: string; // YYYY-MM-DD
     last_processed_iso?: string;
+    status?: string;
 }
 
 export interface UpsertRecurringPayload {
@@ -18,6 +19,7 @@ export interface UpsertRecurringPayload {
     day_of_month: number;
     default_cost: number;
     start_date_iso?: string;
+    status?: string;
 }
 
 // ─── API Functions ────────────────────────────────────────────────────────────

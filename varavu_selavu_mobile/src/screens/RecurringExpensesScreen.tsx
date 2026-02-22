@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
-    ActivityIndicator, Alert, ScrollView, RefreshControl, Platform,
+    ActivityIndicator, Alert, ScrollView, RefreshControl, Platform, Switch,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { theme } from '../theme';
@@ -74,6 +74,7 @@ const EMPTY_FORM: UpsertRecurringPayload = {
     day_of_month: new Date().getDate(),
     default_cost: 0,
     start_date_iso: new Date().toISOString().split('T')[0],
+    status: 'Active',
 };
 
 export default function RecurringExpensesScreen() {
@@ -189,6 +190,7 @@ export default function RecurringExpensesScreen() {
             day_of_month: template.day_of_month,
             default_cost: template.default_cost,
             start_date_iso: template.start_date_iso,
+            status: template.status || 'Active',
         });
         setFormVisible(true);
     };
@@ -266,6 +268,7 @@ export default function RecurringExpensesScreen() {
                                             <Text style={styles.templateName} numberOfLines={1}>{t.description}</Text>
                                             <Text style={styles.templateMeta}>
                                                 {t.category} • Day {t.day_of_month} • Due {t.nextDue.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                {t.status === 'Paused' && ' • ⏸️ Paused'}
                                             </Text>
                                             {t.last_processed_iso && (
                                                 <Text style={styles.templateProcessed}>
@@ -377,6 +380,15 @@ export default function RecurringExpensesScreen() {
                                 placeholder="YYYY-MM-DD"
                                 placeholderTextColor={theme.colors.textTertiary}
                             />
+
+                            <View style={[styles.rowFields, { alignItems: 'center', marginBottom: 16, justifyContent: 'space-between' }]}>
+                                <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Pause Template</Text>
+                                <Switch
+                                    value={form.status === 'Paused'}
+                                    onValueChange={(val) => setForm((f) => ({ ...f, status: val ? 'Paused' : 'Active' }))}
+                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                />
+                            </View>
 
                             <TouchableOpacity
                                 style={[styles.saveBtn, saving && styles.saveBtnDisabled]}

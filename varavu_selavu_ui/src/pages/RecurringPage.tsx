@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../api/recurring';
-import { Box, Typography, Card, CardContent, TextField, Button, Paper, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Snackbar, Alert, CircularProgress, Dialog } from '@mui/material';
+import { Box, Typography, Card, CardContent, TextField, Button, Paper, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Snackbar, Alert, CircularProgress, Dialog, FormControlLabel, Switch } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -20,6 +20,7 @@ const RecurringPage: React.FC = () => {
     day_of_month: new Date().getDate(),
     default_cost: 0,
     start_date_iso: new Date().toISOString().split('T')[0],
+    status: 'Active',
   });
 
   const [editing, setEditing] = React.useState<RecurringTemplateDTO | null>(null);
@@ -38,7 +39,7 @@ const RecurringPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
       setEditing(null);
-      setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0] });
+      setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' });
       setToast({ open: true, message: 'Template saved', severity: 'success' });
     },
     onError: () => {
@@ -79,13 +80,19 @@ const RecurringPage: React.FC = () => {
             <Grid size={{ xs: 6, md: 2 }}>
               <TextField label="Default cost" type="number" fullWidth value={form.default_cost} onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 2 }}>
               <TextField label="Start date" type="date" fullWidth value={form.start_date_iso} onChange={e => setForm(f => ({ ...f, start_date_iso: e.target.value }))} InputLabelProps={{ shrink: true }} />
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 2 }} display="flex" alignItems="center">
+              <FormControlLabel
+                control={<Switch checked={form.status === 'Paused'} onChange={e => setForm(f => ({ ...f, status: e.target.checked ? 'Paused' : 'Active' }))} />}
+                label={form.status === 'Paused' ? 'Paused' : 'Active'}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 2 }}>
               <Button variant="contained" onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !form.description || !form.category || form.default_cost <= 0}>Save</Button>
               {editing && (
-                <Button sx={{ ml: 1 }} onClick={() => { setEditing(null); setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0] }); }}>Cancel</Button>
+                <Button sx={{ ml: 1 }} onClick={() => { setEditing(null); setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' }); }}>Cancel</Button>
               )}
             </Grid>
           </Grid>
@@ -102,6 +109,7 @@ const RecurringPage: React.FC = () => {
               <TableCell>Default Cost</TableCell>
               <TableCell>Start</TableCell>
               <TableCell>Last Processed</TableCell>
+              <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
@@ -120,8 +128,9 @@ const RecurringPage: React.FC = () => {
                 <TableCell>${t.default_cost.toFixed(2)}</TableCell>
                 <TableCell>{t.start_date_iso}</TableCell>
                 <TableCell>{t.last_processed_iso || '-'}</TableCell>
+                <TableCell>{t.status === 'Paused' ? '⏸️ Paused' : 'Active'}</TableCell>
                 <TableCell align="right">
-                  <IconButton onClick={() => { setEditing(t); setForm({ description: t.description, category: t.category, day_of_month: t.day_of_month, default_cost: t.default_cost, start_date_iso: t.start_date_iso }); }}><EditIcon /></IconButton>
+                  <IconButton onClick={() => { setEditing(t); setForm({ description: t.description, category: t.category, day_of_month: t.day_of_month, default_cost: t.default_cost, start_date_iso: t.start_date_iso, status: t.status || 'Active' }); }}><EditIcon /></IconButton>
                   <IconButton onClick={() => { setPendingExec(t); setExecAmount(t.default_cost); setExecuteOpen(true); }} disabled={executingId === t.id}>
                     {executingId === t.id ? <CircularProgress size={18} /> : <PlayArrowIcon />}
                   </IconButton>

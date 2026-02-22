@@ -84,7 +84,7 @@ class GoogleSheetsClient:
         try:
             return self.spreadsheet.worksheet("recurring")
         except gspread.exceptions.WorksheetNotFound:
-            ws = self.spreadsheet.add_worksheet(title="recurring", rows="500", cols="8")
+            ws = self.spreadsheet.add_worksheet(title="recurring", rows="500", cols="9")
             ws.append_row([
                 "user_id",
                 "description",
@@ -94,6 +94,7 @@ class GoogleSheetsClient:
                 "start_date_iso",
                 "last_processed_iso",
                 "template_id",
+                "status",
             ])
             return ws
 

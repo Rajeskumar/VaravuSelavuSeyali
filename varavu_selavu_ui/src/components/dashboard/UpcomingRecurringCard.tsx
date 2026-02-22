@@ -33,11 +33,12 @@ const UpcomingRecurringCard: React.FC = () => {
         const end = new Date(now);
         end.setDate(end.getDate() + daysAhead);
         const upcoming = templates
+          .filter(t => t.status !== 'Paused')
           .map(t => ({ t, dt: nextOccurrence(t, now) }))
           .filter(x => x.dt && x.dt >= now && x.dt <= end)
-          .sort((a,b) => (a.dt!.getTime() - b.dt!.getTime()))
+          .sort((a, b) => (a.dt!.getTime() - b.dt!.getTime()))
           .map(x => ({
-            date: x!.dt!.toISOString().slice(0,10),
+            date: x!.dt!.toISOString().slice(0, 10),
             description: x.t.description,
             category: x.t.category,
             amount: x.t.default_cost,

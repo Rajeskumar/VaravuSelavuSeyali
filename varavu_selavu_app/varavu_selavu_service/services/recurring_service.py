@@ -28,6 +28,7 @@ class RecurringService:
         for row_idx, row in enumerate(rows, start=2):
             if row.get("user_id") != user_id:
                 continue
+            raw_status = str(row.get("status") or "").strip().title()
             out.append({
                 "id": row.get("template_id") or f"r_{row_idx}",
                 "description": row.get("description", ""),
@@ -36,6 +37,7 @@ class RecurringService:
                 "default_cost": float(row.get("default_cost", 0) or 0),
                 "start_date_iso": str(row.get("start_date_iso") or datetime.utcnow().strftime("%Y-%m-%d")),
                 "last_processed_iso": row.get("last_processed_iso") or None,
+                "status": raw_status if raw_status else "Active",
             })
         return out
 
@@ -47,6 +49,7 @@ class RecurringService:
         day_of_month: int,
         default_cost: float,
         start_date_iso: Optional[str] = None,
+        status: str = "Active",
     ) -> Dict:
         rows = self._load_records()
         # Find existing by (user_id, description, category)
@@ -57,12 +60,12 @@ class RecurringService:
                 break
         start_val = start_date_iso or datetime.utcnow().strftime("%Y-%m-%d")
         if target_row_idx:
-            values = [[user_id, description, category, day_of_month, default_cost, start_val, rows[target_row_idx-2].get("last_processed_iso"), rows[target_row_idx-2].get("template_id")]]
-            self.ws.update(f"A{target_row_idx}:H{target_row_idx}", values)
+            values = [[user_id, description, category, day_of_month, default_cost, start_val, rows[target_row_idx-2].get("last_processed_iso"), rows[target_row_idx-2].get("template_id"), status]]
+            self.ws.update(f"A{target_row_idx}:I{target_row_idx}", values)
             tpl_id = rows[target_row_idx-2].get("template_id") or f"r_{target_row_idx}"
         else:
             tpl_id = f"recur_{int(datetime.utcnow().timestamp())}"
-            self.ws.append_row([user_id, description, category, day_of_month, default_cost, start_val, "", tpl_id])
+            self.ws.append_row([user_id, description, category, day_of_month, default_cost, start_val, "", tpl_id, status])
         return {
             "id": tpl_id,
             "description": description,
@@ -70,6 +73,7 @@ class RecurringService:
             "day_of_month": day_of_month,
             "default_cost": default_cost,
             "start_date_iso": start_val,
+            "status": status,
         }
 
     def compute_due(self, user_id: str, as_of_iso: Optional[str] = None) -> List[Dict]:
@@ -78,6 +82,8 @@ class RecurringService:
         a_ms = datetime(aY, aM + 1, aD).timestamp()
         due: List[Dict] = []
         for tpl in self.list_templates(user_id):
+            if tpl.get("status") == "Paused":
+                continue
             start = datetime.strptime(tpl["last_processed_iso"], "%Y-%m-%d") if tpl.get("last_processed_iso") else datetime.strptime(tpl["start_date_iso"], "%Y-%m-%d")
             y, m0 = start.year, start.month - 1
             if tpl.get("last_processed_iso"):
@@ -118,8 +124,8 @@ class RecurringService:
             tid = row.get("template_id")
             if not tid or tid not in latest:
                 continue
-            values = [[row.get("user_id"), row.get("description"), row.get("category"), row.get("day_of_month"), row.get("default_cost"), row.get("start_date_iso"), latest[tid], tid]]
-            self.ws.update(f"A{idx}:H{idx}", values)
+            values = [[row.get("user_id"), row.get("description"), row.get("category"), row.get("day_of_month"), row.get("default_cost"), row.get("start_date_iso"), latest[tid], tid, row.get("status", "Active")]]
+            self.ws.update(f"A{idx}:I{idx}", values)
 
     def delete_template(self, user_id: str, template_id: str) -> bool:
         rows = self._load_records()
