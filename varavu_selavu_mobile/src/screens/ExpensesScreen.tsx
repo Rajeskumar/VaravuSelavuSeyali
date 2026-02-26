@@ -54,7 +54,12 @@ export default function ExpensesScreen() {
             if (reset) {
                 setExpenses(data.items || []);
             } else {
-                setExpenses((prev) => [...prev, ...(data.items || [])]);
+                setExpenses((prev) => {
+                    const newItems = (data.items || []).filter(
+                        (item: ExpenseRecord) => !prev.some((p) => p.row_id === item.row_id)
+                    );
+                    return [...prev, ...newItems];
+                });
             }
 
             setOffset(currentOffset + (data.items?.length || 0));
@@ -182,7 +187,7 @@ export default function ExpensesScreen() {
                 <FlatList
                     data={expenses}
                     renderItem={renderItem}
-                    keyExtractor={(item) => String(item.row_id)}
+                    keyExtractor={(item) => `expense-${item.row_id}`}
                     onRefresh={() => fetchExpenses(true)}
                     refreshing={loading}
                     onEndReached={() => {

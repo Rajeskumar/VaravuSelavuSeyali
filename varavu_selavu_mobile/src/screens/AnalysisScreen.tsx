@@ -197,7 +197,7 @@ export default function AnalysisScreen() {
                     const txCount = data.category_expense_details?.[ct.category]?.length ?? 0;
                     return (
                         <TouchableOpacity
-                            key={`${ct.category}-${index}`}
+                            key={`category-${ct.category}-${index}`}
                             style={styles.breakdownRow}
                             onPress={() => openDrillDown(ct.category)}
                             activeOpacity={0.6}
@@ -240,7 +240,7 @@ export default function AnalysisScreen() {
                                 <Text style={styles.drillDownEmpty}>No transactions found</Text>
                             ) : (
                                 drillDownItems.map((item, index) => (
-                                    <View key={`${item.date}-${item.description}-${item.cost}-${index}`} style={styles.drillDownRow}>
+                                    <View key={`drilldown-${item.date}-${index}`} style={styles.drillDownRow}>
                                         <View style={styles.drillDownInfo}>
                                             <Text style={styles.drillDownDesc} numberOfLines={1}>
                                                 {item.description}

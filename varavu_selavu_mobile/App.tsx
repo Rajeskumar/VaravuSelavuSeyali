@@ -5,7 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator, View, Text, TouchableOpacity, StyleSheet,
-  Animated, Dimensions, Modal, SafeAreaView, Pressable,
+  Animated, Dimensions, Modal, SafeAreaView, Pressable, Platform
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -57,6 +57,7 @@ function AuthStack() {
 
 function MainTabs() {
   const { openDrawer } = useDrawer();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -80,8 +81,8 @@ function MainTabs() {
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopWidth: 0,
-          height: 72,
-          paddingBottom: 10,
+          height: Platform.OS === 'android' ? 72 + insets.bottom : 72 + Math.max(insets.bottom, 10),
+          paddingBottom: Platform.OS === 'android' ? insets.bottom + 10 : Math.max(insets.bottom, 10),
           paddingTop: 8,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
