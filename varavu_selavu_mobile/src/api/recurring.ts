@@ -22,6 +22,14 @@ export interface UpsertRecurringPayload {
     status?: string;
 }
 
+export interface DueOccurrenceDTO {
+    template_id: string;
+    date_iso: string; // YYYY-MM-DD
+    description: string;
+    category: string;
+    suggested_cost: number;
+}
+
 // ─── API Functions ────────────────────────────────────────────────────────────
 
 export async function listRecurringTemplates(): Promise<RecurringTemplateDTO[]> {
@@ -47,6 +55,24 @@ export async function deleteRecurringTemplate(templateId: string): Promise<{ suc
     if (!res.ok) throw new Error('Failed to delete recurring template');
     return res.json();
 }
+
+export async function getRecurringDue(asOfISO?: string): Promise<DueOccurrenceDTO[]> {
+    const qs = asOfISO ? `?as_of=${encodeURIComponent(asOfISO)}` : '';
+    const res = await apiFetch(`/api/v1/recurring/due${qs}`, { method: 'GET' });
+    if (!res.ok) throw new Error('Failed to load due recurring expenses');
+    return res.json();
+}
+
+export async function confirmRecurring(items: { template_id: string; date_iso: string; cost: number }[]): Promise<{ success: boolean }> {
+    const res = await apiFetch('/api/v1/recurring/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+    });
+    if (!res.ok) throw new Error('Failed to confirm recurring expenses');
+    return res.json();
+}
+
 
 export async function executeRecurringNow(
     templateId: string,

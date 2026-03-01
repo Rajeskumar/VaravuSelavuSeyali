@@ -13,6 +13,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { theme } from './src/theme';
 import ToastProvider from './src/components/Toast';
 import TabIcon from './src/components/TabIcon';
+import RecurringPrompt from './src/components/RecurringPrompt';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -160,7 +161,7 @@ interface DrawerMenuItem {
 }
 
 const DRAWER_ITEMS: DrawerMenuItem[] = [
-  { key: 'home', label: 'Home', icon: '🏠', screen: 'MainTabs' },
+  { key: 'home', label: 'Home', icon: '🏠', screen: 'Dashboard' },
   { key: 'recurring', label: 'Recurring Expenses', icon: '🔁', screen: 'Recurring' },
   { key: 'about', label: 'About App', icon: 'ℹ️', screen: 'About' },
   { key: 'feature', label: 'Submit Feature Request', icon: '💡', screen: 'FeatureRequest' },
@@ -387,7 +388,14 @@ function RootNavigator() {
         },
       }}
     >
-      {accessToken ? <AppShell /> : <AuthStack />}
+      {accessToken ? (
+        <>
+          <AppShell />
+          <RecurringPrompt />
+        </>
+      ) : (
+        <AuthStack />
+      )}
       <ToastProvider />
     </NavigationContainer>
   );
