@@ -18,7 +18,9 @@ _REVOKED_REFRESH_TOKENS: set[str] = set()
 class AuthService:
     def __init__(self, user_ws=None):
         self.is_mock = user_ws is not None
-        if user_ws is None:
+        if settings.USE_POSTGRES and user_ws is None:
+            self.user_ws = None
+        elif user_ws is None:
             gs = GoogleSheetsClient()
             # use existing `user_data` sheet for user credentials
             self.user_ws = gs.user_data_sheet()
@@ -74,7 +76,8 @@ class AuthService:
         if not user:
             return False
         stored = (
-            user.get("hashed_password")
+            user.get("password_hash")
+            or user.get("hashed_password")
             or user.get("password")
             or user.get("Password")
         )

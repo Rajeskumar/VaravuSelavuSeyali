@@ -5,6 +5,7 @@ varavu_selavu_app/.env
 varavu_selavu_app/varavu_selavu_service/.env.*
 !varavu_selavu_app/varavu_selavu_service/.env.example
 expense_ux_design.png
+**/.env/**
 
 # Python cache
 **/__pycache__/
