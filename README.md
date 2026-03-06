@@ -66,7 +66,7 @@ and stored in `expenses` with line items in `expense_items`, all scoped by
 the captured image automatically. Tabs are created if missing.
 
 Set `LLM_TIMEOUT_SEC` in `.env` to increase the OpenAI/Ollama request timeout
-(default 180 seconds) if calls are slow or time out.
+(default 180 seconds) if calls are slow or time out. 
 
 ## Mobile Application
 
