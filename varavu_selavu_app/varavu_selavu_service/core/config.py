@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # PostgreSQL Toggle
     USE_POSTGRES: bool = True
-    DATABASE_URL: str = "postgresql://postgres:AMCUOn3fk1d0qEBu@db.eebwjvoqxurihrmugmti.supabase.co:5432/postgres"
+    DATABASE_URL: str = ""
 
     # OCR / receipts
     OCR_ENGINE: str = "openai"
