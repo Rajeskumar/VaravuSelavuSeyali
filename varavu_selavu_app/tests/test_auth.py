@@ -1,4 +1,6 @@
 import os
+os.environ["USE_POSTGRES"] = "false"
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from unittest.mock import patch

@@ -49,4 +49,4 @@ def test_delete_expense():
         res = client.delete("/api/v1/expenses/5")
         assert res.status_code == 200
         assert res.json() == {"success": True}
-        svc.delete_expense.assert_called_once_with(5)
+        svc.delete_expense.assert_called_once_with("5")

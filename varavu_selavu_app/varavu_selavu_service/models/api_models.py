@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, conint
 
@@ -102,7 +102,7 @@ class Expense(BaseModel):
 
 
 class ExpenseRow(Expense):
-    row_id: int
+    row_id: Union[int, str]
 
 
 class ExpenseCreatedResponse(BaseModel):
