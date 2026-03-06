@@ -22,6 +22,8 @@ from varavu_selavu_service.models.api_models import (
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.repo.sheets_repo import SheetsRepo
+from varavu_selavu_service.repo.postgres_repo import PostgresRepo
+from typing import Union
 from varavu_selavu_service.services.chat_service import (
     call_chat_model,
     list_openai_models,
@@ -52,6 +54,8 @@ router.include_router(auth_router, prefix="/auth")
 from varavu_selavu_service.db.google_sheets import get_sheets_client as _gs
 
 def get_expense_service() -> ExpenseService:
+    if settings.USE_POSTGRES:
+        return ExpenseService()
     return ExpenseService(gs_client=_gs())
 # Simple in-memory cache for analysis results
 _ANALYSIS_CACHE: dict[
@@ -76,7 +80,9 @@ def get_receipt_service() -> ReceiptService:
     return ReceiptService(engine=settings.OCR_ENGINE)
 
 
-def get_sheets_repo() -> SheetsRepo:
+def get_sheets_repo() -> Union[SheetsRepo, PostgresRepo]:
+    if settings.USE_POSTGRES:
+        return PostgresRepo()
     return SheetsRepo(client=_gs())
 
 
@@ -84,6 +90,8 @@ def get_categorization_service() -> CategorizationService:
     return CategorizationService()
 
 def get_recurring_service() -> RecurringService:
+    if settings.USE_POSTGRES:
+        return RecurringService()
     return RecurringService(gs_client=_gs())
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
@@ -171,7 +179,7 @@ def list_expenses(
     summary="Update an existing expense",
 )
 def update_expense(
-    row_id: int,
+    row_id: str,
     data: ExpenseRequest,
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
@@ -203,7 +211,7 @@ def update_expense(
     summary="Delete an expense",
 )
 def delete_expense(
-    row_id: int,
+    row_id: str,
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
     _: str = Depends(auth_required),
@@ -311,7 +319,7 @@ def parse_receipt(
 )
 def create_expense_with_items(
     payload: ExpenseWithItemsRequest,
-    sheets_repo: SheetsRepo = Depends(get_sheets_repo),
+    sheets_repo: Union[SheetsRepo, PostgresRepo] = Depends(get_sheets_repo),
     _: str = Depends(auth_required),
     force: bool = Query(False),
 ):

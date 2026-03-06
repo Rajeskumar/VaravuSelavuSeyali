@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # Analysis cache TTL (seconds)
     ANALYSIS_CACHE_TTL_SEC: int = 60
 
+    # PostgreSQL Toggle
+    USE_POSTGRES: bool = True
+    DATABASE_URL: str = "postgresql://postgres:AMCUOn3fk1d0qEBu@db.eebwjvoqxurihrmugmti.supabase.co:5432/postgres"
+
     # OCR / receipts
     OCR_ENGINE: str = "openai"
     MAX_UPLOAD_MB: int = 12
