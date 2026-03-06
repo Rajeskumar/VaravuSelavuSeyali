@@ -32,7 +32,7 @@ function todayMMDDYYYY(): string {
 interface DraftItem {
   line_no: number;
   item_name: string;
-  line_total: number;
+  line_total: string;
   category_name: string;
 }
 
@@ -212,7 +212,7 @@ export default function AddExpenseScreen() {
       const items: DraftItem[] = (data.items || []).map((it: any, idx: number) => ({
         line_no: it.line_no || idx + 1,
         item_name: it.item_name || it.normalized_name || '',
-        line_total: it.line_total || 0,
+        line_total: it.line_total != null ? String(it.line_total) : '',
         category_name: it.category_name || '',
       }));
 
@@ -272,7 +272,7 @@ export default function AddExpenseScreen() {
 
   const getReconcileDelta = () => {
     if (!draft) return 0;
-    const subtotal = draft.items.reduce((s, it) => s + (it.line_total || 0), 0);
+    const subtotal = draft.items.reduce((s, it) => s + (parseFloat(it.line_total) || 0), 0);
     const { tax = 0, tip = 0, discount = 0 } = draft.header;
     const total = parseFloat(amount) || 0;
     return subtotal + tax + tip - discount - total;
@@ -296,7 +296,7 @@ export default function AddExpenseScreen() {
     if (!draft) return;
     setDraft({
       ...draft,
-      items: [...draft.items, { line_no: draft.items.length + 1, item_name: '', line_total: 0, category_name: '' }],
+      items: [...draft.items, { line_no: draft.items.length + 1, item_name: '', line_total: '', category_name: '' }],
     });
   };
 
@@ -326,7 +326,7 @@ export default function AddExpenseScreen() {
             purchased_at: date,
             fingerprint: draft.fingerprint,
           },
-          items: draft.items.map((i) => ({ ...i })),
+          items: draft.items.map((i) => ({ ...i, line_total: parseFloat(i.line_total) || 0 })),
         };
         await addExpenseWithItems(payload);
         showToast({ message: 'Expense with items saved! 🎉', type: 'success' });
@@ -463,8 +463,8 @@ export default function AddExpenseScreen() {
                         <Text style={styles.lineItemLabel}>Total</Text>
                         <RNTextInput
                           style={styles.lineItemInput}
-                          value={String(item.line_total)}
-                          onChangeText={(v) => updateItem(idx, 'line_total', parseFloat(v) || 0)}
+                          value={item.line_total}
+                          onChangeText={(v) => updateItem(idx, 'line_total', v)}
                           keyboardType="numeric"
                           placeholder="0.00"
                           placeholderTextColor={theme.colors.textTertiary}
@@ -492,7 +492,7 @@ export default function AddExpenseScreen() {
                       : `⚠️ Mismatch: $${getReconcileDelta().toFixed(2)}`}
                   </Text>
                   <Text style={styles.reconcileSubtext}>
-                    Subtotal: ${draft.items.reduce((s, i) => s + i.line_total, 0).toFixed(2)}
+                    Subtotal: ${draft.items.reduce((s, i) => s + (parseFloat(i.line_total) || 0), 0).toFixed(2)}
                     {draft.header.tax ? ` + Tax: $${draft.header.tax}` : ''}
                     {draft.header.tip ? ` + Tip: $${draft.header.tip}` : ''}
                   </Text>
