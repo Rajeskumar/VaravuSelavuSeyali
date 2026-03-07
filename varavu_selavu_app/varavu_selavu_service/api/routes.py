@@ -21,9 +21,7 @@ from varavu_selavu_service.models.api_models import (
 )
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
-from varavu_selavu_service.repo.sheets_repo import SheetsRepo
 from varavu_selavu_service.repo.postgres_repo import PostgresRepo
-from typing import Union
 from varavu_selavu_service.services.chat_service import (
     call_chat_model,
     list_openai_models,
@@ -51,12 +49,8 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router, prefix="/auth")
 
 # Dependency providers
-from varavu_selavu_service.db.google_sheets import get_sheets_client as _gs
-
 def get_expense_service() -> ExpenseService:
-    if settings.USE_POSTGRES:
-        return ExpenseService()
-    return ExpenseService(gs_client=_gs())
+    return ExpenseService()
 # Simple in-memory cache for analysis results
 _ANALYSIS_CACHE: dict[
     tuple[str, int | None, int | None, str | None, str | None],
@@ -80,19 +74,15 @@ def get_receipt_service() -> ReceiptService:
     return ReceiptService(engine=settings.OCR_ENGINE)
 
 
-def get_sheets_repo() -> Union[SheetsRepo, PostgresRepo]:
-    if settings.USE_POSTGRES:
-        return PostgresRepo()
-    return SheetsRepo(client=_gs())
+def get_postgres_repo() -> PostgresRepo:
+    return PostgresRepo()
 
 
 def get_categorization_service() -> CategorizationService:
     return CategorizationService()
 
 def get_recurring_service() -> RecurringService:
-    if settings.USE_POSTGRES:
-        return RecurringService()
-    return RecurringService(gs_client=_gs())
+    return RecurringService()
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
@@ -319,7 +309,7 @@ def parse_receipt(
 )
 def create_expense_with_items(
     payload: ExpenseWithItemsRequest,
-    sheets_repo: Union[SheetsRepo, PostgresRepo] = Depends(get_sheets_repo),
+    repo: PostgresRepo = Depends(get_postgres_repo),
     _: str = Depends(auth_required),
     force: bool = Query(False),
 ):
@@ -338,14 +328,14 @@ def create_expense_with_items(
     discount = header.get("discount", 0)
     if abs(subtotal + tax + tip - discount - header["amount"]) > 0.02:
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
-    existing = sheets_repo.find_expense_by_fingerprint(payload.user_email, header.get("fingerprint", ""))
+    existing = repo.find_expense_by_fingerprint(payload.user_email, header.get("fingerprint", ""))
     if existing and not force:
         raise HTTPException(status_code=409, detail={"expense_id": existing.get("id")})
-    expense_id = sheets_repo.append_expense({**header, "user_email": payload.user_email})
+    expense_id = repo.append_expense({**header, "user_email": payload.user_email})
     try:
-        item_ids = sheets_repo.append_items(payload.user_email, expense_id, items)
+        item_ids = repo.append_items(payload.user_email, expense_id, items)
     except Exception:
-        sheets_repo.delete_expense(expense_id)
+        repo.delete_expense(expense_id)
         raise
     return {"expense_id": expense_id, "item_ids": item_ids}
 

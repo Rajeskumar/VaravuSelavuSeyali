@@ -9,7 +9,7 @@ The service uses JWT based authentication with access and refresh tokens.
 ### Environment variables
 - `JWT_SECRET` – secret used to sign tokens.
 - `JWT_EXPIRE_MINUTES` – access token lifetime in minutes (default 30).
-- `GOOGLE_SHEETS_SPREADSHEET_ID` – id of the Google Sheet used for storage.
+- `DATABASE_URL` – connection string for the PostgreSQL database.
 - `OCR_ENGINE` – receipt parsing engine (default `openai`, or `ollama` for local models).
 - `OPENAI_API_KEY` – API key when using the OpenAI engine.
 - `OLLAMA_HOST` – base URL for a local Ollama instance (default `http://localhost:11434`).
@@ -58,10 +58,9 @@ so the AI can parse them. After selecting a file, use **Parse Receipt** to send
 it to the backend. Files remain in memory and are parsed by an AI model (OpenAI
 or a local Ollama instance). Parsed header data populates the existing date,
 cost, description, and category fields (main and subcategory), while line items
-appear in an editable table where rows can be added or removed. The Save button
-stays disabled until required fields are filled, parsing/conversion finishes,
-and totals reconcile. Expenses are appended to the original manual-entry sheet
-and stored in `expenses` with line items in `expense_items`, all scoped by
+is disabled until required fields are filled, parsing/conversion finishes,
+and totals reconcile. Expenses and line items are stored securely in 
+PostgreSQL, scoped by `user_email`.
 `user_email`. On mobile, the **Take Photo** action opens the camera and parses
 the captured image automatically. Tabs are created if missing.
 

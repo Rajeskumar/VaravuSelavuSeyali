@@ -40,8 +40,7 @@ class Settings(BaseSettings):
     # Analysis cache TTL (seconds)
     ANALYSIS_CACHE_TTL_SEC: int = 60
 
-    # PostgreSQL Toggle
-    USE_POSTGRES: bool = True
+    # PostgreSQL Toggles
     DATABASE_URL: str = ""
 
     # OCR / receipts

@@ -3,10 +3,10 @@ from fastapi.testclient import TestClient
 
 from varavu_selavu_service.main import app
 from varavu_selavu_service.services.receipt_service import ReceiptService
-from varavu_selavu_service.api.routes import get_receipt_service, get_sheets_repo
+from varavu_selavu_service.api.routes import get_receipt_service, get_postgres_repo
 
 
-class FakeSheetsRepo:
+class FakePostgresRepo:
     def __init__(self):
         self.expenses = []
         self.items = []
@@ -35,8 +35,8 @@ class FakeSheetsRepo:
         return ids
 
 
-fake_repo = FakeSheetsRepo()
-app.dependency_overrides[get_sheets_repo] = lambda: fake_repo
+fake_repo = FakePostgresRepo()
+app.dependency_overrides[get_postgres_repo] = lambda: fake_repo
 app.dependency_overrides[get_receipt_service] = lambda: ReceiptService(engine="mock")
 client = TestClient(app)
 

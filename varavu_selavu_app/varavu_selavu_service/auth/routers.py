@@ -12,17 +12,8 @@ from .security import create_access_token, create_refresh_token, auth_required, 
 router = APIRouter(tags=["Auth"])
 
 
-from varavu_selavu_service.core.config import Settings
-
-settings = Settings()
-
 def get_auth_service() -> AuthService:
-    if settings.USE_POSTGRES:
-        return AuthService()
-        
-    from varavu_selavu_service.db.google_sheets import get_sheets_client
-    gs = get_sheets_client()
-    return AuthService(user_ws=gs.user_data_sheet())
+    return AuthService()
 
 
 class RegisterRequest(BaseModel):
