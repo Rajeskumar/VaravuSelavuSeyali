@@ -41,12 +41,13 @@ def get_db_connection():
         pool.putconn(conn)
 
 @contextmanager
-def get_db_cursor(commit: bool = False):
+def get_db_cursor(commit: bool = False, **kwargs):
     """
     Yields a RealDictCursor that automatically commits on exit if `commit=True`.
     """
     with get_db_connection() as conn:
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        kwargs.setdefault("cursor_factory", RealDictCursor)
+        cursor = conn.cursor(**kwargs)
         try:
             yield cursor
             if commit:

@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from threading import RLock
 import time
-from typing import Any, Dict, Optional, Tuple
-
-import pandas as pd
-
-from varavu_selavu_service.services.expense_service import ExpenseService
+from typing import Any, Dict, Optional, Tuple, List
+from datetime import datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import func, extract, Integer
+from varavu_selavu_service.db.models import Expense
 
 
 @dataclass
@@ -25,11 +25,11 @@ class AnalysisService:
     """
 
     # Cache key: (user_id, year, month) -> AnalysisResult
-    _CACHE: Dict[Tuple[str, Optional[int], Optional[int]], AnalysisResult] = {}
+    _CACHE: Dict[Tuple[str, Optional[int], Optional[int], Optional[str], Optional[str]], AnalysisResult] = {}
     _CACHE_LOCK: RLock = RLock()
 
-    def __init__(self, expense_service: Optional[ExpenseService] = None, ttl_sec: int = 60):
-        self.expense_service = expense_service or ExpenseService()
+    def __init__(self, db: Session, ttl_sec: int = 60):
+        self.db = db
         self.ttl_sec = ttl_sec
 
     def invalidate_cache(self) -> None:
@@ -61,117 +61,95 @@ class AnalysisService:
                 if entry and (now_ts - entry.generated_at < self.ttl_sec):
                     return entry.data
 
-        df = self.expense_service.load_dataframe()
-        if df.empty:
-            result = {
-                "top_categories": [],
-                "category_totals": [],
-                "monthly_trend": [],
-                "total_expenses": 0.0,
-                "category_expense_details": {},
-                "filter_info": {
-                    "applied_user_col": None,
-                    "year": int(year) if year is not None else None,
-                    "month": int(month) if month is not None else None,
-                    "row_count": 0,
-                },
-            }
-            if use_cache:
-                with self._CACHE_LOCK:
-                    self._CACHE[cache_key] = AnalysisResult(result, now_ts)
-            return result
+        # --------------------------------------------------------------------------------
+        # 1. Build dynamic ORM Filters
+        # --------------------------------------------------------------------------------
+        filters = [Expense.user_email == user_id]
+        
+        if start_date:
+            filters.append(Expense.purchased_at >= start_date)
+        if end_date:
+            filters.append(Expense.purchased_at <= end_date)
+            
+        is_sqlite = "sqlite" in str(self.db.bind.url)
+        if year is not None:
+            if is_sqlite:
+                filters.append(func.cast(func.strftime('%Y', Expense.purchased_at), Integer) == int(year))
+            else:
+                filters.append(extract('year', Expense.purchased_at) == int(year))
+                
+        if month is not None:
+            if is_sqlite:
+                filters.append(func.cast(func.strftime('%m', Expense.purchased_at), Integer) == int(month))
+            else:
+                filters.append(extract('month', Expense.purchased_at) == int(month))
 
-        # Normalize column names
-        df = df.copy()
-        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
-
-        # Filter by user. If there is a user-identifying column but no rows
-        # match the current user, return an empty dataset rather than leaking
-        # all rows. If no suitable user column exists, also return empty.
-        applied_user_filter = None
-        candidate_user_cols = [c for c in df.columns if ("user" in c or "email" in c)]
-        found_col = None
-        for col in ["user_id", "email", "user", *candidate_user_cols]:
-            if col in df.columns:
-                found_col = col
-                tmp = df[df[col] == user_id]
-                df = tmp  # even if empty, enforce per-user isolation
-                applied_user_filter = col
-                break
-        if found_col is None:
-            # No recognizable user column -> do not return global data
-            df = df.iloc[0:0]
-
-        # Determine date column
-        date_col: Optional[str] = "date" if "date" in df.columns else None
-        if date_col is None:
-            for c in df.columns:
-                if "date" in c:
-                    date_col = c
-                    break
-        if date_col:
-            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-            if df[date_col].isna().mean() > 0.5:
-                df[date_col] = pd.to_datetime(df[date_col], errors="coerce", dayfirst=True)
-        if "cost" in df.columns:
-            df["cost"] = pd.to_numeric(df["cost"], errors="coerce")
-
-        required_cols = [c for c in [date_col, "cost"] if c]
-        if required_cols:
-            df = df.dropna(subset=required_cols)
-
-        # Filters
-        if date_col:
-            if start_date:
-                df = df[df[date_col] >= pd.to_datetime(start_date)]
-            if end_date:
-                df = df[df[date_col] <= pd.to_datetime(end_date)]
-            if year is not None:
-                df = df[df[date_col].dt.year == int(year)]
-            if month is not None:
-                df = df[df[date_col].dt.month == int(month)]
-
-        # Category totals and top categories
+        # --------------------------------------------------------------------------------
+        # 2. Execute Analyis Queries
+        # --------------------------------------------------------------------------------
+        top_categories = []
         category_totals = []
-        if "category" in df.columns:
-            cat = df.groupby("category")["cost"].sum().sort_values(ascending=False)
-            top_categories = cat.index.tolist()[:5]
-            category_totals = [{"category": k, "total": float(v)} for k, v in cat.items()]
-        else:
-            top_categories = []
-
-        # Monthly trend
         monthly_trend = []
-        if date_col:
-            trend = (
-                df.assign(YearMonth=df[date_col].dt.to_period("M").dt.to_timestamp())
-                .groupby("YearMonth")["cost"].sum().reset_index()
-            )
-            monthly_trend = [
-                {"month": r["YearMonth"].strftime("%Y-%m"), "total": float(r["cost"])}
-                for _, r in trend.iterrows()
-            ]
-
-        total_expenses = float(df["cost"].sum()) if "cost" in df.columns else 0.0
-
-        # Category expense details when specific month is selected
+        total_expenses = 0.0
         category_expense_details: Dict[str, list] = {}
-        if "category" in df.columns:
-            for cat_name, g in df.groupby("category"):
-                details = [
-                    {
-                        "date": (
-                            r[date_col].strftime("%Y-%m-%d")
-                            if date_col and (date_col in r) and not pd.isna(r[date_col])
-                            else ""
-                        ),
-                        "description": str(r.get("description", "")),
-                        "category": str(r.get("category", "")),
-                        "cost": float(r.get("cost", 0) or 0),
-                    }
-                    for _, r in g.iterrows()
-                ]
-                category_expense_details[cat_name] = details
+        
+        row_count = self.db.query(func.count(Expense.id)).filter(*filters).scalar() or 0
+
+        if row_count > 0:
+            total_val = self.db.query(func.sum(Expense.amount)).filter(*filters).scalar()
+            total_expenses = float(total_val) if total_val else 0.0
+
+            cat_results = self.db.query(
+                Expense.category_id, 
+                func.sum(Expense.amount).label('cost')
+            ).filter(*filters).group_by(Expense.category_id).order_by(func.sum(Expense.amount).desc()).all()
+            
+            for r in cat_results:
+                cat_name = r[0] or "Uncategorized"
+                val = float(r[1])
+                category_totals.append({"category": cat_name, "total": val})
+                if len(top_categories) < 5:
+                    top_categories.append(cat_name)
+
+            if is_sqlite:
+                month_expr = func.strftime('%Y-%m', Expense.purchased_at)
+            else:
+                month_expr = func.to_char(func.date_trunc('month', Expense.purchased_at), 'YYYY-MM')
+
+            trend_results = self.db.query(
+                month_expr.label('month'), 
+                func.sum(Expense.amount).label('total')
+            ).filter(*filters).group_by(month_expr).order_by(month_expr.asc()).all()
+            
+            for r in trend_results:
+                if r[0]:
+                    monthly_trend.append({"month": r[0], "total": float(r[1])})
+
+            detail_rows = self.db.query(
+                Expense.purchased_at,
+                Expense.description,
+                Expense.category_id,
+                Expense.amount
+            ).filter(*filters).order_by(Expense.purchased_at.desc()).all()
+            
+            for r in detail_rows:
+                cat_name = r[2] or "Uncategorized"
+                if cat_name not in category_expense_details:
+                    category_expense_details[cat_name] = []
+                
+                dt_str = ""
+                if r[0]:
+                    if isinstance(r[0], str):
+                        dt_str = r[0][:10]
+                    else:
+                        dt_str = r[0].strftime("%Y-%m-%d")
+
+                category_expense_details[cat_name].append({
+                    "date": dt_str,
+                    "description": r[1] or "",
+                    "category": cat_name,
+                    "cost": float(r[3] or 0),
+                })
 
         result: Dict[str, Any] = {
             "top_categories": top_categories,
@@ -180,12 +158,12 @@ class AnalysisService:
             "total_expenses": total_expenses,
             "category_expense_details": category_expense_details,
             "filter_info": {
-                "applied_user_col": applied_user_filter,
+                "applied_user_col": "user_email",
                 "year": int(year) if year is not None else None,
                 "month": int(month) if month is not None else None,
                 "start_date": start_date,
                 "end_date": end_date,
-                "row_count": int(len(df)),
+                "row_count": row_count,
             },
         }
 

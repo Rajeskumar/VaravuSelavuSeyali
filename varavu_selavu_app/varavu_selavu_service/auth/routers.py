@@ -8,12 +8,14 @@ from google.auth.transport import requests
 
 from .service import AuthService
 from .security import create_access_token, create_refresh_token, auth_required, decode_token
+from sqlalchemy.orm import Session
+from varavu_selavu_service.db.session import get_db
 
 router = APIRouter(tags=["Auth"])
 
 
-def get_auth_service() -> AuthService:
-    return AuthService()
+def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
+    return AuthService(db)
 
 
 class RegisterRequest(BaseModel):

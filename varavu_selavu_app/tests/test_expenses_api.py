@@ -1,50 +1,58 @@
-from fastapi.testclient import TestClient
-from unittest.mock import Mock
+import pytest
+import uuid
+from datetime import datetime
+from varavu_selavu_service.db.models import Expense
 
+def test_list_expenses(test_client, db_session):
+    e1_id = uuid.uuid4()
+    e2_id = uuid.uuid4()
+    
+    e1 = Expense(
+        id=e1_id,
+        user_email="test@user.com",
+        purchased_at=datetime(2024, 1, 1),
+        category_id="Food & Drink",
+        amount=3.5,
+        description="Coffee"
+    )
+    e2 = Expense(
+        id=e2_id,
+        user_email="test@user.com",
+        purchased_at=datetime(2024, 1, 2),
+        category_id="Food & Drink",
+        amount=12.0,
+        description="Lunch"
+    )
+    db_session.add_all([e1, e2])
+    db_session.commit()
 
-def test_list_expenses():
-    from varavu_selavu_service.main import app
-    from varavu_selavu_service.auth.security import auth_required
-    from varavu_selavu_service.api import routes
-    app.dependency_overrides[auth_required] = lambda: "u1"
-    svc = Mock()
-    svc.get_expenses_for_user.return_value = [
-        {
-            "row_id": 2,
-            "user_id": "u1",
-            "date": "01/01/2024",
-            "description": "Coffee",
-            "category": "Food & Drink",
-            "cost": 3.5,
-        },
-        {
-            "row_id": 3,
-            "user_id": "u1",
-            "date": "01/02/2024",
-            "description": "Lunch",
-            "category": "Food & Drink",
-            "cost": 12.0,
-        },
-    ]
-    app.dependency_overrides[routes.get_expense_service] = lambda: svc
-    client = TestClient(app)
-    res = client.get("/api/v1/expenses", params={"user_id": "u1", "limit": 1})
+    res = test_client.get("/api/v1/expenses", params={"user_id": "test@user.com", "limit": 1})
     assert res.status_code == 200
     data = res.json()
+    
     # Should return most recent first
+    assert len(data["items"]) == 1
     assert data["items"][0]["description"] == "Lunch"
     assert data["next_offset"] == 1
 
 
-def test_delete_expense():
-    from varavu_selavu_service.main import app
-    from varavu_selavu_service.auth.security import auth_required
-    from varavu_selavu_service.api import routes
-    app.dependency_overrides[auth_required] = lambda: "u1"
-    svc = Mock()
-    app.dependency_overrides[routes.get_expense_service] = lambda: svc
-    client = TestClient(app)
-    res = client.delete("/api/v1/expenses/5")
+def test_delete_expense(test_client, db_session):
+    e_id = uuid.uuid4()
+    e = Expense(
+        id=e_id,
+        user_email="test@user.com",
+        purchased_at=datetime(2024, 1, 1),
+        category_id="Misc",
+        amount=10.0,
+        description="To Delete"
+    )
+    db_session.add(e)
+    db_session.commit()
+
+    res = test_client.delete(f"/api/v1/expenses/{str(e_id)}")
     assert res.status_code == 200
     assert res.json() == {"success": True}
-    svc.delete_expense.assert_called_once_with("5")
+    
+    # Verify it was deleted from db
+    deleted = db_session.query(Expense).filter(Expense.id == e_id).first()
+    assert deleted is None

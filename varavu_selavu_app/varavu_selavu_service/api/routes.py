@@ -31,6 +31,8 @@ from varavu_selavu_service.services.analysis_service import AnalysisService
 from varavu_selavu_service.services.categorization_service import CategorizationService
 from varavu_selavu_service.services.recurring_service import RecurringService
 from varavu_selavu_service.core.config import Settings
+from sqlalchemy.orm import Session
+from varavu_selavu_service.db.session import get_db
 from threading import RLock
 from varavu_selavu_service.auth.routers import router as auth_router
 from varavu_selavu_service.auth.security import auth_required
@@ -49,8 +51,8 @@ router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router, prefix="/auth")
 
 # Dependency providers
-def get_expense_service() -> ExpenseService:
-    return ExpenseService()
+def get_expense_service(db: Session = Depends(get_db)) -> ExpenseService:
+    return ExpenseService(db)
 # Simple in-memory cache for analysis results
 _ANALYSIS_CACHE: dict[
     tuple[str, int | None, int | None, str | None, str | None],
@@ -59,30 +61,23 @@ _ANALYSIS_CACHE: dict[
 _ANALYSIS_CACHE_TTL_SEC = 60  # adjust as needed
 _CACHE_LOCK = RLock()
 
-_analysis_service_singleton: AnalysisService | None = None
-
-
-def get_analysis_service() -> AnalysisService:
-    # Reuse a singleton instance to preserve in-memory cache across requests
-    global _analysis_service_singleton
-    if _analysis_service_singleton is None:
-        _analysis_service_singleton = AnalysisService(ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
-    return _analysis_service_singleton
+def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
+    return AnalysisService(db=db, ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
 
 
 def get_receipt_service() -> ReceiptService:
     return ReceiptService(engine=settings.OCR_ENGINE)
 
 
-def get_postgres_repo() -> PostgresRepo:
-    return PostgresRepo()
+def get_postgres_repo(db: Session = Depends(get_db)) -> PostgresRepo:
+    return PostgresRepo(db=db)
 
 
 def get_categorization_service() -> CategorizationService:
     return CategorizationService()
 
-def get_recurring_service() -> RecurringService:
-    return RecurringService()
+def get_recurring_service(db: Session = Depends(get_db)) -> RecurringService:
+    return RecurringService(db)
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
@@ -538,13 +533,21 @@ def execute_recurring_now(
     existing = expense_service.get_expenses_for_user(user_id)
     # month key YYYY-MM
     month_key = f"{y}-{str(m0+1).zfill(2)}"
-    import pandas as pd
     already = False
     for e in existing:
         try:
-            d = pd.to_datetime(e["date"], format="%m/%d/%Y", errors="coerce")
-            if pd.isna(d):
+            # e["date"] could be YYYY-MM-DD or MM/DD/YYYY based on the load
+            d_str = e.get("date", "")
+            if not d_str:
                 continue
+            if len(d_str) > 10:
+                d_str = d_str[:10]
+                
+            try:
+                d = _dt.strptime(d_str, "%Y-%m-%d")
+            except ValueError:
+                d = _dt.strptime(d_str, "%m/%d/%Y")
+
             if d.strftime("%Y-%m") == month_key and e.get("description") == tpl["description"] and e.get("category") == tpl["category"]:
                 already = True
                 break

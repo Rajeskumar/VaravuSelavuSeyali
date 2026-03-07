@@ -4,12 +4,10 @@ from typing import List, Dict, Optional
 from datetime import date as date_type, datetime, timedelta
 import uuid
 
-import psycopg2
-from varavu_selavu_service.db.postgres import get_db_cursor
-
+from sqlalchemy.orm import Session
+from varavu_selavu_service.db.models import RecurringTemplate
 
 def _last_day_of_month(y: int, m0: int) -> int:
-    """Return the last day-of-month for year y and zero-based month m0 (0=Jan)."""
     next_month_year = y + 1 if m0 == 11 else y
     next_month = 1 if m0 == 11 else m0 + 2  # convert to 1-12 next month
     first_of_next = datetime(next_month_year, next_month, 1)
@@ -17,36 +15,24 @@ def _last_day_of_month(y: int, m0: int) -> int:
 
 
 class RecurringService:
-    def __init__(self):
-        pass
+    def __init__(self, db: Session):
+        self.db = db
 
     def list_templates(self, user_id: str) -> List[Dict]:
-        with get_db_cursor() as cur:
-            cur.execute(
-                """
-                SELECT id as template_id, description, category, day_of_month,
-                       default_cost, start_date, last_processed_date, status
-                FROM trackspense.recurring_templates
-                WHERE user_email = %s
-                ORDER BY created_at ASC
-                """,
-                (user_id,)
-            )
-            rows = cur.fetchall()
+        rows = self.db.query(RecurringTemplate).filter(RecurringTemplate.user_email == user_id).order_by(RecurringTemplate.created_at.asc()).all()
         out: List[Dict] = []
         for r in rows:
-            raw_stat = r["status"]
-            st_iso = r["start_date"].strftime("%Y-%m-%d") if r["start_date"] else None
-            lp_iso = r["last_processed_date"].strftime("%Y-%m-%d") if r["last_processed_date"] else None
+            st_iso = r.start_date.strftime("%Y-%m-%d") if r.start_date else None
+            lp_iso = r.last_processed_date.strftime("%Y-%m-%d") if r.last_processed_date else None
             out.append({
-                "id": str(r["template_id"]),
-                "description": r["description"],
-                "category": r["category"],
-                "day_of_month": int(r["day_of_month"]),
-                "default_cost": float(r["default_cost"]),
+                "id": str(r.id),
+                "description": r.description,
+                "category": r.category,
+                "day_of_month": int(r.day_of_month),
+                "default_cost": float(r.default_cost),
                 "start_date_iso": st_iso or datetime.utcnow().strftime("%Y-%m-%d"),
                 "last_processed_iso": lp_iso,
-                "status": raw_stat if raw_stat else "Active",
+                "status": r.status if r.status else "Active",
             })
         return out
 
@@ -61,39 +47,37 @@ class RecurringService:
         status: str = "Active",
     ) -> Dict:
         start_val = start_date_iso or datetime.utcnow().strftime("%Y-%m-%d")
+        start_date_parsed = datetime.strptime(start_val, "%Y-%m-%d").date()
         
-        with get_db_cursor(commit=True) as cur:
-            # Find existing by description and category manually since conflict isn't strict
-            cur.execute(
-                """
-                SELECT id FROM trackspense.recurring_templates
-                WHERE user_email = %s AND description = %s AND category = %s
-                LIMIT 1
-                """,
-                (user_id, description, category)
+        tpl = self.db.query(RecurringTemplate).filter(
+            RecurringTemplate.user_email == user_id, 
+            RecurringTemplate.description == description, 
+            RecurringTemplate.category == category
+        ).first()
+
+        if tpl:
+            tpl.day_of_month = day_of_month
+            tpl.default_cost = default_cost
+            tpl.start_date = start_date_parsed
+            tpl.status = status
+            tpl_id = str(tpl.id)
+        else:
+            tpl_id_uuid = uuid.uuid4()
+            tpl = RecurringTemplate(
+                id=tpl_id_uuid,
+                user_email=user_id,
+                description=description,
+                category=category,
+                day_of_month=day_of_month,
+                default_cost=default_cost,
+                start_date=start_date_parsed,
+                status=status
             )
-            row = cur.fetchone()
+            self.db.add(tpl)
+            tpl_id = str(tpl_id_uuid)
             
-            if row:
-                tpl_id = str(row["id"])
-                cur.execute(
-                    """
-                    UPDATE trackspense.recurring_templates
-                    SET day_of_month = %s, default_cost = %s, start_date = %s, status = %s
-                    WHERE id = %s
-                    """,
-                    (day_of_month, default_cost, start_val, status, tpl_id)
-                )
-            else:
-                tpl_id = str(uuid.uuid4())
-                cur.execute(
-                    """
-                    INSERT INTO trackspense.recurring_templates
-                    (id, user_email, description, category, day_of_month, default_cost, start_date, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (tpl_id, user_id, description, category, day_of_month, default_cost, start_val, status)
-                )
+        self.db.commit()
+
         return {
             "id": tpl_id,
             "description": description,
@@ -144,24 +128,17 @@ class RecurringService:
             if (tid not in latest) or latest[tid] < dt:
                 latest[tid] = dt
         
-        with get_db_cursor(commit=True) as cur:
-            for tid, update_dt in latest.items():
-                cur.execute(
-                    """
-                    UPDATE trackspense.recurring_templates
-                    SET last_processed_date = %s
-                    WHERE id = %s AND user_email = %s
-                    """,
-                    (update_dt, tid, user_id)
-                )
+        for tid, update_dt in latest.items():
+            parsed_dt = datetime.strptime(update_dt, "%Y-%m-%d").date()
+            tpl = self.db.query(RecurringTemplate).filter(RecurringTemplate.id == tid, RecurringTemplate.user_email == user_id).first()
+            if tpl:
+                tpl.last_processed_date = parsed_dt
+        self.db.commit()
 
     def delete_template(self, user_id: str, template_id: str) -> bool:
-        with get_db_cursor(commit=True) as cur:
-            cur.execute(
-                """
-                DELETE FROM trackspense.recurring_templates
-                WHERE id = %s AND user_email = %s
-                """,
-                (template_id, user_id)
-            )
-            return cur.rowcount > 0
+        tpl = self.db.query(RecurringTemplate).filter(RecurringTemplate.id == template_id, RecurringTemplate.user_email == user_id).first()
+        if tpl:
+            self.db.delete(tpl)
+            self.db.commit()
+            return True
+        return False
