@@ -8,6 +8,7 @@ export interface ExpensePayload {
   date: string; // MM/DD/YYYY
   cost: number;
   user_id?: string;
+  merchant_name?: string;
 }
 
 export interface ExpenseRecord {
@@ -17,6 +18,7 @@ export interface ExpenseRecord {
   description: string;
   category: string;
   cost: number;
+  merchant_name?: string;
 }
 
 export interface ExpenseListResponse {
@@ -27,6 +29,7 @@ export interface ExpenseListResponse {
 export interface CategorizeResult {
   main_category: string;
   subcategory: string;
+  merchant_name?: string;
 }
 
 export async function addExpense(payload: ExpensePayload, token: string): Promise<void> {

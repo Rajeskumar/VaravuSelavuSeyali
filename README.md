@@ -1,76 +1,41 @@
-# TrackSpense by Cereberoos
+# TrackSpense by Cerebroos💸
 
-This project provides a FastAPI backend and a React frontend to track and analyse personal expenses.
+**TrackSpense** is your smart, AI-powered personal finance companion. Designed to remove the friction from tracking your daily expenses, TrackSpense helps you understand your spending habits, manage subscriptions, and take control of your financial future—all through an intuitive, automated interface.
 
-## Authentication
+---
 
-The service uses JWT based authentication with access and refresh tokens.
+## 🎯 Our Goal
 
-### Environment variables
-- `JWT_SECRET` – secret used to sign tokens.
-- `JWT_EXPIRE_MINUTES` – access token lifetime in minutes (default 30).
-- `DATABASE_URL` – connection string for the PostgreSQL database.
-- `OCR_ENGINE` – receipt parsing engine (default `openai`, or `ollama` for local models).
-- `OPENAI_API_KEY` – API key when using the OpenAI engine.
-- `OLLAMA_HOST` – base URL for a local Ollama instance (default `http://localhost:11434`).
-- `OCR_MODEL` – model id for OpenAI/Ollama (default `gpt-4o-mini`).
-- `MAX_UPLOAD_MB` – maximum receipt upload size in MB (default `12`).
-- `ALLOWED_MIME` – comma separated list of allowed MIME types.
+To make personal finance tracking effortless, accurate, and highly insightful. We believe that managing your money shouldn't feel like a chore. By leveraging cutting-edge Artificial Intelligence and seamless cross-platform experiences, TrackSpense automates the tedious parts of data entry and budgeting so you can focus on your financial wellness and growth.
 
-### Auth flow
-1. **Register** – `POST /api/v1/auth/register` with `name`, `email`, `phone` and `password`.
-2. **Login** – `POST /api/v1/auth/login` using OAuth2 password form (`username` & `password`). Returns access and refresh tokens.
-3. **Refresh** – `POST /api/v1/auth/refresh` with a refresh token to obtain new tokens.
-4. **Logout** – `POST /api/v1/auth/logout` with a refresh token to invalidate it.
-5. **Current user** – `GET /api/v1/auth/me` with the access token to get user info.
+---
 
-### Example using curl
-```bash
-# register
-curl -X POST http://localhost:8000/api/v1/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Alice","email":"user@example.com","phone":"1234567890","password":"secret"}'
+## ✨ Key Product Features
 
-# login
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'username=user@example.com&password=secret'
+### 📸 AI-Powered Receipt Ingestion
+Say goodbye to manual data entry. Simply snap a photo or upload a receipt, and TrackSpense's advanced AI engine instantly extracts the merchant name, date, total cost, and even the individual itemized line-items. It handles complex taxes, tips, and discounts automatically.
 
-# refresh
-curl -X POST http://localhost:8000/api/v1/auth/refresh \
-  -H 'Content-Type: application/json' \
-  -d '{"refresh_token":"<token>"}'
+### 🧠 Smart Semantic Categorization
+Not sure where "Subway dinner" or "Cricket club dues" belong? TrackSpense features an intelligent categorization engine that semantically classifies your expenses into the correct main and sub-categories based entirely on the context of your purchase.
 
-# logout
-curl -X POST http://localhost:8000/api/v1/auth/logout \
-  -H 'Content-Type: application/json' \
-  -d '{"refresh_token":"<token>"}'
-```
+### 💬 Conversational AI Financial Analyst
+Talk directly to your financial data! TrackSpense includes a built-in AI assistant that understands your spending. Ask natural questions like *"How much did I spend on dining out this month?"* or *"Where can I cut back on subscriptions?"* and get instant, personalized, data-driven answers.
 
-All expense and analysis routes now require a valid access token.
+### 🔄 Recurring Expense Management
+Never lose track of a subscription or miss a bill again. Easily set up, monitor, and manage all your recurring monthly expenses in one dedicated dashboard, helping you identify and eliminate "zombie subscriptions."
 
-### Receipt ingestion
+### 📊 Comprehensive Dashboards & Analytics
+Understand your cash flow at a glance. Visualize your spending with beautiful, interactive charts. Track your monthly trends, drill down into specific category breakdowns, and see exactly where your money is going over time.
 
-The `Add Expense` form now includes an optional **Upload Receipt** section with
-"Choose File" and "Take Photo" actions. Images from mobile cameras (including
-HEIC) are converted to PNG in the browser—showing a spinner during conversion—
-so the AI can parse them. After selecting a file, use **Parse Receipt** to send
-it to the backend. Files remain in memory and are parsed by an AI model (OpenAI
-or a local Ollama instance). Parsed header data populates the existing date,
-cost, description, and category fields (main and subcategory), while line items
-is disabled until required fields are filled, parsing/conversion finishes,
-and totals reconcile. Expenses and line items are stored securely in 
-PostgreSQL, scoped by `user_email`.
-`user_email`. On mobile, the **Take Photo** action opens the camera and parses
-the captured image automatically. Tabs are created if missing.
+### 📱 Seamless Cross-Platform Experience
+Whether you prefer managing your finances on a desktop or while out and about, TrackSpense has you covered. Enjoy a consistent, premium experience across our feature-rich **Web Application** and our native **Mobile Apps** for both iOS and Android.
 
-Set `LLM_TIMEOUT_SEC` in `.env` to increase the OpenAI/Ollama request timeout
-(default 180 seconds) if calls are slow or time out. 
+---
 
-## Mobile Application
+## 🛠️ Developer & Technical Documentation
 
-A native mobile application (Android/iOS) is available in the `varavu_selavu_mobile` directory.
+TrackSpense is powered by a robust backend architecture utilizing FastAPI, PostgreSQL, and intelligent LLM routing. If you are a developer looking to run, build, or deploy TrackSpense locally, please refer to the technical documentation located in the respective component directories:
 
-See [varavu_selavu_mobile/README.md](varavu_selavu_mobile/README.md) for detailed setup and running instructions.
-
-See [MOBILE_APP_ROADMAP.md](./MOBILE_APP_ROADMAP.md) for detailed architecture and implementation steps.
+- **[Backend Service & API (`varavu_selavu_app`)](./varavu_selavu_app/README.md)**: Setup instructions for the Python/FastAPI backend, PostgreSQL database, JWT authentication, and AI/OCR engine configurations.
+- **[Web Frontend (`varavu_selavu_ui`)](./varavu_selavu_ui/README.md)**: Development guide for the React-based web application.
+- **[Mobile Application (`varavu_selavu_mobile`)](./varavu_selavu_mobile/README.md)**: Build and deployment instructions for the native iOS and Android mobile platforms.

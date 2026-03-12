@@ -60,6 +60,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [expenseDate, setExpenseDate] = useState(existing ? mmddyyyyToISO(existing.date) : new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState(existing?.description || '');
   const [cost, setCost] = useState(existing?.cost || 0);
+  const [merchantName, setMerchantName] = useState(existing?.merchant_name || '');
+  const [userPickedMerchant, setUserPickedMerchant] = useState(!!existing?.merchant_name);
   const [mainCategory, setMainCategory] = useState(initialMain);
   const [subcategory, setSubcategory] = useState(initialSub);
   const [userPickedCategory, setUserPickedCategory] = useState(!!existing);
@@ -108,6 +110,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
         setMainCategory(res.main_category);
         setSubcategory(res.subcategory);
       }
+      // Auto-populate merchant_name from LLM if user hasn't overridden
+      if (!userPickedMerchant && res.merchant_name) {
+        setMerchantName(res.merchant_name);
+      }
     } catch {
       /* ignore errors */
     }
@@ -129,6 +135,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       setExpenseDate(mmddyyyyToISO(existing.date));
       setDescription(existing.description);
       setCost(existing.cost);
+      setMerchantName(existing.merchant_name || '');
+      setUserPickedMerchant(!!existing.merchant_name);
       const main = findMainCategory(existing.category);
       setMainCategory(main);
       setSubcategory(existing.category);
@@ -224,6 +232,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     const val = e.target.value;
     setDescription(val);
     setUserPickedCategory(false);
+    // Reset auto-merchant when description changes (unless user has manually set it)
+    if (!userPickedMerchant) setMerchantName('');
     if (draft) setDraft({ ...draft, header: { ...draft.header, description: val } });
     scheduleFetch();
   };
@@ -265,6 +275,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       setDraft(processed);
       setCost(hdr.amount || 0);
       setDescription(desc);
+      // Populate merchant from receipt header if user hasn't manually typed one
+      if (!userPickedMerchant && (hdr.merchant_name || hdr.merchant)) {
+        setMerchantName(hdr.merchant_name || hdr.merchant || '');
+      }
       if (hdr.purchased_at) setExpenseDate(hdr.purchased_at.split('T')[0]);
       setMainCategory(main);
       if (sub && CATEGORY_GROUPS[main].includes(sub)) setSubcategory(sub); else setSubcategory(CATEGORY_GROUPS[main][0]);
@@ -310,6 +324,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           description,
           category: subcategory,
           cost,
+          merchant_name: merchantName || undefined,
         };
         await updateExpense(existing.row_id, payload);
         setMessage('Expense updated successfully.');
@@ -333,6 +348,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             main_category_name: mainCategory,
             purchased_at: formattedDate,
             fingerprint: draft.fingerprint,
+            merchant_name: merchantName || undefined,
           },
           items: draft.items.map((i: any) => ({ ...i })),
         };
@@ -344,6 +360,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           description,
           category: subcategory,
           cost,
+          merchant_name: merchantName || undefined,
         });
         setMessage('Expense added successfully.');
         if (recurring) {
@@ -409,6 +426,27 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 onBlur={handleDescriptionBlur}
                 placeholder="e.g., Electricity bill, Grocery at Costco"
                 required
+              />
+            </Grid>
+            <Grid size={12}>
+              <TextField
+                fullWidth
+                label="Merchant / Store Name"
+                value={merchantName}
+                sx={glassFieldSx}
+                onChange={(e) => {
+                  setMerchantName(e.target.value);
+                  setUserPickedMerchant(true);
+                }}
+                placeholder="e.g., Starbucks, Amazon, PG&E"
+                helperText="Auto-suggested from description — you can edit anytime"
+                InputProps={{
+                  endAdornment: !userPickedMerchant && merchantName ? (
+                    <InputAdornment position="end">
+                      <span title="Auto-suggested" style={{ fontSize: 16 }}>✨</span>
+                    </InputAdornment>
+                  ) : undefined,
+                }}
               />
             </Grid>
             <Grid size={6}>

@@ -86,6 +86,7 @@ const ExpensesPage: React.FC = () => {
             <TableRow>
               <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Date</TableCell>
               <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Merchant</TableCell>
               <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Category</TableCell>
               <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }} align="right">Cost</TableCell>
               <TableCell sx={{ backgroundColor: 'primary.main', color: 'primary.contrastText' }}></TableCell>
@@ -100,6 +101,11 @@ const ExpensesPage: React.FC = () => {
               >
                 <TableCell>{exp.date}</TableCell>
                 <TableCell>{exp.description}</TableCell>
+                <TableCell>
+                  {exp.merchant_name
+                    ? <span title={exp.merchant_name} style={{ fontWeight: 500 }}>{exp.merchant_name}</span>
+                    : <span style={{ color: '#aaa' }}>—</span>}
+                </TableCell>
                 <TableCell>{exp.category}</TableCell>
                 <TableCell align="right">${exp.cost.toFixed(2)}</TableCell>
                 <TableCell>

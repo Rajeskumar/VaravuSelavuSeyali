@@ -10,7 +10,7 @@ class ExpenseService:
     def __init__(self, db: Session):
         self.db = db
 
-    def add_expense(self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float) -> Dict:
+    def add_expense(self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float, merchant_name: Optional[str] = None) -> Dict:
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
         else:
@@ -29,7 +29,8 @@ class ExpenseService:
             purchased_at=purchased_at,
             category_id=category,
             amount=cost,
-            description=description
+            description=description,
+            merchant_name=merchant_name,
         )
         self.db.add(db_expense)
         self.db.commit()
@@ -41,6 +42,7 @@ class ExpenseService:
             "description": description,
             "category": category,
             "cost": cost,
+            "merchant_name": merchant_name,
         }
 
     def delete_expense(self, row_id: Union[int, str]) -> None:
@@ -67,6 +69,7 @@ class ExpenseService:
                 "description": r.description or "",
                 "category": r.category_id or "",
                 "cost": float(r.amount or 0),
+                "merchant_name": r.merchant_name,
             })
         return results
 
@@ -78,6 +81,7 @@ class ExpenseService:
         description: str,
         category: str,
         cost: float,
+        merchant_name: Optional[str] = None,
     ) -> Dict:
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
@@ -101,6 +105,7 @@ class ExpenseService:
             expense.description = description
             expense.category_id = category
             expense.amount = cost
+            expense.merchant_name = merchant_name
             self.db.commit()
             
         return {
@@ -110,4 +115,5 @@ class ExpenseService:
             "description": description,
             "category": category,
             "cost": cost,
+            "merchant_name": merchant_name,
         }

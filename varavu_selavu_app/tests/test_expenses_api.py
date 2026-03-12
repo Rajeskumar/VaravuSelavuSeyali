@@ -56,3 +56,59 @@ def test_delete_expense(test_client, db_session):
     # Verify it was deleted from db
     deleted = db_session.query(Expense).filter(Expense.id == e_id).first()
     assert deleted is None
+
+
+def test_create_expense_with_merchant_name(test_client, db_session):
+    """Adding an expense with merchant_name should persist and return it."""
+    payload = {
+        "user_id": "test@user.com",
+        "cost": 8.50,
+        "category": "Food & Drink",
+        "description": "Latte at Starbucks",
+        "date": "03/11/2026",
+        "merchant_name": "Starbucks",
+    }
+    res = test_client.post("/api/v1/expenses", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["success"] is True
+    assert data["expense"]["merchant_name"] == "Starbucks"
+
+    # Verify stored in DB
+    stored = db_session.query(Expense).filter(
+        Expense.user_email == "test@user.com",
+        Expense.description == "Latte at Starbucks",
+    ).first()
+    assert stored is not None
+    assert stored.merchant_name == "Starbucks"
+
+
+def test_update_expense_merchant_name(test_client, db_session):
+    """Updating an expense should overwrite the merchant_name."""
+    e_id = uuid.uuid4()
+    e = Expense(
+        id=e_id,
+        user_email="test@user.com",
+        purchased_at=datetime(2024, 6, 1),
+        category_id="Other",
+        amount=20.0,
+        description="Misc purchase",
+        merchant_name="OldMerchant",
+    )
+    db_session.add(e)
+    db_session.commit()
+
+    payload = {
+        "user_id": "test@user.com",
+        "cost": 20.0,
+        "category": "Other",
+        "description": "Misc purchase",
+        "date": "06/01/2024",
+        "merchant_name": "NewMerchant",
+    }
+    res = test_client.put(f"/api/v1/expenses/{str(e_id)}", json=payload)
+    assert res.status_code == 200
+    assert res.json()["expense"]["merchant_name"] == "NewMerchant"
+
+    db_session.refresh(e)
+    assert e.merchant_name == "NewMerchant"

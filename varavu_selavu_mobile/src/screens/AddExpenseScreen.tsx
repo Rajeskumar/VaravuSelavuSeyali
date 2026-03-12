@@ -114,6 +114,8 @@ export default function AddExpenseScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [categorizing, setCategorizing] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [merchantName, setMerchantName] = useState('');
+  const [userPickedMerchant, setUserPickedMerchant] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<ScrollView>(null);
 
@@ -164,10 +166,14 @@ export default function AddExpenseScreen() {
               setSubcategory(CATEGORY_GROUPS[mc][0]);
             }
           }
+          // Auto-populate merchant name from LLM if user hasn't overridden
+          if (!userPickedMerchant && result.merchant_name) {
+            setMerchantName(result.merchant_name);
+          }
         } catch { /* silent */ } finally { setCategorizing(false); }
       }, 600);
     }
-  }, []);
+  }, [userPickedMerchant]);
 
   const handlePickImage = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -231,6 +237,11 @@ export default function AddExpenseScreen() {
 
       if (header.amount) setAmount(String(header.amount));
       if (desc) setDescription(desc);
+
+      // Populate merchant from receipt header if user hasn't manually typed one
+      if (!userPickedMerchant && (header.merchant_name || header.merchant)) {
+        setMerchantName(header.merchant_name || header.merchant || '');
+      }
 
       // Set category from receipt response
       const mc = header.main_category_name || findMainCategory(header.category_name || '');
@@ -325,6 +336,7 @@ export default function AddExpenseScreen() {
             main_category_name: mainCategory,
             purchased_at: date,
             fingerprint: draft.fingerprint,
+            merchant_name: merchantName || undefined,
           },
           items: draft.items.map((i) => ({ ...i, line_total: parseFloat(i.line_total) || 0 })),
         };
@@ -339,6 +351,7 @@ export default function AddExpenseScreen() {
             sub_category: subcategory,
             date,
             user_id: userEmail,
+            merchant_name: merchantName || undefined,
           },
           accessToken,
         );
@@ -349,6 +362,8 @@ export default function AddExpenseScreen() {
       setAmount('');
       setMainCategory(MAIN_CATEGORIES[0]);
       setSubcategory(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
+      setMerchantName('');
+      setUserPickedMerchant(false);
       setImage(null);
       setDraft(null);
       setShowItems(false);
@@ -524,6 +539,17 @@ export default function AddExpenseScreen() {
           {categorizing && (
             <Text style={styles.categorizingHint}>✨ Auto-detecting category...</Text>
           )}
+
+          <CustomInput
+            label="Merchant / Store Name"
+            icon="🏪"
+            placeholder="e.g., Starbucks, Amazon"
+            value={merchantName}
+            onChangeText={(text) => {
+              setMerchantName(text);
+              setUserPickedMerchant(true);
+            }}
+          />
 
           {/* Category dropdown */}
           <DropdownPicker

@@ -6,6 +6,7 @@ export interface AddExpensePayload {
   description: string;
   category: string; // subcategory string
   cost: number;
+  merchant_name?: string;
 }
 
 export interface AddExpenseResponse {
@@ -29,6 +30,7 @@ export interface ExpenseRecord {
   description: string;
   category: string;
   cost: number;
+  merchant_name?: string;
 }
 
 export interface ExpenseListResponse {
@@ -98,6 +100,7 @@ export async function addExpenseWithItems(payload: any) {
 export interface CategorySuggestion {
   main_category: string;
   subcategory: string;
+  merchant_name?: string;
 }
 
 export async function suggestCategory(description: string): Promise<CategorySuggestion> {

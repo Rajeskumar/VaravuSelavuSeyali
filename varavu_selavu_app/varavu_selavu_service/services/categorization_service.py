@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from varavu_selavu_service.services.chat_service import call_chat_model
 
@@ -97,30 +97,41 @@ class CategorizationService:
         # Fallback error
         raise ValueError("Unrecognized JSON format from LLM")
 
-    def llm_classify(self, description: str) -> Optional[Tuple[str, str]]:
-        """Use an LLM to classify descriptions when no deterministic match exists."""
+    def llm_classify(self, description: str) -> Optional[Tuple[str, str, Optional[str]]]:
+        """Use an LLM to classify descriptions when no deterministic match exists.
+
+        Returns a 3-tuple (main_category, subcategory, merchant_name) or None on failure.
+        """
         try:
             categories_json = json.dumps(CATEGORY_GROUPS)
             prompt = (
                 "You categorize expense descriptions. "
                 f"Available categories: {categories_json}. "
-                "Strictly respond with ONLY JSON in the form {\"main_category\":\"...\", \"subcategory\":\"...\"} with no extra text or code fences. "
+                "Also infer the merchant or company name from the description if it can be identified (e.g. 'Starbucks', 'Amazon', 'PG&E'). "
+                "If no merchant can be identified, set merchant_name to null. "
+                "Strictly respond with ONLY JSON in the form "
+                "{\"main_category\":\"...\", \"subcategory\":\"...\", \"merchant_name\":\"...\"} "
+                "with no extra text or code fences. "
                 f"Description: '{description}'."
             )
             response = call_chat_model(query=prompt, analysis={}, model=None)
             data = self._parse_json_response(response)
             main = data.get("main_category")
             sub = data.get("subcategory")
+            merchant = data.get("merchant_name") or None
             if main in CATEGORY_GROUPS and sub in CATEGORY_GROUPS[main]:
-                return main, sub
+                return main, sub, merchant
             raise ValueError(f"Invalid category combination: {main} / {sub}")
         except Exception as exc:  # pragma: no cover - network or parsing errors
             logger.warning("LLM classification failed: %s", exc)
         return None
 
-    def classify(self, description: str) -> Tuple[str, str]:
-        """Classify description using the LLM and fall back to Other/General."""
+    def classify(self, description: str) -> Tuple[str, str, Optional[str]]:
+        """Classify description using the LLM and fall back to Other/General.
+
+        Returns a 3-tuple (main_category, subcategory, merchant_name).
+        """
         result = self.llm_classify(description)
         if result:
             return result
-        return "Other", "General"
+        return "Other", "General", None

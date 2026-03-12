@@ -100,8 +100,8 @@ def categorize_expense(
     categorizer: CategorizationService = Depends(get_categorization_service),
     _: str = Depends(auth_required),
 ):
-    main, sub = categorizer.classify(data.description)
-    return {"main_category": main, "subcategory": sub}
+    main, sub, merchant = categorizer.classify(data.description)
+    return {"main_category": main, "subcategory": sub, "merchant_name": merchant}
 
 
 @router.post(
@@ -123,6 +123,7 @@ def create_expense(
         description=data.description,
         category=data.category,
         cost=data.cost,
+        merchant_name=data.merchant_name,
     )
     # Invalidate analysis cache on writes
     analysis_service.invalidate_cache()
@@ -133,6 +134,7 @@ def create_expense(
         "description": saved.get("description", data.description),
         "category": saved.get("category", data.category),
         "cost": float(saved.get("cost", data.cost)),
+        "merchant_name": saved.get("merchant_name"),
     }
     return {"success": True, "expense": expense_payload}
 
@@ -177,6 +179,7 @@ def update_expense(
         description=data.description,
         category=data.category,
         cost=data.cost,
+        merchant_name=data.merchant_name,
     )
     analysis_service.invalidate_cache()
     expense_payload = {
@@ -185,6 +188,7 @@ def update_expense(
         "description": saved.get("description", data.description),
         "category": saved.get("category", data.category),
         "cost": float(saved.get("cost", data.cost)),
+        "merchant_name": saved.get("merchant_name"),
     }
     return {"success": True, "expense": expense_payload}
 

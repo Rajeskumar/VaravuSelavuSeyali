@@ -16,6 +16,7 @@ class ExpenseRequest(BaseModel):
     category: str
     description: str
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    merchant_name: Optional[str] = None
 
 
 class ReceiptParseResponse(BaseModel):
@@ -57,9 +58,10 @@ class CategorizeRequest(BaseModel):
 
 
 class CategorizeResponse(BaseModel):
-    """Response with suggested main category and subcategory."""
+    """Response with suggested main category and subcategory (and optional merchant name)."""
     main_category: str
     subcategory: str
+    merchant_name: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -99,6 +101,7 @@ class Expense(BaseModel):
     description: str
     category: str
     cost: float
+    merchant_name: Optional[str] = None
 
 
 class ExpenseRow(Expense):

@@ -39,6 +39,7 @@ export default function ExpensesScreen() {
     const [editMainCategory, setEditMainCategory] = useState(MAIN_CATEGORIES[0]);
     const [editSubcategory, setEditSubcategory] = useState(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
     const [editDate, setEditDate] = useState('');
+    const [editMerchantName, setEditMerchantName] = useState('');
 
     const fetchExpenses = async (reset = false) => {
         if (!accessToken || !userEmail) return;
@@ -105,6 +106,7 @@ export default function ExpensesScreen() {
         setEditMainCategory(mc);
         setEditSubcategory(expense.category);
         setEditDate(expense.date);
+        setEditMerchantName(expense.merchant_name || '');
         setEditModalVisible(true);
     };
 
@@ -120,6 +122,7 @@ export default function ExpensesScreen() {
                     date: editDate,
                     sub_category: editSubcategory,
                     user_id: userEmail,
+                    merchant_name: editMerchantName || undefined,
                 },
                 accessToken,
             );
@@ -146,6 +149,11 @@ export default function ExpensesScreen() {
                         <View style={styles.categoryBadge}>
                             <Text style={styles.categoryText}>{item.category}</Text>
                         </View>
+                        {item.merchant_name ? (
+                            <View style={styles.merchantBadge}>
+                                <Text style={styles.merchantText}>🏪 {item.merchant_name}</Text>
+                            </View>
+                        ) : null}
                         <Text style={styles.dateText}>{item.date}</Text>
                     </View>
                 </View>
@@ -224,6 +232,13 @@ export default function ExpensesScreen() {
                             icon="📝"
                             value={editDescription}
                             onChangeText={setEditDescription}
+                        />
+                        <CustomInput
+                            label="Merchant / Store Name"
+                            icon="🏪"
+                            placeholder="e.g., Starbucks, Amazon"
+                            value={editMerchantName}
+                            onChangeText={setEditMerchantName}
                         />
                         {/* Main Category Picker */}
                         <Text style={styles.pickerLabel}>📁  Main Category</Text>
@@ -446,5 +461,16 @@ const styles = StyleSheet.create({
     },
     pickerChipTextActive: {
         color: '#FFFFFF',
+    },
+    merchantBadge: {
+        backgroundColor: '#EFF6FF',
+        paddingHorizontal: 7,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    merchantText: {
+        fontSize: 11,
+        fontWeight: '500',
+        color: '#3B82F6',
     },
 });
