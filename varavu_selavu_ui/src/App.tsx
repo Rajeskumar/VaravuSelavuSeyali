@@ -21,6 +21,8 @@ import UserMenu from './components/layout/UserMenu';
 import ProfilePage from './pages/ProfilePage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AIAnalystPage from './pages/AIAnalystPage';
+import ItemInsightsPage from './pages/ItemInsightsPage';
+import MerchantInsightsPage from './pages/MerchantInsightsPage';
 import theme from './theme';
 import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
@@ -126,6 +128,8 @@ const AppContent: React.FC = () => {
         <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
         <Route path="/recurring" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><RecurringPage /></MainLayout></RequireAuth>} />
         <Route path="/ai-analyst" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AIAnalystPage /></MainLayout></RequireAuth>} />
+        <Route path="/item-insights" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ItemInsightsPage /></MainLayout></RequireAuth>} />
+        <Route path="/merchant-insights" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><MerchantInsightsPage /></MainLayout></RequireAuth>} />
         <Route path="/profile" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ProfilePage /></MainLayout></RequireAuth>} />
       </Routes>
       {/* Recurring expenses prompt appears after login */}

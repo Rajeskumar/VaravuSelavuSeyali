@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException
+from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks
 from datetime import datetime
 
 from varavu_selavu_service.models.api_models import (
@@ -28,6 +28,8 @@ from varavu_selavu_service.services.chat_service import (
     list_ollama_models,
 )
 from varavu_selavu_service.services.analysis_service import AnalysisService
+from varavu_selavu_service.services.analytics_service import AnalyticsService
+from varavu_selavu_service.services.insights_aggregation_service import InsightsAggregationService
 from varavu_selavu_service.services.categorization_service import CategorizationService
 from varavu_selavu_service.services.recurring_service import RecurringService
 from varavu_selavu_service.core.config import Settings
@@ -64,6 +66,12 @@ _CACHE_LOCK = RLock()
 def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
     return AnalysisService(db=db, ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
 
+def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
+    return AnalyticsService(db)
+
+def get_insights_aggregation_service(db: Session = Depends(get_db)) -> InsightsAggregationService:
+    return InsightsAggregationService(db)
+
 
 def get_receipt_service() -> ReceiptService:
     return ReceiptService(engine=settings.OCR_ENGINE)
@@ -78,6 +86,12 @@ def get_categorization_service() -> CategorizationService:
 
 def get_recurring_service(db: Session = Depends(get_db)) -> RecurringService:
     return RecurringService(db)
+
+def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
+    return AnalyticsService(db=db)
+
+def get_insights_aggregation_service(db: Session = Depends(get_db)) -> InsightsAggregationService:
+    return InsightsAggregationService(db=db)
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
@@ -113,8 +127,10 @@ def categorize_expense(
 )
 def create_expense(
     data: ExpenseRequest,
+    background_tasks: BackgroundTasks,
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     _: str = Depends(auth_required),
 ):
     saved = expense_service.add_expense(
@@ -127,6 +143,16 @@ def create_expense(
     )
     # Invalidate analysis cache on writes
     analysis_service.invalidate_cache()
+    
+    # Asynchronous insight aggregation
+    background_tasks.add_task(
+        aggregation_svc.on_simple_expense_created,
+        user_email=data.user_id,
+        merchant_name=data.merchant_name,
+        purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y"),
+        amount=data.cost
+    )
+    
     # Normalize to response model shape
     expense_payload = {
         "user_id": saved.get("User ID", data.user_id),
@@ -168,11 +194,13 @@ def list_expenses(
 def update_expense(
     row_id: str,
     data: ExpenseRequest,
+    background_tasks: BackgroundTasks,
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     _: str = Depends(auth_required),
 ):
-    saved = expense_service.update_expense(
+    saved, old_data = expense_service.update_expense(
         row_id=row_id,
         user_id=data.user_id,
         date=data.date,
@@ -182,6 +210,19 @@ def update_expense(
         merchant_name=data.merchant_name,
     )
     analysis_service.invalidate_cache()
+    
+    if old_data:
+        background_tasks.add_task(
+            aggregation_svc.on_simple_expense_updated,
+            user_email=data.user_id,
+            old_merchant_name=old_data["merchant_name"],
+            old_amount=old_data["amount"],
+            old_purchased_at=old_data["purchased_at"],
+            new_merchant_name=data.merchant_name,
+            new_amount=data.cost,
+            new_purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y")
+        )
+        
     expense_payload = {
         "user_id": saved.get("User ID", data.user_id),
         "date": data.date,
@@ -219,6 +260,46 @@ def dashboard():
         "months_tracked": 5
     }
 
+# ---------------------- Analytics ---------------------- #
+
+@router.get("/analytics/items", tags=["Analytics"], summary="Get top items")
+def get_top_items(
+    limit: int = Query(20, ge=1),
+    svc: AnalyticsService = Depends(get_analytics_service),
+    user_id: str = Depends(auth_required),
+):
+    return svc.get_top_items(user_id, limit)
+
+@router.get("/analytics/items/{item_name}", tags=["Analytics"], summary="Get item details")
+def get_item_detail(
+    item_name: str,
+    svc: AnalyticsService = Depends(get_analytics_service),
+    user_id: str = Depends(auth_required),
+):
+    detail = svc.get_item_detail(user_id, item_name)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return detail
+
+@router.get("/analytics/merchants", tags=["Analytics"], summary="Get top merchants")
+def get_top_merchants(
+    limit: int = Query(20, ge=1),
+    svc: AnalyticsService = Depends(get_analytics_service),
+    user_id: str = Depends(auth_required),
+):
+    return svc.get_top_merchants(user_id, limit)
+
+@router.get("/analytics/merchants/{merchant_name}", tags=["Analytics"], summary="Get merchant details")
+def get_merchant_detail(
+    merchant_name: str,
+    svc: AnalyticsService = Depends(get_analytics_service),
+    user_id: str = Depends(auth_required),
+):
+    detail = svc.get_merchant_detail(user_id, merchant_name)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    return detail
+
 @router.get(
     "/analysis",
     response_model=AnalysisResponse,
@@ -253,6 +334,7 @@ def analysis_chat(
     request: ChatRequest,
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
     _: str = Depends(auth_required),
 ):
     """
@@ -273,8 +355,17 @@ def analysis_chat(
         use_cache=False,
     )
 
-    # Pass the query + analysis to the appropriate chat model
-    chat_response = call_chat_model(query=request.query, analysis=analysis_result, model=request.model)
+    # Attempt RAG context retrieval for item/merchant-specific queries
+    rag_context = analytics_service.build_rag_context(
+        user_email=request.user_id,
+        query=request.query,
+    )
+
+    # Pass the query + analysis + optional RAG context to the appropriate chat model
+    chat_response = call_chat_model(
+        query=request.query, analysis=analysis_result,
+        model=request.model, rag_context=rag_context,
+    )
 
     return {"response": chat_response}
 
@@ -309,6 +400,7 @@ def parse_receipt(
 def create_expense_with_items(
     payload: ExpenseWithItemsRequest,
     repo: PostgresRepo = Depends(get_postgres_repo),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     _: str = Depends(auth_required),
     force: bool = Query(False),
 ):
@@ -336,6 +428,20 @@ def create_expense_with_items(
     except Exception:
         repo.delete_expense(expense_id)
         raise
+
+    # Trigger insights aggregation for item + merchant tracking
+    try:
+        aggregation_svc.on_expense_with_items_created(
+            user_email=payload.user_email,
+            expense_id=expense_id,
+            merchant_name=header.get("merchant_name"),
+            purchased_at=header.get("purchased_at") if isinstance(header.get("purchased_at"), datetime) else None,
+            items=items,
+        )
+    except Exception as exc:
+        import logging as _log
+        _log.getLogger("varavu_selavu.routes").warning("Insights aggregation failed: %s", exc)
+
     return {"expense_id": expense_id, "item_ids": item_ids}
 
 
@@ -612,3 +718,68 @@ def send_email_route(
         return {"success": True, "message": "Email sent successfully"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
+
+
+# ---------------------- Analytics (Item & Merchant Insights) ---------------------- #
+
+@router.get(
+    "/analytics/items",
+    tags=["Analytics"],
+    summary="Get top items by total spend for a user",
+)
+def get_top_items(
+    user_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    _: str = Depends(auth_required),
+):
+    return analytics_service.get_top_items(user_email=user_id, limit=limit)
+
+
+@router.get(
+    "/analytics/items/{item_name}",
+    tags=["Analytics"],
+    summary="Get detail for a specific item including price history and store comparison",
+)
+def get_item_detail(
+    item_name: str,
+    user_id: str = Query(...),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    _: str = Depends(auth_required),
+):
+    result = analytics_service.get_item_detail(user_email=user_id, item_name=item_name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return result
+
+
+@router.get(
+    "/analytics/merchants",
+    tags=["Analytics"],
+    summary="Get top merchants by total spend for a user",
+)
+def get_top_merchants(
+    user_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    _: str = Depends(auth_required),
+):
+    return analytics_service.get_top_merchants(user_email=user_id, limit=limit)
+
+
+@router.get(
+    "/analytics/merchants/{merchant_name}",
+    tags=["Analytics"],
+    summary="Get detail for a specific merchant including monthly aggregates and items bought",
+)
+def get_merchant_detail(
+    merchant_name: str,
+    user_id: str = Query(...),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    _: str = Depends(auth_required),
+):
+    result = analytics_service.get_merchant_detail(user_email=user_id, merchant_name=merchant_name)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Merchant not found")
+    return result
+

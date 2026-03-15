@@ -1,86 +1,267 @@
-# Getting Started with Create React App
+# TrackSpense Web Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+The React-based web application for the TrackSpense expense tracking platform. Features a modern glassmorphism UI, interactive charts, AI-powered receipt scanning, a conversational financial analyst, and recurring expense management.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## Tech Stack
 
-### `npm start`
+| Component | Technology | Version |
+|:---|:---|:---|
+| Language | TypeScript | ~4.9.5 |
+| Framework | React | ≥19.1.1 |
+| Scaffolding | Create React App | 5.0.1 |
+| UI Library | Material-UI (MUI) | ≥7.3.1 |
+| Routing | React Router v6 | ≥6.30.1 |
+| Data Fetching | TanStack React Query | ≥5.84.2 |
+| Charts | Plotly.js + react-plotly.js | ≥3.0.3 |
+| Date Utils | date-fns | ≥4.1.0 |
+| Image Conversion | heic2any | 0.0.4 |
+| Styling Engine | Emotion (CSS-in-JS via MUI) | — |
+| Production Server | nginx (alpine) | — |
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Quick Start
 
-### `npm test`
+### Prerequisites
+- Node.js 18+
+- Backend service running (see `../varavu_selavu_app/README.md`)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### 1. Install Dependencies
+```bash
+cd varavu_selavu_ui
+npm install
+```
 
-### `npm run build`
+### 2. Configure Environment
+Create `.env.development` if it doesn't exist:
+```env
+REACT_APP_API_BASE_URL=http://localhost:8000
+REACT_APP_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+> **Note:** If `REACT_APP_GOOGLE_CLIENT_ID` is not set, the login page will show "Google login not configured" and the Google Sign-In button will not initialize.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### 3. Run the App
+```bash
+npm start
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Open http://localhost:3000 in your browser.
 
-### `npm run eject`
+### Makefile Shortcuts (from repo root)
+```bash
+make install-web     # Install deps
+make start-web       # Start dev server
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+---
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Project Structure
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```
+varavu_selavu_ui/
+├── Dockerfile                          # Multi-stage: Node 18 build → nginx serve
+├── nginx.conf                          # SPA routing (all paths → index.html)
+├── package.json
+├── tsconfig.json
+├── .env.development                    # Dev env vars (API URL, Google Client ID)
+├── .env.production                     # Prod env vars (Cloud Run URLs)
+├── public/                             # Static assets (index.html, favicon, etc.)
+└── src/
+    ├── App.tsx                         # Root component: Router, Auth guard, AppBar
+    ├── theme.ts                        # MUI theme (glassmorphism, gradients, colors)
+    ├── index.tsx                       # React DOM root
+    ├── index.css                       # Global CSS
+    │
+    ├── api/                            # API client layer
+    │   ├── apiconfig.ts               # Base URL resolution (dev vs prod)
+    │   ├── api.ts                     # Generic fetch wrapper with auth headers
+    │   ├── auth.ts                    # Login, register, logout, refresh, Google login
+    │   ├── expenses.ts               # Expense CRUD + receipt parse + with_items
+    │   ├── analysis.ts               # Analysis GET + chat POST
+    │   ├── recurring.ts              # Templates, due, confirm, execute_now
+    │   ├── profile.ts                # Profile GET/PUT
+    │   └── models.ts                 # Shared TypeScript interfaces
+    │
+    ├── pages/                          # Page-level components (one per route)
+    │   ├── HomePage.tsx               # Public landing / marketing page
+    │   ├── LoginPage.tsx              # Login form + Google Sign-In button
+    │   ├── RegisterPage.tsx           # Registration form
+    │   ├── ForgotPasswordPage.tsx     # Password reset form
+    │   ├── DashboardPage.tsx          # Main dashboard with summary cards
+    │   ├── ExpensesPage.tsx           # Expense list with add/edit/delete
+    │   ├── ExpenseAnalysisPage.tsx    # Plotly charts + category breakdown
+    │   ├── AIAnalystPage.tsx          # Conversational AI chat interface
+    │   ├── RecurringPage.tsx          # Recurring expense template management
+    │   └── ProfilePage.tsx            # User profile management
+    │
+    ├── components/                     # Reusable UI components
+    │   ├── layout/                    # MainLayout (sidebar drawer), UserMenu
+    │   ├── dashboard/                 # Dashboard cards, summary widgets
+    │   ├── expenses/                  # Expense forms, RecurringPrompt modal
+    │   ├── analysis/                  # Chart wrappers
+    │   ├── ai-analyst/                # Chat UI components
+    │   └── common/                    # Shared UI elements
+    │
+    └── utils/                          # Utility functions
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+---
 
-## Learn More
+## Features Implemented
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### 🔐 Authentication
+- Email/password login with JWT tokens
+- Google One-Tap Sign-In (via Google Identity Services)
+- User registration with name, phone, email, password
+- Password reset (forgot password flow)
+- Token auto-refresh on expiry
+- Profile management (update name, phone)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 💰 Expense Management
+- Create expenses with date, description, category, cost, merchant
+- AI-powered auto-categorization: type a description → get category suggestion
+- Paginated expense history (sorted by date, newest first)
+- Edit and delete existing expenses
+- Receipt scanning: upload image/PDF → AI extracts all fields and line items
 
-### Code Splitting
+### 📊 Analytics & Charts
+- Category totals (Plotly pie/bar charts)
+- Monthly spending trend (line chart)
+- Top 5 spending categories
+- Category drill-down with expense details
+- Filter by year, month, or custom date range
+- Cache-backed for fast loading (60s TTL)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+### 🤖 AI Financial Analyst
+- Conversational chat interface
+- Asks natural language questions about your expenses
+- Powered by OpenAI (production) or Ollama (local)
+- Model selection dropdown (lists available models)
+- Context-aware: injects your expense data into the LLM
 
-### Analyzing the Bundle Size
+### 🔄 Recurring Expenses
+- Create recurring expense templates (description, category, day of month, cost)
+- View all templates with Active/Paused status
+- Auto-prompt on login when recurring expenses are due
+- Confirm or skip due expenses
+- Execute immediately for current month
+- Delete templates
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+### ✉️ Contact & Feedback
+- Submit Feature Request form
+- Contact Us form
+- Sent via backend SMTP email
 
-### Making a Progressive Web App
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+## Route Map
 
-### Advanced Configuration
+| Path | Component | Auth | Description |
+|:---|:---|:---|:---|
+| `/` | `HomePage` | No | Landing page |
+| `/login` | `LoginPage` | No | Login |
+| `/register` | `RegisterPage` | No | Registration |
+| `/forgot-password` | `ForgotPasswordPage` | No | Password reset |
+| `/dashboard` | `DashboardPage` | Yes | Dashboard |
+| `/expenses` | `ExpensesPage` | Yes | Expense list & CRUD |
+| `/analysis` | `ExpenseAnalysisPage` | Yes | Charts & analytics |
+| `/recurring` | `RecurringPage` | Yes | Recurring management |
+| `/ai-analyst` | `AIAnalystPage` | Yes | AI chat |
+| `/profile` | `ProfilePage` | Yes | Profile settings |
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+**Auth Guard:** Routes with `Auth=Yes` redirect to `/login` if no `vs_token` exists in `localStorage`.
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+## Design System
 
-### `npm run build` fails to minify
+### Theme
+- **Primary:** `#4F46E5` (Indigo)
+- **Secondary:** `#14B8A6` (Teal)
+- **Background:** `#F6F7FB`
+- **Border Radius:** 12px
+- **Font:** Inter, Roboto
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+### Visual Effects
+- **Glassmorphism:** Semi-transparent panels with `backdrop-filter: blur(12px)`
+- **AppBar:** Gradient `linear-gradient(135deg, indigo 70%, teal 70%)`
+- **Cards:** Subtle shadow with `translateY(-2px)` hover lift
+- **Buttons:** No uppercase text-transform, shadow on hover
+
+---
+
+## Auth Token Storage
+
+| `localStorage` Key | Value |
+|:---|:---|
+| `vs_token` | JWT access token |
+| `vs_refresh` | JWT refresh token |
+| `vs_user` | User email address |
+
+A custom event `vs_auth_changed` is dispatched on login/logout to synchronize auth state across components.
+
+---
+
+## API Client
+
+- **Base URL (dev):** `http://localhost:8080` (default) or `REACT_APP_API_BASE_URL`
+- **Base URL (prod):** Set via `REACT_APP_API_BASE_URL` environment variable at build time
+- **React Query Config:** 1-min stale time, 5-min GC, no refetch on window focus
+- **Auth Header:** `Authorization: Bearer <vs_token>` attached to all protected requests
+
+---
 
 ## Google Login Setup
 
-This app uses Google Identity Services (GSI) for login.
+1. Create an OAuth 2.0 Web Client ID in [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Add `http://localhost:3000` (and your prod domain) to **Authorized JavaScript origins**
+3. Set `REACT_APP_GOOGLE_CLIENT_ID` in `.env.development` and `.env.production`
+4. Also set `GOOGLE_CLIENT_ID` on the backend (see backend README)
 
-- Set `REACT_APP_GOOGLE_CLIENT_ID` in env files:
-  - Development: `varavu_selavu_ui/.env.development`
-  - Production: `varavu_selavu_ui/.env.production`
+---
 
-Example:
+## Build & Deploy
 
+### Production Build
+```bash
+npm run build    # Output: ./build/
 ```
-REACT_APP_GOOGLE_CLIENT_ID=1234567890-abc123.apps.googleusercontent.com
+
+### Docker
+
+```bash
+docker build -t trackspense-frontend .
+docker run -p 8080:8080 trackspense-frontend
 ```
 
-If not set, the Login page will show: "Google login not configured" and the button will not initialize. Ensure your OAuth Client ID is of type "Web application" and that your app origin (e.g., `http://localhost:3000`) is listed under Authorized JavaScript origins in Google Cloud Console.
+**Multi-stage Dockerfile:**
+1. **Stage 1 (build):** Node 18 → `npm ci` → `npm run build`
+2. **Stage 2 (serve):** nginx:alpine → copies `build/` → serves on port 8080
+
+**SPA Routing:** nginx is configured via `nginx.conf` to serve `index.html` for all routes.
+
+---
+
+## Testing
+
+```bash
+npm test         # Interactive test runner (Jest + React Testing Library)
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|:---|:---|:---|
+| `REACT_APP_API_BASE_URL` | Yes | Backend API base URL |
+| `REACT_APP_GOOGLE_CLIENT_ID` | Optional | Google OAuth Web Client ID |
+
+---
+
+## License
+
+This project is licensed under the MIT License.

@@ -27,6 +27,9 @@ Never lose track of a subscription or miss a bill again. Easily set up, monitor,
 ### 📊 Comprehensive Dashboards & Analytics
 Understand your cash flow at a glance. Visualize your spending with beautiful, interactive charts. Track your monthly trends, drill down into specific category breakdowns, and see exactly where your money is going over time.
 
+### 🛒 Item & Merchant Insights
+Drill all the way down to individual line-items. TrackSpense automatically aggregates your purchases in the background, allowing you to track the exact price history of specific items across different stores, visualize store comparisons, and monitor merchant-level spend over time.
+
 ### 📱 Seamless Cross-Platform Experience
 Whether you prefer managing your finances on a desktop or while out and about, TrackSpense has you covered. Enjoy a consistent, premium experience across our feature-rich **Web Application** and our native **Mobile Apps** for both iOS and Android.
 

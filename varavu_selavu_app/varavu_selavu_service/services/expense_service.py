@@ -82,7 +82,7 @@ class ExpenseService:
         category: str,
         cost: float,
         merchant_name: Optional[str] = None,
-    ) -> Dict:
+    ) -> tuple[Dict, Optional[Dict]]:
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
         else:
@@ -100,7 +100,13 @@ class ExpenseService:
             parsed_id = row_id
         
         expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.user_email == user_id).first()
+        old_expense_data = None
         if expense:
+            old_expense_data = {
+                "amount": float(expense.amount),
+                "merchant_name": expense.merchant_name,
+                "purchased_at": expense.purchased_at
+            }
             expense.purchased_at = purchased_at
             expense.description = description
             expense.category_id = category
@@ -116,4 +122,4 @@ class ExpenseService:
             "category": category,
             "cost": cost,
             "merchant_name": merchant_name,
-        }
+        }, old_expense_data

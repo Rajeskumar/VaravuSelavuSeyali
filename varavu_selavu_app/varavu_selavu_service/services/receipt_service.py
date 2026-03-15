@@ -96,10 +96,15 @@ class ReceiptService:
         system_prompt = (
             "You are an expert receipt parsing assistant. Given a grocery receipt, "
             "return a JSON object with a `header` and an `items` array. The header must "
-            "include merchant_name, purchased_at (ISO 8601), currency, amount (total), "
+            "include merchant_name, normalized_merchant_name (a clean, standardized "
+            "version of the merchant name — e.g. 'WAL-MART #5213' becomes 'Walmart'), "
+            "purchased_at (ISO 8601), currency, amount (total), "
             "tax, tip, discount, description, main_category_name, and category_name. "
             "Choose main and sub categories from: "
             f"{CATEGORY_PROMPT}. For each line item provide line_no, item_name, "
+            "normalized_name (a clean, standardized product name — e.g. 'GV WHOLE MLK GL' "
+            "becomes 'Great Value Whole Milk Gallon', 'BNLS SKNLS CHKN BRST' becomes "
+            "'Boneless Skinless Chicken Breast'), "
             "quantity, unit, unit_price, line_total, and category_name. Correct any "
             "misspelled or partial item names using your knowledge of grocery products. "
             "All monetary values must be floating point dollars exactly as shown on the "
@@ -151,10 +156,14 @@ class ReceiptService:
                 "You are an expert receipt parsing assistant. Given the following "
                 "base64-encoded grocery receipt image, return JSON with a `header` "
                 "and an `items` array. The header must include merchant_name, "
+                "normalized_merchant_name (a clean, standardized version of the "
+                "merchant name — e.g. 'WAL-MART #5213' becomes 'Walmart'), "
                 "purchased_at (ISO 8601), currency, amount (total), tax, tip, "
                 "discount, description, main_category_name, and category_name. "
                 "Choose categories from: "
                 f"{CATEGORY_PROMPT}. Each item requires line_no, item_name, "
+                "normalized_name (a clean, standardized product name — e.g. "
+                "'GV WHOLE MLK GL' becomes 'Great Value Whole Milk Gallon'), "
                 "quantity, unit, unit_price, line_total, and category_name. "
                 "Fix any misspelled or partial item names using your knowledge of "
                 "grocery products. All monetary values must be floating point "
@@ -190,9 +199,24 @@ class ReceiptService:
 
         header = parsed.get("header", {})
         items = parsed.get("items", [])
+
+        # ── Normalize names (ensure fields always exist) ──
+        # If the LLM returned normalized_merchant_name, keep it; otherwise
+        # fall back to merchant_name as-is.
+        if not header.get("normalized_merchant_name"):
+            header["normalized_merchant_name"] = header.get("merchant_name", "")
+        # Use the normalized merchant name as the description's merchant for
+        # downstream insight tracking.
+        header["merchant_name_raw"] = header.get("merchant_name", "")
+        header["merchant_name"] = header["normalized_merchant_name"]
+
+        for item in items:
+            if not item.get("normalized_name"):
+                item["normalized_name"] = item.get("item_name", "Unknown")
+
         purchased_at_hour = header.get("purchased_at", "")[:13]
         top_names = "".join(i.get("item_name", "") for i in items[:3])
-        fp_source = f"{header.get('merchant_name','')}{purchased_at_hour}{header.get('amount',0)}{top_names}"
+        fp_source = f"{header.get('merchant_name_raw','')}{purchased_at_hour}{header.get('amount',0)}{top_names}"
         fingerprint = hashlib.sha256(fp_source.encode()).hexdigest()
         result: Dict[str, Any] = {
             "header": header,
