@@ -170,6 +170,41 @@ class ModelListResponse(BaseModel):
     provider: str
     models: List[str]
 
+# ---------------------- Insight Analytics ---------------------- #
+
+class InsightMetrics(BaseModel):
+    total_spent: float
+    transaction_count: int
+    average_transaction_amount: float
+    month_over_month_change_amount: Optional[float] = None
+    month_over_month_change_percent: Optional[float] = None
+    average_unit_price: Optional[float] = None
+    min_unit_price: Optional[float] = None
+    max_unit_price: Optional[float] = None
+    total_quantity_bought: Optional[float] = None
+    last_paid_price: Optional[float] = None
+    distinct_merchants_count: Optional[int] = None
+    first_seen_at: Optional[str] = None
+    last_seen_at: Optional[str] = None
+
+
+class MerchantInsightSummary(InsightMetrics):
+    merchant_name: str
+
+
+class ItemInsightSummary(InsightMetrics):
+    item_name: str
+
+
+class ChangeInsight(BaseModel):
+    metric_name: str
+    previous_value: float
+    current_value: float
+    change_amount: float
+    change_percent: float  # baseline indicated, typically vs previous month
+    time_scope: str
+    entity_name: Optional[str] = None
+
 
 # ---------------------- Recurring ---------------------- #
 

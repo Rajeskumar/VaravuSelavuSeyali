@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box, Typography, Paper, CircularProgress, List, ListItemButton, ListItemText,
   ListItemAvatar, Avatar, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  IconButton, LinearProgress, Alert, Chip,
+  IconButton, LinearProgress, Alert, Chip, Select, MenuItem, FormControl, InputLabel,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import StorefrontIcon from '@mui/icons-material/Storefront';
@@ -19,14 +20,42 @@ const MerchantInsightsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<MerchantInsightDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [year, setYear] = useState<number | string>('all');
+  const [month, setMonth] = useState<number | string>('all');
+  const location = useLocation();
 
   useEffect(() => {
     if (!userId) return;
-    getTopMerchants(userId)
+    setLoading(true);
+    getTopMerchants(userId, {
+      year: year === 'all' ? undefined : Number(year),
+      month: month === 'all' ? undefined : Number(month),
+    })
       .then(setMerchants)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [userId, year, month]);
+
+  // Auto-load a merchant detail if `?merchant=` is present in URL
+  useEffect(() => {
+    if (!userId) return;
+    const params = new URLSearchParams(location.search);
+    const merchantParam = params.get('merchant');
+    if (merchantParam) {
+      // Load directly
+      (async () => {
+        setDetailLoading(true);
+        try {
+          const d = await getMerchantDetail(userId, merchantParam);
+          setDetail(d);
+        } catch {
+          // ignore
+        } finally {
+          setDetailLoading(false);
+        }
+      })();
+    }
+  }, [location.search, userId]);
 
   const handleSelect = async (m: MerchantInsightSummary) => {
     setDetailLoading(true);
@@ -40,6 +69,9 @@ const MerchantInsightsPage: React.FC = () => {
       setDetailLoading(false);
     }
   };
+
+  const years = ['all', ...Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)];
+  const months = ['all', ...Array.from({ length: 12 }, (_, i) => i + 1)];
 
   if (loading) {
     return (
@@ -135,9 +167,25 @@ const MerchantInsightsPage: React.FC = () => {
   // List view
   return (
     <Box>
-      <Typography variant="h4" fontWeight={700} gutterBottom>
-        🏪 Merchant Insights
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4" fontWeight={700}>
+          🏪 Merchant Insights
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <FormControl size="small">
+            <InputLabel>Year</InputLabel>
+            <Select value={year} label="Year" onChange={(e) => setYear(e.target.value)}>
+              {years.map(y => <MenuItem key={y} value={y}>{y}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <FormControl size="small">
+            <InputLabel>Month</InputLabel>
+            <Select value={month} label="Month" onChange={(e) => setMonth(e.target.value)}>
+              {months.map(m => <MenuItem key={m} value={m}>{m === 'all' ? 'All' : MONTH_NAMES[(m as number)-1]}</MenuItem>)}
+            </Select>
+          </FormControl>
+        </Box>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Your top merchants ranked by total spend
       </Typography>
@@ -151,7 +199,7 @@ const MerchantInsightsPage: React.FC = () => {
           {detailLoading && <LinearProgress />}
           <List>
             {merchants.map((m) => (
-              <ListItemButton key={m.id} onClick={() => handleSelect(m)} sx={{ borderRadius: 2 }}>
+              <ListItemButton key={m.merchant_name} onClick={() => handleSelect(m)} sx={{ borderRadius: 2 }}>
                 <ListItemAvatar>
                   <Avatar sx={{ bgcolor: 'primary.light' }}>
                     <StorefrontIcon />

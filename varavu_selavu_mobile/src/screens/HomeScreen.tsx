@@ -210,20 +210,20 @@ export default function HomeScreen() {
 
           <TouchableOpacity
             style={[styles.actionCard, { backgroundColor: '#EFF6FF' }]}
-            onPress={() => navigation.navigate('Analysis')}
+            onPress={() => navigation.navigate('ItemInsights')}
             activeOpacity={0.7}
           >
-            <Text style={styles.actionEmoji}>📊</Text>
-            <Text style={[styles.actionLabel, { color: '#1E40AF' }]}>Analytics</Text>
+            <Text style={styles.actionEmoji}>🛒</Text>
+            <Text style={[styles.actionLabel, { color: '#1E40AF' }]}>Items</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.actionCard, { backgroundColor: '#FFF7ED' }]}
-            onPress={() => navigation.navigate('AI Analyst')}
+            onPress={() => navigation.navigate('MerchantInsights')}
             activeOpacity={0.7}
           >
-            <Text style={styles.actionEmoji}>🤖</Text>
-            <Text style={[styles.actionLabel, { color: '#9A3412' }]}>AI Chat</Text>
+            <Text style={styles.actionEmoji}>🏪</Text>
+            <Text style={[styles.actionLabel, { color: '#9A3412' }]}>Merchants</Text>
           </TouchableOpacity>
         </View>
       </View>

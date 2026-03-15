@@ -43,11 +43,16 @@ class InsightsAggregationService:
         merchant_name: Optional[str],
         purchased_at: Optional[datetime],
         items: List[Dict[str, Any]],
+        total_amount: Optional[float] = None,
     ) -> None:
         """Call after a receipt-based expense + items are persisted."""
-        self._update_merchant_insight(user_email, merchant_name, purchased_at, float(
-            sum(i.get("line_total", 0) for i in items)
-        ))
+        # Use total_amount if provided (parent total), else fallback to sum of items
+        if total_amount is not None:
+            merchant_amount = total_amount
+        else:
+            merchant_amount = float(sum(i.get("line_total", 0) for i in items))
+
+        self._update_merchant_insight(user_email, merchant_name, purchased_at, merchant_amount)
         for item in items:
             self._update_item_insight(
                 user_email=user_email,
@@ -95,6 +100,56 @@ class InsightsAggregationService:
                 user_email, new_merchant_name, new_purchased_at, new_amount, count_delta=1
             )
             
+        self.db.commit()
+
+    def on_expense_deleted(
+        self,
+        user_email: str,
+        merchant_name: Optional[str],
+        amount: float,
+        purchased_at: Optional[datetime],
+        items: List[Dict[str, Any]]
+    ) -> None:
+        """Call after an expense is deleted to decrement aggregates."""
+        # 1. Back out merchant totals
+        if merchant_name:
+            self._update_merchant_insight(
+                user_email, merchant_name, purchased_at, -amount, count_delta=-1
+            )
+            
+        # 2. Back out item aggregates
+        for item in items:
+            normalized_name = item.get("normalized_name") or item.get("item_name", "Unknown")
+            unit_price = float(item.get("unit_price") or item.get("line_total", 0))
+            quantity = float(item.get("quantity", 1) or 1)
+            line_total = float(item.get("line_total", 0))
+            
+            insight = (
+                self.db.query(ItemInsight)
+                .filter(
+                    ItemInsight.user_email == user_email,
+                    ItemInsight.normalized_name == normalized_name,
+                )
+                .first()
+            )
+            if insight:
+                # Decrement values
+                prev_total = float(insight.total_spent or 0)
+                prev_qty = float(insight.total_quantity_bought or 0)
+                new_total = max(0, prev_total - line_total)
+                new_qty = max(0, prev_qty - quantity)
+                
+                insight.total_spent = Decimal(str(new_total))
+                insight.total_quantity_bought = Decimal(str(new_qty))
+                insight.avg_unit_price = Decimal(str(new_total / new_qty)) if new_qty > 0 else Decimal("0")
+                
+                # Note: We can't strictly restore min/max without re-scanning all history,
+                # but we leave them as-is. If qty is 0, we could reset them.
+                if new_qty == 0:
+                    insight.min_price = Decimal("0")
+                    insight.max_price = Decimal("0")
+                    insight.avg_unit_price = Decimal("0")
+                    
         self.db.commit()
 
     # ------------------------------------------------------------------

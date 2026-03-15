@@ -1,4 +1,4 @@
-import { Box, Button, Card, CardContent, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from '@mui/material';
+import { Box, Button, Card, CardContent, FormControl, InputLabel, MenuItem, Select, TextField, Typography, Chip } from '@mui/material';
 import React, { useState } from "react";
 import { fetchWithAuth } from '../../api/api';
 import { getModels, ModelsResponse } from '../../api/models';
@@ -8,6 +8,13 @@ interface AIAnalystChatProps {
   startDate: string;
   endDate: string;
 }
+
+const SUGGESTED_PROMPTS = [
+    "What were my top spending categories?",
+    "How much did I spend at Amazon?",
+    "Has the price of milk gone up?",
+    "Where did I buy eggs cheapest?"
+];
 
 export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystChatProps) {
   const [query, setQuery] = useState("");
@@ -38,9 +45,10 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
     return () => ac.abort();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const handleSubmit = async (e?: React.FormEvent, overrideQuery?: string) => {
+    if (e) e.preventDefault();
+    const finalQuery = overrideQuery || query;
+    if (!finalQuery.trim()) return;
 
     setLoading(true);
     setError(null);
@@ -50,7 +58,7 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
         method: "POST",
         body: JSON.stringify({
           user_id: userId,
-          query,
+          query: finalQuery,
           start_date: startDate,
           end_date: endDate,
           model: model || undefined,
@@ -69,6 +77,11 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleChipClick = (prompt: string) => {
+    setQuery(prompt);
+    handleSubmit(undefined, prompt);
   };
 
   const scopeLabel = `${startDate} to ${endDate}`;
@@ -159,7 +172,7 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
             <TextField
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={"e.g. What were my top categories?"}
+              placeholder={"Ask about a merchant, item price, or where you got the best deal..."}
               multiline
               minRows={4}
               fullWidth
@@ -167,6 +180,24 @@ export default function AIAnalystChat({ userId, startDate, endDate }: AIAnalystC
             <Button type="submit" variant="contained" disabled={loading || !query.trim()}>
               {loading ? 'Thinking…' : 'Send'}
             </Button>
+          </Box>
+          
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Try asking:
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {SUGGESTED_PROMPTS.map((prompt, i) => (
+                <Chip
+                  key={i}
+                  label={prompt}
+                  onClick={() => handleChipClick(prompt)}
+                  disabled={loading}
+                  variant="outlined"
+                  sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' } }}
+                />
+              ))}
+            </Box>
           </Box>
 
           {error && <Typography color="error" sx={{ mt: 1 }}>{error}</Typography>}

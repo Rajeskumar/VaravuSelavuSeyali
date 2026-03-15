@@ -45,7 +45,7 @@ class ExpenseService:
             "merchant_name": merchant_name,
         }
 
-    def delete_expense(self, row_id: Union[int, str]) -> None:
+    def delete_expense(self, row_id: Union[int, str]) -> Optional[Dict]:
         try:
             parsed_id = uuid.UUID(str(row_id))
         except ValueError:
@@ -53,8 +53,29 @@ class ExpenseService:
         
         expense = self.db.query(Expense).filter(Expense.id == parsed_id).first()
         if expense:
+            deleted_data = {
+                "user_email": expense.user_email,
+                "merchant_name": expense.merchant_name,
+                "amount": float(expense.amount),
+                "purchased_at": expense.purchased_at,
+            }
+            # Fetch associated items so we can back them out too
+            from varavu_selavu_service.db.models import ExpenseItem
+            items = self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == parsed_id).all()
+            
+            deleted_data["items"] = [
+                {
+                    "normalized_name": item.normalized_name or item.item_name,
+                    "unit_price": float(item.unit_price or 0),
+                    "quantity": float(item.quantity or 1),
+                    "line_total": float(item.line_total or 0)
+                } for item in items
+            ]
+            
             self.db.delete(expense)
             self.db.commit()
+            return deleted_data
+        return None
 
     def get_expenses_for_user(self, user_id: str) -> List[Dict]:
         expenses = self.db.query(Expense).filter(Expense.user_email == user_id).order_by(Expense.purchased_at.desc()).all()

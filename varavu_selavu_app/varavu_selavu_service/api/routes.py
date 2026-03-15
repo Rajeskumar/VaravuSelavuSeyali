@@ -45,7 +45,9 @@ from varavu_selavu_service.models.api_models import (
     ConfirmRecurringRequest,
     SendEmailRequest,
     SendEmailResponse,
+    ChangeInsight,
 )
+from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
 
 settings = Settings()
 
@@ -87,11 +89,8 @@ def get_categorization_service() -> CategorizationService:
 def get_recurring_service(db: Session = Depends(get_db)) -> RecurringService:
     return RecurringService(db)
 
-def get_analytics_service(db: Session = Depends(get_db)) -> AnalyticsService:
-    return AnalyticsService(db=db)
-
-def get_insights_aggregation_service(db: Session = Depends(get_db)) -> InsightsAggregationService:
-    return InsightsAggregationService(db=db)
+def get_insight_analytics_service(db: Session = Depends(get_db)) -> InsightAnalyticsService:
+    return InsightAnalyticsService(db=db)
 
 @router.get("/healthz", response_model=HealthResponse, tags=["Health"], summary="Liveness probe")
 def health_check():
@@ -242,12 +241,25 @@ def update_expense(
 )
 def delete_expense(
     row_id: str,
+    background_tasks: BackgroundTasks,
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     _: str = Depends(auth_required),
 ):
-    expense_service.delete_expense(row_id)
+    deleted_data = expense_service.delete_expense(row_id)
     analysis_service.invalidate_cache()
+    
+    if deleted_data:
+        background_tasks.add_task(
+            aggregation_svc.on_expense_deleted,
+            user_email=deleted_data["user_email"],
+            merchant_name=deleted_data["merchant_name"],
+            amount=deleted_data["amount"],
+            purchased_at=deleted_data["purchased_at"],
+            items=deleted_data.get("items", [])
+        )
+        
     return {"success": True}
 
 
@@ -262,21 +274,74 @@ def dashboard():
 
 # ---------------------- Analytics ---------------------- #
 
+@router.get("/analytics/changes", response_model=list[ChangeInsight], tags=["Analytics"], summary="Get spend change insights")
+def get_change_insights(
+    user_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
+    _: str = Depends(auth_required),
+):
+    """
+    Returns insight cards explaining what changed in a selected period compared
+    to a previous comparable period across categories, merchants, and items.
+    """
+    return insight_service.calculate_change_insights(
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        year=year,
+        month=month,
+    )
+
 @router.get("/analytics/items", tags=["Analytics"], summary="Get top items")
 def get_top_items(
     limit: int = Query(20, ge=1),
-    svc: AnalyticsService = Depends(get_analytics_service),
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
     user_id: str = Depends(auth_required),
 ):
-    return svc.get_top_items(user_id, limit)
+    if start_date or end_date or year is not None or month is not None:
+        return insight_service.calculate_item_metrics(
+            user_id=user_id,
+            start_date=start_date,
+            end_date=end_date,
+            year=year,
+            month=month,
+            limit=limit,
+        )
+    return analytics_service.get_top_items(user_id, limit)
 
 @router.get("/analytics/items/{item_name}", tags=["Analytics"], summary="Get item details")
 def get_item_detail(
     item_name: str,
-    svc: AnalyticsService = Depends(get_analytics_service),
-    user_id: str = Depends(auth_required),
+    user_id: str = Query(...),
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
+    _: str = Depends(auth_required),
 ):
-    detail = svc.get_item_detail(user_id, item_name)
+    if start_date or end_date or year is not None or month is not None:
+        detail = insight_service.calculate_item_detail(
+            user_id=user_id,
+            item_name=item_name,
+            start_date=start_date,
+            end_date=end_date,
+            year=year,
+            month=month
+        )
+    else:
+        detail = analytics_service.get_item_detail(user_email=user_id, item_name=item_name)
+        
     if not detail:
         raise HTTPException(status_code=404, detail="Item not found")
     return detail
@@ -284,18 +349,35 @@ def get_item_detail(
 @router.get("/analytics/merchants", tags=["Analytics"], summary="Get top merchants")
 def get_top_merchants(
     limit: int = Query(20, ge=1),
-    svc: AnalyticsService = Depends(get_analytics_service),
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
     user_id: str = Depends(auth_required),
 ):
-    return svc.get_top_merchants(user_id, limit)
+    if start_date or end_date or year is not None or month is not None:
+        return insight_service.calculate_merchant_metrics(
+            user_id=user_id,
+            start_date=start_date,
+            end_date=end_date,
+            year=year,
+            month=month,
+            limit=limit,
+        )
+    return analytics_service.get_top_merchants(user_id, limit)
 
 @router.get("/analytics/merchants/{merchant_name}", tags=["Analytics"], summary="Get merchant details")
 def get_merchant_detail(
     merchant_name: str,
-    svc: AnalyticsService = Depends(get_analytics_service),
-    user_id: str = Depends(auth_required),
+    user_id: str = Query(...),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    _: str = Depends(auth_required),
 ):
-    detail = svc.get_merchant_detail(user_id, merchant_name)
+    # We could implement dynamic date filtering for merchant detail too if requested,
+    # but for now we just delegate to AnalyticsService
+    detail = analytics_service.get_merchant_detail(user_email=user_id, merchant_name=merchant_name)
     if not detail:
         raise HTTPException(status_code=404, detail="Merchant not found")
     return detail
@@ -335,6 +417,7 @@ def analysis_chat(
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
     analytics_service: AnalyticsService = Depends(get_analytics_service),
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
     _: str = Depends(auth_required),
 ):
     """
@@ -356,10 +439,23 @@ def analysis_chat(
     )
 
     # Attempt RAG context retrieval for item/merchant-specific queries
-    rag_context = analytics_service.build_rag_context(
+    # Use dynamic filtering directly using the user's requested date scope.
+    rag_context = insight_service.build_rag_context(
         user_email=request.user_id,
         query=request.query,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        year=request.year,
+        month=request.month,
     )
+    
+    # If dynamic retrieval didn't find anything via exact word matching, 
+    # try the fallback fuzzy searching from AnalyticsService (which spans all-time).
+    if not rag_context:
+        rag_context = analytics_service.build_rag_context(
+            user_email=request.user_id,
+            query=request.query,
+        )
 
     # Pass the query + analysis + optional RAG context to the appropriate chat model
     chat_response = call_chat_model(
@@ -718,68 +814,3 @@ def send_email_route(
         return {"success": True, "message": "Email sent successfully"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
-
-
-# ---------------------- Analytics (Item & Merchant Insights) ---------------------- #
-
-@router.get(
-    "/analytics/items",
-    tags=["Analytics"],
-    summary="Get top items by total spend for a user",
-)
-def get_top_items(
-    user_id: str,
-    limit: int = Query(20, ge=1, le=100),
-    analytics_service: AnalyticsService = Depends(get_analytics_service),
-    _: str = Depends(auth_required),
-):
-    return analytics_service.get_top_items(user_email=user_id, limit=limit)
-
-
-@router.get(
-    "/analytics/items/{item_name}",
-    tags=["Analytics"],
-    summary="Get detail for a specific item including price history and store comparison",
-)
-def get_item_detail(
-    item_name: str,
-    user_id: str = Query(...),
-    analytics_service: AnalyticsService = Depends(get_analytics_service),
-    _: str = Depends(auth_required),
-):
-    result = analytics_service.get_item_detail(user_email=user_id, item_name=item_name)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return result
-
-
-@router.get(
-    "/analytics/merchants",
-    tags=["Analytics"],
-    summary="Get top merchants by total spend for a user",
-)
-def get_top_merchants(
-    user_id: str,
-    limit: int = Query(20, ge=1, le=100),
-    analytics_service: AnalyticsService = Depends(get_analytics_service),
-    _: str = Depends(auth_required),
-):
-    return analytics_service.get_top_merchants(user_email=user_id, limit=limit)
-
-
-@router.get(
-    "/analytics/merchants/{merchant_name}",
-    tags=["Analytics"],
-    summary="Get detail for a specific merchant including monthly aggregates and items bought",
-)
-def get_merchant_detail(
-    merchant_name: str,
-    user_id: str = Query(...),
-    analytics_service: AnalyticsService = Depends(get_analytics_service),
-    _: str = Depends(auth_required),
-):
-    result = analytics_service.get_merchant_detail(user_email=user_id, merchant_name=merchant_name)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Merchant not found")
-    return result
-

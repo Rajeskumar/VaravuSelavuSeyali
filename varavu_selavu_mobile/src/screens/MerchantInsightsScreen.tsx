@@ -3,29 +3,38 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { theme } from '../theme';
 import {
   getTopMerchants, getMerchantDetail,
   MerchantInsightSummary, MerchantInsightDetail,
 } from '../api/analytics';
+import { ListSkeleton, HeroSkeleton } from '../components/SkeletonLoader';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export default function MerchantInsightsScreen() {
   const { userEmail } = useAuth();
+  const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const [merchants, setMerchants] = useState<MerchantInsightSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantInsightDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [year, setYear] = useState<number | string>('all');
+  const [month, setMonth] = useState<number | string>('all');
 
   const fetchMerchants = useCallback(async () => {
     if (!userEmail) return;
     try {
-      const data = await getTopMerchants(userEmail);
+      const data = await getTopMerchants(userEmail, {
+        year: year === 'all' ? undefined : Number(year),
+        month: month === 'all' ? undefined : Number(month),
+      });
       setMerchants(data);
     } catch {
       // non-fatal
@@ -33,9 +42,12 @@ export default function MerchantInsightsScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userEmail]);
+  }, [userEmail, year, month]);
 
-  useEffect(() => { fetchMerchants(); }, [fetchMerchants]);
+  useEffect(() => {
+    setLoading(true);
+    fetchMerchants();
+  }, [fetchMerchants]);
 
   const onRefresh = () => { setRefreshing(true); fetchMerchants(); };
 
@@ -53,11 +65,22 @@ export default function MerchantInsightsScreen() {
     }
   };
 
-  if (loading) {
+  const years = ['all', ...Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)];
+  const months = ['all', ...Array.from({ length: 12 }, (_, i) => i + 1)];
+
+  if (loading && !refreshing) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      <ScrollView style={[styles.container, { paddingTop: insets.top }]}>
+         <View style={styles.header}>
+            <View>
+              <Text style={styles.screenTitle}>🏪 Merchant Insights</Text>
+              <Text style={styles.screenSubtitle}>Your top merchants by total spend</Text>
+            </View>
+          </View>
+        <View style={{ paddingHorizontal: 16 }}>
+           <ListSkeleton count={5} />
+        </View>
+      </ScrollView>
     );
   }
 
@@ -77,7 +100,7 @@ export default function MerchantInsightsScreen() {
         </View>
 
         {/* Monthly Aggregates */}
-        {selectedMerchant.monthly_aggregates.length > 0 && (
+        {selectedMerchant.monthly_aggregates.length > 0 ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>📅 Monthly Spending</Text>
             {selectedMerchant.monthly_aggregates.map((a, i) => {
@@ -95,11 +118,22 @@ export default function MerchantInsightsScreen() {
                 </View>
               );
             })}
+             <Text style={styles.trustCopy}>
+                Spend trends are based on your complete historical data for this merchant.
+            </Text>
           </View>
+        ) : (
+            <View style={styles.card}>
+               <Text style={styles.cardTitle}>📅 Monthly Spending</Text>
+               <View style={styles.emptyDetailState}>
+                 <Text style={styles.emptyDetailText}>Not enough history to show trends yet.</Text>
+                 <Text style={styles.emptyDetailSubtext}>Continue tracking expenses to build insights.</Text>
+               </View>
+            </View>
         )}
 
         {/* Items Bought */}
-        {selectedMerchant.items_bought.length > 0 && (
+        {selectedMerchant.items_bought.length > 0 ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>🛍️ Items Bought Here</Text>
             {selectedMerchant.items_bought.map((item, i) => (
@@ -113,8 +147,32 @@ export default function MerchantInsightsScreen() {
                 <Text style={styles.itemAvg}>Avg ${item.avg_price.toFixed(2)}</Text>
               </View>
             ))}
+             <Text style={styles.trustCopy}>
+                Item averages represent actual purchase history extracted from receipts.
+            </Text>
           </View>
+        ) : (
+           <View style={styles.card}>
+               <Text style={styles.cardTitle}>🛍️ Items Bought Here</Text>
+               <View style={styles.emptyDetailState}>
+                 <Text style={styles.emptyDetailText}>No item data available.</Text>
+                 <Text style={styles.emptyDetailSubtext}>Upload a receipt to unlock item-level insights for this merchant.</Text>
+                 <TouchableOpacity style={styles.ctaButton} onPress={() => navigation.navigate('Add Expense')}>
+                    <Text style={styles.ctaButtonText}>Add Receipt Expense</Text>
+                 </TouchableOpacity>
+               </View>
+            </View>
         )}
+
+        {/* AI Action */}
+         <TouchableOpacity 
+            style={[styles.card, { backgroundColor: '#FFF7ED', alignItems: 'center', paddingVertical: 20 }]}
+            onPress={() => navigation.navigate('AI Analyst')}
+         >
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>🤖</Text>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: '#9A3412' }}>Ask AI about {selectedMerchant.merchant_name}</Text>
+         </TouchableOpacity>
+
       </ScrollView>
     );
   }
@@ -122,14 +180,43 @@ export default function MerchantInsightsScreen() {
   // List view
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <Text style={styles.screenTitle}>🏪 Merchant Insights</Text>
-      <Text style={styles.screenSubtitle}>Your top merchants by total spend</Text>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.screenTitle}>🏪 Merchant Insights</Text>
+          <Text style={styles.screenSubtitle}>Your top merchants by total spend</Text>
+        </View>
+      </View>
+      <View style={styles.filters}>
+        <View style={styles.pickerContainer}>
+          <Text style={styles.pickerLabel}>Year</Text>
+          <Picker
+            selectedValue={year}
+            style={styles.picker}
+            onValueChange={(itemValue) => setYear(itemValue)}
+          >
+            {years.map(y => <Picker.Item key={y} label={String(y)} value={y} />)}
+          </Picker>
+        </View>
+        <View style={styles.pickerContainer}>
+          <Text style={styles.pickerLabel}>Month</Text>
+          <Picker
+            selectedValue={month}
+            style={styles.picker}
+            onValueChange={(itemValue) => setMonth(itemValue)}
+          >
+            {months.map(m => <Picker.Item key={m} label={m === 'all' ? 'All' : MONTH_NAMES[m as number - 1]} value={m} />)}
+          </Picker>
+        </View>
+      </View>
 
       {merchants.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🏬</Text>
-          <Text style={styles.emptyText}>No merchant insights yet</Text>
-          <Text style={styles.emptySubtext}>Add expenses with merchant info to see insights here</Text>
+          <Text style={styles.emptyText}>No merchant data found</Text>
+          <Text style={styles.emptySubtext}>Add merchant names to your expenses to improve merchant insights.</Text>
+           <TouchableOpacity style={styles.ctaButton} onPress={() => navigation.navigate('Add Expense')}>
+              <Text style={styles.ctaButtonText}>Add an Expense</Text>
+           </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -157,7 +244,10 @@ export default function MerchantInsightsScreen() {
 
       {detailLoading && (
         <View style={styles.overlay}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+           <View style={{ backgroundColor: theme.colors.surface, padding: 24, borderRadius: 16, alignItems: 'center' }}>
+               <ActivityIndicator size="large" color={theme.colors.primary} />
+               <Text style={{ marginTop: 12, color: theme.colors.textSecondary, fontWeight: '500' }}>Loading insights...</Text>
+           </View>
         </View>
       )}
     </View>
@@ -167,8 +257,13 @@ export default function MerchantInsightsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
-  screenTitle: { fontSize: 24, fontWeight: '800', color: theme.colors.text, paddingHorizontal: 16, paddingTop: 12 },
-  screenSubtitle: { fontSize: 14, color: theme.colors.textSecondary, paddingHorizontal: 16, marginBottom: 12 },
+  header: { paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  screenTitle: { fontSize: 24, fontWeight: '800', color: theme.colors.text },
+  screenSubtitle: { fontSize: 14, color: theme.colors.textSecondary, marginBottom: 12 },
+  filters: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 12, gap: 8 },
+  pickerContainer: { flex: 1, backgroundColor: theme.colors.surface, borderRadius: 8, padding: 8, ...theme.shadows.sm },
+  pickerLabel: { fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 },
+  picker: { height: 40 },
   // Merchant card
   merchantCard: {
     flexDirection: 'row', alignItems: 'center',
@@ -212,13 +307,19 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 15, fontWeight: '600', color: theme.colors.text },
   itemMeta: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
   itemAvg: { fontSize: 15, fontWeight: '700', color: theme.colors.primary },
-  // Empty
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  // Empty states and trust
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40, marginTop: 40 },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
   emptyText: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginBottom: 6 },
-  emptySubtext: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center' },
+  emptySubtext: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 20 },
+  ctaButton: { backgroundColor: theme.colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24 },
+  ctaButtonText: { color: 'white', fontWeight: '700', fontSize: 15 },
+  emptyDetailState: { alignItems: 'center', paddingVertical: 20 },
+  emptyDetailText: { fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 4 },
+  emptyDetailSubtext: { fontSize: 13, color: theme.colors.textTertiary, textAlign: 'center', marginBottom: 16 },
+  trustCopy: { fontSize: 11, color: theme.colors.textTertiary, fontStyle: 'italic', marginTop: 12, textAlign: 'center' },
   overlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.7)',
+    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center', alignItems: 'center',
   },
 });

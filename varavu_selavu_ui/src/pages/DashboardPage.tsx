@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import MetricCard from '../components/dashboard/MetricCard';
 import RecentActivityList from '../components/dashboard/RecentActivityList';
 import CategoryBreakdownSunburst from '../components/dashboard/CategoryBreakdownSunburst';
@@ -9,6 +10,9 @@ import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import Paper from '@mui/material/Paper';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { parseAppDate } from '../utils/date';
 import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
@@ -27,6 +31,7 @@ const DashboardPage: React.FC = () => {
     }
   });
   const year = new Date().getFullYear();
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     const user = localStorage.getItem('vs_user');
@@ -111,16 +116,44 @@ const DashboardPage: React.FC = () => {
     setData(resp);
   };
 
+  const InsightsLinksCard = () => (
+    <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+      <Typography variant="h6" gutterBottom fontWeight={600}>Discover Insights</Typography>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' }}>
+        <Button
+          variant="outlined"
+          color="primary"
+          startIcon={<ShoppingCartIcon />}
+          onClick={() => navigate('/item-insights')}
+          sx={{ justifyContent: 'flex-start', py: 1.5, borderRadius: 2 }}
+        >
+          View Top Purchased Items
+        </Button>
+        <Button
+          variant="outlined"
+          color="secondary"
+          startIcon={<StorefrontIcon />}
+          onClick={() => navigate('/merchant-insights')}
+          sx={{ justifyContent: 'flex-start', py: 1.5, borderRadius: 2 }}
+        >
+          View Top Merchants
+        </Button>
+      </Box>
+    </Paper>
+  );
+
+
   // Card registry for customizable layout
   const cards: Record<string, { id: string; md: number; element: React.ReactNode }> = {
     sunburstOther: { id: 'sunburstOther', md: 8, element: <CategoryBreakdownSunburst title="Other Expenses (This Month)" data={sunburstOther} details={otherDetailMap} /> },
     sunburstRecurring: { id: 'sunburstRecurring', md: 4, element: <CategoryBreakdownSunburst title="Recurring (This Month)" data={sunburstRecurring} details={recurringDetailMap} /> },
     trend: { id: 'trend', md: 8, element: <SpendTrendChart data={data.monthly_trend.slice(-12)} /> },
+    insights: { id: 'insights', md: 4, element: <InsightsLinksCard /> },
     recent: { id: 'recent', md: 8, element: <RecentActivityList items={recent} /> },
     quickAdd: { id: 'quickAdd', md: 4, element: <QuickAddExpenseCard onAdded={fetchData} /> },
     upcoming: { id: 'upcoming', md: 4, element: <UpcomingRecurringCard /> },
   };
-  const defaultOrder = ['sunburstOther', 'sunburstRecurring', 'trend', 'quickAdd', 'recent', 'upcoming'];
+  const defaultOrder = ['sunburstOther', 'sunburstRecurring', 'trend', 'insights', 'recent', 'upcoming', 'quickAdd'];
   const order = (layoutOrder && layoutOrder.length ? layoutOrder : defaultOrder).filter(id => cards[id]);
 
   // DnD handlers
