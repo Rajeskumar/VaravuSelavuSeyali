@@ -26,6 +26,8 @@ import RecurringExpensesScreen from './src/screens/RecurringExpensesScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import FeatureRequestScreen from './src/screens/FeatureRequestScreen';
 import ContactUsScreen from './src/screens/ContactUsScreen';
+import ItemInsightsScreen from './src/screens/ItemInsightsScreen';
+import MerchantInsightsScreen from './src/screens/MerchantInsightsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -162,6 +164,8 @@ interface DrawerMenuItem {
 
 const DRAWER_ITEMS: DrawerMenuItem[] = [
   { key: 'home', label: 'Home', icon: '🏠', screen: 'Dashboard' },
+  { key: 'itemInsights', label: 'Item Insights', icon: '🛒', screen: 'ItemInsights' },
+  { key: 'merchantInsights', label: 'Merchant Insights', icon: '🏪', screen: 'MerchantInsights' },
   { key: 'recurring', label: 'Recurring Expenses', icon: '🔁', screen: 'Recurring' },
   { key: 'about', label: 'About App', icon: 'ℹ️', screen: 'About' },
   { key: 'feature', label: 'Submit Feature Request', icon: '💡', screen: 'FeatureRequest' },
@@ -339,6 +343,16 @@ function AppShell() {
           name="Recurring"
           component={RecurringExpensesScreen}
           options={{ headerShown: true, headerTitle: 'Recurring Expenses', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="ItemInsights"
+          component={ItemInsightsScreen}
+          options={{ headerShown: true, headerTitle: 'Item Insights', headerBackTitle: 'Back' }}
+        />
+        <Stack.Screen
+          name="MerchantInsights"
+          component={MerchantInsightsScreen}
+          options={{ headerShown: true, headerTitle: 'Merchant Insights', headerBackTitle: 'Back' }}
         />
         <Stack.Screen
           name="About"

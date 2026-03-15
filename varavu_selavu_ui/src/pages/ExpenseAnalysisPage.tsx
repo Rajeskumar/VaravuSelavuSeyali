@@ -4,6 +4,7 @@ import ExpenseSummaryCards from '../components/analysis/ExpenseSummaryCards';
 import CategoryBarChart from '../components/analysis/CategoryBarChart';
 import CategorySummaryTable from '../components/analysis/CategorySummaryTable';
 import MonthlyTrendLineChart from '../components/analysis/MonthlyTrendLineChart';
+import SmartChangeInsightsCard from '../components/analysis/SmartChangeInsightsCard';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { useQuery } from '@tanstack/react-query';
 
@@ -96,10 +97,20 @@ const ExpenseAnalysisPage: React.FC = () => {
             </Paper>
           )}
 
-          <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
-            <ExpenseSummaryCards totalExpenses={data.total_expenses} income={income} />
-          </Paper>
+          <Grid container columns={12} spacing={2} sx={{ mb: 2 }}>
+             <Grid size={{ xs: 12, md: 7 }}>
+                <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
+                  <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
+                  <ExpenseSummaryCards totalExpenses={data.total_expenses} income={income} />
+                </Paper>
+             </Grid>
+             <Grid size={{ xs: 12, md: 5 }}>
+                 <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
+                   <Typography variant="h6" sx={{ mb: 1 }}>What Changed</Typography>
+                   <SmartChangeInsightsCard userId={user} year={year} month={overallYear ? undefined : month} />
+                 </Paper>
+             </Grid>
+          </Grid>
 
           <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
             <Typography variant="h6" sx={{ mb: 1 }}>Top Categories</Typography>
@@ -126,15 +137,6 @@ const ExpenseAnalysisPage: React.FC = () => {
             </Paper>
           ) : null}
 
-          {/* Optional: Keep last six months for context if desired; currently hidden for month view to avoid mixing data */}
-          {/* <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>Last 6 Months</Typography>
-            <Grid container columns={12}>
-              <Grid size={{ xs: 12 }}>
-                <LastSixMonthsLineChart monthlyTrend={data.monthly_trend} />
-              </Grid>
-            </Grid>
-          </Paper> */}
         </Grid>
       </Grid>
     </Box>

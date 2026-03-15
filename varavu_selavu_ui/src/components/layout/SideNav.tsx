@@ -11,6 +11,8 @@ import ListAltIcon from '@mui/icons-material/ListAlt';
 import InsightsIcon from '@mui/icons-material/Insights';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
+import StorefrontIcon from '@mui/icons-material/Storefront';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -20,6 +22,8 @@ const navItems = [
   { label: 'Dashboard', icon: <HomeIcon />, path: '/dashboard' },
   { label: 'Expenses', icon: <ListAltIcon />, path: '/expenses' },
   { label: 'Analysis', icon: <InsightsIcon />, path: '/analysis' },
+  { label: 'Item Insights', icon: <ShoppingCartIcon />, path: '/item-insights' },
+  { label: 'Merchant Insights', icon: <StorefrontIcon />, path: '/merchant-insights' },
   { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
   { label: 'Recurring', icon: <AutorenewIcon />, path: '/recurring' },
 ];

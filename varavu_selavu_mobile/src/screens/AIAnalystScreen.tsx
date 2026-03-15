@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
     FlatList, KeyboardAvoidingView, Platform, Animated,
-    ActivityIndicator, Keyboard, Modal, Dimensions,
+    ActivityIndicator, Keyboard, Modal, Dimensions, ScrollView
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -34,6 +34,13 @@ const PERIODS: { key: Period; label: string }[] = [
     { key: 'last_month', label: 'Last Month' },
     { key: 'this_year', label: 'This Year' },
     { key: 'all_time', label: 'All Time' },
+];
+
+const SUGGESTED_PROMPTS = [
+    "What were my top spending categories?",
+    "How much did I spend at Amazon?",
+    "Has the price of milk gone up?",
+    "Where did I buy eggs cheapest?"
 ];
 
 interface DisplayMessage {
@@ -112,8 +119,8 @@ export default function AIAnalystScreen() {
         }
     }, [loading]);
 
-    const handleSend = async () => {
-        const text = inputText.trim();
+    const handleSend = async (textOverride?: string) => {
+        const text = textOverride || inputText.trim();
         if (!text || loading) return;
 
         const userMsg: DisplayMessage = { id: Date.now().toString(), role: 'user', content: text };
@@ -247,16 +254,27 @@ export default function AIAnalystScreen() {
                             <Text style={styles.emptyIcon}>🤖</Text>
                             <Text style={styles.emptyTitle}>AI Financial Analyst</Text>
                             <Text style={styles.emptySubtitle}>
-                                Ask me anything about your expenses
+                                Ask me anything about your expenses, specific items, or merchants.
                             </Text>
                             <View style={styles.emptyPeriodBadge}>
                                 <Text style={styles.emptyPeriodText}>
                                     📅 {PERIODS.find(p => p.key === period)?.label}
                                 </Text>
                             </View>
-                            <Text style={styles.emptyHint}>
-                                e.g. "What were my top spending categories?"
-                            </Text>
+                            
+                            <View style={styles.suggestionsContainer}>
+                                <Text style={styles.suggestionsTitle}>Try asking:</Text>
+                                {SUGGESTED_PROMPTS.map((prompt, idx) => (
+                                    <TouchableOpacity 
+                                        key={idx} 
+                                        style={styles.suggestionChip}
+                                        onPress={() => handleSend(prompt)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.suggestionText}>{prompt}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
                         </View>
                     }
                     ListFooterComponent={renderTypingIndicator}
@@ -278,13 +296,13 @@ export default function AIAnalystScreen() {
                             placeholderTextColor={theme.colors.textTertiary}
                             value={inputText}
                             onChangeText={setInputText}
-                            onSubmitEditing={handleSend}
+                            onSubmitEditing={() => handleSend()}
                             multiline
                             maxLength={500}
                         />
                         <TouchableOpacity
                             style={[styles.sendBtn, (!inputText.trim() || loading) && styles.sendBtnDisabled]}
-                            onPress={handleSend}
+                            onPress={() => handleSend()}
                             disabled={!inputText.trim() || loading}
                             activeOpacity={0.7}
                         >
@@ -430,7 +448,7 @@ const styles = StyleSheet.create({
     sendBtnDisabled: { backgroundColor: theme.colors.textTertiary },
     sendBtnText: { color: '#fff', fontSize: 20, fontWeight: '700' },
     // Empty state
-    emptyState: { alignItems: 'center', paddingVertical: 60 },
+    emptyState: { alignItems: 'center', paddingVertical: 40 },
     emptyIcon: { fontSize: 48, marginBottom: 12 },
     emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.colors.text, marginBottom: 6 },
     emptySubtitle: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 36 },
@@ -440,9 +458,22 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
         borderRadius: 12,
         backgroundColor: theme.colors.primarySurface,
+        marginBottom: 20,
     },
     emptyPeriodText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-    emptyHint: { fontSize: 12, color: theme.colors.textTertiary, marginTop: 14, fontStyle: 'italic' },
+    suggestionsContainer: { width: '100%', paddingHorizontal: 20, marginTop: 10 },
+    suggestionsTitle: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 10, textAlign: 'center' },
+    suggestionChip: { 
+        backgroundColor: theme.colors.surface, 
+        borderWidth: 1, 
+        borderColor: theme.colors.border,
+        borderRadius: 20, 
+        paddingVertical: 10, 
+        paddingHorizontal: 16, 
+        marginBottom: 8,
+        ...theme.shadows.sm
+    },
+    suggestionText: { fontSize: 14, color: theme.colors.primary, textAlign: 'center', fontWeight: '500' },
     // Model picker modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
     modalContent: {
