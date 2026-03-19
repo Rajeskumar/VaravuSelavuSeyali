@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import SimpleSelect from '../components/SimpleSelect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
@@ -25,8 +25,9 @@ export default function MerchantInsightsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedMerchant, setSelectedMerchant] = useState<MerchantInsightDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [year, setYear] = useState<number | string>('all');
-  const [month, setMonth] = useState<number | string>('all');
+  // Keep picker values as strings across platforms to avoid blank selection issues
+  const [year, setYear] = useState<string>('all');
+  const [month, setMonth] = useState<string>('all');
 
   const fetchMerchants = useCallback(async () => {
     if (!userEmail) return;
@@ -65,8 +66,10 @@ export default function MerchantInsightsScreen() {
     }
   };
 
-  const years = ['all', ...Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)];
-  const months = ['all', ...Array.from({ length: 12 }, (_, i) => i + 1)];
+  const years = ['all', ...Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - i))];
+  const months = ['all', ...Array.from({ length: 12 }, (_, i) => String(i + 1))];
+  const yearOptions = years.map(y => ({ value: y, label: y === 'all' ? 'All' : y }));
+  const monthOptions = months.map(m => ({ value: m, label: m === 'all' ? 'All' : MONTH_NAMES[Number(m) - 1] }));
 
   if (loading && !refreshing) {
     return (
@@ -188,24 +191,10 @@ export default function MerchantInsightsScreen() {
       </View>
       <View style={styles.filters}>
         <View style={styles.pickerContainer}>
-          <Text style={styles.pickerLabel}>Year</Text>
-          <Picker
-            selectedValue={year}
-            style={styles.picker}
-            onValueChange={(itemValue) => setYear(itemValue)}
-          >
-            {years.map(y => <Picker.Item key={y} label={String(y)} value={y} />)}
-          </Picker>
+          <SimpleSelect label="Year" value={year} onChange={setYear} options={yearOptions} />
         </View>
         <View style={styles.pickerContainer}>
-          <Text style={styles.pickerLabel}>Month</Text>
-          <Picker
-            selectedValue={month}
-            style={styles.picker}
-            onValueChange={(itemValue) => setMonth(itemValue)}
-          >
-            {months.map(m => <Picker.Item key={m} label={m === 'all' ? 'All' : MONTH_NAMES[m as number - 1]} value={m} />)}
-          </Picker>
+          <SimpleSelect label="Month" value={month} onChange={setMonth} options={monthOptions} />
         </View>
       </View>
 
@@ -263,7 +252,7 @@ const styles = StyleSheet.create({
   filters: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 12, gap: 8 },
   pickerContainer: { flex: 1, backgroundColor: theme.colors.surface, borderRadius: 8, padding: 8, ...theme.shadows.sm },
   pickerLabel: { fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 },
-  picker: { height: 40 },
+  picker: { height: 40, color: theme.colors.text },
   // Merchant card
   merchantCard: {
     flexDirection: 'row', alignItems: 'center',
