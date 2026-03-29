@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import {
   Box, Typography, Paper, List, ListItemButton, ListItemText,
   Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  IconButton, LinearProgress, Alert, FormControl, InputLabel, Select, MenuItem, Button, Skeleton,
+  IconButton, LinearProgress, FormControl, InputLabel, Select, MenuItem, Button, Skeleton,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ReceiptIcon from '@mui/icons-material/Receipt';
@@ -24,8 +24,8 @@ const ItemInsightsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<ItemInsightDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [year, setYear] = useState<number | string>('all');
-  const [month, setMonth] = useState<number | string>('all');
+  const [year, setYear] = useState<number | string>(new Date().getFullYear());
+  const [month, setMonth] = useState<number | string>(new Date().getMonth() + 1);
   const location = useLocation();
 
   useEffect(() => {

@@ -39,8 +39,9 @@ def override_get_db_pg():
         db.close()
 
 # Only apply override if we actually load the app
-app.dependency_overrides[auth_required] = override_auth
-app.dependency_overrides[get_db] = override_get_db_pg
+if DB_URL:
+    app.dependency_overrides[auth_required] = override_auth
+    app.dependency_overrides[get_db] = override_get_db_pg
 
 @pytest.fixture(scope="module")
 def db_session_real():

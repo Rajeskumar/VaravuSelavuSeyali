@@ -587,6 +587,7 @@ def upsert_recurring_template(
         user_id=user_id,
         description=data.description,
         category=data.category,
+        merchant_name=data.merchant_name,
         day_of_month=int(data.day_of_month),
         default_cost=float(data.default_cost),
         start_date_iso=data.start_date_iso,
@@ -686,6 +687,7 @@ def confirm_recurring(
             description=d['description'],
             category=d['category'],
             cost=cost,
+            merchant_name=d.get('merchant_name'),
         )
         existing_keys.add(dup_key)
         processed.append({"template_id": d['template_id'], "date_iso": d['date_iso']})
@@ -768,6 +770,7 @@ def execute_recurring_now(
             description=tpl["description"],
             category=tpl["category"],
             cost=use_cost,
+            merchant_name=tpl.get("merchant_name"),
         )
         created = True
 

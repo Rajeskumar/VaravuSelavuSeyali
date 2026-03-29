@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MerchantInsightsPage from './MerchantInsightsPage';
+import { MemoryRouter } from 'react-router-dom';
 import * as analyticsApi from '../api/analytics';
 
 // Mock the API client
@@ -19,7 +20,7 @@ describe('MerchantInsightsPage', () => {
 
   it('renders the empty state when no merchants are returned', async () => {
     (analyticsApi.getTopMerchants as jest.Mock).mockResolvedValueOnce([]);
-    render(<MerchantInsightsPage />);
+    render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
 
     expect(await screen.findByText(/No merchant insights yet/i)).toBeInTheDocument();
   });
@@ -30,7 +31,7 @@ describe('MerchantInsightsPage', () => {
       { id: '2', merchant_name: 'Target', total_spent: 120.0, transaction_count: 5 }
     ]);
 
-    render(<MerchantInsightsPage />);
+    render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
 
     expect(await screen.findByText('Costco')).toBeInTheDocument();
     expect(screen.getByText('Target')).toBeInTheDocument();
@@ -55,7 +56,7 @@ describe('MerchantInsightsPage', () => {
       ]
     });
 
-    render(<MerchantInsightsPage />);
+    render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
 
     // Click the merchant
     const merchantButton = await screen.findByText('Costco');

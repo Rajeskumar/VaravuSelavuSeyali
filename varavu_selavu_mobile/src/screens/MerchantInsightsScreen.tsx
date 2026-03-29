@@ -210,7 +210,7 @@ export default function MerchantInsightsScreen() {
       ) : (
         <FlatList
           data={merchants}
-          keyExtractor={(m) => m.id}
+          keyExtractor={(m) => m.merchant_name}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
           contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
           renderItem={({ item: m }) => (

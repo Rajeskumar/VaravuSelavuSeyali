@@ -55,8 +55,9 @@ def db_session():
     db.add(u)
     db.commit()
     
-    yield db
-    
-    db.close()
-    # Drop all after test
-    Base.metadata.drop_all(bind=engine)
+    try:
+        yield db
+    finally:
+        db.close()
+        # Drop all after test
+        Base.metadata.drop_all(bind=engine)

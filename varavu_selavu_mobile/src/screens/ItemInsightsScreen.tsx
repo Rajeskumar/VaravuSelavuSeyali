@@ -199,7 +199,7 @@ export default function ItemInsightsScreen() {
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item) => item.id || item.item_name || String(Math.random())}
+          keyExtractor={(item, index) => item.normalized_name || item.item_name || String(index)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
           contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
           renderItem={({ item }) => (

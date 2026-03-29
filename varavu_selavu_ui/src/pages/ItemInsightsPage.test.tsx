@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ItemInsightsPage from './ItemInsightsPage';
+import { MemoryRouter } from 'react-router-dom';
 import * as analyticsApi from '../api/analytics';
 
 // Mock the API client
@@ -19,7 +20,7 @@ describe('ItemInsightsPage', () => {
 
   it('renders the empty state when no items are returned', async () => {
     (analyticsApi.getTopItems as jest.Mock).mockResolvedValueOnce([]);
-    render(<ItemInsightsPage />);
+    render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
 
     expect(await screen.findByText(/No item insights yet/i)).toBeInTheDocument();
   });
@@ -30,7 +31,7 @@ describe('ItemInsightsPage', () => {
       { id: '2', normalized_name: 'Whole Milk', avg_unit_price: 4.0, total_quantity_bought: 5, total_spent: 20.0 }
     ]);
 
-    render(<ItemInsightsPage />);
+    render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
 
     expect(await screen.findByText('Fuji Apples')).toBeInTheDocument();
     expect(screen.getByText('Whole Milk')).toBeInTheDocument();
@@ -57,7 +58,7 @@ describe('ItemInsightsPage', () => {
       ]
     });
 
-    render(<ItemInsightsPage />);
+    render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
 
     // Click the item
     const itemButton = await screen.findByText('Fuji Apples');

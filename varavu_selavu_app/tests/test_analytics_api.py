@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
+from unittest.mock import patch
 
 # Ensure we use an in-memory db for these unit tests if not specified
 if "DATABASE_URL" not in os.environ:
@@ -16,37 +17,10 @@ from varavu_selavu_service.db.session import Base, get_db
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.db.models import User, Expense, ExpenseItem, ItemInsight, MerchantInsight
 
-engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-    execution_options={"schema_translate_map": {"trackspense": None}}
-)
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-def override_auth():
-    return "test@user.com"
-
-app.dependency_overrides[get_db] = override_get_db
-app.dependency_overrides[auth_required] = override_auth
-
 @pytest.fixture(scope="function")
-def db_session():
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
+def analytics_db_session(db_session):
+    db = db_session
     
-    # Seed User
-    user_id = uuid.uuid4()
-    user = User(id=user_id, email="test@user.com", password_hash="hash", name="Test User")
-    db.add(user)
-
     # Seed Data for Dynamic Retrieval
     e1 = Expense(
         id=uuid.uuid4(),
@@ -80,45 +54,44 @@ def db_session():
     db.add(merchant1)
     
     db.commit()
+    db.commit()
     yield db
-    db.close()
-    Base.metadata.drop_all(bind=engine)
 
-client = TestClient(app)
-
-def test_get_top_items(db_session):
-    response = client.get("/api/v1/analytics/items?limit=10")
+def test_get_top_items(test_client, analytics_db_session):
+    response = test_client.get("/api/v1/analytics/items?limit=10")
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 1
     assert data[0]["normalized_name"] == "Apples" or data[0]["item_name"] == "Apples"
 
-def test_get_item_detail(db_session):
-    response = client.get("/api/v1/analytics/items/Apples")
+def test_get_item_detail(test_client, analytics_db_session):
+    response = test_client.get("/api/v1/analytics/items/Apples?user_id=test@user.com")
     assert response.status_code == 200
     data = response.json()
     assert data["normalized_name"] == "Apples" or data["item_name"] == "Apples"
     assert "price_history" in data
     assert "store_comparison" in data
     
-def test_get_top_merchants(db_session):
-    response = client.get("/api/v1/analytics/merchants?limit=10")
+def test_get_top_merchants(test_client, analytics_db_session):
+    response = test_client.get("/api/v1/analytics/merchants?limit=10")
     assert response.status_code == 200
     data = response.json()
     assert len(data) >= 1
     assert data[0]["merchant_name"] == "Walmart"
 
-def test_get_merchant_detail(db_session):
-    response = client.get("/api/v1/analytics/merchants/Walmart")
+def test_get_merchant_detail(test_client, analytics_db_session):
+    response = test_client.get("/api/v1/analytics/merchants/Walmart?user_id=test@user.com")
     assert response.status_code == 200
     data = response.json()
     assert data["merchant_name"] == "Walmart"
     assert "monthly_aggregates" in data
     assert "items_bought" in data
 
-def test_analysis_chat_with_item_intent(db_session):
+@patch("varavu_selavu_service.api.routes.call_chat_model")
+def test_analysis_chat_with_item_intent(mock_call_chat_model, test_client, analytics_db_session):
+    mock_call_chat_model.return_value = "Apples cost $2.00 on average."
     # Asking about an item should trigger the item intent
-    response = client.post(
+    response = test_client.post(
         "/api/v1/analysis/chat",
         json={
             "user_id": "test@user.com",
@@ -132,9 +105,11 @@ def test_analysis_chat_with_item_intent(db_session):
     assert response.status_code == 200
     assert "response" in response.json()
 
-def test_analysis_chat_with_merchant_intent(db_session):
+@patch("varavu_selavu_service.api.routes.call_chat_model")
+def test_analysis_chat_with_merchant_intent(mock_call_chat_model, test_client, analytics_db_session):
+    mock_call_chat_model.return_value = "You spent $150.0 at Walmart."
     # Asking about a merchant should trigger the merchant intent
-    response = client.post(
+    response = test_client.post(
         "/api/v1/analysis/chat",
         json={
             "user_id": "test@user.com",

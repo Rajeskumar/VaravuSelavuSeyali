@@ -48,7 +48,7 @@ test('add and delete items, save enabled on mismatch', async () => {
 
   fireEvent.change(screen.getByLabelText(/Cost \(USD\)/i), { target: { value: '2' } });
   expect(
-  screen.getByText((content) => content.startsWith('Totals mismatch by $'))
-).toBeTruthy();
-  expect(screen.getByText('Add Expense')).toBeTruthy();
+    screen.getByText((content) => content.startsWith('Totals mismatch by $'))
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Add Expense' })).not.toBeDisabled();
 });

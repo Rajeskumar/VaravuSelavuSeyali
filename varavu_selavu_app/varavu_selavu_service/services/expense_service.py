@@ -33,6 +33,21 @@ class ExpenseService:
             merchant_name=merchant_name,
         )
         self.db.add(db_expense)
+        
+        from varavu_selavu_service.db.models import ExpenseItem
+        proxy_item = ExpenseItem(
+            expense_id=new_id,
+            user_email=user_id,
+            line_no=1,
+            item_name=description,
+            normalized_name=description,
+            category_id=category,
+            quantity=1,
+            unit="Item",
+            unit_price=cost,
+            line_total=cost,
+        )
+        self.db.add(proxy_item)
         self.db.commit()
         
         return {
@@ -133,6 +148,31 @@ class ExpenseService:
             expense.category_id = category
             expense.amount = cost
             expense.merchant_name = merchant_name
+            
+            from varavu_selavu_service.db.models import ExpenseItem
+            items = self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == parsed_id).all()
+            if len(items) == 1:
+                # If there's exactly one item, we assume it's our synthesized proxy (or a 1-item receipt). Keep it in sync.
+                items[0].item_name = description
+                items[0].normalized_name = description
+                items[0].category_id = category
+                items[0].unit_price = cost
+                items[0].line_total = cost
+            elif len(items) == 0:
+                proxy_item = ExpenseItem(
+                    expense_id=parsed_id,
+                    user_email=user_id,
+                    line_no=1,
+                    item_name=description,
+                    normalized_name=description,
+                    category_id=category,
+                    quantity=1,
+                    unit="Item",
+                    unit_price=cost,
+                    line_total=cost,
+                )
+                self.db.add(proxy_item)
+
             self.db.commit()
             
         return {

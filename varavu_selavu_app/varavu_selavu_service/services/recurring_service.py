@@ -28,6 +28,7 @@ class RecurringService:
                 "id": str(r.id),
                 "description": r.description,
                 "category": r.category,
+                "merchant_name": r.merchant_name,
                 "day_of_month": int(r.day_of_month),
                 "default_cost": float(r.default_cost),
                 "start_date_iso": st_iso or datetime.utcnow().strftime("%Y-%m-%d"),
@@ -45,6 +46,7 @@ class RecurringService:
         default_cost: float,
         start_date_iso: Optional[str] = None,
         status: str = "Active",
+        merchant_name: Optional[str] = None,
     ) -> Dict:
         start_val = start_date_iso or datetime.utcnow().strftime("%Y-%m-%d")
         start_date_parsed = datetime.strptime(start_val, "%Y-%m-%d").date()
@@ -56,6 +58,7 @@ class RecurringService:
         ).first()
 
         if tpl:
+            tpl.merchant_name = merchant_name
             tpl.day_of_month = day_of_month
             tpl.default_cost = default_cost
             tpl.start_date = start_date_parsed
@@ -68,6 +71,7 @@ class RecurringService:
                 user_email=user_id,
                 description=description,
                 category=category,
+                merchant_name=merchant_name,
                 day_of_month=day_of_month,
                 default_cost=default_cost,
                 start_date=start_date_parsed,
@@ -82,6 +86,7 @@ class RecurringService:
             "id": tpl_id,
             "description": description,
             "category": category,
+            "merchant_name": merchant_name,
             "day_of_month": day_of_month,
             "default_cost": default_cost,
             "start_date_iso": start_val,
@@ -112,6 +117,7 @@ class RecurringService:
                         "date_iso": d.strftime("%Y-%m-%d"),
                         "description": tpl["description"],
                         "category": tpl["category"],
+                        "merchant_name": tpl.get("merchant_name"),
                         "suggested_cost": tpl["default_cost"],
                     })
                 m0 += 1

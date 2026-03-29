@@ -107,6 +107,10 @@ class ReceiptService:
             "'Boneless Skinless Chicken Breast'), "
             "quantity, unit, unit_price, line_total, and category_name. Correct any "
             "misspelled or partial item names using your knowledge of grocery products. "
+            "Crucially, accurately identify taxes and discounts. A discount can be a global "
+            "receipt discount, or a negative line item (set line_total to a negative number). "
+            "Ensure that the sum of line_total for all items plus tax and tip, minus discount "
+            "exactly matches the total amount. Be extremely careful not to miss tax details. "
             "All monetary values must be floating point dollars exactly as shown on the "
             "receipt with no rounding. Respond only with JSON."
         )
@@ -166,9 +170,13 @@ class ReceiptService:
                 "'GV WHOLE MLK GL' becomes 'Great Value Whole Milk Gallon'), "
                 "quantity, unit, unit_price, line_total, and category_name. "
                 "Fix any misspelled or partial item names using your knowledge of "
-                "grocery products. All monetary values must be floating point "
-                "dollars exactly as shown on the receipt. Respond only with JSON. "
-                "Image (base64): "
+                "grocery products. Crucially, accurately identify taxes and discounts. "
+                "A discount can be a global receipt discount, or a negative line item "
+                "(set line_total to a negative number). Ensure the sum of line_total "
+                "for all items plus tax and tip, minus discount exactly matches the "
+                "total amount. Be extremely careful not to miss tax details. "
+                "All monetary values must be floating point dollars exactly as shown. "
+                "Respond only with JSON. Image (base64): "
                 + b64
             ),
             "format": "json",

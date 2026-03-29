@@ -69,6 +69,7 @@ class RecurringTemplate(Base):
     user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
     description = Column(String(255), nullable=False)
     category = Column(String(100), nullable=False)
+    merchant_name = Column(String(255))
     day_of_month = Column(Integer, nullable=False)
     default_cost = Column(Numeric(12, 2), nullable=False)
     start_date = Column(Date, nullable=False)

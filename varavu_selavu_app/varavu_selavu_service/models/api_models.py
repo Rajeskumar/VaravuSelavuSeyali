@@ -212,6 +212,7 @@ class RecurringTemplateDTO(BaseModel):
     id: str
     description: str
     category: str
+    merchant_name: str | None = None
     day_of_month: conint(ge=1, le=31)  # type: ignore
     default_cost: float
     start_date_iso: str
@@ -222,6 +223,7 @@ class RecurringTemplateDTO(BaseModel):
 class UpsertRecurringTemplateRequest(BaseModel):
     description: str
     category: str
+    merchant_name: str | None = None
     day_of_month: conint(ge=1, le=31)  # type: ignore
     default_cost: float
     start_date_iso: str | None = None
@@ -233,6 +235,7 @@ class DueOccurrenceDTO(BaseModel):
     date_iso: str
     description: str
     category: str
+    merchant_name: str | None = None
     suggested_cost: float
 
 

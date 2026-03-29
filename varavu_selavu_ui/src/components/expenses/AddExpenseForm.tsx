@@ -291,7 +291,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
 
   const reconcileDelta = () => {
     if (!draft) return 0;
-    const subtotal = draft.items.reduce((s: number, it: any) => s + (it.line_total || 0), 0);
+    const subtotal = draft.items.reduce((s: number, it: any) => s + (Number(it.line_total) || 0), 0);
     const { tax = 0, tip = 0, discount = 0 } = draft.header;
     return subtotal + tax + tip - discount - cost;
   };
@@ -302,7 +302,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     const requiredFilled =
       description.trim() !== '' && cost > 0 && expenseDate && subcategory && mainCategory;
     return (
-      saving || parsing || converting || !requiredFilled || (draft ? !reconcileOk() : false)
+      saving || parsing || converting || !requiredFilled
     );
   };
 
@@ -622,7 +622,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                       sx={glassFieldSx}
                       onChange={e => {
                         const items = [...draft.items];
-                        items[idx].line_total = parseFloat(e.target.value) || 0;
+                        const val = e.target.value;
+                        items[idx].line_total = val === '-' || val === '' ? val : Number(val);
                         setDraft({ ...draft, items });
                       }}
                     />
