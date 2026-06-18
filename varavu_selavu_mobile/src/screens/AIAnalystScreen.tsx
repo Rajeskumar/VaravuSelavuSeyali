@@ -4,6 +4,7 @@ import {
     FlatList, KeyboardAvoidingView, Platform, Animated,
     ActivityIndicator, Keyboard, Modal, Dimensions, ScrollView
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { sendChatMessage, ChatPayload } from '../api/chat';
@@ -191,13 +192,13 @@ export default function AIAnalystScreen() {
         );
     };
 
-    // When keyboard is closed, we need space for the absolute tab bar (72px)
-    // When keyboard is open, the tab bar hides, so no extra spacing needed
+    // When keyboard is closed, we need space for the absolute tab bar
+    // The pill nav is 66px tall + 16px bottom margin + safe area
     const isKeyboardUp = keyboardHeight > 0;
-    const TAB_BAR_HEIGHT = 72;
+    const TAB_BAR_HEIGHT = 82 + insets.bottom;
 
     return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
             {/* Header bar: Period chips + Model selector — inside safe area */}
             <View style={styles.headerBar}>
                 <View style={styles.periodRow}>
@@ -344,14 +345,13 @@ export default function AIAnalystScreen() {
                     </View>
                 </TouchableOpacity>
             </Modal>
-        </View>
+        </LinearGradient>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: theme.colors.background,
     },
     // Header: period chips + model selector
     headerBar: {

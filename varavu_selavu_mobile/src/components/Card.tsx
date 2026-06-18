@@ -6,15 +6,17 @@ interface CardProps {
     children: React.ReactNode;
     style?: ViewStyle;
     noPadding?: boolean;
+    /** Use inset style — gray background, no shadow (for grouped list sections) */
+    inset?: boolean;
 }
 
 /**
- * Card — elevated white container with subtle shadow.
- * 16px border radius, 20px padding by default.
+ * Card — iOS-style elevated white container.
+ * Mimics premium card layouts: generous radius, diffused shadow, zero border.
  */
-export default function Card({ children, style, noPadding = false }: CardProps) {
+export default function Card({ children, style, noPadding = false, inset = false }: CardProps) {
     return (
-        <View style={[styles.card, noPadding && styles.noPadding, style]}>
+        <View style={[styles.card, noPadding && styles.noPadding, inset && styles.inset, style]}>
             {children}
         </View>
     );
@@ -23,16 +25,16 @@ export default function Card({ children, style, noPadding = false }: CardProps) 
 const styles = StyleSheet.create({
     card: {
         backgroundColor: theme.colors.surface,
-        borderRadius: theme.borderRadius.lg,
+        borderRadius: theme.borderRadius.xl,
         padding: 20,
-        marginBottom: 16,
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
-        elevation: 3,
+        marginBottom: 12,
+        ...theme.shadows.sm,
     },
     noPadding: {
         padding: 0,
+    },
+    inset: {
+        backgroundColor: theme.colors.surfaceSecondary,
+        ...theme.shadows.xs,
     },
 });

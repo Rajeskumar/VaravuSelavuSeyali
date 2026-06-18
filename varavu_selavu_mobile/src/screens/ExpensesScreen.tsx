@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, Modal, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
@@ -179,7 +180,7 @@ export default function ExpensesScreen() {
     );
 
     return (
-        <View style={styles.container}>
+        <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={styles.container}>
             <View style={styles.header}>
                 <Text style={theme.typography.h2}>History</Text>
                 <Text style={styles.headerSubtitle}>
@@ -298,14 +299,13 @@ export default function ExpensesScreen() {
                     </View>
                 </View>
             </Modal>
-        </View>
+        </LinearGradient>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: theme.colors.background,
         paddingTop: Platform.OS === 'android' ? 50 : 56,
     },
     header: {

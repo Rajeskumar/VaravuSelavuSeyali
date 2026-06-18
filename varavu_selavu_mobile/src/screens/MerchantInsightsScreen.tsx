@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import SimpleSelect from '../components/SimpleSelect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -73,7 +74,7 @@ export default function MerchantInsightsScreen() {
 
   if (loading && !refreshing) {
     return (
-      <ScrollView style={[styles.container, { paddingTop: insets.top }]}>
+      <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
          <View style={styles.header}>
             <View>
               <Text style={styles.screenTitle}>🏪 Merchant Insights</Text>
@@ -83,14 +84,15 @@ export default function MerchantInsightsScreen() {
         <View style={{ paddingHorizontal: 16 }}>
            <ListSkeleton count={5} />
         </View>
-      </ScrollView>
+      </LinearGradient>
     );
   }
 
   // Detail view
   if (selectedMerchant) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
+      <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={styles.container}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top }}>
         <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedMerchant(null)}>
           <Text style={styles.backText}>← Back to Merchants</Text>
         </TouchableOpacity>
@@ -177,12 +179,13 @@ export default function MerchantInsightsScreen() {
          </TouchableOpacity>
 
       </ScrollView>
+      </LinearGradient>
     );
   }
 
   // List view
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.screenTitle}>🏪 Merchant Insights</Text>
@@ -239,12 +242,12 @@ export default function MerchantInsightsScreen() {
            </View>
         </View>
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
   header: { paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   screenTitle: { fontSize: 24, fontWeight: '800', color: theme.colors.text },

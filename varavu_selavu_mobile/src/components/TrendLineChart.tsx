@@ -55,25 +55,27 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
     const chartConfig = {
         backgroundGradientFrom: theme.colors.surface,
         backgroundGradientTo: theme.colors.surface,
-        color: (opacity = 1) => `rgba(14, 165, 233, ${opacity})`, // Sky blue
+        color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`, // Royal Blue
         labelColor: () => theme.colors.textSecondary,
         strokeWidth: 3,
         decimalPlaces: 0,
         propsForBackgroundLines: {
-            strokeDasharray: '6 4',
-            stroke: theme.colors.borderLight,
-            strokeWidth: 1,
+            strokeWidth: 0, // Removed grid lines
+        },
+        propsForLabels: {
+            fontFamily: 'Inter-Medium',
+            fontSize: 11,
         },
         propsForDots: {
-            r: '5',
+            r: '4',
             strokeWidth: '2',
-            stroke: '#0EA5E9',
+            stroke: '#2563EB',
             fill: theme.colors.surface,
         },
-        fillShadowGradientFrom: '#0EA5E9',
-        fillShadowGradientTo: '#E0F2FE',
-        fillShadowGradientFromOpacity: 0.35,
-        fillShadowGradientToOpacity: 0.02,
+        fillShadowGradientFrom: '#2563EB',
+        fillShadowGradientTo: theme.colors.surface,
+        fillShadowGradientFromOpacity: 0.25,
+        fillShadowGradientToOpacity: 0.0,
     };
 
     return (
@@ -81,7 +83,7 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
             <Text style={[theme.typography.h3, { marginBottom: 16 }]}>{title}</Text>
             {loading ? (
                 <View style={styles.loader}>
-                    <ActivityIndicator size="small" color={theme.colors.secondary} />
+                    <ActivityIndicator size="small" color={theme.colors.primary} />
                     <Text style={styles.loaderText}>Loading trend data...</Text>
                 </View>
             ) : trendData && trendData.values.some((v) => v > 0) ? (
@@ -95,7 +97,7 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
                         height={200}
                         chartConfig={chartConfig}
                         bezier
-                        withInnerLines={true}
+                        withInnerLines={false}
                         withOuterLines={false}
                         withVerticalLines={false}
                         fromZero

@@ -1,118 +1,195 @@
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
 
+/**
+ * Premium design tokens.
+ * - Primary: Accent Blue #007AFF
+ * - Background: iOS System White #FFFFFF
+ * - Secondary Surface: iOS System Gray 6 #F2F2F7
+ * - Cards: Pure white with diffused iOS-style shadow
+ */
 export const theme = {
   colors: {
-    primary: '#059669',         // Emerald 600
-    primaryLight: '#34D399',    // Emerald 400
-    primaryDark: '#047857',     // Emerald 700
-    primarySurface: '#ECFDF5',  // Emerald 50
-    secondary: '#0EA5E9',       // Sky 500
-    background: '#F5F7FA',      // Cool off-white
-    surface: '#FFFFFF',
-    text: '#1e293b',            // Dark Slate 800
-    textSecondary: '#64748b',   // Slate 500
-    textTertiary: '#94a3b8',    // Slate 400
-    error: '#EF4444',           // Red 500
-    errorSurface: '#FEF2F2',    // Red 50
-    success: '#10B981',         // Emerald 500
-    successSurface: '#ECFDF5',
-    warning: '#F59E0B',         // Amber 500
-    warningSurface: '#FFFBEB',
-    border: '#E2E8F0',          // Slate 200
-    borderLight: '#F1F5F9',     // Slate 100
-    glass: 'rgba(255, 255, 255, 0.9)',
-    glassDark: 'rgba(255, 255, 255, 0.95)',
-    gradientStart: '#059669',
-    gradientEnd: '#047857',
-    overlay: 'rgba(15, 23, 42, 0.6)',
+    // Accent Blue — precise, trustworthy
+    primary: '#4F46E5', // Indigo
+    primaryLight: '#6D64F0',
+    primaryDark: '#3730A3',
+    primarySurface: '#EEF2FF',
+    secondary: '#14B8A6', // Teal
+
+    // Backgrounds — iOS system palette
+    background: '#F6F7FB',        // Matches web
+    surface: '#FFFFFF',           // Cards and sheets
+    surfaceSecondary: '#F2F2F7',  // Inset backgrounds inside cards
+    surfaceElevated: '#FFFFFF',   // Elevated overlays
+
+    // Text — standard iOS typographic palette
+    text: '#111827',              // Matches web dark
+    textSecondary: '#6B7280',     // 60% opacity — iOS secondary label
+    textTertiary: '#9CA3AF',      // iOS tertiary label
+    textQuaternary: '#C7C7CC',    // iOS quaternary label
+
+    // Semantic signals
+    success: '#16A34A',           // System Green
+    successSurface: '#E9F9EE',
+    error: '#DC2626',             // System Red
+    errorSurface: '#FFF0EF',
+    warning: '#F59E0B',           // System Orange
+    warningSurface: '#FFF4E6',
+
+    // Borders & Dividers — iOS separator
+    border: '#E5E7EB',            // iOS separator (opaque)
+    borderLight: '#F3F4F6',       // iOS separator (light)
+
+    // Special
+    highlight: '#14B8A6',
   },
+
   spacing: {
     xs: 4,
     sm: 8,
     md: 16,
     lg: 24,
     xl: 32,
-    xxl: 40,
+    xxl: 48,
   },
+
   borderRadius: {
-    sm: 8,
-    md: 12,
-    lg: 16,
-    xl: 28,
+    xs: 6,
+    sm: 10,
+    md: 14,
+    lg: 18,
+    xl: 22,
+    xxl: 32,
     full: 9999,
   },
+
   typography: {
+    fontFamily: {
+      regular: 'Inter-Regular',
+      medium: 'Inter-Medium',
+      semiBold: 'Inter-SemiBold',
+      bold: 'Inter-Bold',
+      black: 'Inter-Black',
+    },
+    // iOS "largeTitle" equivalent
     h1: {
-      fontSize: 32,
-      fontWeight: '800' as const,
-      color: '#1e293b',
+      fontFamily: 'Inter-Black',
+      fontSize: 34,
+      color: '#000000',
       letterSpacing: -0.5,
     },
+    // iOS "title1"
     h2: {
-      fontSize: 24,
-      fontWeight: '700' as const,
-      color: '#1e293b',
+      fontFamily: 'Inter-Bold',
+      fontSize: 28,
+      color: '#000000',
       letterSpacing: -0.3,
     },
+    // iOS "title2"
     h3: {
-      fontSize: 20,
-      fontWeight: '600' as const,
-      color: '#1e293b',
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 22,
+      color: '#000000',
+      letterSpacing: -0.2,
     },
+    // iOS "headline"
     body: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 17,
+      color: '#000000',
+    },
+    // iOS "body"
+    bodyRegular: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 17,
+      color: '#000000',
+      lineHeight: 22,
+    },
+    // iOS "callout"
+    callout: {
+      fontFamily: 'Inter-Regular',
       fontSize: 16,
-      fontWeight: '400' as const,
-      color: '#1e293b',
-      lineHeight: 24,
+      color: '#3C3C43',
     },
-    bodySmall: {
-      fontSize: 14,
-      fontWeight: '400' as const,
-      color: '#64748b',
-      lineHeight: 20,
+    // iOS "subheadline"
+    subheadline: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 15,
+      color: '#3C3C43',
     },
+    // iOS "footnote"
+    footnote: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 13,
+      color: '#8E8E93',
+    },
+    // iOS "caption1"
     caption: {
+      fontFamily: 'Inter-Regular',
       fontSize: 12,
-      fontWeight: '500' as const,
-      color: '#64748b',
-      letterSpacing: 0.2,
+      color: '#8E8E93',
     },
     label: {
+      fontFamily: 'Inter-SemiBold',
       fontSize: 13,
-      fontWeight: '600' as const,
-      color: '#64748b',
+      color: '#8E8E93',
       textTransform: 'uppercase' as const,
-      letterSpacing: 0.8,
+      letterSpacing: 0.5,
     },
   },
+
   shadows: {
-    sm: {
-      shadowColor: '#0f172a',
+    // iOS-style diffused shadow — very soft
+    xs: {
+      shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.06,
-      shadowRadius: 2,
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
       elevation: 1,
     },
+    sm: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 12,
+      elevation: 2,
+    },
     md: {
-      shadowColor: '#0f172a',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 3,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 20,
+      elevation: 4,
     },
     lg: {
-      shadowColor: '#0f172a',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.15,
-      shadowRadius: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.10,
+      shadowRadius: 28,
       elevation: 8,
     },
-    colored: {
-      shadowColor: '#059669',
-      shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.3,
-      shadowRadius: 20,
+    // Colored glow for the FAB
+    fab: {
+      shadowColor: '#4F46E5',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 16,
       elevation: 10,
+    },
+    // Floating pill nav bar shadow
+    nav: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.12,
+      shadowRadius: 24,
+      elevation: 12,
+    },
+    colored: {
+      shadowColor: '#4F46E5',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.25,
+      shadowRadius: 16,
+      elevation: 8,
     },
   },
 } as const;
@@ -124,66 +201,23 @@ export const globalStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
+    borderRadius: theme.borderRadius.xl,
     padding: theme.spacing.lg,
     marginBottom: theme.spacing.md,
-    ...theme.shadows.md,
+    ...theme.shadows.sm,
   },
-  glassCard: {
-    backgroundColor: theme.colors.glass,
-    borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    ...theme.shadows.md,
-  },
-  input: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: theme.borderRadius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 14,
-    marginBottom: theme.spacing.md,
-    borderWidth: 1.5,
-    borderColor: theme.colors.border,
-    fontSize: 16,
-    color: theme.colors.text,
-    minHeight: 48,
-  },
-  button: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 14,
-    paddingHorizontal: theme.spacing.lg,
+  // iOS-style inset grouped list section
+  listSection: {
+    backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    ...theme.shadows.md,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 14,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.borderRadius.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: theme.colors.primary,
-    minHeight: 48,
-  },
-  secondaryButtonText: {
-    color: theme.colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sectionTitle: {
-    ...theme.typography.h3,
+    overflow: 'hidden',
     marginBottom: theme.spacing.md,
-    marginTop: theme.spacing.sm,
+    ...theme.shadows.sm,
+  },
+  // iOS separator that respects left inset (like Settings app)
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.borderLight,
+    marginLeft: 56,
   },
 });

@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, ScrollView, StyleSheet, Platform, StatusBar, ViewStyle } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { theme } from '../theme';
 
 interface ScreenWrapperProps {
@@ -25,24 +26,28 @@ export default function ScreenWrapper({
 
     if (scroll) {
         return (
-            <ScrollView
-                style={containerStyle}
-                contentContainerStyle={[styles.content, { paddingBottom }, contentStyle]}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-            >
-                {children}
-            </ScrollView>
+            <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={containerStyle}>
+                <ScrollView
+                    contentContainerStyle={[styles.content, { paddingBottom }, contentStyle]}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {children}
+                </ScrollView>
+            </LinearGradient>
         );
     }
 
-    return <View style={[containerStyle, styles.content, contentStyle]}>{children}</View>;
+    return (
+        <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[containerStyle, styles.content, contentStyle]}>
+            {children}
+        </LinearGradient>
+    );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: theme.colors.background,
         paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 40) + 8 : 56,
     },
     content: {

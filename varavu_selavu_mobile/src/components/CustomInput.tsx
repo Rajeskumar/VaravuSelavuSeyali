@@ -13,12 +13,15 @@ interface CustomInputProps extends TextInputProps {
     label?: string;
     error?: string;
     containerStyle?: ViewStyle;
-    icon?: string; // emoji / text glyph
+    icon?: string;
 }
 
 /**
- * CustomInput — styled text input with label, focus border, and optional error/icon.
- * Background: #F8FAFC, focus border = primary color, min height 48px.
+ * CustomInput — iOS Settings/App Store-style input field.
+ * Uses the iOS inset grouped list aesthetic:
+ * - White background, subtle border radius
+ * - Blue cursor + border on focus
+ * - No heavy outer shadow
  */
 export default function CustomInput({
     label,
@@ -43,7 +46,8 @@ export default function CustomInput({
                 {icon ? <Text style={styles.icon}>{icon}</Text> : null}
                 <TextInput
                     style={[styles.input, style]}
-                    placeholderTextColor={theme.colors.textTertiary}
+                    placeholderTextColor={theme.colors.textQuaternary}
+                    selectionColor={theme.colors.primary}
                     onFocus={(e) => {
                         setFocused(true);
                         rest.onFocus?.(e);
@@ -62,48 +66,48 @@ export default function CustomInput({
 
 const styles = StyleSheet.create({
     container: {
-        marginBottom: 18,
+        marginBottom: 0,
     },
     label: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: theme.colors.textSecondary,
-        marginBottom: 8,
-        marginLeft: 4,
-        textTransform: 'uppercase',
-        letterSpacing: 0.6,
+        ...theme.typography.label,
+        marginBottom: 6,
+        marginLeft: 16,
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: 12,
-        borderWidth: 1.5,
-        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.lg,
+        borderWidth: 1,
+        borderColor: theme.colors.borderLight,
         paddingHorizontal: 16,
         minHeight: 52,
     },
     inputFocused: {
         borderColor: theme.colors.primary,
-        backgroundColor: '#FFFFFF',
+        borderWidth: 1.5,
     },
     inputError: {
         borderColor: theme.colors.error,
+        borderWidth: 1.5,
     },
     icon: {
         fontSize: 18,
         marginRight: 10,
+        opacity: 0.7,
     },
     input: {
         flex: 1,
-        fontSize: 16,
+        fontFamily: theme.typography.fontFamily.regular,
+        fontSize: 17,
         color: theme.colors.text,
-        paddingVertical: 12,
+        paddingVertical: 14,
     },
     error: {
-        fontSize: 12,
+        fontFamily: theme.typography.fontFamily.regular,
+        fontSize: 13,
         color: theme.colors.error,
-        marginTop: 4,
-        marginLeft: 4,
+        marginTop: 6,
+        marginLeft: 16,
     },
 });

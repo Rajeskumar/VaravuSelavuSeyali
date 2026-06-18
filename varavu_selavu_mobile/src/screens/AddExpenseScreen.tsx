@@ -1,153 +1,102 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, createContext } from 'react';
 import {
-  View, Text, StyleSheet,
-  ScrollView, TouchableOpacity, Image, Platform,
-  KeyboardAvoidingView, TextInput as RNTextInput, Modal,
-  ActivityIndicator, FlatList,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
+  Dimensions, Pressable, Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
-import {
-  addExpense,
-  uploadReceipt,
-  categorizeExpense,
-  addExpenseWithItems,
-} from '../api/expenses';
-import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
+import { addExpense, categorizeExpense } from '../api/expenses';
+import { CATEGORY_GROUPS, MAIN_CATEGORIES } from '../constants/categories';
 import { theme } from '../theme';
-import Card from '../components/Card';
-import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+
+const { height: SCREEN_H } = Dimensions.get('window');
 
 function todayMMDDYYYY(): string {
   const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${mm}/${dd}/${d.getFullYear()}`;
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-interface DraftItem {
-  line_no: number;
-  item_name: string;
-  line_total: string;
-  category_name: string;
+export interface AddExpenseContextType {
+  openAddExpense: () => void;
+  closeAddExpense: () => void;
 }
 
-interface ReceiptDraft {
-  header: Record<string, any>;
-  items: DraftItem[];
-  warnings: string[];
-  fingerprint: string;
-}
+export const AddExpenseContext = createContext<AddExpenseContextType>({
+  openAddExpense: () => {},
+  closeAddExpense: () => {},
+});
 
-// ─── Dropdown picker component ───────────────────────────────
-interface DropdownPickerProps {
-  label: string;
-  icon: string;
-  value: string;
-  options: string[];
-  onSelect: (value: string) => void;
-  placeholder?: string;
-}
-
-function DropdownPicker({ label, icon, value, options, onSelect, placeholder }: DropdownPickerProps) {
+export default function AddExpenseProvider({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(false);
-  return (
-    <>
-      <Text style={dropdownStyles.label}>{icon}  {label}</Text>
-      <TouchableOpacity
-        style={dropdownStyles.trigger}
-        onPress={() => setVisible(true)}
-        activeOpacity={0.7}
-      >
-        <Text style={[dropdownStyles.triggerText, !value && dropdownStyles.placeholder]}>
-          {value || placeholder || 'Select...'}
-        </Text>
-        <Text style={dropdownStyles.chevron}>▾</Text>
-      </TouchableOpacity>
+  // Sheet starts fully off screen at the bottom
+  const translateY = useRef(new Animated.Value(SCREEN_H)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
 
-      <Modal visible={visible} animationType="slide" transparent>
-        <TouchableOpacity
-          style={dropdownStyles.overlay}
-          activeOpacity={1}
-          onPress={() => setVisible(false)}
-        >
-          <View style={dropdownStyles.sheet}>
-            <View style={dropdownStyles.handle} />
-            <Text style={dropdownStyles.sheetTitle}>{label}</Text>
-            <FlatList
-              data={options}
-              keyExtractor={(item) => item}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[dropdownStyles.option, value === item && dropdownStyles.optionActive]}
-                  onPress={() => { onSelect(item); setVisible(false); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[dropdownStyles.optionText, value === item && dropdownStyles.optionTextActive]}>
-                    {item}
-                  </Text>
-                  {value === item && <Text style={dropdownStyles.check}>✓</Text>}
-                </TouchableOpacity>
-              )}
-              style={{ maxHeight: 350 }}
-              showsVerticalScrollIndicator={false}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </>
-  );
-}
-
-// ─── Main screen ─────────────────────────────────────────────
-export default function AddExpenseScreen() {
+  // Form state
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [mainCategory, setMainCategory] = useState(MAIN_CATEGORIES[0]);
   const [subcategory, setSubcategory] = useState(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
   const [date, setDate] = useState(todayMMDDYYYY());
   const [loading, setLoading] = useState(false);
-  const [image, setImage] = useState<string | null>(null);
   const [categorizing, setCategorizing] = useState(false);
-  const [parsing, setParsing] = useState(false);
   const [merchantName, setMerchantName] = useState('');
   const [userPickedMerchant, setUserPickedMerchant] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scrollRef = useRef<ScrollView>(null);
-
-  // Receipt draft (line items)
-  const [draft, setDraft] = useState<ReceiptDraft | null>(null);
-  const [showItems, setShowItems] = useState(false);
 
   const { accessToken, userEmail } = useAuth();
-  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
-  // Handle main category change — auto-select first subcategory
-  const handleMainCategoryChange = (mc: string) => {
-    setMainCategory(mc);
-    const subs = CATEGORY_GROUPS[mc] || [];
-    setSubcategory(subs[0] || '');
-    if (draft) {
-      setDraft({
-        ...draft,
-        header: { ...draft.header, main_category_name: mc, category_name: subs[0] || '' },
-      });
-    }
+  const openAddExpense = useCallback(() => {
+    setVisible(true);
+    // Animate simultaneously: slide sheet up + fade backdrop
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const closeAddExpense = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: SCREEN_H,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setVisible(false);
+      resetForm();
+    });
+  }, []);
+
+  const resetForm = () => {
+    setDescription('');
+    setAmount('');
+    setMerchantName('');
+    setUserPickedMerchant(false);
+    setDate(todayMMDDYYYY());
+    setMainCategory(MAIN_CATEGORIES[0]);
+    setSubcategory(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
   };
 
-  const handleSubcategoryChange = (sub: string) => {
-    setSubcategory(sub);
-    if (draft) {
-      setDraft({ ...draft, header: { ...draft.header, category_name: sub } });
-    }
-  };
-
-  // Debounced auto-categorization
   const handleDescriptionChange = useCallback((text: string) => {
     setDescription(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -160,536 +109,375 @@ export default function AddExpenseScreen() {
           const sub = result.subcategory || '';
           if (mc && CATEGORY_GROUPS[mc]) {
             setMainCategory(mc);
-            if (CATEGORY_GROUPS[mc].includes(sub)) {
-              setSubcategory(sub);
-            } else {
-              setSubcategory(CATEGORY_GROUPS[mc][0]);
-            }
+            setSubcategory(CATEGORY_GROUPS[mc].includes(sub) ? sub : CATEGORY_GROUPS[mc][0]);
           }
-          // Auto-populate merchant name from LLM if user hasn't overridden
-          if (!userPickedMerchant && result.merchant_name) {
-            setMerchantName(result.merchant_name);
-          }
-        } catch { /* silent */ } finally { setCategorizing(false); }
-      }, 600);
+          if (!userPickedMerchant && result.merchant_name) setMerchantName(result.merchant_name);
+        } catch { }
+        finally { setCategorizing(false); }
+      }, 800);
     }
   }, [userPickedMerchant]);
 
-  const handlePickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      showToast({ message: 'Permission to access photos is required', type: 'warning' });
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.[0]) {
-      setImage(result.assets[0].uri);
-      await parseReceipt(result.assets[0].uri);
-    }
-  };
-
-  const handleTakePhoto = async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissionResult.granted) {
-      showToast({ message: 'Permission to access camera is required', type: 'warning' });
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets?.[0]) {
-      setImage(result.assets[0].uri);
-      await parseReceipt(result.assets[0].uri);
-    }
-  };
-
-  const parseReceipt = async (uri: string) => {
-    if (!accessToken) return;
-    setParsing(true);
-    try {
-      const data = await uploadReceipt(uri, accessToken);
-      const header = data.header || {};
-      const items: DraftItem[] = (data.items || []).map((it: any, idx: number) => ({
-        line_no: it.line_no || idx + 1,
-        item_name: it.item_name || it.normalized_name || '',
-        line_total: it.line_total != null ? String(it.line_total) : '',
-        category_name: it.category_name || '',
-      }));
-
-      let desc = header.description || '';
-      if (!desc) {
-        const merchant = header.merchant_name || header.merchant || '';
-        const sub = header.category_name || '';
-        if (sub === 'Dining out' && header.purchased_at) {
-          const hour = new Date(header.purchased_at).getHours();
-          const meal = hour >= 17 ? 'Dinner' : hour >= 11 ? 'Lunch' : 'Breakfast';
-          desc = `${meal} at ${merchant || 'restaurant'}`;
-        } else {
-          desc = merchant || items.map(i => i.item_name).filter(Boolean).join(', ');
-        }
-      }
-
-      if (header.amount) setAmount(String(header.amount));
-      if (desc) setDescription(desc);
-
-      // Populate merchant from receipt header if user hasn't manually typed one
-      if (!userPickedMerchant && (header.merchant_name || header.merchant)) {
-        setMerchantName(header.merchant_name || header.merchant || '');
-      }
-
-      // Set category from receipt response
-      const mc = header.main_category_name || findMainCategory(header.category_name || '');
-      const sub = header.category_name || CATEGORY_GROUPS[mc]?.[0] || '';
-      setMainCategory(mc);
-      if (CATEGORY_GROUPS[mc]?.includes(sub)) {
-        setSubcategory(sub);
-      } else {
-        setSubcategory(CATEGORY_GROUPS[mc]?.[0] || '');
-      }
-
-      if (header.purchased_at) {
-        try {
-          const d = new Date(header.purchased_at);
-          if (!isNaN(d.getTime())) {
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            setDate(`${mm}/${dd}/${d.getFullYear()}`);
-          }
-        } catch { /* keep current date */ }
-      }
-
-      const receiptDraft: ReceiptDraft = {
-        header: { ...header, description: desc, main_category_name: mc, category_name: sub },
-        items,
-        warnings: data.warnings || [],
-        fingerprint: data.fingerprint || '',
-      };
-
-      setDraft(receiptDraft);
-      if (items.length > 0) setShowItems(true);
-      showToast({ message: `Receipt parsed! ${items.length} items found`, type: 'success' });
-    } catch (error) {
-      showToast({ message: 'Could not parse receipt. Enter details manually.', type: 'error' });
-    } finally {
-      setParsing(false);
-    }
-  };
-
-  const getReconcileDelta = () => {
-    if (!draft) return 0;
-    const subtotal = draft.items.reduce((s, it) => s + (parseFloat(it.line_total) || 0), 0);
-    const { tax = 0, tip = 0, discount = 0 } = draft.header;
-    const total = parseFloat(amount) || 0;
-    return subtotal + tax + tip - discount - total;
-  };
-
-  const reconcileOk = () => Math.abs(getReconcileDelta()) <= 0.02;
-
-  const updateItem = (idx: number, field: keyof DraftItem, value: string | number) => {
-    if (!draft) return;
-    const items = [...draft.items];
-    (items[idx] as any)[field] = value;
-    setDraft({ ...draft, items });
-  };
-
-  const deleteItem = (idx: number) => {
-    if (!draft) return;
-    setDraft({ ...draft, items: draft.items.filter((_, i) => i !== idx) });
-  };
-
-  const addItem = () => {
-    if (!draft) return;
-    setDraft({
-      ...draft,
-      items: [...draft.items, { line_no: draft.items.length + 1, item_name: '', line_total: '', category_name: '' }],
-    });
-  };
-
   const handleSubmit = async () => {
-    if (!description || !amount || !subcategory) {
-      showToast({ message: 'Please fill in required fields', type: 'warning' });
+    if (!description.trim()) {
+      showToast({ message: 'Please enter a description', type: 'warning' });
+      return;
+    }
+    if (!amount.trim() || isNaN(parseFloat(amount))) {
+      showToast({ message: 'Please enter a valid amount', type: 'warning' });
       return;
     }
     if (!accessToken || !userEmail) return;
-
-    if (draft && draft.items.length > 0 && !reconcileOk()) {
-      showToast({ message: `Totals mismatch by $${getReconcileDelta().toFixed(2)}. Adjust items or total.`, type: 'warning' });
-      return;
-    }
-
     setLoading(true);
     try {
-      if (draft && draft.items.length > 0) {
-        const payload = {
-          user_email: userEmail,
-          header: {
-            ...draft.header,
-            amount: parseFloat(amount),
-            description,
-            category_name: subcategory,
-            main_category_name: mainCategory,
-            purchased_at: date,
-            fingerprint: draft.fingerprint,
-            merchant_name: merchantName || undefined,
-          },
-          items: draft.items.map((i) => ({ ...i, line_total: parseFloat(i.line_total) || 0 })),
-        };
-        await addExpenseWithItems(payload);
-        showToast({ message: 'Expense with items saved! 🎉', type: 'success' });
-      } else {
-        await addExpense(
-          {
-            description,
-            cost: parseFloat(amount),
-            category: subcategory,
-            sub_category: subcategory,
-            date,
-            user_id: userEmail,
-            merchant_name: merchantName || undefined,
-          },
-          accessToken,
-        );
-        showToast({ message: 'Expense added successfully! 🎉', type: 'success' });
-      }
-
-      setDescription('');
-      setAmount('');
-      setMainCategory(MAIN_CATEGORIES[0]);
-      setSubcategory(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
-      setMerchantName('');
-      setUserPickedMerchant(false);
-      setImage(null);
-      setDraft(null);
-      setShowItems(false);
-      setDate(todayMMDDYYYY());
-      navigation.goBack();
+      await addExpense({
+        description,
+        cost: parseFloat(amount),
+        category: subcategory,
+        sub_category: subcategory,
+        date,
+        user_id: userEmail,
+        merchant_name: merchantName || undefined,
+      }, accessToken);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast({ message: 'Expense saved', type: 'success' });
+      closeAddExpense();
     } catch (error: any) {
-      showToast({ message: error.message || 'Failed to save expense', type: 'error' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast({ message: error.message || 'Failed to save', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  const TAB_BAR_HEIGHT = 72;
   const currentSubs = CATEGORY_GROUPS[mainCategory] || [];
+  // Sheet height: 88% of screen, minimum so content fits
+  const SHEET_H = SCREEN_H * 0.88;
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={0}
-    >
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: TAB_BAR_HEIGHT + 20 }]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={theme.typography.h2}>Add Expense</Text>
-        <Text style={styles.subtitle}>Track your spending</Text>
+    <AddExpenseContext.Provider value={{ openAddExpense, closeAddExpense }}>
+      {children}
 
-        {/* Receipt Upload */}
-        <Card style={styles.receiptCard}>
-          <Text style={styles.cardLabel}>RECEIPT (OPTIONAL)</Text>
-          {image ? (
-            <View style={styles.imagePreview}>
-              <Image source={{ uri: image }} style={styles.previewImage} />
-              {parsing && (
-                <View style={styles.parsingOverlay}>
-                  <ActivityIndicator size="large" color="#fff" />
-                  <Text style={styles.parsingText}>Parsing receipt...</Text>
+      <Modal
+        transparent
+        visible={visible}
+        animationType="none"
+        onRequestClose={closeAddExpense}
+        statusBarTranslucent
+      >
+        {/* Full-screen container — FLEX layout avoids KeyboardAvoidingView issues */}
+        <View style={styles.modalRoot}>
+
+          {/* ── Tappable backdrop ── */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeAddExpense}>
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: 'rgba(0,0,0,0.52)' }]} />
+          </Pressable>
+
+          {/* ── The Sheet — absolutely pinned to the bottom ── */}
+          <Animated.View
+            style={[
+              styles.sheet,
+              {
+                height: SHEET_H,
+                bottom: 0,
+                paddingBottom: Math.max(insets.bottom, 20),
+                transform: [{ translateY }],
+              },
+            ]}
+          >
+            {/* Drag pill */}
+            <View style={styles.dragPillWrap}>
+              <View style={styles.dragPill} />
+            </View>
+
+            {/* iOS-style sheet header: Cancel | Title | (space) */}
+            <View style={styles.sheetHeader}>
+              <TouchableOpacity
+                onPress={closeAddExpense}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.6}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.sheetTitle}>New Expense</Text>
+              {/* Right spacer to keep title centered */}
+              <Text style={[styles.cancelText, { opacity: 0 }]}>Cancel</Text>
+            </View>
+
+            {/* ── Scrollable body ── */}
+            <ScrollView
+              contentContainerStyle={styles.body}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              keyboardDismissMode="on-drag"
+            >
+              {/* Amount hero */}
+              <View style={styles.amountRow}>
+                <Text style={styles.dollarSign}>$</Text>
+                <RNTextInput
+                  style={styles.amountField}
+                  value={amount}
+                  onChangeText={setAmount}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.textQuaternary}
+                  selectionColor={theme.colors.primary}
+                  autoFocus
+                />
+              </View>
+
+              {/* Inset-grouped form (iOS Settings style) */}
+              <View style={styles.fieldGroup}>
+                <RNTextInput
+                  style={styles.fieldInput}
+                  placeholder="What did you spend on?"
+                  placeholderTextColor={theme.colors.textQuaternary}
+                  value={description}
+                  onChangeText={handleDescriptionChange}
+                  selectionColor={theme.colors.primary}
+                  returnKeyType="next"
+                />
+                <View style={styles.fieldDivider} />
+                <RNTextInput
+                  style={styles.fieldInput}
+                  placeholder="Merchant name (optional)"
+                  placeholderTextColor={theme.colors.textQuaternary}
+                  value={merchantName}
+                  onChangeText={(t) => { setMerchantName(t); setUserPickedMerchant(true); }}
+                  selectionColor={theme.colors.primary}
+                  returnKeyType="next"
+                />
+                <View style={styles.fieldDivider} />
+                <RNTextInput
+                  style={styles.fieldInput}
+                  placeholder="Date — MM/DD/YYYY"
+                  placeholderTextColor={theme.colors.textQuaternary}
+                  value={date}
+                  onChangeText={setDate}
+                  selectionColor={theme.colors.primary}
+                  keyboardType="numbers-and-punctuation"
+                />
+              </View>
+
+              {/* AI Categorizing hint */}
+              {categorizing && (
+                <View style={styles.aiRow}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={styles.aiText}>AI is detecting category…</Text>
                 </View>
               )}
-              <TouchableOpacity
-                onPress={() => { setImage(null); setDraft(null); setShowItems(false); }}
-                style={styles.removeImageBtn}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.removeX}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.uploadRow}>
-              <TouchableOpacity
-                style={[styles.uploadBtn, parsing && styles.uploadBtnDisabled]}
-                onPress={handlePickImage}
-                activeOpacity={0.7}
-                disabled={parsing}
-              >
-                {parsing ? (
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                ) : (
-                  <Text style={styles.uploadEmoji}>🖼️</Text>
-                )}
-                <Text style={styles.uploadLabel}>{parsing ? 'Parsing...' : 'Gallery'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.uploadBtn, parsing && styles.uploadBtnDisabled]}
-                onPress={handleTakePhoto}
-                activeOpacity={0.7}
-                disabled={parsing}
-              >
-                <Text style={styles.uploadEmoji}>📷</Text>
-                <Text style={styles.uploadLabel}>Camera</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </Card>
 
-        {/* Parsed Line Items */}
-        {draft && draft.items.length > 0 && (
-          <Card style={styles.itemsCard}>
-            <TouchableOpacity
-              style={styles.itemsHeader}
-              onPress={() => setShowItems(!showItems)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.itemsHeaderLeft}>
-                <Text style={styles.itemsTitle}>🧾 Line Items</Text>
-                <View style={styles.itemsBadge}>
-                  <Text style={styles.itemsBadgeText}>{draft.items.length}</Text>
-                </View>
-              </View>
-              <Text style={styles.itemsChevron}>{showItems ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-
-            {showItems && (
-              <View style={styles.itemsList}>
-                {draft.items.map((item, idx) => (
-                  <View key={`item-${idx}`} style={styles.lineItem}>
-                    <View style={styles.lineItemRow}>
-                      <View style={styles.lineItemNameCol}>
-                        <Text style={styles.lineItemLabel}>Item</Text>
-                        <RNTextInput
-                          style={styles.lineItemInput}
-                          value={item.item_name}
-                          onChangeText={(v) => updateItem(idx, 'item_name', v)}
-                          placeholder="Name"
-                          placeholderTextColor={theme.colors.textTertiary}
-                        />
-                      </View>
-                      <View style={styles.lineItemTotalCol}>
-                        <Text style={styles.lineItemLabel}>Total</Text>
-                        <RNTextInput
-                          style={styles.lineItemInput}
-                          value={item.line_total}
-                          onChangeText={(v) => updateItem(idx, 'line_total', v)}
-                          keyboardType="numeric"
-                          placeholder="0.00"
-                          placeholderTextColor={theme.colors.textTertiary}
-                        />
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => deleteItem(idx)}
-                        style={styles.lineItemDeleteBtn}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.lineItemDeleteText}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+              {/* Category chips */}
+              <Text style={styles.sectionLabel}>CATEGORY</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                {MAIN_CATEGORIES.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.chip, mainCategory === cat && styles.chipOn]}
+                    onPress={() => { setMainCategory(cat); setSubcategory(CATEGORY_GROUPS[cat]?.[0] || ''); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.chipLabel, mainCategory === cat && styles.chipLabelOn]}>{cat}</Text>
+                  </TouchableOpacity>
                 ))}
+              </ScrollView>
 
-                <TouchableOpacity style={styles.addItemBtn} onPress={addItem} activeOpacity={0.7}>
-                  <Text style={styles.addItemText}>＋ Add Item</Text>
-                </TouchableOpacity>
+              <Text style={styles.sectionLabel}>SUBCATEGORY</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                {currentSubs.map((sub) => (
+                  <TouchableOpacity
+                    key={sub}
+                    style={[styles.chip, subcategory === sub && styles.chipOn]}
+                    onPress={() => setSubcategory(sub)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.chipLabel, subcategory === sub && styles.chipLabelOn]}>{sub}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-                <View style={[styles.reconcileBar, reconcileOk() ? styles.reconcileOk : styles.reconcileError]}>
-                  <Text style={[styles.reconcileText, reconcileOk() ? styles.reconcileTextOk : styles.reconcileTextError]}>
-                    {reconcileOk()
-                      ? '✅ Totals match'
-                      : `⚠️ Mismatch: $${getReconcileDelta().toFixed(2)}`}
-                  </Text>
-                  <Text style={styles.reconcileSubtext}>
-                    Subtotal: ${draft.items.reduce((s, i) => s + (parseFloat(i.line_total) || 0), 0).toFixed(2)}
-                    {draft.header.tax ? ` + Tax: $${draft.header.tax}` : ''}
-                    {draft.header.tip ? ` + Tip: $${draft.header.tip}` : ''}
-                  </Text>
-                </View>
+              {/* Save Button */}
+              <View style={styles.saveBtn}>
+                <CustomButton
+                  title="Save Expense"
+                  onPress={handleSubmit}
+                  loading={loading}
+                />
               </View>
-            )}
-          </Card>
-        )}
-
-        {/* Expense Form */}
-        <Card>
-          <CustomInput
-            label="Amount"
-            icon="💰"
-            placeholder="0.00"
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={setAmount}
-          />
-
-          <CustomInput
-            label="Description"
-            icon="📝"
-            placeholder="What was this expense for?"
-            value={description}
-            onChangeText={handleDescriptionChange}
-          />
-
-          {categorizing && (
-            <Text style={styles.categorizingHint}>✨ Auto-detecting category...</Text>
-          )}
-
-          <CustomInput
-            label="Merchant / Store Name"
-            icon="🏪"
-            placeholder="e.g., Starbucks, Amazon"
-            value={merchantName}
-            onChangeText={(text) => {
-              setMerchantName(text);
-              setUserPickedMerchant(true);
-            }}
-          />
-
-          {/* Category dropdown */}
-          <DropdownPicker
-            label="Main Category"
-            icon="📁"
-            value={mainCategory}
-            options={MAIN_CATEGORIES}
-            onSelect={handleMainCategoryChange}
-            placeholder="Select category"
-          />
-
-          {/* Subcategory dropdown */}
-          <DropdownPicker
-            label="Subcategory"
-            icon="📂"
-            value={subcategory}
-            options={currentSubs}
-            onSelect={handleSubcategoryChange}
-            placeholder="Select subcategory"
-          />
-
-          <CustomInput
-            label="Date"
-            icon="📅"
-            placeholder="MM/DD/YYYY"
-            value={date}
-            onChangeText={setDate}
-          />
-
-          <CustomButton
-            title={draft && draft.items.length > 0 ? 'Save with Items' : 'Save Expense'}
-            onPress={handleSubmit}
-            loading={loading}
-            icon="💾"
-            style={{ marginTop: 8 }}
-          />
-        </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
+    </AddExpenseContext.Provider>
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────
-const dropdownStyles = StyleSheet.create({
-  label: {
-    fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,
-    marginBottom: 6, marginLeft: 4,
-  },
-  trigger: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14,
-    backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border,
-    marginBottom: 14,
-  },
-  triggerText: { fontSize: 15, fontWeight: '500', color: theme.colors.text },
-  placeholder: { color: theme.colors.textTertiary },
-  chevron: { fontSize: 14, color: theme.colors.textTertiary },
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  sheet: {
-    backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 20, paddingBottom: 40,
-  },
-  handle: {
-    width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.border,
-    alignSelf: 'center', marginBottom: 16,
-  },
-  sheetTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginBottom: 12 },
-  option: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, marginBottom: 4,
-    backgroundColor: theme.colors.background,
-  },
-  optionActive: { backgroundColor: theme.colors.primarySurface, borderWidth: 1, borderColor: theme.colors.primary },
-  optionText: { fontSize: 15, fontWeight: '500', color: theme.colors.text },
-  optionTextActive: { color: theme.colors.primary, fontWeight: '700' },
-  check: { fontSize: 18, color: theme.colors.primary, fontWeight: '700' },
-});
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 12 },
-  subtitle: { fontSize: 15, color: theme.colors.textSecondary, marginTop: 4, marginBottom: 20 },
-  receiptCard: { alignItems: 'center', paddingVertical: 20 },
-  cardLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.textSecondary, letterSpacing: 1, marginBottom: 14 },
-  uploadRow: { flexDirection: 'row', gap: 16 },
-  uploadBtn: {
-    alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 16, paddingHorizontal: 28,
-    borderRadius: 16, backgroundColor: theme.colors.primarySurface,
-    borderWidth: 1.5, borderColor: theme.colors.primaryLight,
-    borderStyle: 'dashed', minWidth: 100,
+  modalRoot: {
+    flex: 1,
+    justifyContent: 'flex-end',  // Sheet anchors to bottom
   },
-  uploadBtnDisabled: { opacity: 0.6 },
-  uploadEmoji: { fontSize: 28, marginBottom: 6 },
-  uploadLabel: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
-  imagePreview: { position: 'relative', width: '100%', height: 200, borderRadius: 16, overflow: 'hidden' },
-  previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  parsingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
-  parsingText: { color: '#fff', fontSize: 15, fontWeight: '600', marginTop: 10 },
-  removeImageBtn: {
-    position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.6)',
-    width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center',
+
+  // Sheet
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: theme.colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 24,
   },
-  removeX: { color: '#fff', fontWeight: '800', fontSize: 16 },
-  itemsCard: { paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden' },
-  itemsHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14, backgroundColor: theme.colors.primarySurface,
+
+  dragPillWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
+  dragPill: {
+    width: 36,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: theme.colors.borderLight,
   },
-  itemsHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  itemsTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
-  itemsBadge: { backgroundColor: theme.colors.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  itemsBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  itemsChevron: { fontSize: 12, color: theme.colors.textSecondary },
-  itemsList: { padding: 12 },
-  lineItem: {
-    backgroundColor: theme.colors.background, borderRadius: 12, padding: 10, marginBottom: 8,
-    borderWidth: 1, borderColor: theme.colors.border,
+
+  // iOS sheet header
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.borderLight,
   },
-  lineItemRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
-  lineItemNameCol: { flex: 2 },
-  lineItemTotalCol: { flex: 1 },
-  lineItemLabel: { fontSize: 10, fontWeight: '600', color: theme.colors.textTertiary, letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' },
-  lineItemInput: {
-    fontSize: 14, color: theme.colors.text, fontWeight: '500', padding: 8, borderRadius: 8,
-    backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border, minHeight: 36,
+  cancelText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 17,
+    color: theme.colors.primary,
   },
-  lineItemDeleteBtn: { width: 32, height: 36, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FEE2E2' },
-  lineItemDeleteText: { color: '#DC2626', fontWeight: '700', fontSize: 14 },
-  addItemBtn: {
-    paddingVertical: 10, alignItems: 'center', borderRadius: 10, borderWidth: 1,
-    borderColor: theme.colors.primary, borderStyle: 'dashed', marginTop: 4, marginBottom: 8,
+  sheetTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 17,
+    color: theme.colors.text,
   },
-  addItemText: { color: theme.colors.primary, fontSize: 14, fontWeight: '600' },
-  reconcileBar: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 },
-  reconcileOk: { backgroundColor: '#ECFDF5' },
-  reconcileError: { backgroundColor: '#FEF2F2' },
-  reconcileText: { fontSize: 14, fontWeight: '600' },
-  reconcileTextOk: { color: '#059669' },
-  reconcileTextError: { color: '#DC2626' },
-  reconcileSubtext: { fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-  categorizingHint: { fontSize: 12, color: theme.colors.primary, fontWeight: '500', marginBottom: 8, marginLeft: 4 },
+
+  body: {
+    paddingBottom: 24,
+  },
+
+  // Giant amount input
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 20,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+  },
+  dollarSign: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 36,
+    color: theme.colors.textTertiary,
+    marginRight: 4,
+    marginTop: 6,
+  },
+  amountField: {
+    fontFamily: 'Inter-Black',
+    fontSize: 52,
+    color: theme.colors.text,
+    letterSpacing: -1,
+    minWidth: 80,
+    textAlign: 'left',
+  },
+
+  // Settings-style inset grouped form
+  fieldGroup: {
+    marginHorizontal: 20,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  fieldInput: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 17,
+    color: theme.colors.text,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    backgroundColor: theme.colors.surface,
+    minHeight: 52,
+  },
+  fieldDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.borderLight,
+    marginLeft: 16,
+  },
+
+  // AI hint
+  aiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: theme.colors.primarySurface,
+    padding: 12,
+    borderRadius: 10,
+  },
+  aiText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
+    color: theme.colors.primary,
+  },
+
+  // Section label
+  sectionLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: theme.colors.textTertiary,
+    letterSpacing: 0.5,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+
+  // Chips
+  chips: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 50,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.borderLight,
+    marginRight: 0,
+  },
+  chipOn: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  chipLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 15,
+    color: theme.colors.textSecondary,
+  },
+  chipLabelOn: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+  },
+
+  saveBtn: {
+    marginHorizontal: 20,
+    marginTop: 12,
+  },
 });

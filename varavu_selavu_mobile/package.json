@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@babel/runtime": "7.20.0",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@react-native-picker/picker": "2.11.1",
     "@react-navigation/bottom-tabs": "^6.5.20",
     "@react-navigation/native": "^6.1.17",
@@ -17,7 +18,10 @@
     "axios": "^1.6.8",
     "expo": "~54.0.0",
     "expo-asset": "~12.0.12",
+    "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.13",
+    "expo-font": "^56.0.7",
+    "expo-haptics": "~15.0.8",
     "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.8",
     "expo-secure-store": "~15.0.8",

@@ -9,7 +9,7 @@ const theme = createTheme({
     error: { main: '#DC2626' },
     warning: { main: '#F59E0B' },
   },
-  shape: { borderRadius: 12 },
+  shape: { borderRadius: 14 },
   typography: {
     fontFamily: 'Inter, Roboto, Helvetica, Arial, sans-serif',
     fontSize: 15,
@@ -29,7 +29,7 @@ const theme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow: '0px 1px 4px rgba(0,0,0,0.1)',
+          boxShadow: '0 2px 12px rgba(79,70,229,0.08), 0 1px 4px rgba(0,0,0,0.04)',
           transition: 'transform 0.2s ease',
           '&:hover': {
             transform: 'translateY(-2px)',
@@ -65,6 +65,26 @@ const theme = createTheme({
           color: '#fff',
           backdropFilter: 'blur(12px)',
           borderRight: '1px solid rgba(255,255,255,0.3)',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          '&.MuiChip-filledPrimary': {
+            backgroundColor: '#EEF2FF',
+            color: '#4F46E5',
+          },
+        },
+      },
+    },
+    MuiLinearProgress: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#EEF2FF',
+        },
+        bar: {
+          backgroundColor: '#4F46E5',
         },
       },
     },

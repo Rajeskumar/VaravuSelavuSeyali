@@ -6,10 +6,11 @@ import {
     ActivityIndicator,
     ViewStyle,
     TextStyle,
+    View,
 } from 'react-native';
 import { theme } from '../theme';
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'tinted';
 
 interface CustomButtonProps {
     title: string;
@@ -19,13 +20,15 @@ interface CustomButtonProps {
     disabled?: boolean;
     style?: ViewStyle;
     textStyle?: TextStyle;
-    icon?: string; // emoji or text glyph
+    icon?: string;
     fullWidth?: boolean;
 }
 
 /**
- * CustomButton — pill-shaped button with multiple variants.
- * Touch target is always ≥ 48px. Includes press feedback.
+ * CustomButton — iOS-style system button.
+ * Primary: filled blue pill.
+ * Tinted: blue-tinted surface (like standard tinted button).
+ * Secondary: gray pill.
  */
 export default function CustomButton({
     title,
@@ -58,13 +61,13 @@ export default function CustomButton({
         <TouchableOpacity
             onPress={onPress}
             disabled={isDisabled}
-            activeOpacity={0.8}
+            activeOpacity={0.75}
             style={buttonStyles}
         >
             {loading ? (
                 <ActivityIndicator
                     size="small"
-                    color={variant === 'outline' || variant === 'ghost' ? theme.colors.primary : '#fff'}
+                    color={variant === 'primary' || variant === 'danger' ? '#fff' : theme.colors.primary}
                 />
             ) : (
                 <>
@@ -81,21 +84,22 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 48,
+        minHeight: 50,
         paddingVertical: 14,
         paddingHorizontal: 24,
-        borderRadius: 28,
+        borderRadius: theme.borderRadius.full,
         gap: 8,
     },
     fullWidth: {
         width: '100%',
     },
     disabled: {
-        opacity: 0.5,
+        opacity: 0.4,
     },
     label: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontFamily: theme.typography.fontFamily.semiBold,
+        fontSize: 17,
+        letterSpacing: -0.2,
     },
     icon: {
         fontSize: 18,
@@ -105,10 +109,13 @@ const styles = StyleSheet.create({
 const variantStyles: Record<ButtonVariant, ViewStyle> = {
     primary: {
         backgroundColor: theme.colors.primary,
-        ...theme.shadows.md,
+        ...theme.shadows.sm,
+    },
+    tinted: {
+        backgroundColor: theme.colors.primarySurface,
     },
     secondary: {
-        backgroundColor: theme.colors.primarySurface,
+        backgroundColor: theme.colors.surfaceSecondary,
     },
     outline: {
         backgroundColor: 'transparent',
@@ -117,7 +124,6 @@ const variantStyles: Record<ButtonVariant, ViewStyle> = {
     },
     danger: {
         backgroundColor: theme.colors.error,
-        ...theme.shadows.md,
     },
     ghost: {
         backgroundColor: 'transparent',
@@ -126,7 +132,8 @@ const variantStyles: Record<ButtonVariant, ViewStyle> = {
 
 const variantTextStyles: Record<ButtonVariant, TextStyle> = {
     primary: { color: '#FFFFFF' },
-    secondary: { color: theme.colors.primary },
+    tinted: { color: theme.colors.primary },
+    secondary: { color: theme.colors.text },
     outline: { color: theme.colors.primary },
     danger: { color: '#FFFFFF' },
     ghost: { color: theme.colors.primary },

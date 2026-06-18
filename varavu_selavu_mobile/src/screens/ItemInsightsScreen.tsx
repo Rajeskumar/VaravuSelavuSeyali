@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 // Replace native Picker with a lightweight custom select for consistent UX across platforms
 import SimpleSelect from '../components/SimpleSelect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,24 +79,27 @@ export default function ItemInsightsScreen() {
 
   if (loading && !refreshing) {
     return (
-      <ScrollView style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-            <View>
-              <Text style={styles.screenTitle}>🛒 Item Insights</Text>
-              <Text style={styles.screenSubtitle}>Your top purchased items by total spend</Text>
-            </View>
-        </View>
-        <View style={{ paddingHorizontal: 16 }}>
-           <ListSkeleton count={6} />
-        </View>
-      </ScrollView>
+      <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
+        <ScrollView>
+          <View style={styles.header}>
+              <View>
+                <Text style={styles.screenTitle}>🛒 Item Insights</Text>
+                <Text style={styles.screenSubtitle}>Your top purchased items by total spend</Text>
+              </View>
+          </View>
+          <View style={{ paddingHorizontal: 16 }}>
+             <ListSkeleton count={6} />
+          </View>
+        </ScrollView>
+      </LinearGradient>
     );
   }
 
   // Detail view
   if (selectedItem) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 100 }}>
+      <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={styles.container}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top }}>
         <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedItem(null)}>
           <Text style={styles.backText}>← Back to Items</Text>
         </TouchableOpacity>
@@ -166,12 +170,13 @@ export default function ItemInsightsScreen() {
           </View>
         ) : null}
       </ScrollView>
+      </LinearGradient>
     );
   }
 
   // List view
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.screenTitle}>🛒 Item Insights</Text>
@@ -227,12 +232,12 @@ export default function ItemInsightsScreen() {
            </View>
         </View>
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
   header: { paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   screenTitle: { fontSize: 24, fontWeight: '800', color: theme.colors.text },

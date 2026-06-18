@@ -61,7 +61,7 @@ const HomePage: React.FC = () => {
 
   return (
     <Box>
-      {/* Hero — Apple-like clean, dark, centered */}
+      {/* Hero — Minimalist clean, dark, centered */}
       <Box sx={{ bgcolor: '#000', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <Container maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
           <Grid container columns={12} spacing={4} alignItems="center">

@@ -1,24 +1,35 @@
 import React, { useRef, useState, useCallback, createContext, useContext } from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator, View, Text, TouchableOpacity, StyleSheet,
-  Animated, Dimensions, Modal, SafeAreaView, Pressable, Platform
+  Animated, Dimensions, Modal, Pressable, Platform,
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
+
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  Inter_900Black,
+} from '@expo-google-fonts/inter';
+
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { theme } from './src/theme';
 import ToastProvider from './src/components/Toast';
-import TabIcon from './src/components/TabIcon';
 import RecurringPrompt from './src/components/RecurringPrompt';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HomeScreen from './src/screens/HomeScreen';
-import AddExpenseScreen from './src/screens/AddExpenseScreen';
 import ExpensesScreen from './src/screens/ExpensesScreen';
 import AnalysisScreen from './src/screens/AnalysisScreen';
 import AIAnalystScreen from './src/screens/AIAnalystScreen';
@@ -29,24 +40,228 @@ import ContactUsScreen from './src/screens/ContactUsScreen';
 import ItemInsightsScreen from './src/screens/ItemInsightsScreen';
 import MerchantInsightsScreen from './src/screens/MerchantInsightsScreen';
 
+import AddExpenseProvider, { AddExpenseContext } from './src/screens/AddExpenseScreen';
+
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ─── Drawer Context ────────────────────────────────────────
-// Allows any screen to open/close the custom drawer via context.
-
-interface DrawerContextType {
-  openDrawer: () => void;
-  closeDrawer: () => void;
-}
-const DrawerContext = createContext<DrawerContextType>({
-  openDrawer: () => { },
-  closeDrawer: () => { },
-});
+// ─── Drawer Context ───────────────────────────────────────────────────────────
+interface DrawerContextType { openDrawer: () => void; closeDrawer: () => void; }
+const DrawerContext = createContext<DrawerContextType>({ openDrawer: () => {}, closeDrawer: () => {} });
 export const useDrawer = () => useContext(DrawerContext);
 
-// ─── Auth Stack ────────────────────────────────────────────
+// ─── Tab config ───────────────────────────────────────────────────────────────
+const TAB_ROUTES = [
+  { name: 'Dashboard',  icon: '🏠', label: 'Home'   },
+  { name: 'Expenses',   icon: '📋', label: 'Wallet' },
+  { name: 'Analysis',   icon: '📊', label: 'Stats'  },
+  { name: 'AI Analyst', icon: '🤖', label: 'AI'     },
+];
 
+// ─── Floating Glass Pill Navigation Bar ──────────────────────────────────────
+//
+//  Layout (from bottom of screen upward):
+//    [home indicator / safe area inset]
+//    [16px gap]
+//    [66px pill — 4 tabs + center gap]
+//    [10px gap]
+//    [52px FAB circle]  ← floats above pill center
+//
+function FloatingNavBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const { openAddExpense } = useContext(AddExpenseContext);
+
+  // Active route name
+  const activeRouteName = state.routes[state.index]?.name ?? '';
+
+  const handleTabPress = (routeName: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    navigation.navigate(routeName);
+  };
+
+  const handleFABPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    openAddExpense();
+  };
+
+  return (
+    // Absolute container that covers the whole bottom — content padding is
+    // handled via tabBarStyle.height in the Tab.Navigator options below.
+    <View style={[navStyles.wrapper, { paddingBottom: insets.bottom + 16 }]}>
+
+      {/* ── Glass Pill ── */}
+      <View style={navStyles.pillShadowContainer}>
+        <BlurView tint="light" intensity={90} style={navStyles.pillBlur}>
+          {/* Tint overlay for frosted glass look */}
+          <LinearGradient
+            colors={['rgba(79,70,229,0.15)', 'rgba(20,184,166,0.15)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={navStyles.pillOverlay}
+          />
+
+          {/* Left 2 tabs */}
+          {TAB_ROUTES.slice(0, 2).map((tab) => {
+            const focused = activeRouteName === tab.name;
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                style={navStyles.tabItem}
+                onPress={() => handleTabPress(tab.name)}
+                activeOpacity={0.7}
+              >
+                <Text style={[navStyles.tabIcon, focused && navStyles.tabIconActive]}>
+                  {tab.icon}
+                </Text>
+                <Text style={[navStyles.tabLabel, focused && navStyles.tabLabelActive]}>
+                  {tab.label}
+                </Text>
+                {focused && <View style={navStyles.activeDot} />}
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* ── Inline FAB ── */}
+          <TouchableOpacity
+            style={navStyles.inlineFab}
+            onPress={handleFABPress}
+            activeOpacity={0.85}
+          >
+            <Text style={navStyles.inlineFabPlus}>+</Text>
+          </TouchableOpacity>
+
+          {/* Right 2 tabs */}
+          {TAB_ROUTES.slice(2).map((tab) => {
+            const focused = activeRouteName === tab.name;
+            return (
+              <TouchableOpacity
+                key={tab.name}
+                style={navStyles.tabItem}
+                onPress={() => handleTabPress(tab.name)}
+                activeOpacity={0.7}
+              >
+                <Text style={[navStyles.tabIcon, focused && navStyles.tabIconActive]}>
+                  {tab.icon}
+                </Text>
+                <Text style={[navStyles.tabLabel, focused && navStyles.tabLabelActive]}>
+                  {tab.label}
+                </Text>
+                {focused && <View style={navStyles.activeDot} />}
+              </TouchableOpacity>
+            );
+          })}
+        </BlurView>
+      </View>
+    </View>
+  );
+}
+
+const PILL_WIDTH = Dimensions.get('window').width - 48; // 24px margin each side
+const PILL_HEIGHT = 66;
+const FAB_SIZE = 52;
+
+const navStyles = StyleSheet.create({
+  // The overall bottom-anchored container
+  wrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    // Do NOT clip — FAB sits above the pill and needs to overflow
+    zIndex: 999,
+    pointerEvents: 'box-none',
+  },
+
+  // ── Inline FAB ───────────────────────────────────────────────────────────
+  inlineFab: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 12,
+  },
+  inlineFabPlus: {
+    color: '#FFFFFF',
+    fontSize: 26,
+    lineHeight: 30,
+    fontFamily: 'Inter-Regular',
+    includeFontPadding: false,
+    textAlign: 'center',
+  },
+
+  // ── Pill shell — carries the shadow ──────────────────────────────────────
+  pillShadowContainer: {
+    width: PILL_WIDTH,
+    height: PILL_HEIGHT,
+    borderRadius: PILL_HEIGHT / 2,
+    // Diffused drop shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 22,
+    elevation: 18,
+  },
+
+  // BlurView fills the pill shape completely
+  pillBlur: {
+    flex: 1,
+    borderRadius: PILL_HEIGHT / 2,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // Frosted-glass tint on top of blur
+  pillOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    // Hairline inner border for glass edge highlight
+    borderRadius: PILL_HEIGHT / 2,
+    borderWidth: 0.8,
+    borderColor: 'rgba(79,70,229,0.15)',
+  },
+
+  // ── Tab items ─────────────────────────────────────────────────────────────
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    // Minimum touch target
+    minHeight: 44,
+  },
+  tabIcon: {
+    fontSize: 22,
+    opacity: 0.35,
+    marginBottom: 2,
+  },
+  tabIconActive: {
+    opacity: 1,
+  },
+  tabLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 10,
+    color: '#8E8E93',
+    letterSpacing: 0.2,
+  },
+  tabLabelActive: {
+    color: theme.colors.primary,
+    fontFamily: 'Inter-SemiBold',
+  },
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.primary,
+    marginTop: 3,
+  },
+
+
+});
+
+// ─── Auth Stack ───────────────────────────────────────────────────────────────
 function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -56,327 +271,253 @@ function AuthStack() {
   );
 }
 
-// ─── Main Bottom Tabs ──────────────────────────────────────
+const DummyScreen = () => null;
 
+// ─── Main Tabs ────────────────────────────────────────────────────────────────
 function MainTabs() {
   const { openDrawer } = useDrawer();
   const insets = useSafeAreaInsets();
 
+  // Space reserved for the floating bar:
+  //   FAB (52) + gap between FAB and pill (10) + pill (66) + gap to safe area (16) + safe area inset
+  const floatingBarHeight = FAB_SIZE + 10 + PILL_HEIGHT + 16 + insets.bottom;
+
   return (
     <Tab.Navigator
+      // THIS is the correct API — replaces the entire tab bar
+      tabBar={(props) => <FloatingNavBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textTertiary,
         headerShown: true,
-        tabBarShowLabel: false,
         headerStyle: {
           backgroundColor: theme.colors.background,
+          shadowColor: 'transparent',
           elevation: 0,
-          shadowOpacity: 0,
           borderBottomWidth: 0,
         },
-        headerTitleStyle: { fontWeight: '700', fontSize: 18, color: theme.colors.text },
+        headerTitleStyle: {
+          fontFamily: 'Inter-Bold',
+          fontSize: 18,
+          color: theme.colors.text,
+        },
         headerLeft: () => (
-          <TouchableOpacity onPress={openDrawer} style={tabStyles.hamburger} activeOpacity={0.6}>
-            <Text style={tabStyles.hamburgerIcon}>☰</Text>
+          <TouchableOpacity
+            onPress={openDrawer}
+            style={tabStyles.menuBtn}
+            activeOpacity={0.6}
+          >
+            <Text style={tabStyles.menuBtnIcon}>☰</Text>
           </TouchableOpacity>
         ),
-        tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopWidth: 0,
-          height: Platform.OS === 'android' ? 72 + insets.bottom : 72 + Math.max(insets.bottom, 10),
-          paddingBottom: Platform.OS === 'android' ? insets.bottom + 10 : Math.max(insets.bottom, 10),
-          paddingTop: 8,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          shadowColor: '#0f172a',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 12,
-          elevation: 12,
-        },
+        // Reserve the floating bar height so screens don't hide under it
+        tabBarStyle: { height: floatingBarHeight },
       }}
     >
       <Tab.Screen
         name="Dashboard"
         component={HomeScreen}
-        options={{
-          headerTitle: '',
-          headerTransparent: true,
-          tabBarIcon: ({ focused }) => <TabIcon icon="🏠" label="Home" focused={focused} />,
-        }}
+        options={{ headerTitle: '' }}
       />
       <Tab.Screen
         name="Expenses"
         component={ExpensesScreen}
-        options={{
-          headerTitle: 'History',
-          tabBarIcon: ({ focused }) => <TabIcon icon="📋" label="History" focused={focused} />,
-        }}
-      />
-      <Tab.Screen
-        name="Add Expense"
-        component={AddExpenseScreen}
-        options={{
-          headerTitle: 'Add Expense',
-          tabBarIcon: ({ focused }) => <TabIcon icon="＋" label="Add" focused={focused} isCenter />,
-        }}
+        options={{ headerTitle: 'Transactions' }}
       />
       <Tab.Screen
         name="Analysis"
         component={AnalysisScreen}
-        options={{
-          headerTitle: 'Stats',
-          tabBarIcon: ({ focused }) => <TabIcon icon="📊" label="Stats" focused={focused} />,
-        }}
+        options={{ headerTitle: 'Insights' }}
       />
       <Tab.Screen
         name="AI Analyst"
         component={AIAnalystScreen}
-        options={{
-          headerTitle: 'AI Chat',
-          tabBarIcon: ({ focused }) => <TabIcon icon="🤖" label="AI Chat" focused={focused} />,
-        }}
+        options={{ headerTitle: 'AI Chat' }}
       />
     </Tab.Navigator>
   );
 }
 
 const tabStyles = StyleSheet.create({
-  hamburger: { marginLeft: 16, padding: 4 },
-  hamburgerIcon: { fontSize: 24, color: theme.colors.text },
+  menuBtn: {
+    marginLeft: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.xs,
+  },
+  menuBtnIcon: { fontSize: 15, color: theme.colors.text },
 });
 
-// ─── Custom JS-Only Drawer ─────────────────────────────────
+// ─── iOS-style Slide-in Drawer ────────────────────────────────────────────────
+const DRAWER_W = Dimensions.get('window').width * 0.80;
 
-const DRAWER_W = Dimensions.get('window').width * 0.78;
-
-interface DrawerMenuItem {
-  key: string;
-  label: string;
-  icon: string;
-  screen?: string;
-}
-
-const DRAWER_ITEMS: DrawerMenuItem[] = [
-  { key: 'home', label: 'Home', icon: '🏠', screen: 'Dashboard' },
-  { key: 'itemInsights', label: 'Item Insights', icon: '🛒', screen: 'ItemInsights' },
-  { key: 'merchantInsights', label: 'Merchant Insights', icon: '🏪', screen: 'MerchantInsights' },
-  { key: 'recurring', label: 'Recurring Expenses', icon: '🔁', screen: 'Recurring' },
-  { key: 'about', label: 'About App', icon: 'ℹ️', screen: 'About' },
-  { key: 'feature', label: 'Submit Feature Request', icon: '💡', screen: 'FeatureRequest' },
-  { key: 'contact', label: 'Contact Us', icon: '✉️', screen: 'ContactUs' },
+const DRAWER_ITEMS = [
+  { key: 'home',            label: 'Home',             icon: '🏠', screen: 'Dashboard'       },
+  { key: 'itemInsights',    label: 'Item Insights',    icon: '🛒', screen: 'ItemInsights'    },
+  { key: 'merchantInsights',label: 'Merchant Insights',icon: '🏪', screen: 'MerchantInsights'},
+  { key: 'recurring',       label: 'Recurring',        icon: '🔁', screen: 'Recurring'       },
+  { key: 'about',           label: 'About',            icon: 'ℹ️', screen: 'About'           },
+  { key: 'feature',         label: 'Feature Request',  icon: '💡', screen: 'FeatureRequest'  },
+  { key: 'contact',         label: 'Contact Us',       icon: '✉️', screen: 'ContactUs'       },
 ];
 
-function CustomDrawer({
-  visible,
-  onClose,
-  onNavigate,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onNavigate: (screen: string) => void;
+function CustomDrawer({ visible, onClose, onNavigate }: {
+  visible: boolean; onClose: () => void; onNavigate: (s: string) => void;
 }) {
   const { signOut, userEmail } = useAuth();
   const slideAnim = useRef(new Animated.Value(-DRAWER_W)).current;
   const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
-    Animated.timing(slideAnim, {
+    Animated.spring(slideAnim, {
       toValue: visible ? 0 : -DRAWER_W,
-      duration: 260,
       useNativeDriver: true,
+      bounciness: 0,
+      speed: 20,
     }).start();
   }, [visible]);
 
-  const handleLogout = () => {
-    onClose();
-    signOut();
-  };
-
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
-      {/* Backdrop */}
       <Pressable style={drawerStyles.backdrop} onPress={onClose}>
-        {/* We use a touchable without feedback to prevent closes when clicking inside the drawer itself */}
-        <Pressable onPress={(e) => e.stopPropagation()}>
-          <Animated.View style={[drawerStyles.container, { transform: [{ translateX: slideAnim }] }]}>
-            <View style={{ flex: 1 }}>
-              {/* Header */}
-              <View style={[drawerStyles.header, { paddingTop: Math.max(insets.top, 20) }]}>
-                <View style={drawerStyles.logoRow}>
-                  <View style={drawerStyles.logoCircle}>
-                    <Text style={{ fontSize: 26 }}>💰</Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={drawerStyles.appName}>TrackSpense</Text>
-                    <Text style={drawerStyles.userEmail} numberOfLines={1}>
-                      {userEmail || 'Expense Tracker'}
-                    </Text>
-                  </View>
-                </View>
-                {/* Close Button placed absolutely in the top right of the drawer */}
-                <TouchableOpacity onPress={onClose} style={[drawerStyles.closeButton, { top: Math.max(insets.top, 10) }]} activeOpacity={0.6}>
-                  <Text style={drawerStyles.closeIcon}>✕</Text>
-                </TouchableOpacity>
-              </View>
+        <Animated.View style={[drawerStyles.sheet, { transform: [{ translateX: slideAnim }] }]}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={{ flex: 1 }}>
 
-              {/* Menu Items */}
-              <View style={drawerStyles.menuList}>
-                {DRAWER_ITEMS.map((item) => (
-                  <TouchableOpacity
-                    key={item.key}
-                    style={drawerStyles.menuItem}
-                    activeOpacity={0.6}
-                    onPress={() => {
-                      onClose();
-                      if (item.screen) onNavigate(item.screen);
-                    }}
-                  >
-                    <Text style={drawerStyles.menuIcon}>{item.icon}</Text>
-                    <Text style={drawerStyles.menuLabel}>{item.label}</Text>
-                  </TouchableOpacity>
-                ))}
+            <View style={[drawerStyles.header, { paddingTop: Math.max(insets.top + 12, 40) }]}>
+              <View style={drawerStyles.avatarCircle}>
+                <Text style={drawerStyles.avatarText}>{userEmail?.charAt(0).toUpperCase() || '?'}</Text>
               </View>
-
-              {/* Logout at bottom */}
-              <View style={drawerStyles.footer}>
-                <TouchableOpacity style={drawerStyles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
-                  <Text style={drawerStyles.logoutIcon}>🚪</Text>
-                  <Text style={drawerStyles.logoutText}>Logout</Text>
-                </TouchableOpacity>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Text style={drawerStyles.appTitle}>TrackSpense</Text>
+                <Text style={drawerStyles.userEmail} numberOfLines={1}>{userEmail}</Text>
               </View>
+              <TouchableOpacity onPress={onClose} style={drawerStyles.closeBtn}>
+                <Text style={drawerStyles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
             </View>
-          </Animated.View>
-        </Pressable>
+
+            <View style={drawerStyles.menuSection}>
+              {DRAWER_ITEMS.map((item, index) => (
+                <React.Fragment key={item.key}>
+                  <TouchableOpacity
+                    style={drawerStyles.menuRow}
+                    activeOpacity={0.6}
+                    onPress={() => { onClose(); if (item.screen) onNavigate(item.screen); }}
+                  >
+                    <View style={drawerStyles.menuIconBox}>
+                      <Text style={{ fontSize: 16 }}>{item.icon}</Text>
+                    </View>
+                    <Text style={drawerStyles.menuLabel}>{item.label}</Text>
+                    <Text style={drawerStyles.chevron}>›</Text>
+                  </TouchableOpacity>
+                  {index < DRAWER_ITEMS.length - 1 && (
+                    <View style={drawerStyles.separator} />
+                  )}
+                </React.Fragment>
+              ))}
+            </View>
+
+            <View style={[drawerStyles.footer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+              <TouchableOpacity
+                style={drawerStyles.signOutBtn}
+                onPress={() => { onClose(); signOut(); }}
+                activeOpacity={0.7}
+              >
+                <Text style={drawerStyles.signOutText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
+
+          </Pressable>
+        </Animated.View>
       </Pressable>
     </Modal>
   );
 }
 
 const drawerStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    flexDirection: 'row',
-  },
-  container: {
-    width: DRAWER_W,
-    backgroundColor: theme.colors.surface,
-    flex: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 20,
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', flexDirection: 'row' },
+  sheet: {
+    width: DRAWER_W, flex: 1, backgroundColor: theme.colors.background,
+    shadowColor: '#000', shadowOffset: { width: 8, height: 0 },
+    shadowOpacity: 0.12, shadowRadius: 24, elevation: 20,
   },
   header: {
-    backgroundColor: theme.colors.primarySurface,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.borderLight,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingBottom: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  logoCircle: {
-    width: 50, height: 50, borderRadius: 16,
+  avatarCircle: {
+    width: 48, height: 48, borderRadius: 24,
     backgroundColor: theme.colors.primary,
     alignItems: 'center', justifyContent: 'center',
-    ...theme.shadows.colored,
   },
-  appName: { fontSize: 20, fontWeight: '800', color: theme.colors.text, letterSpacing: -0.3 },
-  userEmail: { fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 },
-  menuList: { flex: 1, paddingTop: 12, paddingHorizontal: 12 },
-  menuItem: {
+  avatarText: { fontSize: 20, color: '#fff', fontFamily: 'Inter-Bold' },
+  appTitle: { fontFamily: 'Inter-Bold', fontSize: 17, color: theme.colors.text },
+  userEmail: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textTertiary, marginTop: 2 },
+  closeBtn: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: theme.colors.surfaceSecondary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  closeBtnText: { fontSize: 14, color: theme.colors.textSecondary, fontFamily: 'Inter-SemiBold' },
+  menuSection: {
+    margin: 16, backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl, overflow: 'hidden',
+    ...theme.shadows.xs,
+  },
+  menuRow: {
     flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 14, paddingHorizontal: 14,
-    borderRadius: 12, marginBottom: 2,
+    paddingVertical: 14, paddingHorizontal: 16, minHeight: 52,
   },
-  menuIcon: { fontSize: 20, marginRight: 14, width: 28, textAlign: 'center' },
-  menuLabel: { fontSize: 15, fontWeight: '600', color: theme.colors.text },
-  footer: {
-    borderTopWidth: 1, borderTopColor: theme.colors.border,
-    padding: 16, paddingBottom: 36,
+  menuIconBox: {
+    width: 32, height: 32, borderRadius: 8,
+    backgroundColor: theme.colors.surfaceSecondary,
+    alignItems: 'center', justifyContent: 'center', marginRight: 14,
   },
-  logoutBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: theme.colors.errorSurface, paddingVertical: 14,
-    paddingHorizontal: 16, borderRadius: 14,
+  menuLabel: { flex: 1, fontFamily: 'Inter-Regular', fontSize: 17, color: theme.colors.text },
+  chevron: { fontSize: 18, color: theme.colors.textQuaternary },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.borderLight, marginLeft: 62 },
+  footer: { paddingHorizontal: 16, marginTop: 'auto' },
+  signOutBtn: {
+    alignItems: 'center', paddingVertical: 16,
+    backgroundColor: theme.colors.errorSurface, borderRadius: theme.borderRadius.xl,
   },
-  logoutIcon: { fontSize: 20, marginRight: 12 },
-  logoutText: { fontSize: 15, fontWeight: '700', color: theme.colors.error },
-  closeButton: {
-    padding: 8,
-    position: 'absolute',
-    top: 10,
-    right: 12,
-  },
-  closeIcon: { fontSize: 20, color: theme.colors.textTertiary, fontWeight: '700' },
+  signOutText: { fontFamily: 'Inter-SemiBold', fontSize: 17, color: theme.colors.error },
 });
 
-// ─── App Shell (Stack with Drawer) ────────────────────────
-
+// ─── App Shell ────────────────────────────────────────────────────────────────
 function AppShell() {
   const navigation = useNavigation<any>();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
-
-  const handleNavigate = useCallback((screen: string) => {
-    navigation.navigate(screen);
-  }, [navigation]);
+  const handleNavigate = useCallback((screen: string) => navigation.navigate(screen), [navigation]);
 
   return (
     <DrawerContext.Provider value={{ openDrawer, closeDrawer }}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{
+        headerShown: false,
+        headerTintColor: theme.colors.primary,
+        headerTitleStyle: { fontFamily: 'Inter-Bold' },
+        headerBackTitleStyle: { fontFamily: 'Inter-Regular' },
+      }}>
         <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen
-          name="Recurring"
-          component={RecurringExpensesScreen}
-          options={{ headerShown: true, headerTitle: 'Recurring Expenses', headerBackTitle: 'Back' }}
-        />
-        <Stack.Screen
-          name="ItemInsights"
-          component={ItemInsightsScreen}
-          options={{ headerShown: true, headerTitle: 'Item Insights', headerBackTitle: 'Back' }}
-        />
-        <Stack.Screen
-          name="MerchantInsights"
-          component={MerchantInsightsScreen}
-          options={{ headerShown: true, headerTitle: 'Merchant Insights', headerBackTitle: 'Back' }}
-        />
-        <Stack.Screen
-          name="About"
-          component={AboutScreen}
-          options={{ headerShown: true, headerTitle: 'About', headerBackTitle: 'Back' }}
-        />
-        <Stack.Screen
-          name="FeatureRequest"
-          component={FeatureRequestScreen}
-          options={{ headerShown: true, headerTitle: 'Feature Request', headerBackTitle: 'Back' }}
-        />
-        <Stack.Screen
-          name="ContactUs"
-          component={ContactUsScreen}
-          options={{ headerShown: true, headerTitle: 'Contact Us', headerBackTitle: 'Back' }}
-        />
+        <Stack.Screen name="Recurring"        component={RecurringExpensesScreen}  options={{ headerShown: true, headerTitle: 'Recurring',         headerBackTitle: '' }} />
+        <Stack.Screen name="ItemInsights"     component={ItemInsightsScreen}       options={{ headerShown: true, headerTitle: 'Item Insights',      headerBackTitle: '' }} />
+        <Stack.Screen name="MerchantInsights" component={MerchantInsightsScreen}   options={{ headerShown: true, headerTitle: 'Merchant Insights',  headerBackTitle: '' }} />
+        <Stack.Screen name="About"            component={AboutScreen}              options={{ headerShown: true, headerTitle: 'About',              headerBackTitle: '' }} />
+        <Stack.Screen name="FeatureRequest"   component={FeatureRequestScreen}     options={{ headerShown: true, headerTitle: 'Feature Request',    headerBackTitle: '' }} />
+        <Stack.Screen name="ContactUs"        component={ContactUsScreen}          options={{ headerShown: true, headerTitle: 'Contact',            headerBackTitle: '' }} />
       </Stack.Navigator>
       <CustomDrawer visible={drawerOpen} onClose={closeDrawer} onNavigate={handleNavigate} />
     </DrawerContext.Provider>
   );
 }
 
-// ─── Root Navigator ────────────────────────────────────────
-
+// ─── Root Navigator ───────────────────────────────────────────────────────────
 function RootNavigator() {
   const { accessToken, isLoading } = useAuth();
 
@@ -395,18 +536,18 @@ function RootNavigator() {
         colors: {
           primary: theme.colors.primary,
           background: theme.colors.background,
-          card: theme.colors.surface,
+          card: theme.colors.background,
           text: theme.colors.text,
-          border: theme.colors.border,
+          border: 'transparent',
           notification: theme.colors.error,
         },
       }}
     >
       {accessToken ? (
-        <>
+        <AddExpenseProvider>
           <AppShell />
           <RecurringPrompt />
-        </>
+        </AddExpenseProvider>
       ) : (
         <AuthStack />
       )}
@@ -415,11 +556,28 @@ function RootNavigator() {
   );
 }
 
+// ─── App Entry ────────────────────────────────────────────────────────────────
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    'Inter-Regular':  Inter_400Regular,
+    'Inter-Medium':   Inter_500Medium,
+    'Inter-SemiBold': Inter_600SemiBold,
+    'Inter-Bold':     Inter_700Bold,
+    'Inter-Black':    Inter_900Black,
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#F2F2F7', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <StatusBar style="dark" backgroundColor={theme.colors.background} />
+        <StatusBar style="dark" backgroundColor="transparent" translucent />
         <RootNavigator />
       </AuthProvider>
     </SafeAreaProvider>

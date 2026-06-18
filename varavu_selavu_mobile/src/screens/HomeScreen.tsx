@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { theme } from '../theme';
-import { LinearGradient } from 'expo-linear-gradient';
-import ScreenWrapper from '../components/ScreenWrapper';
-import Card from '../components/Card';
-import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CategoryDonutChart from '../components/CategoryDonutChart';
 import TrendLineChart from '../components/TrendLineChart';
 
+// ─── Category icon map ───────────────────────────────────────────────────────
 const categoryEmojis: Record<string, string> = {
   food: '🍕', groceries: '🛒', transport: '🚗', entertainment: '🎬',
   shopping: '🛍️', health: '🏥', utilities: '💡', rent: '🏠',
@@ -18,14 +20,317 @@ const categoryEmojis: Record<string, string> = {
   investment: '📈', other: '📋',
 };
 
+const categoryColors: Record<string, string> = {
+  food: '#FF6B6B', groceries: '#4ECDC4', transport: '#45B7D1', entertainment: '#A29BFE',
+  shopping: '#FFA07A', health: '#55EFC4', utilities: '#FFEAA7', rent: '#74B9FF',
+  travel: '#FD79A8', education: '#6C5CE7', subscription: '#00B894', other: '#636E72',
+};
+
 function getCategoryEmoji(category: string): string {
   return categoryEmojis[category?.toLowerCase().trim()] || '💳';
 }
 
+function getCategoryColor(category: string): string {
+  return categoryColors[category?.toLowerCase().trim()] || '#636E72';
+}
+
+function getTimeOfDay(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const formatCurrency = (amount: number) =>
+  `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+/** Prominent "Today" card style hero */
+function HeroCard({ yearlyTotal, monthlyTotal }: { yearlyTotal: number; monthlyTotal: number }) {
+  const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+  return (
+    <LinearGradient
+      colors={['#4F46E5', '#14B8A6']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={heroStyles.card}
+    >
+      {/* Top row */}
+      <View style={heroStyles.topRow}>
+        <Text style={heroStyles.eyebrow}>TOTAL SPENT THIS YEAR</Text>
+        <View style={heroStyles.badge}>
+          <Text style={heroStyles.badgeText}>{new Date().getFullYear()}</Text>
+        </View>
+      </View>
+
+      {/* Big number */}
+      <Text style={heroStyles.amount}>{formatCurrency(yearlyTotal)}</Text>
+
+      {/* Divider line */}
+      <View style={heroStyles.divider} />
+
+      {/* Bottom stats row */}
+      <View style={heroStyles.statsRow}>
+        <View style={heroStyles.statBlock}>
+          <Text style={heroStyles.statLabel}>{currentMonth}</Text>
+          <Text style={heroStyles.statValue}>{formatCurrency(monthlyTotal)}</Text>
+        </View>
+        <View style={heroStyles.statDivider} />
+        <View style={heroStyles.statBlock}>
+          <Text style={heroStyles.statLabel}>Monthly Avg</Text>
+          <Text style={heroStyles.statValue}>
+            {formatCurrency(yearlyTotal / Math.max(new Date().getMonth() + 1, 1))}
+          </Text>
+        </View>
+      </View>
+    </LinearGradient>
+  );
+}
+
+const heroStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 20,
+    marginBottom: 28,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xxl,
+    padding: 24,
+    ...theme.shadows.md,
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  eyebrow: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 0.8,
+  },
+  badge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  badgeText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  amount: {
+    fontFamily: 'Inter-Black',
+    fontSize: 42,
+    color: '#FFFFFF',
+    letterSpacing: -1.5,
+    marginBottom: 20,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginBottom: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statBlock: { flex: 1 },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 20,
+  },
+  statLabel: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 20,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+});
+
+/** Standard section header with optional "See All" */
+function SectionHeader({
+  title,
+  onSeeAll,
+}: {
+  title: string;
+  onSeeAll?: () => void;
+}) {
+  return (
+    <View style={sectionStyles.row}>
+      <Text style={sectionStyles.title}>{title}</Text>
+      {onSeeAll && (
+        <TouchableOpacity onPress={onSeeAll} activeOpacity={0.6}>
+          <Text style={sectionStyles.seeAll}>See All</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+const sectionStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 20,
+    marginBottom: 14,
+  },
+  title: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 22,
+    color: theme.colors.text,
+    letterSpacing: -0.3,
+  },
+  seeAll: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 17,
+    color: theme.colors.primary,
+  },
+});
+
+/** Quick action pill buttons */
+function QuickActions({ navigation }: { navigation: any }) {
+  const actions = [
+    { icon: '🛒', label: 'Items', screen: 'ItemInsights', color: theme.colors.primarySurface },
+    { icon: '🏪', label: 'Merchants', screen: 'MerchantInsights', color: theme.colors.successSurface },
+    { icon: '📊', label: 'Stats', screen: 'Analysis', color: theme.colors.errorSurface },
+  ];
+
+  return (
+    <View style={qaStyles.row}>
+      {actions.map((action) => (
+        <TouchableOpacity
+          key={action.label}
+          style={qaStyles.pill}
+          onPress={() => navigation.navigate(action.screen)}
+          activeOpacity={0.75}
+        >
+          <View style={[qaStyles.iconWrap, { backgroundColor: action.color }]}>
+            <Text style={qaStyles.icon}>{action.icon}</Text>
+          </View>
+          <Text style={qaStyles.label}>{action.label}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const qaStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginBottom: 32,
+    gap: 12,
+  },
+  pill: {
+    flex: 1,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.lg,
+    paddingVertical: 16,
+    alignItems: 'center',
+    ...theme.shadows.sm,
+  },
+  iconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  icon: { fontSize: 22 },
+  label: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: theme.colors.text,
+  },
+});
+
+/** iOS-style receipt list item */
+function ExpenseRow({
+  expense,
+  isLast,
+}: {
+  expense: any;
+  isLast: boolean;
+}) {
+  const color = getCategoryColor(expense.category);
+  return (
+    <>
+      <View style={rowStyles.row}>
+        <View style={[rowStyles.iconBg, { backgroundColor: color + '20' }]}>
+          <Text style={rowStyles.iconText}>{getCategoryEmoji(expense.category)}</Text>
+        </View>
+        <View style={rowStyles.info}>
+          <Text style={rowStyles.title} numberOfLines={1}>{expense.description}</Text>
+          <Text style={rowStyles.subtitle}>{expense.category} · {expense.date}</Text>
+        </View>
+        <Text style={rowStyles.amount}>−{formatCurrency(expense.cost)}</Text>
+      </View>
+      {!isLast && <View style={rowStyles.separator} />}
+    </>
+  );
+}
+
+const rowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 64,
+  },
+  iconBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  iconText: { fontSize: 20 },
+  info: { flex: 1, marginRight: 8 },
+  title: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: theme.colors.text,
+    marginBottom: 3,
+  },
+  subtitle: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: theme.colors.textTertiary,
+  },
+  amount: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 16,
+    color: theme.colors.text,
+    letterSpacing: -0.3,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.colors.borderLight,
+    marginLeft: 74,
+  },
+});
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const { userEmail, accessToken } = useAuth();
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
+  const insets = useSafeAreaInsets();
   const [yearlyData, setYearlyData] = useState<AnalysisResponse | null>(null);
   const [monthlyData, setMonthlyData] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,15 +340,14 @@ export default function HomeScreen() {
     if (!accessToken || !userEmail) return;
     try {
       const now = new Date();
-      // Two parallel calls: yearly (no month) and current month
       const [yearResult, monthResult] = await Promise.all([
         getAnalysis(accessToken, userEmail, { year: now.getFullYear() }),
         getAnalysis(accessToken, userEmail, { year: now.getFullYear(), month: now.getMonth() + 1 }),
       ]);
       setYearlyData(yearResult);
       setMonthlyData(monthResult);
-    } catch (error) {
-      console.error('Failed to fetch dashboard data', error);
+    } catch (e) {
+      console.error('fetchData error', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -51,216 +355,174 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    if (isFocused) {
-      setLoading(true);
-      fetchData();
-    }
+    if (isFocused) { setLoading(true); fetchData(); }
   }, [isFocused]);
 
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    fetchData();
-  }, [accessToken]);
+  const donutData = useMemo(() => {
+    if (!monthlyData?.category_totals) return [];
+    return monthlyData.category_totals.map((ct) => {
+      const details = monthlyData.category_expense_details?.[ct.category] || [];
+      const subMap: Record<string, number> = {};
+      details.forEach((d) => { subMap[d.category || 'Other'] = (subMap[d.category || 'Other'] || 0) + d.cost; });
+      const subcategories = Object.entries(subMap).map(([name, total]) => ({ name, total }));
+      return { category: ct.category, total: ct.total, subcategories: subcategories.length > 1 ? subcategories : undefined };
+    });
+  }, [monthlyData]);
 
-  const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
+  const recentExpenses = useMemo(() => {
+    if (!monthlyData?.category_expense_details) return [];
+    return Object.values(monthlyData.category_expense_details)
+      .flat()
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 6);
+  }, [monthlyData]);
 
   const yearlyTotal = yearlyData?.total_expenses || 0;
   const monthlyTotal = monthlyData?.total_expenses || 0;
 
-  // Build donut chart data from monthly analysis
-  const donutData = useMemo(() => {
-    if (!monthlyData?.category_totals) return [];
-    return monthlyData.category_totals.map((ct) => {
-      // Try to extract subcategory info from category_expense_details
-      const details = monthlyData.category_expense_details?.[ct.category] || [];
-      const subMap: Record<string, number> = {};
-      details.forEach((d) => {
-        // The category field in details may hold subcategory info
-        const subKey = d.category || 'Other';
-        subMap[subKey] = (subMap[subKey] || 0) + d.cost;
-      });
-      const subcategories = Object.entries(subMap).map(([name, total]) => ({ name, total }));
-      return {
-        category: ct.category,
-        total: ct.total,
-        subcategories: subcategories.length > 1 ? subcategories : undefined,
-      };
-    });
-  }, [monthlyData]);
-
-  // Use monthly data for recent expenses (more relevant)
-  const recentExpenses = monthlyData?.category_expense_details
-    ? Object.values(monthlyData.category_expense_details)
-      .flat()
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5)
-    : [];
-
-  if (loading && !yearlyData && !refreshing) {
-    return (
-      <ScreenWrapper scroll>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.welcomeLabel}>Welcome back,</Text>
-            <Text style={theme.typography.h2}>{userEmail?.split('@')[0]}</Text>
-          </View>
-        </View>
-        <HeroSkeleton />
-        <ListSkeleton count={3} />
-      </ScreenWrapper>
-    );
-  }
-
   return (
-    <ScreenWrapper
-      scroll
-      style={{ paddingTop: 0 }}
-      contentStyle={{ paddingHorizontal: 0 }}
-    >
-      <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeLabel}>Welcome back,</Text>
-          <Text style={theme.typography.h2}>{userEmail?.split('@')[0]}</Text>
-        </View>
-      </View>
-
-      {/* Hero Spending Card — Yearly total */}
-      <View style={styles.heroWrapper}>
-        <LinearGradient
-          colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-          style={styles.heroCard}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Text style={styles.heroLabel}>Total Spent This Year</Text>
-          <Text style={styles.heroAmount}>{formatCurrency(yearlyTotal)}</Text>
-          <View style={styles.heroFooter}>
-            <View>
-              <Text style={styles.heroSubLabel}>This Month</Text>
-              <Text style={styles.heroSubAmount}>{formatCurrency(monthlyTotal)}</Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View>
-              <Text style={styles.heroSubLabel}>Avg/Month</Text>
-              <Text style={styles.heroSubAmount}>
-                {formatCurrency(yearlyTotal / Math.max(new Date().getMonth() + 1, 1))}
-              </Text>
-            </View>
+    <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={styles.root}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 160 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchData(); }}
+            tintColor={theme.colors.primary}
+          />
+        }
+      >
+        {/* ── Personalized Greeting Header ─────────────────── */}
+        <View style={styles.pageHeader}>
+          <View>
+            <Text style={styles.greetingSmall}>{getTimeOfDay()},</Text>
+            <Text style={styles.greetingName}>{userEmail?.split('@')[0] || 'there'}</Text>
           </View>
-        </LinearGradient>
-      </View>
-
-      {/* Analytics Dashboard Cards */}
-      <View style={styles.bodyContent}>
-        <View style={styles.sectionHeader}>
-          <Text style={theme.typography.h3}>Analytics</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Analysis')} activeOpacity={0.7}>
-            <Text style={styles.viewAllText}>Details →</Text>
+          <TouchableOpacity style={styles.avatarBtn} activeOpacity={0.75}>
+            <Text style={styles.avatarText}>{userEmail?.charAt(0).toUpperCase() || '?'}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Analytics Charts — vertically stacked */}
-        <CategoryDonutChart data={donutData} title="Category Breakdown" />
-        <TrendLineChart title="Expense Trend (6 mo)" />
-
-        <View style={styles.sectionHeader}>
-          <Text style={theme.typography.h3}>Recent Activity</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Expenses')} activeOpacity={0.7}>
-            <Text style={styles.viewAllText}>View All →</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recentExpenses.length === 0 ? (
-          <Card>
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📭</Text>
-              <Text style={styles.emptyTitle}>No recent activity</Text>
-              <Text style={styles.emptySubtitle}>Add your first expense to get started</Text>
-            </View>
-          </Card>
+        {/* ── Hero Card ─────────────────────────────────────── */}
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color={theme.colors.primary} />
+          </View>
         ) : (
-          recentExpenses.map((expense, index) => (
-            <Card key={`${expense.date}-${expense.description}-${expense.cost}-${index}`} style={styles.expenseCard}>
-              <View style={styles.expenseRow}>
-                <View style={styles.expenseIcon}>
-                  <Text style={styles.expenseIconText}>{getCategoryEmoji(expense.category)}</Text>
-                </View>
-                <View style={styles.expenseInfo}>
-                  <Text style={styles.expenseDesc} numberOfLines={1}>{expense.description}</Text>
-                  <Text style={styles.expenseDate}>{expense.date}</Text>
-                </View>
-                <Text style={styles.expenseCost}>-{formatCurrency(expense.cost)}</Text>
-              </View>
-            </Card>
-          ))
+          <HeroCard yearlyTotal={yearlyTotal} monthlyTotal={monthlyTotal} />
         )}
 
-        <Text style={[theme.typography.h3, { marginTop: 8, marginBottom: 14 }]}>Quick Actions</Text>
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: theme.colors.primarySurface }]}
-            onPress={() => navigation.navigate('Add Expense')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.actionEmoji}>➕</Text>
-            <Text style={[styles.actionLabel, { color: theme.colors.primaryDark }]}>Add New</Text>
-          </TouchableOpacity>
+        {/* ── Quick Actions ─────────────────────────────────── */}
+        <QuickActions navigation={navigation} />
 
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: '#EFF6FF' }]}
-            onPress={() => navigation.navigate('ItemInsights')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.actionEmoji}>🛒</Text>
-            <Text style={[styles.actionLabel, { color: '#1E40AF' }]}>Items</Text>
-          </TouchableOpacity>
+        {/* ── Recent Activity ───────────────────────────────── */}
+        <SectionHeader
+          title="Recent"
+          onSeeAll={() => navigation.navigate('Expenses')}
+        />
 
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: '#FFF7ED' }]}
-            onPress={() => navigation.navigate('MerchantInsights')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.actionEmoji}>🏪</Text>
-            <Text style={[styles.actionLabel, { color: '#9A3412' }]}>Merchants</Text>
-          </TouchableOpacity>
+        {recentExpenses.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>🧾</Text>
+            <Text style={styles.emptyTitle}>No recent expenses</Text>
+            <Text style={styles.emptySubtitle}>Tap the + button to add one</Text>
+          </View>
+        ) : (
+          <View style={styles.listCard}>
+            {recentExpenses.map((expense, i) => (
+              <ExpenseRow
+                key={`${expense.date}-${i}`}
+                expense={expense}
+                isLast={i === recentExpenses.length - 1}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* ── Analytics ─────────────────────────────────────── */}
+        <View style={styles.analyticsSpacer} />
+        <SectionHeader title="Analytics" />
+        <View style={styles.chartPad}>
+          <CategoryDonutChart data={donutData} title="Monthly Breakdown" />
+          <TrendLineChart title="6-Month Trend" />
         </View>
-      </View>
-    </ScreenWrapper>
+      </ScrollView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 100, paddingBottom: 20 },
-  welcomeLabel: { fontSize: 14, color: theme.colors.textSecondary, fontWeight: '500', marginBottom: 2 },
-  heroWrapper: { paddingHorizontal: 20 },
-  heroCard: { borderRadius: 24, padding: 28, marginBottom: 28, ...theme.shadows.colored },
-  heroLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '500', marginBottom: 6 },
-  heroAmount: { color: '#fff', fontSize: 40, fontWeight: '800', letterSpacing: -1, marginBottom: 22 },
-  heroFooter: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', paddingTop: 18 },
-  heroDivider: { width: 1, height: 36, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 28 },
-  heroSubLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontWeight: '500' },
-  heroSubAmount: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 4 },
-  bodyContent: { paddingHorizontal: 20 },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  viewAllText: { color: theme.colors.primary, fontWeight: '600', fontSize: 14 },
-
-  // Expense list
-  expenseCard: { marginBottom: 10, padding: 16 },
-  expenseRow: { flexDirection: 'row', alignItems: 'center' },
-  expenseIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: theme.colors.primarySurface, justifyContent: 'center', alignItems: 'center' },
-  expenseIconText: { fontSize: 22 },
-  expenseInfo: { flex: 1, marginLeft: 14 },
-  expenseDesc: { fontSize: 16, fontWeight: '600', color: theme.colors.text, marginBottom: 3 },
-  expenseDate: { fontSize: 13, color: theme.colors.textTertiary },
-  expenseCost: { fontSize: 17, fontWeight: '700', color: theme.colors.error },
-  emptyState: { alignItems: 'center', paddingVertical: 24 },
-  emptyIcon: { fontSize: 40, marginBottom: 12 },
-  emptyTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.text, marginBottom: 4 },
-  emptySubtitle: { fontSize: 14, color: theme.colors.textSecondary },
-  actionsRow: { flexDirection: 'row', gap: 12 },
-  actionCard: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 20, borderRadius: 16, ...theme.shadows.sm },
-  actionEmoji: { fontSize: 28, marginBottom: 8 },
-  actionLabel: { fontSize: 13, fontWeight: '700' },
+  root: {
+    flex: 1,
+  },
+  scroll: {
+    paddingHorizontal: 0,
+  },
+  pageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  greetingSmall: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 17,
+    color: theme.colors.textTertiary,
+    marginBottom: 2,
+  },
+  greetingName: {
+    fontFamily: 'Inter-Black',
+    fontSize: 34,
+    color: theme.colors.text,
+    letterSpacing: -0.5,
+    textTransform: 'capitalize',
+  },
+  avatarBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...theme.shadows.sm,
+  },
+  avatarText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 18,
+    color: '#fff',
+  },
+  loadingCard: {
+    marginHorizontal: 20,
+    height: 180,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+    ...theme.shadows.md,
+  },
+  listCard: {
+    marginHorizontal: 20,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    overflow: 'hidden',
+    marginBottom: 8,
+    ...theme.shadows.sm,
+  },
+  emptyCard: {
+    marginHorizontal: 20,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.xl,
+    paddingVertical: 40,
+    alignItems: 'center',
+    ...theme.shadows.xs,
+  },
+  emptyIcon: { fontSize: 44, marginBottom: 14 },
+  emptyTitle: { fontFamily: 'Inter-SemiBold', fontSize: 17, color: theme.colors.text, marginBottom: 6 },
+  emptySubtitle: { fontFamily: 'Inter-Regular', fontSize: 15, color: theme.colors.textTertiary },
+  analyticsSpacer: { height: 24 },
+  chartPad: { paddingHorizontal: 20 },
 });
