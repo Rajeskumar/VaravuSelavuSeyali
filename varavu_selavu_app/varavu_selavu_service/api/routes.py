@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks, Request
 from datetime import datetime
 
 from varavu_selavu_service.models.api_models import (
@@ -48,6 +48,7 @@ from varavu_selavu_service.models.api_models import (
     ChangeInsight,
 )
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
+from varavu_selavu_service.core.limiter import limiter
 
 settings = Settings()
 
@@ -412,8 +413,10 @@ def analysis(
     tags=["Analysis"],
     summary="Ask a question about your expenses",
 )
+@limiter.limit("5/minute")
 def analysis_chat(
-    request: ChatRequest,
+    request: Request,
+    body: ChatRequest,
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
     analytics_service: AnalyticsService = Depends(get_analytics_service),
@@ -430,37 +433,37 @@ def analysis_chat(
     """
     # Re‑use the AnalysisService to get the data for the requested month (fresh read for chat)
     analysis_result = analysis_service.analyze(
-        user_id=request.user_id,
-        year=request.year,
-        month=request.month,
-        start_date=request.start_date,
-        end_date=request.end_date,
+        user_id=body.user_id,
+        year=body.year,
+        month=body.month,
+        start_date=body.start_date,
+        end_date=body.end_date,
         use_cache=False,
     )
 
     # Attempt RAG context retrieval for item/merchant-specific queries
     # Use dynamic filtering directly using the user's requested date scope.
     rag_context = insight_service.build_rag_context(
-        user_email=request.user_id,
-        query=request.query,
-        start_date=request.start_date,
-        end_date=request.end_date,
-        year=request.year,
-        month=request.month,
+        user_email=body.user_id,
+        query=body.query,
+        start_date=body.start_date,
+        end_date=body.end_date,
+        year=body.year,
+        month=body.month,
     )
     
     # If dynamic retrieval didn't find anything via exact word matching, 
     # try the fallback fuzzy searching from AnalyticsService (which spans all-time).
     if not rag_context:
         rag_context = analytics_service.build_rag_context(
-            user_email=request.user_id,
-            query=request.query,
+            user_email=body.user_id,
+            query=body.query,
         )
 
     # Pass the query + analysis + optional RAG context to the appropriate chat model
     chat_response = call_chat_model(
-        query=request.query, analysis=analysis_result,
-        model=request.model, rag_context=rag_context,
+        query=body.query, analysis=analysis_result,
+        model=body.model, rag_context=rag_context,
     )
 
     return {"response": chat_response}

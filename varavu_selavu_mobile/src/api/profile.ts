@@ -1,4 +1,5 @@
-import { fetchWithAuth } from './api';
+// src/api/profile.ts
+import { apiFetch } from './apiFetch';
 
 export interface Profile {
   email: string;
@@ -8,14 +9,15 @@ export interface Profile {
 }
 
 export async function getProfile(): Promise<Profile> {
-  const res = await fetchWithAuth('/api/v1/auth/profile', { method: 'GET' });
+  const res = await apiFetch('/api/v1/auth/profile', { method: 'GET' });
   if (!res.ok) throw new Error('Failed to load profile');
   return res.json();
 }
 
 export async function updateProfile(payload: { name?: string | null; phone?: string | null; address?: string | null }): Promise<Profile> {
-  const res = await fetchWithAuth('/api/v1/auth/profile', {
+  const res = await apiFetch('/api/v1/auth/profile', {
     method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error('Failed to update profile');
@@ -23,8 +25,7 @@ export async function updateProfile(payload: { name?: string | null; phone?: str
 }
 
 export async function deleteProfile(): Promise<{ success: boolean }> {
-  const res = await fetchWithAuth('/api/v1/auth/profile', { method: 'DELETE' });
+  const res = await apiFetch('/api/v1/auth/profile', { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete profile');
   return res.json();
 }
-

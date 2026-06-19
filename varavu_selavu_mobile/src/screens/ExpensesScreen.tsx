@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, Alert, TouchableOpacity, Modal, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
@@ -11,6 +12,7 @@ import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
+import { formatCurrency } from '../utils/currencyMath';
 
 // Category emoji mapping
 const categoryEmojis: Record<string, string> = {
@@ -161,7 +163,7 @@ export default function ExpensesScreen() {
 
                 {/* Cost & Actions */}
                 <View style={styles.cardRight}>
-                    <Text style={styles.cost}>-${item.cost.toFixed(2)}</Text>
+                    <Text style={styles.cost}>-{formatCurrency(item.cost)}</Text>
                     <View style={styles.actions}>
                         <TouchableOpacity onPress={() => handleEdit(item)} style={styles.actionBtn} activeOpacity={0.7}>
                             <Text style={styles.editText}>✏️</Text>
@@ -193,26 +195,29 @@ export default function ExpensesScreen() {
                     <ListSkeleton count={5} />
                 </View>
             ) : (
-                <FlatList
-                    data={expenses}
-                    renderItem={renderItem}
-                    keyExtractor={(item) => `expense-${item.row_id}`}
-                    onRefresh={() => fetchExpenses(true)}
-                    refreshing={loading}
-                    onEndReached={() => {
-                        if (hasMore && !loading) fetchExpenses(false);
-                    }}
-                    onEndReachedThreshold={0.5}
-                    ListEmptyComponent={
-                        <Card style={styles.emptyCard}>
-                            <Text style={styles.emptyIcon}>📭</Text>
-                            <Text style={styles.emptyTitle}>No expenses yet</Text>
-                            <Text style={styles.emptySubtitle}>Start tracking your spending</Text>
-                        </Card>
-                    }
-                    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}
-                    showsVerticalScrollIndicator={false}
-                />
+                <View style={{ flex: 1, paddingHorizontal: 20 }}>
+                    <FlashList
+                        data={expenses}
+                        renderItem={renderItem}
+                        keyExtractor={(item) => `expense-${item.row_id}`}
+                        onRefresh={() => fetchExpenses(true)}
+                        refreshing={loading}
+                        onEndReached={() => {
+                            if (hasMore && !loading) fetchExpenses(false);
+                        }}
+                        onEndReachedThreshold={0.5}
+                        estimatedItemSize={100}
+                        ListEmptyComponent={
+                            <Card style={styles.emptyCard}>
+                                <Text style={styles.emptyIcon}>📭</Text>
+                                <Text style={styles.emptyTitle}>No expenses yet</Text>
+                                <Text style={styles.emptySubtitle}>Start tracking your spending</Text>
+                            </Card>
+                        }
+                        contentContainerStyle={{ paddingBottom: 100 }}
+                        showsVerticalScrollIndicator={false}
+                    />
+                </View>
             )}
 
             {/* Edit Modal */}

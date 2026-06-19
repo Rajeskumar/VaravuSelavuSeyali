@@ -1,16 +1,20 @@
 import React from 'react';
-import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert } from '@mui/material';
+import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Divider } from '@mui/material';
 import { logout as apiLogout } from '../api/auth';
-import { getProfile, updateProfile } from '../api/profile';
+import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 
 const ProfilePage: React.FC = () => {
   const [email, setEmail] = React.useState('');
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
+  const [address, setAddress] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
+  const [openDeleteDialog, setOpenDeleteDialog] = React.useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = React.useState('');
+  const [deleting, setDeleting] = React.useState(false);
 
   React.useEffect(() => {
     let mounted = true;
@@ -21,6 +25,7 @@ const ProfilePage: React.FC = () => {
         setEmail(p.email || localStorage.getItem('vs_user') || '');
         setName(p.name || '');
         setPhone(p.phone || '');
+        setAddress(p.address || '');
       } catch (e) {
         setError('Failed to load profile');
       } finally {
@@ -48,14 +53,29 @@ const ProfilePage: React.FC = () => {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await updateProfile({ name, phone });
+      const updated = await updateProfile({ name, phone, address });
       setName(updated.name || '');
       setPhone(updated.phone || '');
+      setAddress(updated.address || '');
       setSuccess('Profile updated');
     } catch (e) {
       setError('Failed to update profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== 'DELETE') return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteProfile();
+      handleLogout();
+    } catch (e) {
+      setError('Failed to delete profile');
+      setDeleting(false);
+      setOpenDeleteDialog(false);
     }
   };
 
@@ -80,6 +100,9 @@ const ProfilePage: React.FC = () => {
                 <TextField label="Phone" fullWidth value={phone} onChange={e => setPhone(e.target.value)} />
               </Grid>
               <Grid size={12}>
+                <TextField label="Address" fullWidth multiline rows={2} value={address} onChange={e => setAddress(e.target.value)} />
+              </Grid>
+              <Grid size={12}>
                 <Button type="submit" variant="contained" fullWidth disabled={saving || loading}>
                   {saving ? 'Saving...' : 'Save Changes'}
                 </Button>
@@ -87,12 +110,55 @@ const ProfilePage: React.FC = () => {
             </Grid>
           </Box>
           {email && (
-            <Button sx={{ mt: 2 }} variant="outlined" color="error" fullWidth onClick={handleLogout}>
+            <Button sx={{ mt: 2 }} variant="outlined" color="primary" fullWidth onClick={handleLogout}>
               Logout
             </Button>
           )}
+
+          <Divider sx={{ my: 3 }} />
+          
+          <Typography variant="h6" color="error" gutterBottom>
+            Danger Zone
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Permanently delete your account and all associated expense data. This action cannot be undone.
+          </Typography>
+          <Button variant="contained" color="error" fullWidth onClick={() => setOpenDeleteDialog(true)}>
+            Delete Account
+          </Button>
+
         </CardContent>
       </Card>
+
+      <Dialog open={openDeleteDialog} onClose={() => !deleting && setOpenDeleteDialog(false)}>
+        <DialogTitle>Delete Account</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Are you absolutely sure? This will permanently delete your profile, expenses, and all insights. 
+            Type <strong>DELETE</strong> below to confirm.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Type DELETE"
+            fullWidth
+            variant="outlined"
+            value={deleteConfirmation}
+            onChange={(e) => setDeleteConfirmation(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDeleteDialog(false)} disabled={deleting}>Cancel</Button>
+          <Button 
+            onClick={handleDeleteAccount} 
+            color="error" 
+            variant="contained"
+            disabled={deleteConfirmation !== 'DELETE' || deleting}
+          >
+            {deleting ? 'Deleting...' : 'Delete Permanently'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

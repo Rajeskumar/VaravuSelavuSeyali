@@ -20,6 +20,7 @@ class AuthService:
                 "email": user.email,
                 "name": user.name,
                 "phone": user.phone,
+                "address": user.address,
                 "password_hash": user.password_hash,
                 "created_at": user.created_at
             }
@@ -69,7 +70,7 @@ class AuthService:
         self.db.commit()
         return True
 
-    def update_profile(self, email: str, name: Optional[str] = None, phone: Optional[str] = None) -> bool:
+    def update_profile(self, email: str, name: Optional[str] = None, phone: Optional[str] = None, address: Optional[str] = None) -> bool:
         user = self.db.query(User).filter(User.email == email).first()
         if not user:
             return False
@@ -78,8 +79,22 @@ class AuthService:
             user.name = name
         if phone is not None:
             user.phone = phone
+        if address is not None:
+            user.address = address
         self.db.commit()
         return True
+
+    def delete_user(self, email: str) -> bool:
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            return False
+        try:
+            self.db.delete(user)
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False
 
     def revoke_refresh_token(self, token: str) -> None:
         _REVOKED_REFRESH_TOKENS.add(token)

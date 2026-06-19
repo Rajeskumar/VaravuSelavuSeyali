@@ -3,9 +3,11 @@ import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ErrorBoundary } from 'react-error-boundary';
 import {
   ActivityIndicator, View, Text, TouchableOpacity, StyleSheet,
-  Animated, Dimensions, Modal, Pressable, Platform,
+  Animated, Dimensions, Modal, Pressable, Platform, SafeAreaView
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -39,10 +41,29 @@ import FeatureRequestScreen from './src/screens/FeatureRequestScreen';
 import ContactUsScreen from './src/screens/ContactUsScreen';
 import ItemInsightsScreen from './src/screens/ItemInsightsScreen';
 import MerchantInsightsScreen from './src/screens/MerchantInsightsScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
 
 import AddExpenseProvider, { AddExpenseContext } from './src/screens/AddExpenseScreen';
 
 const Stack = createNativeStackNavigator();
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+function ErrorFallback({ error, resetErrorBoundary }: any) {
+  return (
+    <SafeAreaView style={styles.errorContainer}>
+      <Text style={styles.errorTitle}>Something went wrong</Text>
+      <Text style={styles.errorText}>{error.message}</Text>
+    </SafeAreaView>
+  );
+}
 const Tab = createBottomTabNavigator();
 
 // ─── Drawer Context ───────────────────────────────────────────────────────────
@@ -355,6 +376,7 @@ const DRAWER_W = Dimensions.get('window').width * 0.80;
 
 const DRAWER_ITEMS = [
   { key: 'home',            label: 'Home',             icon: '🏠', screen: 'Dashboard'       },
+  { key: 'profile',         label: 'Profile',          icon: '👤', screen: 'Profile'         },
   { key: 'itemInsights',    label: 'Item Insights',    icon: '🛒', screen: 'ItemInsights'    },
   { key: 'merchantInsights',label: 'Merchant Insights',icon: '🏪', screen: 'MerchantInsights'},
   { key: 'recurring',       label: 'Recurring',        icon: '🔁', screen: 'Recurring'       },
@@ -505,6 +527,7 @@ function AppShell() {
         headerBackTitleStyle: { fontFamily: 'Inter-Regular' },
       }}>
         <Stack.Screen name="MainTabs" component={MainTabs} />
+        <Stack.Screen name="Profile"          component={ProfileScreen}            options={{ headerShown: true, headerTitle: 'Profile',            headerBackTitle: '' }} />
         <Stack.Screen name="Recurring"        component={RecurringExpensesScreen}  options={{ headerShown: true, headerTitle: 'Recurring',         headerBackTitle: '' }} />
         <Stack.Screen name="ItemInsights"     component={ItemInsightsScreen}       options={{ headerShown: true, headerTitle: 'Item Insights',      headerBackTitle: '' }} />
         <Stack.Screen name="MerchantInsights" component={MerchantInsightsScreen}   options={{ headerShown: true, headerTitle: 'Merchant Insights',  headerBackTitle: '' }} />
@@ -575,11 +598,36 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <StatusBar style="dark" backgroundColor="transparent" translucent />
-        <RootNavigator />
-      </AuthProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <StatusBar style="dark" backgroundColor="transparent" translucent />
+            <RootNavigator />
+          </AuthProvider>
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
+
+const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#e74c3c',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#7f8c8d',
+    textAlign: 'center',
+  },
+});

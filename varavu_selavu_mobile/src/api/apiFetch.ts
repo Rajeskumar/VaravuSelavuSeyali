@@ -8,6 +8,7 @@
  *     and redirect the user to the Login screen.
  */
 import * as SecureStore from 'expo-secure-store';
+import NetInfo from '@react-native-community/netinfo';
 import API_BASE_URL from './apiconfig';
 import { refresh as refreshToken } from './auth';
 
@@ -76,6 +77,13 @@ export async function apiFetch(
     }
 
     const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+    
+    // Offline Check
+    const networkState = await NetInfo.fetch();
+    if (!networkState.isConnected) {
+        throw new Error('OFFLINE: No internet connection');
+    }
+
     let response = await fetch(url, { ...options, headers });
 
     // On 401, attempt refresh and retry once

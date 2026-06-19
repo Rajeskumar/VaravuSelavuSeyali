@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from google.oauth2 import id_token
@@ -10,6 +10,7 @@ from .service import AuthService
 from .security import create_access_token, create_refresh_token, auth_required, decode_token
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
+from varavu_selavu_service.core.limiter import limiter
 
 router = APIRouter(tags=["Auth"])
 
@@ -58,7 +59,9 @@ def register(data: RegisterRequest, auth: AuthService = Depends(get_auth_service
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     auth: AuthService = Depends(get_auth_service),
 ):
@@ -134,11 +137,13 @@ class ProfileResponse(BaseModel):
     email: EmailStr
     name: str | None = None
     phone: str | None = None
+    address: str | None = None
 
 
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
+    address: str | None = None
 
 
 @router.get("/profile", response_model=ProfileResponse)
@@ -146,15 +151,24 @@ def get_profile(user: str = Depends(auth_required), auth: AuthService = Depends(
     data = auth.get_user(user) or {}
     name = data.get("name") or data.get("Name") or None
     phone = data.get("phone") or data.get("Phone") or None
-    return {"email": user, "name": name, "phone": phone}
+    address = data.get("address") or data.get("Address") or None
+    return {"email": user, "name": name, "phone": phone, "address": address}
 
 
 @router.put("/profile", response_model=ProfileResponse)
 def update_profile(payload: UpdateProfileRequest, user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
-    ok = auth.update_profile(email=user, name=payload.name, phone=payload.phone)
+    ok = auth.update_profile(email=user, name=payload.name, phone=payload.phone, address=payload.address)
     if not ok:
         raise HTTPException(status_code=400, detail="Unable to update profile")
     data = auth.get_user(user) or {}
     name = payload.name if payload.name is not None else (data.get("name") or data.get("Name") or None)
     phone = payload.phone if payload.phone is not None else (data.get("phone") or data.get("Phone") or None)
-    return {"email": user, "name": name, "phone": phone}
+    address = payload.address if payload.address is not None else (data.get("address") or data.get("Address") or None)
+    return {"email": user, "name": name, "phone": phone, "address": address}
+
+@router.delete("/profile")
+def delete_profile(user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
+    ok = auth.delete_user(user)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Unable to delete profile")
+    return {"success": True}
