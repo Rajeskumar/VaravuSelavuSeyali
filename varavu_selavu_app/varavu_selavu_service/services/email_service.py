@@ -3,6 +3,8 @@
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.header import Header
+from email.utils import formataddr
 from varavu_selavu_service.core.config import Settings
 
 import logging
@@ -41,12 +43,19 @@ def send_email(
         ``True`` if the email was sent successfully.
     """
     sender = _settings.MAIL_FROM
-    recipient = _settings.MAIL_FROM  # send to the app owner's mailbox
+    recipient = _settings.MAIL_TO or _settings.MAIL_FROM  # send to MAIL_TO, fallback to MAIL_FROM
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[{form_type.upper().replace('_', ' ')}] {subject}"
-    msg["From"] = sender
+    msg["Subject"] = Header(f"[{form_type.upper().replace('_', ' ')}] {subject}", "utf-8")
+    
+    # Gmail requires the 'From' address to match the authenticated account.
+    # We put the user's name/email in the display name portion, and set a Reply-To header.
+    display_name = name or (user_email if user_email != "anonymous" else "Unknown User")
+    msg["From"] = formataddr((str(Header(display_name, "utf-8")), sender))
     msg["To"] = recipient
+    
+    if user_email and user_email != "anonymous":
+        msg.add_header("Reply-To", user_email)
 
     # ---- plain text part ----
     text_lines = [
@@ -57,7 +66,7 @@ def send_email(
         "Message:",
         message_body,
     ]
-    text_part = MIMEText("\n".join(text_lines), "plain")
+    text_part = MIMEText("\n".join(text_lines), "plain", "utf-8")
 
     # ---- HTML part ----
     html_body = f"""
@@ -73,7 +82,7 @@ def send_email(
         <p style="margin-top:24px;font-size:12px;color:#94a3b8">Sent from TrackSpense App</p>
     </div>
     """
-    html_part = MIMEText(html_body, "html")
+    html_part = MIMEText(html_body, "html", "utf-8")
 
     msg.attach(text_part)
     msg.attach(html_part)
