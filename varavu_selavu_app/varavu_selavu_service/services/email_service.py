@@ -5,7 +5,10 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from varavu_selavu_service.core.config import Settings
 
+import logging
+
 _settings = Settings()
+logger = logging.getLogger(__name__)
 
 
 def send_email(
@@ -75,9 +78,21 @@ def send_email(
     msg.attach(text_part)
     msg.attach(html_part)
 
-    with smtplib.SMTP(_settings.MAIL_SERVER, _settings.MAIL_PORT) as server:
-        server.starttls()
-        server.login(_settings.MAIL_USERNAME, _settings.MAIL_PASSWORD)
-        server.sendmail(sender, [recipient], msg.as_string())
+    if not _settings.MAIL_USERNAME or not _settings.MAIL_PASSWORD:
+        logger.warning("MAIL_USERNAME or MAIL_PASSWORD not configured. Skipping actual email send.")
+        logger.info("Mock Email Output:\n%s", msg.as_string())
+        return True
+
+    try:
+        with smtplib.SMTP(_settings.MAIL_SERVER, _settings.MAIL_PORT) as server:
+            server.starttls()
+            server.login(_settings.MAIL_USERNAME, _settings.MAIL_PASSWORD)
+            server.sendmail(sender, [recipient], msg.as_string())
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error("SMTP Authentication failed. Check your MAIL_USERNAME and MAIL_PASSWORD (use an App Password for Gmail).", exc_info=True)
+        raise Exception(f"SMTP Authentication failed: {e}") from e
+    except Exception as e:
+        logger.error("Failed to send email via SMTP.", exc_info=True)
+        raise
 
     return True

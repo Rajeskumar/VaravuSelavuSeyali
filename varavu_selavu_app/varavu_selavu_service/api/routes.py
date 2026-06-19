@@ -804,9 +804,10 @@ def delete_recurring_template(
     tags=["Email"],
     summary="Send a generic email (feature request, contact us, etc.)",
 )
+@limiter.limit("5/minute")
 def send_email_route(
+    request: Request,
     data: SendEmailRequest,
-    _: str = Depends(auth_required),
 ):
     from varavu_selavu_service.services.email_service import send_email
     try:
@@ -819,4 +820,6 @@ def send_email_route(
         )
         return {"success": True, "message": "Email sent successfully"}
     except Exception as exc:
+        import logging
+        logging.getLogger("varavu_selavu_service.api.routes").error(f"Error in send_email_route: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")

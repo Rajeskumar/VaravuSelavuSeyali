@@ -33,6 +33,9 @@ Drill all the way down to individual line-items. TrackSpense automatically aggre
 ### 📱 Seamless Cross-Platform Experience
 Whether you prefer managing your finances on a desktop or while out and about, TrackSpense has you covered. Enjoy a consistent, premium experience across our feature-rich **Web Application** and our native **Mobile Apps** for both iOS and Android.
 
+### 💡 Direct User Feedback & Submit Ideas
+We constantly evolve based on user input! TrackSpense features a built-in "Submit Idea" module across both web and mobile, allowing you to directly communicate feature requests and ideas straight to the development team.
+
 ---
 
 ## 🛠️ Developer & Technical Documentation

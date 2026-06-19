@@ -13,6 +13,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import StorefrontIcon from '@mui/icons-material/Storefront';
+import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
@@ -26,6 +27,7 @@ const navItems = [
   { label: 'Merchant Insights', icon: <StorefrontIcon />, path: '/merchant-insights' },
   { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
   { label: 'Recurring', icon: <AutorenewIcon />, path: '/recurring' },
+  { label: 'Submit Idea', icon: <LightbulbOutlinedIcon />, path: '/feature-request' },
 ];
 
 interface SideNavProps {

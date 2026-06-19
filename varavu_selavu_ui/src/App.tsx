@@ -26,6 +26,7 @@ import MerchantInsightsPage from './pages/MerchantInsightsPage';
 import theme from './theme';
 import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
+import FeatureRequestPage from './pages/FeatureRequestPage';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
   const token = localStorage.getItem('vs_token');
@@ -123,6 +124,7 @@ const AppContent: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/feature-request" element={<FeatureRequestPage />} />
         <Route path="/dashboard" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><DashboardPage /></MainLayout></RequireAuth>} />
         <Route path="/expenses" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpensesPage /></MainLayout></RequireAuth>} />
         <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />

@@ -741,6 +741,7 @@ Description: '{user_description}'."
 | `/recurring` | `RecurringPage` | Yes | Recurring management |
 | `/ai-analyst` | `AIAnalystPage` | Yes | Chat with AI |
 | `/profile` | `ProfilePage` | Yes | Profile management |
+| `/feature-request` | `FeatureRequestPage` | No | Submit a feature request or idea |
 
 ### 11.4 Auth Guard
 ```typescript
