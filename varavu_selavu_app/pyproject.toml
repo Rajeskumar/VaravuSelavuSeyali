@@ -1,7 +1,7 @@
 [project]
 name = "varavu-selavu-app"
 version = "0.1.0"
-description = "FastAPI backend for TrackSpense by Cereberoos"
+description = "FastAPI backend for TrackSpense by Cerebroos"
 authors = [
     {name = "Rajesh Kumar Ganesan"}
 ]

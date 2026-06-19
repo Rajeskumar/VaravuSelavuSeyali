@@ -23,7 +23,7 @@ export default function AboutScreen() {
             <Card>
                 <Text style={styles.sectionTitle}>About</Text>
                 <Text style={styles.body}>
-                    TrackSpense by Cereberoos is a comprehensive expense tracking application designed to help you manage your
+                    TrackSpense by Cerebroos is a comprehensive expense tracking application designed to help you manage your
                     personal finances with ease. Track daily expenses, analyze spending patterns with beautiful
                     charts, set up recurring expenses, and get AI-powered insights — all in one app.
                 </Text>
@@ -56,7 +56,7 @@ export default function AboutScreen() {
                     Built with ❤️ using React Native, Expo, and FastAPI.
                 </Text>
                 <Text style={[styles.body, { marginTop: 4, color: theme.colors.textTertiary }]}>
-                    © {new Date().getFullYear()} TrackSpense by Cereberoos. All rights reserved.
+                    © {new Date().getFullYear()} TrackSpense by Cerebroos. All rights reserved.
                 </Text>
             </Card>
         </ScreenWrapper>
