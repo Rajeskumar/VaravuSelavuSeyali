@@ -1,41 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
     FlatList, KeyboardAvoidingView, Platform, Animated,
-    ActivityIndicator, Keyboard, Modal, Dimensions, ScrollView
+    ActivityIndicator, Keyboard, Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { sendChatMessage, ChatPayload } from '../api/chat';
+import { sendChatMessage, ChatPayload, ChatMessage } from '../api/chat';
 import { apiFetch } from '../api/apiFetch';
-import { theme } from '../theme';
-
-type Period = 'last_month' | 'this_year' | 'all_time';
-
-function getDateRange(period: Period): { start_date?: string; end_date?: string; year?: number } {
-    const now = new Date();
-    switch (period) {
-        case 'last_month': {
-            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-            return {
-                start_date: `${(lastMonth.getMonth() + 1).toString().padStart(2, '0')}/01/${lastMonth.getFullYear()}`,
-                end_date: `${(lastDay.getMonth() + 1).toString().padStart(2, '0')}/${lastDay.getDate().toString().padStart(2, '0')}/${lastDay.getFullYear()}`,
-            };
-        }
-        case 'this_year':
-            return { year: now.getFullYear() };
-        case 'all_time':
-            return {};
-    }
-}
-
-const PERIODS: { key: Period; label: string }[] = [
-    { key: 'last_month', label: 'Last Month' },
-    { key: 'this_year', label: 'This Year' },
-    { key: 'all_time', label: 'All Time' },
-];
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 const SUGGESTED_PROMPTS = [
     "What were my top spending categories?",
@@ -52,11 +27,12 @@ interface DisplayMessage {
 
 export default function AIAnalystScreen() {
     const { accessToken, userEmail } = useAuth();
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
-    const [period, setPeriod] = useState<Period>('this_year');
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const flatListRef = useRef<FlatList>(null);
 
@@ -125,16 +101,23 @@ export default function AIAnalystScreen() {
         if (!text || loading) return;
 
         const userMsg: DisplayMessage = { id: Date.now().toString(), role: 'user', content: text };
-        setMessages((prev) => [...prev, userMsg]);
+        
+        // Compute new history immediately for payload
+        const newHistory = [...messages, userMsg];
+        setMessages(newHistory);
         setInputText('');
         setLoading(true);
 
         try {
-            const dateRange = getDateRange(period);
+            // Map our DisplayMessage to ChatMessage for the API
+            const apiMessages: ChatMessage[] = newHistory.map(m => ({
+                role: m.role,
+                content: m.content
+            }));
+            
             const payload: ChatPayload = {
                 user_id: userEmail || '',
-                query: text,
-                ...dateRange,
+                messages: apiMessages,
                 model: selectedModel || undefined,
             };
 
@@ -198,27 +181,12 @@ export default function AIAnalystScreen() {
     const TAB_BAR_HEIGHT = 82 + insets.bottom;
 
     return (
-        <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
-            {/* Header bar: Period chips + Model selector — inside safe area */}
+        <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
+            {/* Header bar: Model selector — inside safe area */}
             <View style={styles.headerBar}>
-                <View style={styles.periodRow}>
-                    {PERIODS.map(({ key, label }) => (
-                        <TouchableOpacity
-                            key={key}
-                            style={[styles.periodChip, period === key && styles.periodChipActive]}
-                            onPress={() => setPeriod(key)}
-                            activeOpacity={0.7}
-                        >
-                            <Text
-                                style={[styles.periodChipText, period === key && styles.periodChipTextActive]}
-                                numberOfLines={1}
-                            >
-                                {label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
+                <View style={styles.headerTitleRow}>
+                    <Text style={styles.headerTitle}>AI Analyst</Text>
                 </View>
-
                 {models.length > 0 && (
                     <TouchableOpacity
                         style={styles.modelBtn}
@@ -238,7 +206,7 @@ export default function AIAnalystScreen() {
             <KeyboardAvoidingView
                 style={styles.chatArea}
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={insets.top + 100}
+                keyboardVerticalOffset={insets.top + 50}
             >
                 <FlatList
                     ref={flatListRef}
@@ -259,7 +227,7 @@ export default function AIAnalystScreen() {
                             </Text>
                             <View style={styles.emptyPeriodBadge}>
                                 <Text style={styles.emptyPeriodText}>
-                                    📅 {PERIODS.find(p => p.key === period)?.label}
+                                    ℹ️ Uses last 3 months by default unless specified
                                 </Text>
                             </View>
                             
@@ -349,52 +317,40 @@ export default function AIAnalystScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     container: {
         flex: 1,
     },
-    // Header: period chips + model selector
     headerBar: {
-        paddingHorizontal: 12,
-        paddingTop: 4,
-        paddingBottom: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 12,
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: theme.colors.border,
         backgroundColor: theme.colors.surface,
     },
-    periodRow: {
+    headerTitleRow: {
         flexDirection: 'row',
-        gap: 6,
-    },
-    periodChip: {
-        flex: 1,
         alignItems: 'center',
-        paddingVertical: 8,
-        borderRadius: 12,
-        backgroundColor: theme.colors.background,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
     },
-    periodChipActive: {
-        backgroundColor: theme.colors.primary,
-        borderColor: theme.colors.primary,
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: theme.colors.text,
     },
-    periodChipText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: theme.colors.textSecondary,
-    },
-    periodChipTextActive: { color: '#fff' },
     modelBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 6,
         paddingHorizontal: 10,
         paddingVertical: 6,
         borderRadius: 10,
         backgroundColor: theme.colors.background,
         borderWidth: 1,
         borderColor: theme.colors.border,
+        maxWidth: 160,
     },
     modelBtnIcon: { fontSize: 14, marginRight: 6 },
     modelBtnText: { flex: 1, fontSize: 12, fontWeight: '500', color: theme.colors.text },

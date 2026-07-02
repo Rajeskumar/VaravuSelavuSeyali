@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
@@ -9,7 +9,8 @@ import SimpleSelect from '../components/SimpleSelect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import {
   getTopItems, getItemDetail,
   ItemInsightSummary, ItemInsightDetail,
@@ -22,6 +23,8 @@ export default function ItemInsightsScreen() {
   const { userEmail } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [items, setItems] = useState<ItemInsightSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -79,7 +82,7 @@ export default function ItemInsightsScreen() {
 
   if (loading && !refreshing) {
     return (
-      <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
+      <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
         <ScrollView>
           <View style={styles.header}>
               <View>
@@ -98,7 +101,7 @@ export default function ItemInsightsScreen() {
   // Detail view
   if (selectedItem) {
     return (
-      <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={styles.container}>
+      <LinearGradient colors={theme.gradients.surface} style={styles.container}>
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top }}>
         <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedItem(null)}>
           <Text style={styles.backText}>← Back to Items</Text>
@@ -176,7 +179,7 @@ export default function ItemInsightsScreen() {
 
   // List view
   return (
-    <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={[styles.container, { paddingTop: insets.top }]}>
+    <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <View>
           <Text style={styles.screenTitle}>🛒 Item Insights</Text>
@@ -236,7 +239,7 @@ export default function ItemInsightsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background },
   header: { paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

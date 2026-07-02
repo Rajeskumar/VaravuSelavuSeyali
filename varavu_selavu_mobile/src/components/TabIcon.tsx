@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 interface TabIconProps {
     icon: string;
@@ -14,6 +15,8 @@ interface TabIconProps {
  * Small label only shown when focused.
  */
 export default function TabIcon({ icon, label, focused }: TabIconProps) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     return (
         <View style={styles.container}>
             <Text style={[styles.icon, focused && styles.iconFocused]}>
@@ -26,7 +29,7 @@ export default function TabIcon({ icon, label, focused }: TabIconProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     container: {
         alignItems: 'center',
         justifyContent: 'center',

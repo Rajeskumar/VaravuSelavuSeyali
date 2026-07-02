@@ -18,8 +18,8 @@ const HeroVisual: React.FC = () => (
           <stop offset="100%" stopColor="#34d399" />
         </linearGradient>
         <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a78bfa" />
-          <stop offset="100%" stopColor="#7c3aed" />
+          <stop offset="0%" stopColor="#EC4899" />
+          <stop offset="100%" stopColor="#7C3AED" />
         </linearGradient>
         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feDropShadow dx="0" dy="10" stdDeviation="20" floodColor="#000" floodOpacity="0.5" />
@@ -120,7 +120,9 @@ const HomePage: React.FC = () => {
 
       {/* Features — gradient row */}
       <Box sx={{
-        background: 'linear-gradient(135deg, #FFF7ED 0%, #ECFEFF 100%)',
+        background: theme.palette.mode === 'dark'
+          ? 'linear-gradient(135deg, #1D1730 0%, #241825 100%)'
+          : 'linear-gradient(135deg, #F5F0FF 0%, #FDF0F8 100%)',
         borderTop: `1px solid ${theme.palette.divider}`,
         borderBottom: `1px solid ${theme.palette.divider}`,
       }}>
@@ -158,7 +160,9 @@ const HomePage: React.FC = () => {
 
       {/* Vision — gradient row */}
       <Box sx={{
-        background: 'linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%)',
+        background: theme.palette.mode === 'dark'
+          ? 'linear-gradient(135deg, #241825 0%, #1D1730 100%)'
+          : 'linear-gradient(135deg, #FDF0F8 0%, #F5F0FF 100%)',
         borderTop: `1px solid ${theme.palette.divider}`,
         borderBottom: `1px solid ${theme.palette.divider}`,
       }}>

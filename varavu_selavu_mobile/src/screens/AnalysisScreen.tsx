@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity,
     Modal, FlatList, ActivityIndicator,
@@ -6,7 +6,8 @@ import {
 import { PieChart, LineChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
@@ -21,6 +22,8 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 
 export default function AnalysisScreen() {
     const { accessToken, userEmail } = useAuth();
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const [data, setData] = useState<AnalysisResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -290,7 +293,7 @@ export default function AnalysisScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     summaryCard: { alignItems: 'center', paddingVertical: 28 },
     summaryLabel: { fontSize: 14, color: theme.colors.textSecondary, fontWeight: '500' },
     summaryAmount: { fontSize: 36, fontWeight: '800', color: theme.colors.primary, marginVertical: 6, letterSpacing: -1 },

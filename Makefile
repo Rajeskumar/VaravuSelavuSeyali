@@ -5,7 +5,7 @@ install-backend:
 	cd varavu_selavu_app && poetry install
 
 start-backend:
-	cd varavu_selavu_app && poetry run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+	cd varavu_selavu_app && poetry run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
 test-backend:
 	cd varavu_selavu_app && poetry run pytest

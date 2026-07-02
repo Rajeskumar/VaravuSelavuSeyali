@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import CustomButton from '../components/CustomButton';
 import CustomInput from '../components/CustomInput';
 import { showToast } from '../components/Toast';
@@ -17,6 +18,8 @@ export default function RegisterScreen() {
 
   const { signUp } = useAuth();
   const navigation = useNavigation<any>();
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const handleRegister = async () => {
     if (!name || !email || !password || !phone) {
@@ -123,7 +126,7 @@ export default function RegisterScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,

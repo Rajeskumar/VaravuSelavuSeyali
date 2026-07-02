@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     View,
     TextInput,
@@ -7,7 +7,8 @@ import {
     TextInputProps,
     ViewStyle,
 } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 interface CustomInputProps extends TextInputProps {
     label?: string;
@@ -31,6 +32,8 @@ export default function CustomInput({
     style,
     ...rest
 }: CustomInputProps) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const [focused, setFocused] = useState(false);
 
     return (
@@ -64,7 +67,7 @@ export default function CustomInput({
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     container: {
         marginBottom: 0,
     },

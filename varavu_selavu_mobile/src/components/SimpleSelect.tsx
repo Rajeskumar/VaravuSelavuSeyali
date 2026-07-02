@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, FlatList, Platform } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 export interface Option {
   label: string;
@@ -16,6 +17,8 @@ interface SimpleSelectProps {
 }
 
 export default function SimpleSelect({ label, value, onChange, options, placeholder = 'Select' }: SimpleSelectProps) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [open, setOpen] = useState(false);
 
   const selected = useMemo(() => options.find(o => o.value === value), [options, value]);
@@ -62,7 +65,7 @@ export default function SimpleSelect({ label, value, onChange, options, placehol
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   label: { fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 },
   control: {
     height: 40,

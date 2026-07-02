@@ -25,7 +25,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
-import { theme } from './src/theme';
+import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
+import { AppTheme, withAlpha } from './src/theme';
 import ToastProvider from './src/components/Toast';
 import RecurringPrompt from './src/components/RecurringPrompt';
 
@@ -91,6 +92,8 @@ const TAB_ROUTES = [
 function FloatingNavBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { openAddExpense } = useContext(AddExpenseContext);
+  const { theme, isDark } = useAppTheme();
+  const navStyles = React.useMemo(() => createNavStyles(theme), [theme]);
 
   // Active route name
   const activeRouteName = state.routes[state.index]?.name ?? '';
@@ -112,10 +115,10 @@ function FloatingNavBar({ state, navigation }: BottomTabBarProps) {
 
       {/* ── Glass Pill ── */}
       <View style={navStyles.pillShadowContainer}>
-        <BlurView tint="light" intensity={90} style={navStyles.pillBlur}>
+        <BlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={navStyles.pillBlur}>
           {/* Tint overlay for frosted glass look */}
           <LinearGradient
-            colors={['rgba(79,70,229,0.15)', 'rgba(20,184,166,0.15)']}
+            colors={[withAlpha(theme.colors.gradientStart, 0.15), withAlpha(theme.colors.gradientEnd, 0.15)]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={navStyles.pillOverlay}
@@ -181,7 +184,7 @@ const PILL_WIDTH = Dimensions.get('window').width - 48; // 24px margin each side
 const PILL_HEIGHT = 66;
 const FAB_SIZE = 52;
 
-const navStyles = StyleSheet.create({
+const createNavStyles = (theme: AppTheme) => StyleSheet.create({
   // The overall bottom-anchored container
   wrapper: {
     position: 'absolute',
@@ -221,7 +224,7 @@ const navStyles = StyleSheet.create({
     // Diffused drop shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.14,
+    shadowOpacity: theme.mode === 'dark' ? 0.35 : 0.14,
     shadowRadius: 22,
     elevation: 18,
   },
@@ -241,7 +244,7 @@ const navStyles = StyleSheet.create({
     // Hairline inner border for glass edge highlight
     borderRadius: PILL_HEIGHT / 2,
     borderWidth: 0.8,
-    borderColor: 'rgba(79,70,229,0.15)',
+    borderColor: withAlpha(theme.colors.primary, 0.15),
   },
 
   // ── Tab items ─────────────────────────────────────────────────────────────
@@ -264,7 +267,7 @@ const navStyles = StyleSheet.create({
   tabLabel: {
     fontFamily: 'Inter-Medium',
     fontSize: 10,
-    color: '#8E8E93',
+    color: theme.colors.textTertiary,
     letterSpacing: 0.2,
   },
   tabLabelActive: {
@@ -298,6 +301,8 @@ const DummyScreen = () => null;
 function MainTabs() {
   const { openDrawer } = useDrawer();
   const insets = useSafeAreaInsets();
+  const { theme } = useAppTheme();
+  const tabStyles = React.useMemo(() => createTabStyles(theme), [theme]);
 
   // Space reserved for the floating bar:
   //   FAB (52) + gap between FAB and pill (10) + pill (66) + gap to safe area (16) + safe area inset
@@ -357,7 +362,7 @@ function MainTabs() {
   );
 }
 
-const tabStyles = StyleSheet.create({
+const createTabStyles = (theme: AppTheme) => StyleSheet.create({
   menuBtn: {
     marginLeft: 16,
     width: 34,
@@ -391,6 +396,8 @@ function CustomDrawer({ visible, onClose, onNavigate }: {
   const { signOut, userEmail } = useAuth();
   const slideAnim = useRef(new Animated.Value(-DRAWER_W)).current;
   const insets = useSafeAreaInsets();
+  const { theme } = useAppTheme();
+  const drawerStyles = React.useMemo(() => createDrawerStyles(theme), [theme]);
 
   React.useEffect(() => {
     Animated.spring(slideAnim, {
@@ -458,7 +465,7 @@ function CustomDrawer({ visible, onClose, onNavigate }: {
   );
 }
 
-const drawerStyles = StyleSheet.create({
+const createDrawerStyles = (theme: AppTheme) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', flexDirection: 'row' },
   sheet: {
     width: DRAWER_W, flex: 1, backgroundColor: theme.colors.background,
@@ -513,6 +520,7 @@ const drawerStyles = StyleSheet.create({
 function AppShell() {
   const navigation = useNavigation<any>();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { theme } = useAppTheme();
 
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
@@ -523,7 +531,8 @@ function AppShell() {
       <Stack.Navigator screenOptions={{
         headerShown: false,
         headerTintColor: theme.colors.primary,
-        headerTitleStyle: { fontFamily: 'Inter-Bold' },
+        headerStyle: { backgroundColor: theme.colors.background },
+        headerTitleStyle: { fontFamily: 'Inter-Bold', color: theme.colors.text },
         headerBackTitleStyle: { fontFamily: 'Inter-Regular' },
       }}>
         <Stack.Screen name="MainTabs" component={MainTabs} />
@@ -543,6 +552,7 @@ function AppShell() {
 // ─── Root Navigator ───────────────────────────────────────────────────────────
 function RootNavigator() {
   const { accessToken, isLoading } = useAuth();
+  const { theme, isDark } = useAppTheme();
 
   if (isLoading) {
     return (
@@ -555,7 +565,7 @@ function RootNavigator() {
   return (
     <NavigationContainer
       theme={{
-        dark: false,
+        dark: isDark,
         colors: {
           primary: theme.colors.primary,
           background: theme.colors.background,
@@ -576,6 +586,17 @@ function RootNavigator() {
       )}
       <ToastProvider />
     </NavigationContainer>
+  );
+}
+
+// Renders the status bar with the correct contrast for the active theme.
+function ThemedStatusBarAndNav() {
+  const { isDark } = useAppTheme();
+  return (
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor="transparent" translucent />
+      <RootNavigator />
+    </>
   );
 }
 
@@ -601,10 +622,11 @@ export default function App() {
     <ErrorBoundary FallbackComponent={ErrorFallback}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          <AuthProvider>
-            <StatusBar style="dark" backgroundColor="transparent" translucent />
-            <RootNavigator />
-          </AuthProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <ThemedStatusBarAndNav />
+            </AuthProvider>
+          </ThemeProvider>
         </SafeAreaProvider>
       </QueryClientProvider>
     </ErrorBoundary>

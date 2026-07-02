@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     Modal, View, Text, StyleSheet, TouchableOpacity,
     TextInput, ScrollView, Switch
 } from 'react-native';
-import { theme, globalStyles } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import { getRecurringDue, confirmRecurring, DueOccurrenceDTO } from '../api/recurring';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from './Toast';
@@ -17,6 +18,8 @@ const promptedSessions = new Set<string>();
 
 export default function RecurringPrompt() {
     const { userEmail } = useAuth();
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const [open, setOpen] = useState(false);
     const [due, setDue] = useState<DueOccurrenceDTO[]>([]);
     const [items, setItems] = useState<Record<string, ItemState>>({});
@@ -124,17 +127,17 @@ export default function RecurringPrompt() {
 
                     <View style={styles.actionRow}>
                         <TouchableOpacity
-                            style={[globalStyles.secondaryButton, { flex: 1, marginRight: theme.spacing.sm }]}
+                            style={[styles.secondaryButton, { flex: 1, marginRight: theme.spacing.sm }]}
                             onPress={() => setOpen(false)}
                         >
-                            <Text style={globalStyles.secondaryButtonText}>Skip</Text>
+                            <Text style={styles.secondaryButtonText}>Skip</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                            style={[globalStyles.button, { flex: 1, marginLeft: theme.spacing.sm }]}
+                            style={[styles.confirmButton, { flex: 1, marginLeft: theme.spacing.sm }]}
                             onPress={onConfirm}
                             disabled={loading}
                         >
-                            <Text style={globalStyles.buttonText}>{loading ? 'Saving...' : 'Confirm'}</Text>
+                            <Text style={styles.confirmButtonText}>{loading ? 'Saving...' : 'Confirm'}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -143,7 +146,7 @@ export default function RecurringPrompt() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     backdrop: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.5)',
@@ -165,7 +168,7 @@ const styles = StyleSheet.create({
         fontSize: 22,
     },
     subtitle: {
-        ...theme.typography.bodySmall,
+        ...theme.typography.subheadline,
         marginBottom: theme.spacing.lg,
     },
     list: {
@@ -192,7 +195,13 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
     costInput: {
-        ...globalStyles.input,
+        fontFamily: theme.typography.fontFamily.regular,
+        fontSize: 17,
+        color: theme.colors.text,
+        backgroundColor: theme.colors.surfaceSecondary,
+        borderRadius: theme.borderRadius.sm,
+        borderWidth: 1,
+        borderColor: theme.colors.borderLight,
         marginBottom: 0,
         minHeight: 40,
         width: 80,
@@ -203,5 +212,30 @@ const styles = StyleSheet.create({
     actionRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+    },
+    secondaryButton: {
+        backgroundColor: theme.colors.surfaceSecondary,
+        borderRadius: theme.borderRadius.lg,
+        paddingVertical: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    secondaryButtonText: {
+        fontFamily: theme.typography.fontFamily.semiBold,
+        fontSize: 16,
+        color: theme.colors.text,
+    },
+    confirmButton: {
+        backgroundColor: theme.colors.primary,
+        borderRadius: theme.borderRadius.lg,
+        paddingVertical: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...theme.shadows.sm,
+    },
+    confirmButtonText: {
+        fontFamily: theme.typography.fontFamily.semiBold,
+        fontSize: 16,
+        color: '#FFFFFF',
     },
 });

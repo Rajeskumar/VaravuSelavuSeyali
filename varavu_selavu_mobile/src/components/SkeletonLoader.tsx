@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, View, StyleSheet, ViewStyle } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 interface SkeletonProps {
     width?: number | string;
@@ -19,6 +20,8 @@ function Skeleton({
     borderRadius = 8,
     style,
 }: SkeletonProps) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const opacity = useRef(new Animated.Value(0.3)).current;
 
     useEffect(() => {
@@ -45,6 +48,8 @@ function Skeleton({
 
 /** Pre-built skeleton for a dashboard hero card */
 export function HeroSkeleton() {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     return (
         <View style={styles.heroContainer}>
             <Skeleton width="60%" height={14} />
@@ -59,6 +64,8 @@ export function HeroSkeleton() {
 
 /** Pre-built skeleton for a list of expense cards */
 export function ListSkeleton({ count = 3 }: { count?: number }) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     return (
         <View>
             {Array.from({ length: count }).map((_, i) => (
@@ -77,9 +84,9 @@ export function ListSkeleton({ count = 3 }: { count?: number }) {
 
 export default Skeleton;
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     skeleton: {
-        backgroundColor: '#E2E8F0',
+        backgroundColor: theme.colors.surfaceSecondary,
     },
     heroContainer: {
         backgroundColor: theme.colors.surface,

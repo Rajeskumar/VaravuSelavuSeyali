@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Grid, Typography, FormControl, InputLabel, Select, MenuItem, Paper, Divider, Switch, FormControlLabel } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import ExpenseSummaryCards from '../components/analysis/ExpenseSummaryCards';
 import CategoryBarChart from '../components/analysis/CategoryBarChart';
 import CategorySummaryTable from '../components/analysis/CategorySummaryTable';
@@ -7,8 +8,10 @@ import MonthlyTrendLineChart from '../components/analysis/MonthlyTrendLineChart'
 import SmartChangeInsightsCard from '../components/analysis/SmartChangeInsightsCard';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { useQuery } from '@tanstack/react-query';
+import { glassCardSx } from '../theme';
 
 const ExpenseAnalysisPage: React.FC = () => {
+  const theme = useTheme();
   const [data, setData] = useState<AnalysisResponse | null>(null);
   const income = 6200; // same default used in legacy app
   const now = useMemo(() => new Date(), []);
@@ -39,11 +42,7 @@ const ExpenseAnalysisPage: React.FC = () => {
   const title = overallYear ? `Analysis — ${year} (Year Overview)` : `Analysis — ${monthNames[month-1]} ${year}`;
 
   const glass = {
-    backdropFilter: 'blur(8px)',
-    background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(240,248,255,0.65) 100%)',
-    border: '1px solid rgba(255,255,255,0.35)',
-    boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
-    borderRadius: 3,
+    ...glassCardSx(theme),
     animation: 'fadeIn 0.5s ease',
   } as const;
 

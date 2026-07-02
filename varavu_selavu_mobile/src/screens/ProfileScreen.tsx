@@ -1,15 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, ActivityIndicator, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 import { useAuth } from '../context/AuthContext';
 import * as Haptics from 'expo-haptics';
 
 export default function ProfileScreen({ navigation }: any) {
   const { signOut, userEmail } = useAuth();
-  
+  const { theme, isDark, toggleTheme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const [email, setEmail] = useState(userEmail || '');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -64,7 +67,7 @@ export default function ProfileScreen({ navigation }: any) {
         {
           text: 'Delete Permanently',
           style: 'destructive',
-          onPress: async (text) => {
+          onPress: async (text?: string) => {
             if (text !== 'DELETE') {
               Alert.alert('Error', 'Confirmation text did not match.');
               return;
@@ -91,7 +94,7 @@ export default function ProfileScreen({ navigation }: any) {
   }
 
   return (
-    <LinearGradient colors={['#F8FAFC', '#E2E8F0']} style={styles.container}>
+    <LinearGradient colors={theme.gradients.surface} style={styles.container}>
       <SafeAreaView edges={['bottom']} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.card}>
@@ -143,6 +146,22 @@ export default function ProfileScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Preferences</Text>
+            <View style={styles.preferenceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.preferenceLabel}>Dark Mode</Text>
+                <Text style={styles.preferenceDesc}>Switch between light and dark appearance</Text>
+              </View>
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+
           <View style={styles.dangerZone}>
             <Text style={styles.dangerTitle}>Danger Zone</Text>
             <Text style={styles.dangerDesc}>
@@ -158,20 +177,38 @@ export default function ProfileScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { padding: 16, paddingBottom: 100 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 3,
+    ...theme.shadows.sm,
+  },
+  sectionTitle: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 16,
+    color: theme.colors.text,
+    marginBottom: 12,
+  },
+  preferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  preferenceLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 15,
+    color: theme.colors.text,
+    marginBottom: 2,
+  },
+  preferenceDesc: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: theme.colors.textSecondary,
   },
   label: {
     fontFamily: 'Inter-SemiBold',
@@ -180,9 +217,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: theme.colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: theme.colors.border,
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
@@ -191,7 +228,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   readOnlyInput: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: theme.colors.surfaceSecondary,
     color: theme.colors.textTertiary,
   },
   textArea: {
@@ -211,7 +248,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   dangerZone: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: theme.colors.errorSurface,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,

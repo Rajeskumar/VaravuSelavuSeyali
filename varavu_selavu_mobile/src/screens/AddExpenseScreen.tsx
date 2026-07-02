@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, createContext } from 'react';
+import React, { useState, useRef, useCallback, createContext, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
@@ -7,7 +7,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { addExpense, categorizeExpense } from '../api/expenses';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES } from '../constants/categories';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +32,8 @@ export const AddExpenseContext = createContext<AddExpenseContextType>({
 });
 
 export default function AddExpenseProvider({ children }: { children: React.ReactNode }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [visible, setVisible] = useState(false);
   // Sheet starts fully off screen at the bottom
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
@@ -312,7 +315,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   modalRoot: {
     flex: 1,
     justifyContent: 'flex-end',  // Sheet anchors to bottom

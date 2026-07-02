@@ -4,9 +4,11 @@ import { BrowserRouter as Router, Route, Routes, useNavigate, Navigate } from 'r
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import { ThemeProvider, CssBaseline, useTheme, useMediaQuery, IconButton } from '@mui/material';
+import { useTheme, useMediaQuery, IconButton, Tooltip } from '@mui/material';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import MenuIcon from '@mui/icons-material/Menu';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -23,7 +25,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AIAnalystPage from './pages/AIAnalystPage';
 import ItemInsightsPage from './pages/ItemInsightsPage';
 import MerchantInsightsPage from './pages/MerchantInsightsPage';
-import theme from './theme';
+import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
 import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
 import FeatureRequestPage from './pages/FeatureRequestPage';
@@ -43,6 +45,7 @@ const AppContent: React.FC = () => {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { isDark, toggleMode } = useThemeMode();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -100,6 +103,11 @@ const AppContent: React.FC = () => {
           >
             TrackSpense
           </Typography>
+          <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+            <IconButton color="inherit" onClick={toggleMode} sx={{ mr: 1 }}>
+              {isDark ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
+            </IconButton>
+          </Tooltip>
           {user ? (
             <UserMenu
               email={user}
@@ -152,12 +160,11 @@ const queryClient = new QueryClient({
 
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <ThemeModeProvider>
       <Router>
         <AppContent />
       </Router>
-    </ThemeProvider>
+    </ThemeModeProvider>
   </QueryClientProvider>
 );
 

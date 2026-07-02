@@ -12,10 +12,13 @@ import Link from '@mui/material/Link';
 import Divider from '@mui/material/Divider';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
+import { useTheme } from '@mui/material/styles';
 import { login, loginWithGoogle } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
+import { glassCardSx } from '../theme';
 
 const LoginPage: React.FC = () => {
+  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -143,13 +146,9 @@ const LoginPage: React.FC = () => {
         </Backdrop>
         <Card
           sx={{
+            ...glassCardSx(theme),
             width: 420,
             maxWidth: '100%',
-            backdropFilter: 'blur(14px)',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.40) 0%, rgba(255,255,255,0.22) 100%)',
-            border: '1px solid rgba(255,255,255,0.35)',
-            boxShadow: '0 16px 32px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.6)',
-            borderRadius: 3,
           }}
           elevation={0}
         >

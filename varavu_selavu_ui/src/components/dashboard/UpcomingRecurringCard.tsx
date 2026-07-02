@@ -5,8 +5,10 @@ import Typography from '@mui/material/Typography';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
+import { useTheme } from '@mui/material/styles';
 import { listRecurringTemplates, RecurringTemplateDTO } from '../../api/recurring';
 import { formatAppDate } from '../../utils/date';
+import { glassCardSx } from '../../theme';
 
 const daysAhead = 14;
 
@@ -23,6 +25,7 @@ function nextOccurrence(t: RecurringTemplateDTO, from = new Date()): Date | null
 }
 
 const UpcomingRecurringCard: React.FC = () => {
+  const theme = useTheme();
   const [items, setItems] = React.useState<{ date: string; description: string; category: string; amount: number }[]>([]);
 
   React.useEffect(() => {
@@ -53,11 +56,7 @@ const UpcomingRecurringCard: React.FC = () => {
   return (
     <Card
       sx={{
-        backdropFilter: 'blur(8px)',
-        background: 'linear-gradient(135deg, rgba(255,250,245,0.9) 0%, rgba(255,240,230,0.9) 100%)',
-        border: '1px solid rgba(255,255,255,0.4)',
-        boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
-        borderRadius: 3,
+        ...glassCardSx(theme),
         animation: 'fadeIn 0.5s ease',
       }}
     >

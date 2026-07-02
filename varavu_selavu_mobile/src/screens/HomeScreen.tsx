@@ -7,7 +7,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CategoryDonutChart from '../components/CategoryDonutChart';
 import TrendLineChart from '../components/TrendLineChart';
@@ -48,10 +49,12 @@ const formatCurrency = (amount: number) =>
 
 /** Prominent "Today" card style hero */
 function HeroCard({ yearlyTotal, monthlyTotal }: { yearlyTotal: number; monthlyTotal: number }) {
+  const { theme } = useAppTheme();
+  const heroStyles = useMemo(() => createHeroStyles(theme), [theme]);
   const currentMonth = new Date().toLocaleString('default', { month: 'long' });
   return (
     <LinearGradient
-      colors={['#4F46E5', '#14B8A6']}
+      colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={heroStyles.card}
@@ -88,7 +91,7 @@ function HeroCard({ yearlyTotal, monthlyTotal }: { yearlyTotal: number; monthlyT
   );
 }
 
-const heroStyles = StyleSheet.create({
+const createHeroStyles = (theme: AppTheme) => StyleSheet.create({
   card: {
     marginHorizontal: 20,
     marginBottom: 28,
@@ -165,6 +168,8 @@ function SectionHeader({
   title: string;
   onSeeAll?: () => void;
 }) {
+  const { theme } = useAppTheme();
+  const sectionStyles = useMemo(() => createSectionStyles(theme), [theme]);
   return (
     <View style={sectionStyles.row}>
       <Text style={sectionStyles.title}>{title}</Text>
@@ -177,7 +182,7 @@ function SectionHeader({
   );
 }
 
-const sectionStyles = StyleSheet.create({
+const createSectionStyles = (theme: AppTheme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -200,6 +205,8 @@ const sectionStyles = StyleSheet.create({
 
 /** Quick action pill buttons */
 function QuickActions({ navigation }: { navigation: any }) {
+  const { theme } = useAppTheme();
+  const qaStyles = useMemo(() => createQaStyles(theme), [theme]);
   const actions = [
     { icon: '🛒', label: 'Items', screen: 'ItemInsights', color: theme.colors.primarySurface },
     { icon: '🏪', label: 'Merchants', screen: 'MerchantInsights', color: theme.colors.successSurface },
@@ -225,7 +232,7 @@ function QuickActions({ navigation }: { navigation: any }) {
   );
 }
 
-const qaStyles = StyleSheet.create({
+const createQaStyles = (theme: AppTheme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -265,6 +272,8 @@ function ExpenseRow({
   expense: any;
   isLast: boolean;
 }) {
+  const { theme } = useAppTheme();
+  const rowStyles = useMemo(() => createRowStyles(theme), [theme]);
   const color = getCategoryColor(expense.category);
   return (
     <>
@@ -283,7 +292,7 @@ function ExpenseRow({
   );
 }
 
-const rowStyles = StyleSheet.create({
+const createRowStyles = (theme: AppTheme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -331,6 +340,8 @@ export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [yearlyData, setYearlyData] = useState<AnalysisResponse | null>(null);
   const [monthlyData, setMonthlyData] = useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -381,7 +392,7 @@ export default function HomeScreen() {
   const monthlyTotal = monthlyData?.total_expenses || 0;
 
   return (
-    <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={styles.root}>
+    <LinearGradient colors={theme.gradients.surface} style={styles.root}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 160 }]}
@@ -453,7 +464,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
   root: {
     flex: 1,
   },

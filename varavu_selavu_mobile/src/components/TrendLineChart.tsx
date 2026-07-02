@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysis } from '../api/analysis';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme, withAlpha } from '../theme';
 import Card from './Card';
 
 const screenWidth = Dimensions.get('window').width;
@@ -15,6 +16,8 @@ interface TrendLineChartProps {
 
 export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineChartProps) {
     const { accessToken, userEmail } = useAuth();
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const [trendData, setTrendData] = useState<{ labels: string[]; values: number[] } | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -55,7 +58,7 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
     const chartConfig = {
         backgroundGradientFrom: theme.colors.surface,
         backgroundGradientTo: theme.colors.surface,
-        color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`, // Royal Blue
+        color: (opacity = 1) => withAlpha(theme.colors.primary, opacity),
         labelColor: () => theme.colors.textSecondary,
         strokeWidth: 3,
         decimalPlaces: 0,
@@ -69,10 +72,10 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
         propsForDots: {
             r: '4',
             strokeWidth: '2',
-            stroke: '#2563EB',
+            stroke: theme.colors.primary,
             fill: theme.colors.surface,
         },
-        fillShadowGradientFrom: '#2563EB',
+        fillShadowGradientFrom: theme.colors.primary,
         fillShadowGradientTo: theme.colors.surface,
         fillShadowGradientFromOpacity: 0.25,
         fillShadowGradientToOpacity: 0.0,
@@ -111,7 +114,7 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     chartWrapper: {
         alignItems: 'center',
     },

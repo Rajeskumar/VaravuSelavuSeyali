@@ -10,7 +10,9 @@ import {
   TableRow,
   TableContainer
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { formatAppDate } from '../../utils/date';
+import { glassCardSx } from '../../theme';
 
 interface Activity {
   date: string;
@@ -23,14 +25,12 @@ interface Props {
   items: Activity[];
 }
 
-const RecentActivityList: React.FC<Props> = ({ items }) => (
+const RecentActivityList: React.FC<Props> = ({ items }) => {
+  const theme = useTheme();
+  return (
   <Card
     sx={{
-      backdropFilter: 'blur(8px)',
-      background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(255,245,248,0.65) 100%)',
-      border: '1px solid rgba(255,255,255,0.35)',
-      boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
-      borderRadius: 3,
+      ...glassCardSx(theme),
       animation: 'fadeIn 0.5s ease'
     }}
   >
@@ -75,6 +75,7 @@ const RecentActivityList: React.FC<Props> = ({ items }) => (
       </TableContainer>
     </CardContent>
   </Card>
-);
+  );
+};
 
 export default RecentActivityList;

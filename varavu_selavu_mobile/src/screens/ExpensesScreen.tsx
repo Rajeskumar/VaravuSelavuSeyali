@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import Card from '../components/Card';
 import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
@@ -29,6 +30,8 @@ export default function ExpensesScreen() {
     const { accessToken, userEmail } = useAuth();
     const navigation = useNavigation<any>();
     const isFocused = useIsFocused();
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
     const [loading, setLoading] = useState(false);
     const [offset, setOffset] = useState(0);
@@ -182,7 +185,7 @@ export default function ExpensesScreen() {
     );
 
     return (
-        <LinearGradient colors={['#F6F7FB', '#EEF2FF']} style={styles.container}>
+        <LinearGradient colors={theme.gradients.surface} style={styles.container}>
             <View style={styles.header}>
                 <Text style={theme.typography.h2}>History</Text>
                 <Text style={styles.headerSubtitle}>
@@ -308,7 +311,7 @@ export default function ExpensesScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     container: {
         flex: 1,
         paddingTop: Platform.OS === 'android' ? 50 : 56,

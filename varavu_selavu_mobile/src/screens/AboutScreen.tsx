@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Linking, TouchableOpacity } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
 
 export default function AboutScreen() {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     return (
         <ScreenWrapper scroll>
             {/* App Identity */}
@@ -63,7 +66,7 @@ export default function AboutScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     hero: {
         alignItems: 'center',
         paddingVertical: 32,

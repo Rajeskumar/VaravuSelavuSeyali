@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, Typography, TextField, Button, MenuItem } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { addExpense, suggestCategory } from '../../api/expenses';
 import { isoToMMDDYYYY } from '../../utils/date';
+import { glassCardSx } from '../../theme';
 
 interface Props {
   onAdded?: () => void;
@@ -73,15 +75,12 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
   };
 
   useEffect(() => () => { if (typingRef.current) clearTimeout(typingRef.current); }, []);
+  const theme = useTheme();
 
   return (
     <Card
       sx={{
-        backdropFilter: 'blur(8px)',
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(240,255,244,0.75) 100%)',
-        border: '1px solid rgba(255,255,255,0.35)',
-        boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
-        borderRadius: 3,
+        ...glassCardSx(theme),
         animation: 'fadeIn 0.5s ease'
       }}
     >

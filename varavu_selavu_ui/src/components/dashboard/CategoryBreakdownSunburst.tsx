@@ -1,7 +1,9 @@
 import React from 'react';
 import { Card, CardContent, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import Plot from 'react-plotly.js';
 import CategoryDetailsDrawer, { ExpenseItem } from '../common/CategoryDetailsDrawer';
+import { glassCardSx } from '../../theme';
 
 interface CategoryTotal {
   category: string;
@@ -22,14 +24,11 @@ const CategoryBreakdownSunburst: React.FC<Props> = ({ data, title = 'Category Br
   const [open, setOpen] = React.useState(false);
   const [currentLabel, setCurrentLabel] = React.useState<string>('');
   const items = currentLabel && details ? (details[currentLabel] || []) : [];
+  const theme = useTheme();
   return (
     <Card
       sx={{
-        backdropFilter: 'blur(8px)',
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(240,248,255,0.65) 100%)',
-        border: '1px solid rgba(255,255,255,0.35)',
-        boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
-        borderRadius: 3,
+        ...glassCardSx(theme),
         animation: 'fadeIn 0.5s ease'
       }}
     >

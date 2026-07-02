@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
     ActivityIndicator, Alert,
 } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
@@ -11,6 +12,8 @@ import { sendEmail } from '../api/email';
 
 export default function ContactUsScreen() {
     const { userEmail } = useAuth();
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const [name, setName] = useState('');
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
@@ -100,7 +103,7 @@ export default function ContactUsScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     hero: {
         alignItems: 'center',
         paddingVertical: 24,

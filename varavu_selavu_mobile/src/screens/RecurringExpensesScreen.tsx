@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
     ActivityIndicator, Alert, ScrollView, RefreshControl, Platform, Switch,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
@@ -79,6 +80,8 @@ const EMPTY_FORM: UpsertRecurringPayload = {
 
 export default function RecurringExpensesScreen() {
     const isFocused = useIsFocused();
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const [templates, setTemplates] = useState<RecurringTemplateDTO[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -452,7 +455,7 @@ export default function RecurringExpensesScreen() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     header: {
         flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 48 : 56, paddingBottom: 16,

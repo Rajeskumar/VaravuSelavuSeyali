@@ -2,7 +2,9 @@ import React from 'react';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
 import Plot from 'react-plotly.js';
+import { glassCardSx } from '../../theme';
 
 interface Props {
   data: { month: string; total: number }[];
@@ -12,15 +14,12 @@ interface Props {
 const SpendTrendChart: React.FC<Props> = ({ data }) => {
   const months = data.map(d => d.month);
   const totals = data.map(d => d.total);
+  const theme = useTheme();
   return (
     <Card
       sx={{
+        ...glassCardSx(theme),
         height: '100%',
-        backdropFilter: 'blur(8px)',
-        background: 'linear-gradient(135deg, rgba(245,248,255,0.9) 0%, rgba(232,244,255,0.9) 100%)',
-        border: '1px solid rgba(255,255,255,0.4)',
-        boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
-        borderRadius: 3,
         animation: 'fadeIn 0.5s ease',
       }}
     >
@@ -36,8 +35,8 @@ const SpendTrendChart: React.FC<Props> = ({ data }) => {
               type: 'scatter',
               mode: 'lines+markers',
               fill: 'tozeroy',
-              marker: { color: '#4F46E5' },
-              line: { color: '#4F46E5' },
+              marker: { color: theme.palette.primary.main },
+              line: { color: theme.palette.primary.main },
             },
           ]}
           layout={{

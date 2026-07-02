@@ -1,6 +1,7 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Animated, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -21,19 +22,19 @@ export function showToast(config: ToastConfig) {
     toastRef?.show(config);
 }
 
-const toastMeta: Record<ToastType, { bg: string; icon: string }> = {
+const createToastMeta = (theme: AppTheme): Record<ToastType, { bg: string; icon: string }> => ({
     success: { bg: theme.colors.successSurface, icon: '✓' },
     error: { bg: theme.colors.errorSurface, icon: '✕' },
     warning: { bg: theme.colors.warningSurface, icon: '⚠' },
-    info: { bg: '#EFF6FF', icon: 'ℹ' },
-};
+    info: { bg: theme.colors.primarySurface, icon: 'ℹ' },
+});
 
-const toastTextColor: Record<ToastType, string> = {
-    success: '#065F46',
-    error: '#991B1B',
-    warning: '#92400E',
-    info: '#1E40AF',
-};
+const createToastTextColor = (theme: AppTheme): Record<ToastType, string> => ({
+    success: theme.colors.success,
+    error: theme.colors.error,
+    warning: theme.colors.warning,
+    info: theme.colors.primary,
+});
 
 /**
  * Toast — animated slide-in notification.
@@ -41,6 +42,10 @@ const toastTextColor: Record<ToastType, string> = {
  * Then call showToast({ message: '...', type: 'success' }) from anywhere.
  */
 export default function ToastProvider() {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+    const toastMeta = useMemo(() => createToastMeta(theme), [theme]);
+    const toastTextColor = useMemo(() => createToastTextColor(theme), [theme]);
     const [visible, setVisible] = useState(false);
     const [config, setConfig] = useState<ToastConfig>({ message: '', type: 'success' });
     const translateY = useRef(new Animated.Value(-100)).current;
@@ -99,7 +104,7 @@ export default function ToastProvider() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     container: {
         position: 'absolute',
         top: 60,

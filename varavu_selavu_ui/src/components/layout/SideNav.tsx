@@ -59,14 +59,6 @@ const SideNav: React.FC<SideNavProps> = ({ mobileOpen, handleDrawerToggle }) => 
               mx: 1,
               my: 0.5,
               borderRadius: '24px',
-              '&.Mui-selected': {
-                background: 'linear-gradient(135deg, rgba(79,70,229,0.4), rgba(20,184,166,0.4))',
-                backdropFilter: 'blur(12px)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                '& .MuiListItemIcon-root, & .MuiListItemText-primary': {
-                  color: 'primary.main',
-                },
-              },
             }}
           >
             <ListItemIcon>{item.icon}</ListItemIcon>

@@ -1,161 +1,121 @@
 import os
 import requests
-from fastapi import HTTPException
 import logging
+from fastapi import HTTPException
+from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
+from langchain_core.tools import tool
+from langgraph.prebuilt import create_react_agent
+from langchain_core.messages import HumanMessage, AIMessage
 
 logger = logging.getLogger("varavu_selavu.chat_service")
 
-# --------------------------------------------------------------------------- #
-# Helper: call local Ollama chat API
-# --------------------------------------------------------------------------- #
-
-def call_ollama(query: str, analysis: dict, model: str | None = None, rag_context: dict | None = None) -> str:
-    """
-    Send the user query together with the current analysis data to the
-    local Ollama instance and return the generated response.
-    """
-    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    ollama_url = f"{ollama_base_url.rstrip('/')}/api/chat"  # override via OLLAMA_BASE_URL
-    # Default to a commonly available model name if none provided
-    model_name = model or os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
-    system_content = _build_system_prompt(analysis, rag_context)
-    payload = {
-        "model": model_name,
-        "messages": [
-            {"role": "system", "content": system_content},
-            {
-                "role": "user",
-                "content": f"{query}",
-            },
-        ],
-        "stream": False
-    }
-    timeout = float(os.getenv("OLLAMA_TIMEOUT_SEC", "300"))
-    try:
-        resp = requests.post(ollama_url, json=payload, timeout=timeout)
-        resp.raise_for_status()
-        data = resp.json()
-        # Ollama returns {"message": {"role":"assistant","content":"..."}}
-        return data.get("message", {}).get("content", "")
-    except requests.RequestException as exc:
-        # Log detailed error context for debugging, with traceback and HTTP details
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-        text = getattr(getattr(exc, "response", None), "text", None)
-        logger.exception(
-            "Ollama chat request failed",
-            extra={
-                "provider": "ollama",
-                "base_url": ollama_base_url,
-                "model": model_name,
-                "status": status,
-                "response": text,
-            },
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"Error communicating with Ollama: {exc}",
-        )
-
 
 # --------------------------------------------------------------------------- #
-# Helper: call OpenAI chat completion API
+# Public API: Agentic Chat Model
 # --------------------------------------------------------------------------- #
 
-def call_openai(query: str, analysis: dict, model: str | None = None, rag_context: dict | None = None) -> str:
+def call_chat_model(
+    messages: list[dict],
+    user_id: str,
+    analysis_service,
+    analytics_service,
+    insight_service,
+    model: str | None = None
+) -> str:
     """
-    Send the user query together with the current analysis data to the
-    OpenAI Chat Completions API and return the generated response.
+    Invoke a LangGraph ReAct agent to answer the user's question, using tools 
+    to dynamically query the database instead of loading everything upfront.
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+    
+    @tool
+    def get_expense_summary(start_date: str = None, end_date: str = None) -> str:
+        """Get summary of expenses, totals by category, and top categories. Dates are optional YYYY-MM-DD."""
+        try:
+            res = analysis_service.analyze(user_id=user_id, start_date=start_date, end_date=end_date, use_cache=False)
+            return str(res)
+        except Exception as e:
+            return f"Error fetching expense summary: {str(e)}"
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    model_name = model or os.getenv("OPENAI_MODEL", "gpt-5-mini")
-    system_content = _build_system_prompt(analysis, rag_context)
-    payload = {
-        "model": model_name,
-        "messages": [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": f"{query}"},
-        ],
-    }
-    timeout = float(os.getenv("OPENAI_TIMEOUT_SEC", "300"))
-    url = "https://api.openai.com/v1/chat/completions"
-    try:
-        resp = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=timeout,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    except requests.RequestException as exc:
-        status = getattr(getattr(exc, "response", None), "status_code", None)
-        text = getattr(getattr(exc, "response", None), "text", None)
-        logger.exception(
-            "OpenAI chat request failed",
-            extra={
-                "provider": "openai",
-                "model": model_name,
-                "status": status,
-                "response": text,
-            },
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=f"Error communicating with OpenAI: {exc}",
-        )
+    @tool
+    def get_item_insights(item_name: str, start_date: str = None, end_date: str = None) -> str:
+        """Get price metrics and insights for a specific item over a period. Dates are optional YYYY-MM-DD."""
+        try:
+            res = insight_service.calculate_item_detail(
+                user_id=user_id, item_name=item_name, start_date=start_date, end_date=end_date
+            )
+            return str(res) if res else f"No data found for item: {item_name}"
+        except Exception as e:
+            return f"Error fetching item insights: {str(e)}"
 
+    @tool
+    def get_merchant_insights(merchant_name: str) -> str:
+        """Get metrics and spending trends for a specific merchant."""
+        try:
+            res = analytics_service.get_merchant_detail(user_email=user_id, merchant_name=merchant_name)
+            return str(res) if res else f"No data found for merchant: {merchant_name}"
+        except Exception as e:
+            return f"Error fetching merchant insights: {str(e)}"
 
-# --------------------------------------------------------------------------- #
-# Public API: choose provider based on environment
-# --------------------------------------------------------------------------- #
-
-def call_chat_model(query: str, analysis: dict, model: str | None = None, rag_context: dict | None = None) -> str:
-    """
-    Use OpenAI in production and Ollama locally.
-    The environment is determined via the ENV or ENVIRONMENT variables.
-    """
+    tools = [get_expense_summary, get_item_insights, get_merchant_insights]
+    
+    # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
     provider = "openai" if env.lower() in {"prod", "production"} else "ollama"
-    logger.info(
-        "Dispatching chat request",
-        extra={"provider": provider, "env": env, "model": model},
-    )
+    
+    logger.info("Initializing LangGraph agent", extra={"provider": provider, "env": env, "model": model})
+    
     if provider == "openai":
-        return call_openai(query, analysis, model=model, rag_context=rag_context)
-    return call_ollama(query, analysis, model=model, rag_context=rag_context)
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
+        
+        # We fallback to gpt-4o-mini as it supports tool calling natively
+        llm = ChatOpenAI(
+            model=model or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            api_key=api_key,
+            temperature=0
+        )
+    else:
+        # We fallback to llama3 for Ollama local usage
+        llm = ChatOllama(
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            model=model or os.getenv("OLLAMA_MODEL", "llama3.1"),
+            temperature=0
+        )
+        
+    history_text = ""
+    if len(messages) > 1:
+        history_text = "\n\nPrevious conversation history:\n"
+        for m in messages[:-1]:
+            role = "User" if m.get("role") == "user" else "Assistant"
+            content = m.get("content", "")
+            history_text += f"{role}: {content}\n"
 
-
-# --------------------------------------------------------------------------- #
-# System prompt builder
-# --------------------------------------------------------------------------- #
-
-def _build_system_prompt(analysis: dict, rag_context: dict | None = None) -> str:
-    """Build the system prompt including general analysis and optional RAG context."""
-    parts = [
-        "You are a financial analyst assistant. You help users understand their expenses, "
-        "spending patterns, item prices, and merchant spending.",
-        f"\n\nGeneral analysis data:\n{analysis}",
-    ]
-    if rag_context:
-        ctx_type = rag_context.get("type", "unknown")
-        ctx_data = rag_context.get("data", {})
-        if ctx_type == "item_insight":
-            parts.append(
-                f"\n\nDetailed item insight (including price history and store comparison):\n{ctx_data}"
-            )
-        elif ctx_type == "merchant_insight":
-            parts.append(
-                f"\n\nDetailed merchant insight (including monthly aggregates and items bought):\n{ctx_data}"
-            )
-    return "".join(parts)
+    system_prompt = (
+        "You are a financial analyst assistant. You help users understand their expenses. "
+        "If the user does not specify a timeline for an aggregate query, assume they want data for the last 3 months "
+        "(calculate this relative to today, using your tools). "
+        "Use your tools to query the database and answer the user's questions clearly and concisely. "
+        "Format your answer using markdown. "
+    ) + history_text
+    
+    agent = create_react_agent(llm, tools, prompt=system_prompt)
+    
+    # Only pass the final message to the agent as the current input
+    if not messages:
+        return "Please ask a question."
+        
+    last_message = messages[-1]
+    lc_messages = [HumanMessage(content=last_message.get("content", ""))]
+            
+    try:
+        result = agent.invoke({"messages": lc_messages})
+        final_message = result["messages"][-1]
+        return final_message.content
+    except Exception as e:
+        logger.exception("Agent execution failed", extra={"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(e)}")
 
 
 # --------------------------------------------------------------------------- #
@@ -165,7 +125,7 @@ def _build_system_prompt(analysis: dict, rag_context: dict | None = None) -> str
 def list_openai_models() -> list[str]:
     """
     Return a list of model IDs from OpenAI's Models API, filtered to
-    gpt-5, gpt-5.2, and gpt-5-mini (if they exist).
+    gpt-4o, gpt-4o-mini, gpt-5, gpt-5.2, and gpt-5-mini (if they exist).
     """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -181,7 +141,7 @@ def list_openai_models() -> list[str]:
         remote_ids = {m.get("id") for m in data.get("data", []) if m.get("id")}
 
         # Only include these models if they are returned by the API
-        target_models = ["gpt-5-mini", "gpt-5.2", "gpt-5"]
+        target_models = ["gpt-5-mini", "gpt-5.2", "gpt-5", "gpt-4o-mini", "gpt-4o"]
 
         filtered_ids = [mid for mid in target_models if mid in remote_ids]
         return filtered_ids
@@ -202,7 +162,7 @@ def list_ollama_models() -> list[str]:
     try:
         resp = requests.get(url, timeout=10)
         resp.raise_for_status()
-        data = resp.json()  # {"models": [{"name":"llama3:instruct",...}, ...]}
+        data = resp.json()
         return [m.get("name") for m in data.get("models", []) if m.get("name")]
     except requests.RequestException as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)

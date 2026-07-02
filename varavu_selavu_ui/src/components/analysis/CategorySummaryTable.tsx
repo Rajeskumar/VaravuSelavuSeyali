@@ -1,5 +1,7 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Popover, Box } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import { glassCardSx } from '../../theme';
 
 interface Props {
   categoryTotals: { category: string; total: number }[];
@@ -21,19 +23,16 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
   };
 
   const rowsForCat = hoverCat ? details[hoverCat] || [] : [];
+  const theme = useTheme();
 
   return (
     <TableContainer
       component={Paper}
       sx={{
+        ...glassCardSx(theme),
         width: '100%',
         overflowX: 'auto',
         maxWidth: '100vw',
-        backdropFilter: 'blur(8px)',
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.65) 0%, rgba(245,255,248,0.75) 100%)',
-        border: '1px solid rgba(255,255,255,0.35)',
-        boxShadow: '0 10px 24px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.4)',
-        borderRadius: 3
       }}
     >
       <Typography variant="h6" sx={{ m: 2 }}>

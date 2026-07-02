@@ -7,18 +7,14 @@ export interface ChatMessage {
 
 export interface ChatPayload {
   user_id: string;
-  query: string;
-  start_date?: string;
-  end_date?: string;
-  year?: number;
-  month?: number;
+  messages: ChatMessage[];
   model?: string;
 }
 
 /**
  * Send a chat query to the backend AI analyst.
  * Endpoint: POST /api/v1/analysis/chat
- * Payload: { user_id, query, start_date?, end_date? }
+ * Payload: { user_id, messages, model? }
  * Response: { response: string }
  */
 export async function sendChatMessage(token: string, payload: ChatPayload): Promise<string> {

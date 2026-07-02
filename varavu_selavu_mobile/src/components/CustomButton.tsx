@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     TouchableOpacity,
     Text,
@@ -8,7 +8,8 @@ import {
     TextStyle,
     View,
 } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'tinted';
 
@@ -41,6 +42,10 @@ export default function CustomButton({
     icon,
     fullWidth = true,
 }: CustomButtonProps) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+    const variantStyles = useMemo(() => createVariantStyles(theme), [theme]);
+    const variantTextStyles = useMemo(() => createVariantTextStyles(theme), [theme]);
     const isDisabled = disabled || loading;
 
     const buttonStyles: ViewStyle[] = [
@@ -79,7 +84,7 @@ export default function CustomButton({
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     base: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -106,7 +111,7 @@ const styles = StyleSheet.create({
     },
 });
 
-const variantStyles: Record<ButtonVariant, ViewStyle> = {
+const createVariantStyles = (theme: AppTheme): Record<ButtonVariant, ViewStyle> => ({
     primary: {
         backgroundColor: theme.colors.primary,
         ...theme.shadows.sm,
@@ -128,13 +133,13 @@ const variantStyles: Record<ButtonVariant, ViewStyle> = {
     ghost: {
         backgroundColor: 'transparent',
     },
-};
+});
 
-const variantTextStyles: Record<ButtonVariant, TextStyle> = {
+const createVariantTextStyles = (theme: AppTheme): Record<ButtonVariant, TextStyle> => ({
     primary: { color: '#FFFFFF' },
     tinted: { color: theme.colors.primary },
     secondary: { color: theme.colors.text },
     outline: { color: theme.colors.primary },
     danger: { color: '#FFFFFF' },
     ghost: { color: theme.colors.primary },
-};
+});

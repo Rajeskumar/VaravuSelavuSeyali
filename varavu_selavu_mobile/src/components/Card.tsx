@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 
 interface CardProps {
     children: React.ReactNode;
@@ -15,6 +16,8 @@ interface CardProps {
  * Mimics premium card layouts: generous radius, diffused shadow, zero border.
  */
 export default function Card({ children, style, noPadding = false, inset = false }: CardProps) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     return (
         <View style={[styles.card, noPadding && styles.noPadding, inset && styles.inset, style]}>
             {children}
@@ -22,7 +25,7 @@ export default function Card({ children, style, noPadding = false, inset = false
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     card: {
         backgroundColor: theme.colors.surface,
         borderRadius: theme.borderRadius.xl,

@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { G, Path, Circle } from 'react-native-svg';
-import { theme } from '../theme';
+import { useAppTheme } from '../context/ThemeContext';
+import { AppTheme } from '../theme';
 import Card from './Card';
 
 const CHART_COLORS = [
@@ -53,6 +54,8 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
 }
 
 export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }: CategoryDonutChartProps) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
     const grandTotal = useMemo(() => data.reduce((s, d) => s + d.total, 0), [data]);
 
     const outerArcs = useMemo(() => {
@@ -170,7 +173,7 @@ export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: AppTheme) => StyleSheet.create({
     chartContainer: {
         alignItems: 'center',
         justifyContent: 'center',

@@ -1,69 +1,146 @@
 import { StyleSheet } from 'react-native';
 
-/**
- * Premium design tokens.
- * - Primary: Accent Blue #007AFF
- * - Background: iOS System White #FFFFFF
- * - Secondary Surface: iOS System Gray 6 #F2F2F7
- * - Cards: Pure white with diffused iOS-style shadow
- */
-export const theme = {
-  colors: {
-    // Accent Blue — precise, trustworthy
-    primary: '#4F46E5', // Indigo
-    primaryLight: '#6D64F0',
-    primaryDark: '#3730A3',
-    primarySurface: '#EEF2FF',
-    secondary: '#14B8A6', // Teal
+export type ThemeMode = 'light' | 'dark';
 
-    // Backgrounds — iOS system palette
-    background: '#F6F7FB',        // Matches web
-    surface: '#FFFFFF',           // Cards and sheets
-    surfaceSecondary: '#F2F2F7',  // Inset backgrounds inside cards
-    surfaceElevated: '#FFFFFF',   // Elevated overlays
+/** Converts a '#rrggbb' hex color to an 'rgba(r,g,b,a)' string. */
+export function withAlpha(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
-    // Text — standard iOS typographic palette
-    text: '#111827',              // Matches web dark
-    textSecondary: '#6B7280',     // 60% opacity — iOS secondary label
-    textTertiary: '#9CA3AF',      // iOS tertiary label
-    textQuaternary: '#C7C7CC',    // iOS quaternary label
+export interface ThemeColors {
+  primary: string;
+  primaryLight: string;
+  primaryDark: string;
+  primarySurface: string;
+  secondary: string;
+  secondarySurface: string;
 
-    // Semantic signals
-    success: '#16A34A',           // System Green
-    successSurface: '#E9F9EE',
-    error: '#DC2626',             // System Red
-    errorSurface: '#FFF0EF',
-    warning: '#F59E0B',           // System Orange
-    warningSurface: '#FFF4E6',
+  gradientStart: string;
+  gradientEnd: string;
 
-    // Borders & Dividers — iOS separator
-    border: '#E5E7EB',            // iOS separator (opaque)
-    borderLight: '#F3F4F6',       // iOS separator (light)
+  background: string;
+  surface: string;
+  surfaceSecondary: string;
+  surfaceElevated: string;
 
-    // Special
-    highlight: '#14B8A6',
-  },
+  text: string;
+  textSecondary: string;
+  textTertiary: string;
+  textQuaternary: string;
+  textInverse: string;
 
-  spacing: {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    xxl: 48,
-  },
+  success: string;
+  successSurface: string;
+  error: string;
+  errorSurface: string;
+  warning: string;
+  warningSurface: string;
 
-  borderRadius: {
-    xs: 6,
-    sm: 10,
-    md: 14,
-    lg: 18,
-    xl: 22,
-    xxl: 32,
-    full: 9999,
-  },
+  border: string;
+  borderLight: string;
 
-  typography: {
+  highlight: string;
+  overlay: string;
+}
+
+// Vibrant emerald → sky brand
+const lightColors: ThemeColors = {
+  primary: '#10B981',        // Emerald 500
+  primaryLight: '#34D399',
+  primaryDark: '#047857',
+  primarySurface: '#ECFDF5',
+  secondary: '#0EA5E9',      // Sky 500
+  secondarySurface: '#F0F9FF',
+
+  gradientStart: '#10B981',
+  gradientEnd: '#0EA5E9',
+
+  background: '#F7F5FC',
+  surface: '#FFFFFF',
+  surfaceSecondary: '#F1EEFA',
+  surfaceElevated: '#FFFFFF',
+
+  text: '#150F23',
+  textSecondary: '#635E75',
+  textTertiary: '#9891AA',
+  textQuaternary: '#C9C4D6',
+  textInverse: '#FFFFFF',
+
+  success: '#16A34A',
+  successSurface: '#E7F9EE',
+  error: '#EF4444',
+  errorSurface: '#FEECEC',
+  warning: '#F59E0B',
+  warningSurface: '#FFF4E0',
+
+  border: '#E7E1F3',
+  borderLight: '#F1EEF9',
+
+  highlight: '#0EA5E9',
+  overlay: 'rgba(0,0,0,0.4)',
+};
+
+const darkColors: ThemeColors = {
+  primary: '#34D399',        // Emerald 400
+  primaryLight: '#6EE7B7',
+  primaryDark: '#10B981',
+  primarySurface: '#064E3B',
+  secondary: '#38BDF8',      // Sky 400
+  secondarySurface: '#0C4A6E',
+
+  gradientStart: '#34D399',
+  gradientEnd: '#38BDF8',
+
+  background: '#0D0B14',
+  surface: '#18141F',
+  surfaceSecondary: '#221D2F',
+  surfaceElevated: '#241F30',
+
+  text: '#F5F3FA',
+  textSecondary: '#B4AEC4',
+  textTertiary: '#847E97',
+  textQuaternary: '#4E4860',
+  textInverse: '#150F23',
+
+  success: '#34D399',
+  successSurface: '#123324',
+  error: '#F87171',
+  errorSurface: '#3A1919',
+  warning: '#FBBF24',
+  warningSurface: '#3A2A0E',
+
+  border: '#2C2740',
+  borderLight: '#221D30',
+
+  highlight: '#38BDF8',
+  overlay: 'rgba(0,0,0,0.6)',
+};
+
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+};
+
+export const borderRadius = {
+  xs: 8,
+  sm: 12,
+  md: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
+  full: 9999,
+};
+
+function buildTypography(colors: ThemeColors) {
+  return {
     fontFamily: {
       regular: 'Inter-Regular',
       medium: 'Inter-Medium',
@@ -71,153 +148,175 @@ export const theme = {
       bold: 'Inter-Bold',
       black: 'Inter-Black',
     },
-    // iOS "largeTitle" equivalent
     h1: {
       fontFamily: 'Inter-Black',
       fontSize: 34,
-      color: '#000000',
+      color: colors.text,
       letterSpacing: -0.5,
     },
-    // iOS "title1"
     h2: {
       fontFamily: 'Inter-Bold',
       fontSize: 28,
-      color: '#000000',
+      color: colors.text,
       letterSpacing: -0.3,
     },
-    // iOS "title2"
     h3: {
       fontFamily: 'Inter-SemiBold',
       fontSize: 22,
-      color: '#000000',
+      color: colors.text,
       letterSpacing: -0.2,
     },
-    // iOS "headline"
     body: {
       fontFamily: 'Inter-SemiBold',
       fontSize: 17,
-      color: '#000000',
+      color: colors.text,
     },
-    // iOS "body"
     bodyRegular: {
       fontFamily: 'Inter-Regular',
       fontSize: 17,
-      color: '#000000',
+      color: colors.text,
       lineHeight: 22,
     },
-    // iOS "callout"
     callout: {
       fontFamily: 'Inter-Regular',
       fontSize: 16,
-      color: '#3C3C43',
+      color: colors.textSecondary,
     },
-    // iOS "subheadline"
     subheadline: {
       fontFamily: 'Inter-Regular',
       fontSize: 15,
-      color: '#3C3C43',
+      color: colors.textSecondary,
     },
-    // iOS "footnote"
     footnote: {
       fontFamily: 'Inter-Regular',
       fontSize: 13,
-      color: '#8E8E93',
+      color: colors.textTertiary,
     },
-    // iOS "caption1"
     caption: {
       fontFamily: 'Inter-Regular',
       fontSize: 12,
-      color: '#8E8E93',
+      color: colors.textTertiary,
     },
     label: {
       fontFamily: 'Inter-SemiBold',
       fontSize: 13,
-      color: '#8E8E93',
+      color: colors.textTertiary,
       textTransform: 'uppercase' as const,
       letterSpacing: 0.5,
     },
-  },
+  };
+}
 
-  shadows: {
-    // iOS-style diffused shadow — very soft
+function buildShadows(mode: ThemeMode, colors: ThemeColors) {
+  // Dark surfaces need much softer/less-opaque shadows (black shadow on black
+  // is invisible) — lean on a faint glow instead of a drop shadow.
+  const opacityScale = mode === 'dark' ? 0.5 : 1;
+  return {
     xs: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04,
+      shadowOpacity: 0.04 * opacityScale,
       shadowRadius: 4,
       elevation: 1,
     },
     sm: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
+      shadowOpacity: 0.06 * opacityScale,
       shadowRadius: 12,
       elevation: 2,
     },
     md: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08,
+      shadowOpacity: 0.08 * opacityScale,
       shadowRadius: 20,
       elevation: 4,
     },
     lg: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.10,
+      shadowOpacity: 0.1 * opacityScale,
       shadowRadius: 28,
       elevation: 8,
     },
-    // Colored glow for the FAB
     fab: {
-      shadowColor: '#4F46E5',
+      shadowColor: colors.primary,
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
+      shadowOpacity: mode === 'dark' ? 0.55 : 0.35,
       shadowRadius: 16,
       elevation: 10,
     },
-    // Floating pill nav bar shadow
     nav: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 8 },
-      shadowOpacity: 0.12,
+      shadowOpacity: 0.12 * opacityScale,
       shadowRadius: 24,
       elevation: 12,
     },
     colored: {
-      shadowColor: '#4F46E5',
+      shadowColor: colors.primary,
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.25,
+      shadowOpacity: mode === 'dark' ? 0.45 : 0.25,
       shadowRadius: 16,
       elevation: 8,
     },
-  },
-} as const;
+  };
+}
 
-export const globalStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
-  card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    padding: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
-    ...theme.shadows.sm,
-  },
-  // iOS-style inset grouped list section
-  listSection: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    overflow: 'hidden',
-    marginBottom: theme.spacing.md,
-    ...theme.shadows.sm,
-  },
-  // iOS separator that respects left inset (like Settings app)
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.borderLight,
-    marginLeft: 56,
-  },
-});
+export function buildTheme(mode: ThemeMode) {
+  const colors = mode === 'dark' ? darkColors : lightColors;
+  return {
+    mode,
+    colors,
+    spacing,
+    borderRadius,
+    typography: buildTypography(colors),
+    shadows: buildShadows(mode, colors),
+    gradients: {
+      primary: [colors.gradientStart, colors.gradientEnd] as [string, string],
+      surface: mode === 'dark'
+        ? ([colors.background, colors.surfaceSecondary] as [string, string])
+        : ([colors.background, colors.primarySurface] as [string, string]),
+    },
+  };
+}
+
+export type AppTheme = ReturnType<typeof buildTheme>;
+
+export const lightTheme = buildTheme('light');
+export const darkTheme = buildTheme('dark');
+
+// Static default kept for any file not yet migrated to useAppTheme().
+export const theme = lightTheme;
+
+export function createGlobalStyles(t: AppTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: t.colors.background,
+    },
+    card: {
+      backgroundColor: t.colors.surface,
+      borderRadius: t.borderRadius.xl,
+      padding: t.spacing.lg,
+      marginBottom: t.spacing.md,
+      ...t.shadows.sm,
+    },
+    listSection: {
+      backgroundColor: t.colors.surface,
+      borderRadius: t.borderRadius.xl,
+      overflow: 'hidden',
+      marginBottom: t.spacing.md,
+      ...t.shadows.sm,
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: t.colors.borderLight,
+      marginLeft: 56,
+    },
+  });
+}
+
+// Backward-compatible static export (light mode only — not dark-mode aware).
+export const globalStyles = createGlobalStyles(lightTheme);
