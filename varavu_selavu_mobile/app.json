@@ -17,7 +17,11 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.varavuselavumobile"
+      "bundleIdentifier": "com.anonymous.varavuselavumobile",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "This app uses your local network to connect to the development server while building.",
+        "NSBonjourServices": ["_dev._tcp", "_http._tcp"]
+      }
     },
     "android": {
       "adaptiveIcon": {
