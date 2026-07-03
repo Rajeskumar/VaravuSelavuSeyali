@@ -26,6 +26,7 @@ from varavu_selavu_service.services.chat_service import (
     call_chat_model,
     list_openai_models,
     list_ollama_models,
+    list_gemini_models,
 )
 from varavu_selavu_service.services.analysis_service import AnalysisService
 from varavu_selavu_service.services.analytics_service import AnalyticsService
@@ -435,7 +436,8 @@ def analysis_chat(
         analysis_service=analysis_service,
         analytics_service=analytics_service,
         insight_service=insight_service,
-        model=body.model
+        model=body.model,
+        provider=body.provider
     )
 
     return {"response": chat_response}
@@ -524,12 +526,33 @@ def create_expense_with_items(
 )
 def list_models():
     """Return provider and available model ids based on environment."""
-    env = settings.ENVIRONMENT or "local"
-    if env.lower() in {"prod", "production"}:
-        models = list_openai_models()
-        return {"provider": "openai", "models": models}
-    models = list_ollama_models()
-    return {"provider": "ollama", "models": models}
+    models_list = []
+    
+    # Try to load OpenAI models
+    try:
+        openai_models = list_openai_models()
+        for m in openai_models:
+            models_list.append({"provider": "openai", "id": m, "name": f"OpenAI: {m}"})
+    except Exception:
+        pass
+        
+    # Try to load Gemini models
+    try:
+        gemini_models = list_gemini_models()
+        for m in gemini_models:
+            models_list.append({"provider": "gemini", "id": m, "name": f"Gemini: {m}"})
+    except Exception:
+        pass
+        
+    # Try to load Ollama models
+    try:
+        ollama_models = list_ollama_models()
+        for m in ollama_models:
+            models_list.append({"provider": "ollama", "id": m, "name": f"Ollama: {m}"})
+    except Exception:
+        pass
+
+    return {"models": models_list}
 
 
 # ---------------------- Recurring ---------------------- #

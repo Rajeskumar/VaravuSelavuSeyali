@@ -4,6 +4,7 @@ import logging
 from fastapi import HTTPException
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
@@ -21,7 +22,8 @@ def call_chat_model(
     analysis_service,
     analytics_service,
     insight_service,
-    model: str | None = None
+    model: str | None = None,
+    provider: str | None = None
 ) -> str:
     """
     Invoke a LangGraph ReAct agent to answer the user's question, using tools 
@@ -61,7 +63,8 @@ def call_chat_model(
     
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
-    provider = "openai" if env.lower() in {"prod", "production"} else "ollama"
+    if not provider:
+        provider = "openai" if env.lower() in {"prod", "production"} else "ollama"
     
     logger.info("Initializing LangGraph agent", extra={"provider": provider, "env": env, "model": model})
     
@@ -74,6 +77,16 @@ def call_chat_model(
         llm = ChatOpenAI(
             model=model or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             api_key=api_key,
+            temperature=0
+        )
+    elif provider == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
+            
+        llm = ChatGoogleGenerativeAI(
+            model=model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+            google_api_key=api_key,
             temperature=0
         )
     else:
@@ -172,3 +185,28 @@ def list_ollama_models() -> list[str]:
             extra={"provider": "ollama", "url": url, "status": status, "response": text},
         )
         raise HTTPException(status_code=502, detail=f"Error listing Ollama models: {exc}")
+
+def list_gemini_models() -> list[str]:
+    """Return a list of available Gemini models via the API."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    default_models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"]
+    
+    if not api_key:
+        return default_models
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        models = []
+        for m in data.get("models", []):
+            name = m.get("name", "")
+            if name.startswith("models/"):
+                name = name[7:]
+            if "gemini" in name.lower():
+                models.append(name)
+        return models if models else default_models
+    except Exception as exc:
+        logger.exception("Gemini model listing failed", extra={"error": str(exc)})
+        return default_models

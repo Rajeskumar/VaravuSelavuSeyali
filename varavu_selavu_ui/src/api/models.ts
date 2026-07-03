@@ -1,8 +1,13 @@
 import { fetchWithAuth } from './api';
 
+export interface ModelOption {
+  provider: string;
+  id: string;
+  name: string;
+}
+
 export interface ModelsResponse {
-  provider: 'openai' | 'ollama' | string;
-  models: string[];
+  models: ModelOption[];
 }
 
 export async function getModels(signal?: AbortSignal): Promise<ModelsResponse> {

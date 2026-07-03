@@ -74,6 +74,7 @@ class ChatRequest(BaseModel):
     user_id: str
     messages: List[Dict[str, str]] = []
     model: Optional[str] = None
+    provider: Optional[str] = None
 
 
 # ---------------------- Response Models ---------------------- #
@@ -159,9 +160,13 @@ class ErrorResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
-class ModelListResponse(BaseModel):
+class ModelOption(BaseModel):
     provider: str
-    models: List[str]
+    id: str
+    name: str
+
+class ModelListResponse(BaseModel):
+    models: List[ModelOption]
 
 # ---------------------- Insight Analytics ---------------------- #
 

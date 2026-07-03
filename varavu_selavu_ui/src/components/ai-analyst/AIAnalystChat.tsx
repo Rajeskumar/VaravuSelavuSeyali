@@ -3,7 +3,7 @@ import { useTheme } from '@mui/material/styles';
 import React, { useState, useRef, useEffect } from "react";
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { fetchWithAuth } from '../../api/api';
-import { getModels, ModelsResponse } from '../../api/models';
+import { getModels, ModelsResponse, ModelOption } from '../../api/models';
 import { glassCardSx } from '../../theme';
 
 interface AIAnalystChatProps {
@@ -28,9 +28,9 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [models, setModels] = useState<string[]>([]);
-  const [provider, setProvider] = useState<string>("");
-  const [model, setModel] = useState<string>("");
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -38,13 +38,11 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
     getModels(ac.signal)
       .then((res: ModelsResponse) => {
         setModels(res.models);
-        setProvider(res.provider);
-        setModel(currentModel => {
-          if (res.models.length && !currentModel) {
-            return res.models[0];
-          }
-          return currentModel;
-        });
+        if (res.models.length > 0) {
+          const firstProv = res.models[0].provider;
+          setSelectedProvider(firstProv);
+          setSelectedModel(res.models[0]);
+        }
       })
       .catch((e) => {
         console.error('Failed to load models', e);
@@ -73,7 +71,8 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
         body: JSON.stringify({
           user_id: userId,
           messages: newMessages,
-          model: model || undefined,
+          model: selectedModel ? selectedModel.id : undefined,
+          provider: selectedModel ? selectedModel.provider : undefined,
         }),
       });
 
@@ -163,17 +162,38 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
               </Tooltip>
             </Box>
             {models.length > 0 && (
-              <Box sx={{ width: 200 }}>
-                <FormControl size="small" fullWidth>
-                  <InputLabel id="model-label">Model {provider ? `(${provider})` : ''}</InputLabel>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel id="provider-label">Provider</InputLabel>
+                  <Select
+                    labelId="provider-label"
+                    value={selectedProvider}
+                    label="Provider"
+                    onChange={(e) => {
+                      const prov = e.target.value;
+                      setSelectedProvider(prov);
+                      const firstModel = models.find(m => m.provider === prov);
+                      if (firstModel) setSelectedModel(firstModel);
+                    }}
+                  >
+                    {Array.from(new Set(models.map(m => m.provider))).map(p => (
+                      <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel id="model-label">Model</InputLabel>
                   <Select
                     labelId="model-label"
-                    value={model}
-                    label={`Model ${provider ? `(${provider})` : ''}`}
-                    onChange={(e) => setModel(e.target.value)}
+                    value={selectedModel ? selectedModel.id : ""}
+                    label="Model"
+                    onChange={(e) => {
+                      const found = models.find(m => m.id === e.target.value && m.provider === selectedProvider);
+                      if (found) setSelectedModel(found);
+                    }}
                   >
-                    {models.map((m) => (
-                      <MenuItem key={m} value={m}>{m}</MenuItem>
+                    {models.filter(m => m.provider === selectedProvider).map((m) => (
+                      <MenuItem key={`${m.provider}-${m.id}`} value={m.id}>{m.id}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>
