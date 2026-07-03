@@ -25,14 +25,13 @@ CATEGORY_PROMPT = "; ".join(
 
 
 class ReceiptService:
-    """Parse receipts via OpenAI or Ollama; supports mock parsing for tests."""
+    """Parse receipts via Gemini or Ollama; supports mock parsing for tests."""
 
     def __init__(self, engine: Optional[str] = None) -> None:
-        self.engine = engine or os.getenv("OCR_ENGINE", "openai")
-        self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
-        self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.engine = engine or os.getenv("OCR_ENGINE", "gemini")
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        self.model = os.getenv("OCR_MODEL", "gpt-4o-mini")
+        self.model = os.getenv("OCR_MODEL", "gemini-2.5-flash")
         self.timeout = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
 
     # ------------------- mock helpers -------------------
@@ -87,12 +86,8 @@ class ReceiptService:
         return header, items
 
     # ------------------- AI calls -------------------
-    def _call_openai(self, data: bytes, content_type: str) -> Dict[str, Any]:
-        """Send the receipt bytes to the OpenAI vision endpoint."""
-        headers = {
-            "Authorization": f"Bearer {self.openai_api_key}",
-            "Content-Type": "application/json",
-        }
+    def _call_gemini(self, data: bytes, content_type: str) -> Dict[str, Any]:
+        """Send the receipt bytes to the Gemini generateContent endpoint."""
         system_prompt = (
             "You are an expert receipt parsing assistant. Given a grocery receipt, "
             "return a JSON object with a `header` and an `items` array. The header must "
@@ -115,43 +110,50 @@ class ReceiptService:
             "receipt with no rounding. Respond only with JSON."
         )
 
+        b64 = base64.b64encode(data).decode()
+        
+        # Determine actual mimeType since Gemini requires it
+        mime_type = content_type
         if content_type == "application/pdf":
-            upload_headers = {"Authorization": f"Bearer {self.openai_api_key}"}
-            files = {"file": ("receipt.pdf", data, content_type)}
-            upload_resp = requests.post(
-                f"{self.openai_base_url}/files",
-                headers=upload_headers,
-                files=files,
-                data={"purpose": "vision"},
-                timeout=self.timeout,
-            )
-            upload_resp.raise_for_status()
-            file_id = upload_resp.json()["id"]
-            user_content = [
-                {"type": "file", "file_id": file_id},
-                {"type": "text", "text": "Parse this receipt and return JSON."},
-            ]
-        else:
-            b64 = base64.b64encode(data).decode()
-            image_url = {"url": f"data:{content_type};base64,{b64}"}
-            user_content = [
-                {"type": "image_url", "image_url": image_url},
-                {"type": "text", "text": "Parse this receipt and return JSON."},
-            ]
+            mime_type = "application/pdf"
+        elif not mime_type.startswith("image/"):
+            mime_type = "image/jpeg"
 
         body = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content},
+            "systemInstruction": {
+                "parts": [{"text": system_prompt}]
+            },
+            "contents": [
+                {
+                    "parts": [
+                        {"text": "Parse this receipt and return JSON."},
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": b64
+                            }
+                        }
+                    ]
+                }
             ],
-            "response_format": {"type": "json_object"},
+            "generationConfig": {
+                "responseMimeType": "application/json"
+            }
         }
-        url = f"{self.openai_base_url}/chat/completions"
-        resp = requests.post(url, headers=headers, json=body, timeout=self.timeout)
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.gemini_api_key}"
+        resp = requests.post(url, headers={"Content-Type": "application/json"}, json=body, timeout=self.timeout)
         resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
-        return json.loads(content)
+        
+        resp_data = resp.json()
+        try:
+            content = resp_data["candidates"][0]["content"]["parts"][0]["text"]
+            # Sometimes model wraps response in ```json ... ``` despite responseMimeType
+            if content.startswith("```json"):
+                content = content.strip("`").removeprefix("json").strip()
+            return json.loads(content)
+        except (KeyError, IndexError, json.JSONDecodeError) as e:
+            raise Exception(f"Failed to parse Gemini response: {e}")
 
     def _call_ollama(self, b64: str) -> Dict[str, Any]:
         payload = {
@@ -203,7 +205,7 @@ class ReceiptService:
                 b64 = base64.b64encode(data).decode()
                 parsed = self._call_ollama(b64)
             else:
-                parsed = self._call_openai(data, content_type)
+                parsed = self._call_gemini(data, content_type)
 
         header = parsed.get("header", {})
         items = parsed.get("items", [])

@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:AMCUOn3fk1d0qEBu@db.eebwjvoqxurihrmugmti.supabase.co:5432/postgres"
 
     # OCR / receipts
-    OCR_ENGINE: str = "openai"
+    OCR_ENGINE: str = "gemini"
+    OCR_MODEL: str = "gemini-2.5-flash"
     MAX_UPLOAD_MB: int = 12
     ALLOWED_MIME: str = "image/png,image/jpeg,application/pdf"
     LLM_TIMEOUT_SEC: int = 180
