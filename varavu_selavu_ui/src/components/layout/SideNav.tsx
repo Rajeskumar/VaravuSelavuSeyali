@@ -6,89 +6,65 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Toolbar from '@mui/material/Toolbar';
-import HomeIcon from '@mui/icons-material/Home';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import InsightsIcon from '@mui/icons-material/Insights';
-import SmartToyIcon from '@mui/icons-material/SmartToy';
-import AutorenewIcon from '@mui/icons-material/Autorenew';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import StorefrontIcon from '@mui/icons-material/Storefront';
-import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
-import { useTheme } from '@mui/material/styles';
-import useMediaQuery from '@mui/material/useMediaQuery';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import { navItems } from './navItems';
 
-export const drawerWidth = 240; // Increased drawer width
-
-const navItems = [
-  { label: 'Dashboard', icon: <HomeIcon />, path: '/dashboard' },
-  { label: 'Expenses', icon: <ListAltIcon />, path: '/expenses' },
-  { label: 'Analysis', icon: <InsightsIcon />, path: '/analysis' },
-  { label: 'Item Insights', icon: <ShoppingCartIcon />, path: '/item-insights' },
-  { label: 'Merchant Insights', icon: <StorefrontIcon />, path: '/merchant-insights' },
-  { label: 'AI Analyst', icon: <SmartToyIcon />, path: '/ai-analyst' },
-  { label: 'Recurring', icon: <AutorenewIcon />, path: '/recurring' },
-  { label: 'Submit Idea', icon: <LightbulbOutlinedIcon />, path: '/feature-request' },
-];
+export const drawerWidth = 280;
 
 interface SideNavProps {
   mobileOpen: boolean;
   handleDrawerToggle: () => void;
 }
 
+/** Slide-out navigation menu — used on narrow viewports only. Desktop nav lives in NavPills within the top bar. */
 const SideNav: React.FC<SideNavProps> = ({ mobileOpen, handleDrawerToggle }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
-  const drawerContent = (
-    <>
-      <Toolbar />
-      <List>
-        {navItems.map(item => (
-          <ListItemButton
-            key={item.path}
-            selected={location.pathname.startsWith(item.path)}
-            onClick={() => {
-              navigate(item.path);
-              if (isMobile) {
-                handleDrawerToggle();
-              }
-            }}
-            sx={{
-              mx: 1,
-              my: 0.5,
-              borderRadius: '24px',
-            }}
-          >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
-        ))}
-      </List>
-    </>
-  );
 
   return (
     <Drawer
-      variant={isMobile ? 'temporary' : 'permanent'}
-      open={isMobile ? mobileOpen : true}
+      variant="temporary"
+      open={mobileOpen}
       onClose={handleDrawerToggle}
-      ModalProps={{
-        keepMounted: true, // Better open performance on mobile.
-      }}
+      ModalProps={{ keepMounted: true }}
       sx={{
-        display: { xs: isMobile ? 'block' : 'none', md: 'block' },
-        width: drawerWidth,
-        flexShrink: { md: 0 },
+        display: { xs: 'block', md: 'none' },
         [`& .MuiDrawer-paper`]: {
           width: drawerWidth,
           boxSizing: 'border-box',
-          p: 1,
+          p: 1.5,
         },
       }}
     >
-      {drawerContent}
+      <Toolbar />
+      <Box sx={{ px: 1, py: 1 }}>
+        <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.06em' }}>
+          Menu
+        </Typography>
+      </Box>
+      <List sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          const active = location.pathname.startsWith(item.path);
+          return (
+            <ListItemButton
+              key={item.path}
+              selected={active}
+              onClick={() => {
+                navigate(item.path);
+                handleDrawerToggle();
+              }}
+              sx={{ mx: 0.5 }}
+            >
+              <ListItemIcon sx={{ minWidth: 40 }}>
+                <Icon />
+              </ListItemIcon>
+              <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: 600 }} />
+            </ListItemButton>
+          );
+        })}
+      </List>
     </Drawer>
   );
 };

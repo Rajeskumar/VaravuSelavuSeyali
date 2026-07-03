@@ -47,77 +47,85 @@ export interface ThemeColors {
   overlay: string;
 }
 
-// Vibrant emerald → sky brand
+// "Apple structure, Revolut color": Apple's own system Blue → Purple gradient
+// as the single vivid brand accent, carried on Apple's neutral gray canvas.
 const lightColors: ThemeColors = {
-  primary: '#10B981',        // Emerald 500
-  primaryLight: '#34D399',
-  primaryDark: '#047857',
-  primarySurface: '#ECFDF5',
-  secondary: '#0EA5E9',      // Sky 500
-  secondarySurface: '#F0F9FF',
+  primary: '#007AFF',        // Apple system Blue
+  primaryLight: '#409CFF',
+  primaryDark: '#0051D5',
+  primarySurface: '#E8F2FF',
+  secondary: '#AF52DE',      // Apple system Purple
+  secondarySurface: '#F5E9FC',
 
-  gradientStart: '#10B981',
-  gradientEnd: '#0EA5E9',
+  gradientStart: '#007AFF',
+  gradientEnd: '#AF52DE',
 
-  background: '#F7F5FC',
+  background: '#F5F5F7',     // apple.com neutral gray
   surface: '#FFFFFF',
-  surfaceSecondary: '#F1EEFA',
+  surfaceSecondary: '#F5F5F7',
   surfaceElevated: '#FFFFFF',
 
-  text: '#150F23',
-  textSecondary: '#635E75',
-  textTertiary: '#9891AA',
-  textQuaternary: '#C9C4D6',
+  text: '#1D1D1F',
+  textSecondary: '#6E6E73',
+  textTertiary: '#8E8E93',
+  textQuaternary: '#C7C7CC',
   textInverse: '#FFFFFF',
 
-  success: '#16A34A',
-  successSurface: '#E7F9EE',
-  error: '#EF4444',
-  errorSurface: '#FEECEC',
-  warning: '#F59E0B',
-  warningSurface: '#FFF4E0',
+  success: '#34C759',
+  successSurface: '#E6F9EA',
+  error: '#FF3B30',
+  errorSurface: '#FFEBEA',
+  warning: '#FF9500',
+  warningSurface: '#FFF3E0',
 
-  border: '#E7E1F3',
-  borderLight: '#F1EEF9',
+  border: '#D2D2D7',
+  borderLight: '#E5E5EA',
 
-  highlight: '#0EA5E9',
+  highlight: '#FF2D55',      // Apple system Pink — sparing accent
   overlay: 'rgba(0,0,0,0.4)',
 };
 
 const darkColors: ThemeColors = {
-  primary: '#34D399',        // Emerald 400
-  primaryLight: '#6EE7B7',
-  primaryDark: '#10B981',
-  primarySurface: '#064E3B',
-  secondary: '#38BDF8',      // Sky 400
-  secondarySurface: '#0C4A6E',
+  primary: '#0A84FF',        // Apple system Blue (dark)
+  primaryLight: '#409CFF',
+  primaryDark: '#0040DD',
+  primarySurface: '#122840',
+  secondary: '#BF5AF2',      // Apple system Purple (dark)
+  secondarySurface: '#2B1735',
 
-  gradientStart: '#34D399',
-  gradientEnd: '#38BDF8',
+  gradientStart: '#0A84FF',
+  gradientEnd: '#BF5AF2',
 
-  background: '#0D0B14',
-  surface: '#18141F',
-  surfaceSecondary: '#221D2F',
-  surfaceElevated: '#241F30',
+  background: '#000000',
+  surface: '#1C1C1E',
+  surfaceSecondary: '#2C2C2E',
+  surfaceElevated: '#1C1C1E',
 
-  text: '#F5F3FA',
-  textSecondary: '#B4AEC4',
-  textTertiary: '#847E97',
-  textQuaternary: '#4E4860',
-  textInverse: '#150F23',
+  text: '#F5F5F7',
+  textSecondary: '#98989D',
+  textTertiary: '#8E8E93',
+  textQuaternary: '#48484A',
+  textInverse: '#1D1D1F',
 
-  success: '#34D399',
-  successSurface: '#123324',
-  error: '#F87171',
-  errorSurface: '#3A1919',
-  warning: '#FBBF24',
-  warningSurface: '#3A2A0E',
+  success: '#30D158',
+  successSurface: '#0F2818',
+  error: '#FF453A',
+  errorSurface: '#3A1210',
+  warning: '#FF9F0A',
+  warningSurface: '#3A2708',
 
-  border: '#2C2740',
-  borderLight: '#221D30',
+  border: '#38383A',
+  borderLight: '#2C2C2E',
 
-  highlight: '#38BDF8',
+  highlight: '#FF375F',
   overlay: 'rgba(0,0,0,0.6)',
+};
+
+/** Spring/timing presets for react-native-reanimated — tuned for an Apple-like, gentle settle. */
+export const motion = {
+  spring: { damping: 18, stiffness: 220, mass: 0.9 },
+  springBouncy: { damping: 12, stiffness: 260, mass: 0.9 },
+  pressScale: 0.96,
 };
 
 export const spacing = {

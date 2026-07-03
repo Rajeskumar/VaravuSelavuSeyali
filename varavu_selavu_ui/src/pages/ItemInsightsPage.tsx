@@ -14,6 +14,7 @@ import {
   getTopItems, getItemDetail,
   ItemInsightSummary, ItemInsightDetail,
 } from '../api/analytics';
+import { motion } from 'framer-motion';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -101,7 +102,7 @@ const ItemInsightsPage: React.FC = () => {
   // Detail view
   if (detail) {
     return (
-      <Box sx={{ animation: 'fadeIn 0.3s ease' }}>
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <IconButton onClick={() => setDetail(null)} sx={{ mr: 1 }}>
             <ArrowBackIcon />
@@ -209,13 +210,13 @@ const ItemInsightsPage: React.FC = () => {
             </TableContainer>
           </Paper>
         ) : null}
-      </Box>
+      </motion.div>
     );
   }
 
   // List view
   return (
-    <Box sx={{ animation: 'fadeIn 0.3s ease' }}>
+    <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h4" fontWeight={700}>
           🛒 Item Insights
@@ -271,7 +272,7 @@ const ItemInsightsPage: React.FC = () => {
           </List>
         </Paper>
       )}
-    </Box>
+    </motion.div>
   );
 };
 

@@ -1,11 +1,25 @@
 import { createTheme, PaletteMode, Theme } from '@mui/material/styles';
 
-// Vibrant emerald → sky brand
+// "Apple structure, Revolut color": a mostly neutral, spacious Apple-style
+// canvas (apple.com grays, SF-style type, big pill buttons) carrying a single
+// vivid gradient accent — Apple's own system Blue → Purple — used deliberately
+// for CTAs, active states, and data highlights rather than washed everywhere.
 export const brand = {
-  gradientStart: '#10B981',
-  gradientEnd: '#0EA5E9',
-  gradientStartDark: '#34D399',
-  gradientEndDark: '#38BDF8',
+  gradientStart: '#007AFF', // Apple system Blue (light)
+  gradientEnd: '#AF52DE', // Apple system Purple
+  gradientStartDark: '#0A84FF', // Apple system Blue (dark)
+  gradientEndDark: '#BF5AF2', // Apple system Purple (dark)
+  pop: '#FF2D55', // Apple system Pink — sparing use (badges, highlights)
+  popDark: '#FF375F',
+};
+
+/** Apple's own scroll/reveal easing — a fast-out, gentle-settle deceleration. */
+export const motion = {
+  easing: [0.16, 1, 0.3, 1] as const,
+  easingCss: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  fast: 0.2,
+  base: 0.4,
+  slow: 0.7,
 };
 
 export function withAlpha(hex: string, alpha: number): string {
@@ -25,35 +39,36 @@ export function withAlpha(hex: string, alpha: number): string {
 export function glassCardSx(theme: Theme) {
   const isDark = theme.palette.mode === 'dark';
   return {
-    backdropFilter: 'blur(8px)',
+    backdropFilter: 'blur(20px)',
     background: isDark
-      ? `linear-gradient(135deg, ${withAlpha(brand.gradientStartDark, 0.16)} 0%, ${withAlpha(brand.gradientEndDark, 0.12)} 100%)`
-      : `linear-gradient(135deg, ${withAlpha(brand.gradientStart, 0.08)} 0%, ${withAlpha(brand.gradientEnd, 0.08)} 100%)`,
-    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.35)',
+      ? `linear-gradient(135deg, ${withAlpha(brand.gradientStartDark, 0.14)} 0%, ${withAlpha(brand.gradientEndDark, 0.1)} 100%)`
+      : `linear-gradient(135deg, ${withAlpha(brand.gradientStart, 0.06)} 0%, ${withAlpha(brand.gradientEnd, 0.06)} 100%)`,
+    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
     boxShadow: isDark
-      ? '0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)'
-      : '0 10px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
-    borderRadius: 3,
+      ? '0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
+      : '0 20px 40px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6)',
+    borderRadius: 4,
   } as const;
 }
 
 export function getTheme(mode: PaletteMode): Theme {
   const isDark = mode === 'dark';
 
-  const primaryMain = isDark ? '#34D399' : '#10B981';
-  const secondaryMain = isDark ? '#38BDF8' : '#0EA5E9';
+  const primaryMain = isDark ? brand.gradientStartDark : brand.gradientStart;
+  const secondaryMain = isDark ? brand.gradientEndDark : brand.gradientEnd;
   const gradientStart = isDark ? brand.gradientStartDark : brand.gradientStart;
   const gradientEnd = isDark ? brand.gradientEndDark : brand.gradientEnd;
 
-  const backgroundDefault = isDark ? '#0D0B14' : '#F7F5FC';
-  const backgroundPaper = isDark ? '#18141F' : '#FFFFFF';
-  const surfaceSecondary = isDark ? '#221D2F' : '#F1EEFA';
+  // Apple.com's own neutral scale.
+  const backgroundDefault = isDark ? '#000000' : '#F5F5F7';
+  const backgroundPaper = isDark ? '#1C1C1E' : '#FFFFFF';
 
-  const textPrimary = isDark ? '#F5F3FA' : '#150F23';
-  const textSecondary = isDark ? '#B4AEC4' : '#635E75';
+  const textPrimary = isDark ? '#F5F5F7' : '#1D1D1F';
+  const textSecondary = isDark ? '#98989D' : '#6E6E73';
 
-  const paperGlass = isDark ? 'rgba(24,20,31,0.55)' : 'rgba(255,255,255,0.45)';
-  const paperGlassBorder = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.3)';
+  const navGlass = isDark ? 'rgba(0,0,0,0.72)' : 'rgba(255,255,255,0.72)';
+  const paperGlass = isDark ? 'rgba(28,28,30,0.6)' : 'rgba(255,255,255,0.6)';
+  const paperGlassBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
   return createTheme({
     palette: {
@@ -61,18 +76,30 @@ export function getTheme(mode: PaletteMode): Theme {
       primary: { main: primaryMain },
       secondary: { main: secondaryMain },
       background: { default: backgroundDefault, paper: backgroundPaper },
-      success: { main: isDark ? '#34D399' : '#16A34A' },
-      error: { main: isDark ? '#F87171' : '#EF4444' },
-      warning: { main: isDark ? '#FBBF24' : '#F59E0B' },
+      success: { main: isDark ? '#30D158' : '#34C759' },
+      error: { main: isDark ? '#FF453A' : '#FF3B30' },
+      warning: { main: isDark ? '#FF9F0A' : '#FF9500' },
       text: { primary: textPrimary, secondary: textSecondary },
-      divider: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(21,15,35,0.08)',
+      divider: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
     },
-    shape: { borderRadius: 16 },
+    shape: { borderRadius: 14 },
     typography: {
-      fontFamily: 'Inter, Roboto, Helvetica, Arial, sans-serif',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Roboto, Helvetica, Arial, sans-serif',
       fontSize: 15,
-      h5: { fontWeight: 700 },
-      button: { fontWeight: 600 },
+      h1: { fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.05 },
+      h2: { fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.1 },
+      h3: { fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.15 },
+      h4: { fontWeight: 700, letterSpacing: '-0.015em' },
+      h5: { fontWeight: 700, letterSpacing: '-0.01em' },
+      h6: { fontWeight: 600 },
+      body1: { lineHeight: 1.6 },
+      button: { fontWeight: 600, letterSpacing: '-0.005em' },
+    },
+    transitions: {
+      easing: {
+        easeInOut: motion.easingCss,
+        easeOut: motion.easingCss,
+      },
     },
     components: {
       MuiCssBaseline: {
@@ -80,8 +107,8 @@ export function getTheme(mode: PaletteMode): Theme {
           body: {
             backgroundColor: backgroundDefault,
             backgroundImage: isDark
-              ? `radial-gradient(circle at 15% 0%, ${withAlpha(gradientStart, 0.16)} 0%, transparent 45%), radial-gradient(circle at 85% 20%, ${withAlpha(gradientEnd, 0.12)} 0%, transparent 40%)`
-              : `radial-gradient(circle at 15% 0%, ${withAlpha(gradientStart, 0.08)} 0%, transparent 45%), radial-gradient(circle at 85% 20%, ${withAlpha(gradientEnd, 0.08)} 0%, transparent 40%)`,
+              ? `radial-gradient(circle at 15% 0%, ${withAlpha(gradientStart, 0.14)} 0%, transparent 45%), radial-gradient(circle at 85% 20%, ${withAlpha(gradientEnd, 0.1)} 0%, transparent 40%)`
+              : `radial-gradient(circle at 15% 0%, ${withAlpha(gradientStart, 0.05)} 0%, transparent 45%), radial-gradient(circle at 85% 20%, ${withAlpha(gradientEnd, 0.05)} 0%, transparent 40%)`,
             backgroundRepeat: 'no-repeat',
           },
         },
@@ -90,7 +117,7 @@ export function getTheme(mode: PaletteMode): Theme {
         styleOverrides: {
           root: {
             backgroundColor: paperGlass,
-            backdropFilter: 'blur(16px)',
+            backdropFilter: 'blur(20px)',
             backgroundImage: 'none',
             border: `1px solid ${paperGlassBorder}`,
           },
@@ -101,14 +128,14 @@ export function getTheme(mode: PaletteMode): Theme {
           root: {
             borderRadius: 20,
             boxShadow: isDark
-              ? `0 4px 20px ${withAlpha(gradientStart, 0.25)}, 0 1px 4px rgba(0,0,0,0.3)`
-              : `0 2px 16px ${withAlpha(gradientStart, 0.1)}, 0 1px 4px rgba(0,0,0,0.04)`,
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              ? `0 4px 24px rgba(0,0,0,0.4)`
+              : `0 2px 20px rgba(0,0,0,0.05)`,
+            transition: `transform ${motion.base}s ${motion.easingCss}, box-shadow ${motion.base}s ${motion.easingCss}`,
             '&:hover': {
-              transform: 'translateY(-2px)',
+              transform: 'translateY(-3px)',
               boxShadow: isDark
-                ? `0 8px 28px ${withAlpha(gradientStart, 0.35)}`
-                : `0 8px 24px ${withAlpha(gradientStart, 0.16)}`,
+                ? `0 12px 32px rgba(0,0,0,0.5)`
+                : `0 12px 32px rgba(0,0,0,0.1)`,
             },
           },
         },
@@ -117,10 +144,17 @@ export function getTheme(mode: PaletteMode): Theme {
         styleOverrides: {
           root: {
             textTransform: 'none',
-            borderRadius: 12,
+            borderRadius: 980, // Apple's signature pill button
+            paddingLeft: 22,
+            paddingRight: 22,
             boxShadow: 'none',
+            transition: `all ${motion.fast}s ${motion.easingCss}`,
             '&:hover': {
-              boxShadow: isDark ? '0px 4px 14px rgba(0,0,0,0.4)' : '0px 4px 14px rgba(0,0,0,0.15)',
+              boxShadow: 'none',
+              transform: 'scale(1.02)',
+            },
+            '&:active': {
+              transform: 'scale(0.98)',
             },
           },
           containedPrimary: {
@@ -130,26 +164,30 @@ export function getTheme(mode: PaletteMode): Theme {
               filter: 'brightness(1.08)',
             },
           },
+          sizeLarge: {
+            paddingTop: 12,
+            paddingBottom: 12,
+            fontSize: '1.05rem',
+          },
         },
       },
       MuiAppBar: {
         styleOverrides: {
           root: {
-            background: `linear-gradient(135deg, ${withAlpha(gradientStart, 0.75)}, ${withAlpha(gradientEnd, 0.75)})`,
-            color: '#fff',
-            backdropFilter: 'blur(16px)',
-            boxShadow: isDark ? '0 1px 4px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.1)',
+            background: navGlass,
+            color: textPrimary,
+            backdropFilter: 'blur(20px) saturate(1.8)',
+            boxShadow: 'none',
+            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
           },
         },
       },
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            background: isDark
-              ? `linear-gradient(160deg, ${withAlpha(gradientStart, 0.28)}, ${backgroundDefault} 55%)`
-              : `linear-gradient(160deg, ${withAlpha(gradientStart, 0.16)}, ${withAlpha(gradientEnd, 0.1)})`,
+            background: navGlass,
             color: textPrimary,
-            backdropFilter: 'blur(16px)',
+            backdropFilter: 'blur(20px)',
             borderRight: `1px solid ${paperGlassBorder}`,
           },
         },
@@ -157,8 +195,9 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiChip: {
         styleOverrides: {
           root: {
+            borderRadius: 980,
             '&.MuiChip-filledPrimary': {
-              backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : '#F1EBFE',
+              backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
               color: primaryMain,
             },
           },
@@ -167,9 +206,11 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiLinearProgress: {
         styleOverrides: {
           root: {
-            backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : '#F1EBFE',
+            borderRadius: 980,
+            backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
           },
           bar: {
+            borderRadius: 980,
             backgroundImage: `linear-gradient(90deg, ${gradientStart}, ${gradientEnd})`,
           },
         },
@@ -177,13 +218,15 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiListItemButton: {
         styleOverrides: {
           root: {
+            borderRadius: 12,
+            transition: `background-color ${motion.fast}s ${motion.easingCss}`,
             '&.Mui-selected': {
-              background: `linear-gradient(135deg, ${withAlpha(gradientStart, isDark ? 0.35 : 0.16)}, ${withAlpha(gradientEnd, isDark ? 0.35 : 0.16)})`,
+              backgroundColor: isDark ? withAlpha(primaryMain, 0.18) : withAlpha(primaryMain, 0.08),
               '& .MuiListItemIcon-root, & .MuiListItemText-primary': {
                 color: primaryMain,
               },
               '&:hover': {
-                background: `linear-gradient(135deg, ${withAlpha(gradientStart, isDark ? 0.45 : 0.24)}, ${withAlpha(gradientEnd, isDark ? 0.45 : 0.24)})`,
+                backgroundColor: isDark ? withAlpha(primaryMain, 0.26) : withAlpha(primaryMain, 0.12),
               },
             },
           },
@@ -196,8 +239,8 @@ export function getTheme(mode: PaletteMode): Theme {
 /** Convenience token export for non-MUI usages (e.g. inline SVG gradients). */
 export function gradientTokens(mode: PaletteMode) {
   return mode === 'dark'
-    ? { start: brand.gradientStartDark, end: brand.gradientEndDark, surfaceSecondary: '#221D2F' }
-    : { start: brand.gradientStart, end: brand.gradientEnd, surfaceSecondary: '#F1EEFA' };
+    ? { start: brand.gradientStartDark, end: brand.gradientEndDark, surfaceSecondary: '#2C2C2E' }
+    : { start: brand.gradientStart, end: brand.gradientEnd, surfaceSecondary: '#F5F5F7' };
 }
 
 const theme = getTheme('light');

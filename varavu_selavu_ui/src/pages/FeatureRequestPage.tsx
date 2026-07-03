@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Box, Typography, TextField, Button, CircularProgress, Alert, Paper, Container } from '@mui/material';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { sendEmail } from '../api/email';
+import { motion } from 'framer-motion';
 
 const FeatureRequestPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -42,6 +43,7 @@ const FeatureRequestPage: React.FC = () => {
 
   return (
     <Container maxWidth="sm" sx={{ mt: { xs: 4, md: 8 }, mb: 4 }}>
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <Box sx={{ textAlign: 'center', mb: 4 }}>
         <LightbulbOutlinedIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
         <Typography variant="h3" sx={{ fontWeight: 800, mb: 1, letterSpacing: '-0.5px' }}>
@@ -137,6 +139,7 @@ const FeatureRequestPage: React.FC = () => {
           </Button>
         </form>
       </Paper>
+      </motion.div>
     </Container>
   );
 };

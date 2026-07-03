@@ -4,6 +4,7 @@ import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 import LinearProgress from '@mui/material/LinearProgress';
 import Box from '@mui/material/Box';
+import { motion } from 'framer-motion';
 
 interface CategoryTotal { category: string; total: number }
 
@@ -21,6 +22,13 @@ const BudgetVsActualCard: React.FC<Props> = ({ monthTotal, categoryTotals }) => 
   const top = [...categoryTotals].sort((a,b)=>b.total-a.total).slice(0,5);
 
   return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      style={{ height: '100%' }}
+    >
     <Card sx={{ height: '100%' }}>
       <CardContent>
         <Typography variant="h6" gutterBottom>
@@ -50,6 +58,7 @@ const BudgetVsActualCard: React.FC<Props> = ({ monthTotal, categoryTotals }) => 
         )}
       </CardContent>
     </Card>
+    </motion.div>
   );
 };
 

@@ -11,6 +11,7 @@ import {
   TableContainer
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { motion } from 'framer-motion';
 import { formatAppDate } from '../../utils/date';
 import { glassCardSx } from '../../theme';
 
@@ -28,6 +29,12 @@ interface Props {
 const RecentActivityList: React.FC<Props> = ({ items }) => {
   const theme = useTheme();
   return (
+  <motion.div
+    initial={{ opacity: 0, y: 32 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true, margin: '-80px' }}
+    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+  >
   <Card
     sx={{
       ...glassCardSx(theme),
@@ -75,6 +82,7 @@ const RecentActivityList: React.FC<Props> = ({ items }) => {
       </TableContainer>
     </CardContent>
   </Card>
+  </motion.div>
   );
 };
 

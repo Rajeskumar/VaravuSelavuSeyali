@@ -1,56 +1,95 @@
 import React from 'react';
-import { Box, Container, Typography, Button, Grid, Card, CardContent, Stack, useTheme } from '@mui/material';
+import { Box, Container, Typography, Button, Grid, Stack, useTheme } from '@mui/material';
 import AutoGraphIcon from '@mui/icons-material/AutoGraph';
 import InsightsIcon from '@mui/icons-material/Insights';
 import SecurityIcon from '@mui/icons-material/Security';
+import BoltIcon from '@mui/icons-material/Bolt';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { brand, withAlpha, glassCardSx, motion as motionTokens } from '../theme';
 
-const HeroVisual: React.FC = () => (
-  <Box sx={{ width: { xs: '100%', sm: 720 }, aspectRatio: '16 / 10', mx: 'auto' }}>
-    <svg viewBox="0 0 960 600" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#111827" />
-          <stop offset="100%" stopColor="#0b0b0b" />
-        </linearGradient>
-        <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#60a5fa" />
-          <stop offset="100%" stopColor="#34d399" />
-        </linearGradient>
-        <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#EC4899" />
-          <stop offset="100%" stopColor="#7C3AED" />
-        </linearGradient>
-        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="10" stdDeviation="20" floodColor="#000" floodOpacity="0.5" />
-        </filter>
-      </defs>
-      {/* Card Background */}
-      <rect x="40" y="40" width="880" height="520" rx="24" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.08)" filter="url(#shadow)" />
-      {/* Title Bar */}
-      <rect x="64" y="64" width="832" height="56" rx="12" fill="rgba(255,255,255,0.06)" />
-      {/* Bars */}
-      <g opacity="0.9">
-        <rect x="100" y="380" width="36" height="140" fill="url(#barGrad)" rx="8" />
-        <rect x="152" y="340" width="36" height="180" fill="url(#barGrad)" rx="8" opacity="0.9" />
-        <rect x="204" y="300" width="36" height="220" fill="url(#barGrad)" rx="8" opacity="0.8" />
-        <rect x="256" y="360" width="36" height="160" fill="url(#barGrad)" rx="8" opacity="0.85" />
-        <rect x="308" y="320" width="36" height="200" fill="url(#barGrad)" rx="8" opacity="0.9" />
-      </g>
-      {/* Line Chart */}
-      <path d="M420 450 C 470 380, 520 420, 570 360 S 670 320, 720 360 S 820 300, 860 340" stroke="url(#lineGrad)" strokeWidth="6" fill="none" opacity="0.9" />
-      <g fill="#fff">
-        <circle cx="420" cy="450" r="5" opacity="0.8" />
-        <circle cx="570" cy="360" r="5" opacity="0.8" />
-        <circle cx="720" cy="360" r="5" opacity="0.8" />
-        <circle cx="860" cy="340" r="5" opacity="0.8" />
-      </g>
-      {/* Pie/Donut */}
-      <g transform="translate(760,220)">
-        <circle r="56" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="16" />
-        <circle r="56" fill="none" stroke="#34d399" strokeWidth="16" strokeDasharray="220 200" strokeLinecap="round" transform="rotate(-90)" />
-      </g>
-    </svg>
+const reveal = {
+  initial: { opacity: 0, y: 32 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, margin: '-80px' },
+};
+
+const HeroVisual: React.FC = () => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  return (
+    <Box sx={{ width: { xs: '100%', sm: 720 }, aspectRatio: '16 / 10', mx: 'auto' }}>
+      <svg viewBox="0 0 960 600" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={isDark ? '#1C1C1E' : '#111827'} />
+            <stop offset="100%" stopColor="#000000" />
+          </linearGradient>
+          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={brand.gradientStart} />
+            <stop offset="100%" stopColor={brand.gradientEnd} />
+          </linearGradient>
+          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={brand.gradientEnd} />
+            <stop offset="100%" stopColor={brand.gradientStart} />
+          </linearGradient>
+          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="10" stdDeviation="20" floodColor="#000" floodOpacity="0.5" />
+          </filter>
+        </defs>
+        <rect x="40" y="40" width="880" height="520" rx="28" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.08)" filter="url(#shadow)" />
+        <rect x="64" y="64" width="832" height="56" rx="14" fill="rgba(255,255,255,0.06)" />
+        <g opacity="0.9">
+          <rect x="100" y="380" width="36" height="140" fill="url(#barGrad)" rx="10" />
+          <rect x="152" y="340" width="36" height="180" fill="url(#barGrad)" rx="10" opacity="0.9" />
+          <rect x="204" y="300" width="36" height="220" fill="url(#barGrad)" rx="10" opacity="0.8" />
+          <rect x="256" y="360" width="36" height="160" fill="url(#barGrad)" rx="10" opacity="0.85" />
+          <rect x="308" y="320" width="36" height="200" fill="url(#barGrad)" rx="10" opacity="0.9" />
+        </g>
+        <path d="M420 450 C 470 380, 520 420, 570 360 S 670 320, 720 360 S 820 300, 860 340" stroke="url(#lineGrad)" strokeWidth="6" fill="none" opacity="0.9" />
+        <g fill="#fff">
+          <circle cx="420" cy="450" r="5" opacity="0.8" />
+          <circle cx="570" cy="360" r="5" opacity="0.8" />
+          <circle cx="720" cy="360" r="5" opacity="0.8" />
+          <circle cx="860" cy="340" r="5" opacity="0.8" />
+        </g>
+        <g transform="translate(760,220)">
+          <circle r="56" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="16" />
+          <circle r="56" fill="none" stroke={brand.gradientEnd} strokeWidth="16" strokeDasharray="220 200" strokeLinecap="round" transform="rotate(-90)" />
+        </g>
+      </svg>
+    </Box>
+  );
+};
+
+const FEATURES = [
+  { title: 'Smart categorization', desc: 'Learns from your edits to keep entry effortless.', icon: InsightsIcon },
+  { title: 'Trends & forecasts', desc: 'See what changed and what’s next at a glance.', icon: AutoGraphIcon },
+  { title: 'Privacy-first', desc: 'Your data stays yours. No ads. No resale.', icon: SecurityIcon },
+];
+
+const STANDOUT = [
+  { title: 'Frictionless input', desc: 'Photo to text, CSV import, and keyboard‑first quick add.', icon: BoltIcon },
+  { title: 'Insights, not overload', desc: 'Clear explanations for spikes and trends — in context.', icon: VisibilityIcon },
+  { title: 'Your data, respected', desc: 'No ads. No resale. Simple export when you want.', icon: ShieldOutlinedIcon },
+];
+
+const IconBadge: React.FC<{ Icon: React.ElementType }> = ({ Icon }) => (
+  <Box
+    sx={{
+      width: 52,
+      height: 52,
+      borderRadius: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundImage: `linear-gradient(135deg, ${brand.gradientStart}, ${brand.gradientEnd})`,
+      mb: 2,
+    }}
+  >
+    <Icon sx={{ color: '#fff', fontSize: 26 }} />
   </Box>
 );
 
@@ -60,179 +99,177 @@ const HomePage: React.FC = () => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('vs_token') : null;
 
   return (
-    <Box>
-      {/* Hero — Minimalist clean, dark, centered */}
-      <Box sx={{ bgcolor: '#000', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-        <Container maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
-          <Grid container columns={12} spacing={4} alignItems="center">
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
-                <Typography variant="h2" component="h1" sx={{ fontWeight: 800, letterSpacing: -0.5, mb: 1 }}>
-                  TrackSpense
-                </Typography>
-                <Typography variant="h5" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                  Track less. Understand more. Make better money decisions.
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.72)', mb: 4 }}>
-                  Designed to be calm, fast, and privacy‑first — no ads, no clutter.
-                </Typography>
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent={{ xs: 'center', md: 'flex-start' }} sx={{ mb: { xs: 0, md: 0 } }}>
-                  <Button
-                    size="large"
-                    sx={{
-                      px: 3.5,
-                      py: 1.25,
-                      bgcolor: '#fff',
-                      color: '#000',
-                      '&:hover': { bgcolor: '#f2f2f2' },
-                      borderRadius: 999,
-                      fontWeight: 700,
-                    }}
-                    onClick={() => navigate(token ? '/dashboard' : '/login')}
-                  >
-                    {token ? 'Open Dashboard' : 'Get Started'}
-                  </Button>
-                  <Button
-                    size="large"
-                    sx={{
-                      px: 3.5,
-                      py: 1.25,
-                      color: '#fff',
-                      borderColor: 'rgba(255,255,255,0.6)',
-                      borderRadius: 999,
-                    }}
-                    variant="outlined"
-                    onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                  >
-                    Learn more
-                  </Button>
-                </Stack>
+    <Box sx={{ overflowX: 'hidden' }}>
+      {/* Hero */}
+      <Box sx={{ position: 'relative', pt: { xs: 16, md: 20 }, pb: { xs: 10, md: 14 } }}>
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: -1,
+            background: theme.palette.mode === 'dark'
+              ? `radial-gradient(60% 50% at 50% 0%, ${withAlpha(brand.gradientStartDark, 0.22)} 0%, transparent 60%)`
+              : `radial-gradient(60% 50% at 50% 0%, ${withAlpha(brand.gradientStart, 0.12)} 0%, transparent 60%)`,
+          }}
+        />
+        <Container maxWidth="md">
+          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: motionTokens.slow, ease: motionTokens.easing }}>
+            <Typography
+              variant="h1"
+              component="h1"
+              sx={{
+                fontSize: { xs: '2.75rem', sm: '4rem', md: '5.25rem' },
+                textAlign: 'center',
+                mb: 3,
+              }}
+            >
+              Track less.{' '}
+              <Box
+                component="span"
+                sx={{
+                  backgroundImage: `linear-gradient(135deg, ${brand.gradientStart}, ${brand.gradientEnd})`,
+                  backgroundClip: 'text',
+                  WebkitBackgroundClip: 'text',
+                  color: 'transparent',
+                }}
+              >
+                Understand more.
               </Box>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }} sx={{ textAlign: { xs: 'center', md: 'right' } }}>
-              <Box sx={{ display: 'inline-block', width: { xs: '100%', md: '92%' } }}>
-                <HeroVisual />
-              </Box>
-            </Grid>
-          </Grid>
+            </Typography>
+            <Typography
+              variant="h5"
+              sx={{ textAlign: 'center', color: 'text.secondary', fontWeight: 400, maxWidth: 640, mx: 'auto', mb: 5 }}
+            >
+              A calm, fast, privacy-first companion for everyday money decisions. No ads, no clutter — just clarity.
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
+              <Button
+                size="large"
+                variant="contained"
+                color="primary"
+                onClick={() => navigate(token ? '/dashboard' : '/login')}
+              >
+                {token ? 'Open Dashboard' : 'Get Started'}
+              </Button>
+              <Button
+                size="large"
+                variant="outlined"
+                color="inherit"
+                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              >
+                Learn more
+              </Button>
+            </Stack>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 60, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: motionTokens.slow, ease: motionTokens.easing, delay: 0.15 }}
+            style={{ marginTop: 72 }}
+          >
+            <HeroVisual />
+          </motion.div>
         </Container>
       </Box>
 
-      {/* Features — gradient row */}
-      <Box sx={{
-        background: theme.palette.mode === 'dark'
-          ? 'linear-gradient(135deg, #1D1730 0%, #241825 100%)'
-          : 'linear-gradient(135deg, #F5F0FF 0%, #FDF0F8 100%)',
-        borderTop: `1px solid ${theme.palette.divider}`,
-        borderBottom: `1px solid ${theme.palette.divider}`,
-      }}>
+      {/* Features */}
       <Container id="features" maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 6, textAlign: 'center' }}>
-          Thoughtfully designed features
-        </Typography>
+        <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
+          <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 7 }}>
+            Thoughtfully designed features
+          </Typography>
+        </motion.div>
         <Grid container columns={12} spacing={3}>
-          {[{
-            title: 'Smart categorization',
-            desc: 'Learns from your edits to keep entry effortless.',
-            icon: <InsightsIcon />,
-          },{
-            title: 'Trends & forecasts',
-            desc: 'See what changed and what’s next at a glance.',
-            icon: <AutoGraphIcon />,
-          },{
-            title: 'Privacy-first',
-            desc: 'Your data stays yours. No ads. No resale.',
-            icon: <SecurityIcon />,
-          }].map((f) => (
+          {FEATURES.map((f, i) => (
             <Grid size={{ xs: 12, md: 4 }} key={f.title}>
-              <Card elevation={0} variant="outlined" sx={{ height: '100%', p: 1.5 }}>
-                <CardContent>
-                  <Box sx={{ fontSize: 0, color: theme.palette.text.secondary, mb: 1 }}>{f.icon}</Box>
+              <motion.div
+                {...reveal}
+                transition={{ duration: motionTokens.base, ease: motionTokens.easing, delay: i * 0.08 }}
+                style={{ height: '100%' }}
+              >
+                <Box sx={{ ...glassCardSx(theme), height: '100%', p: 3.5 }}>
+                  <IconBadge Icon={f.icon} />
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{f.title}</Typography>
                   <Typography variant="body1" color="text.secondary">{f.desc}</Typography>
-                </CardContent>
-              </Card>
+                </Box>
+              </motion.div>
             </Grid>
           ))}
         </Grid>
       </Container>
-      </Box>
 
-      {/* Vision — gradient row */}
-      <Box sx={{
-        background: theme.palette.mode === 'dark'
-          ? 'linear-gradient(135deg, #241825 0%, #1D1730 100%)'
-          : 'linear-gradient(135deg, #FDF0F8 0%, #F5F0FF 100%)',
-        borderTop: `1px solid ${theme.palette.divider}`,
-        borderBottom: `1px solid ${theme.palette.divider}`,
-      }}>
-        <Container maxWidth="lg" sx={{ py: { xs: 8, md: 12 } }}>
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, textAlign: 'center' }}>Our vision</Typography>
-          <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 880, mx: 'auto', textAlign: 'center' }}>
-            A calm, trustworthy companion for everyday money decisions — no noise, no ads. Just clarity and confidence.
-          </Typography>
-        </Container>
-      </Box>
-
-      {/* Unique — dark gradient row */}
-      <Box sx={{
-        color: '#fff',
-        position: 'relative',
-        background: 'linear-gradient(135deg, #0b0b0b 0%, #111827 100%)',
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        '&:before': {
-          content: '""',
-          position: 'absolute',
-          inset: 0,
-          background: `radial-gradient(60% 50% at 85% 10%, ${theme.palette.primary.main}22 0%, transparent 60%)`,
-          pointerEvents: 'none',
-        },
-      }}>
-        <Container maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 3, textAlign: 'center' }}>How TrackSpense stands out</Typography>
-          <Grid container columns={12} spacing={3}>
-            {[{
-              title: 'Frictionless input',
-              desc: 'Photo to text, CSV import, and keyboard‑first quick add.',
-            }, {
-              title: 'Insights, not overload',
-              desc: 'Clear explanations for spikes and trends — in context.',
-            }, {
-              title: 'Your data, respected',
-              desc: 'No ads. No resale. Simple export when you want.',
-            }].map((c) => (
-              <Grid size={{ xs: 12, md: 4 }} key={c.title}>
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{c.title}</Typography>
-                <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.8)' }}>{c.desc}</Typography>
-              </Grid>
-            ))}
-          </Grid>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 6 }} justifyContent="center">
-            <Button
-              sx={{ px: 3.5, py: 1.25, bgcolor: '#fff', color: '#000', '&:hover': { bgcolor: '#f2f2f2' }, borderRadius: 999 }}
-              onClick={() => navigate(token ? '/dashboard' : '/login')}
+      {/* Vision */}
+      <Box sx={{ bgcolor: theme.palette.mode === 'dark' ? '#0a0a0a' : '#F5F5F7', py: { xs: 10, md: 14 } }}>
+        <Container maxWidth="md">
+          <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
+            <Typography
+              variant="h2"
+              sx={{ fontSize: { xs: '2rem', md: '3rem' }, textAlign: 'center', mb: 0 }}
             >
-              {token ? 'Open Dashboard' : 'Login to start tracking'}
-            </Button>
-            <Button variant="outlined" sx={{ px: 3.5, py: 1.25, color: '#fff', borderColor: 'rgba(255,255,255,0.6)', borderRadius: 999 }} onClick={() => navigate('/register')}>Create a free account</Button>
-          </Stack>
+              A calm, trustworthy companion for everyday money decisions — no noise, no ads.
+              <Box component="span" sx={{ color: 'text.secondary' }}> Just clarity and confidence.</Box>
+            </Typography>
+          </motion.div>
         </Container>
       </Box>
 
-      {/* CTA Footer — gradient row */}
-      <Box sx={{ color: '#fff', background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)` }}>
-        <Container maxWidth="lg" sx={{ py: { xs: 6, md: 8 }, textAlign: 'center' }}>
-          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>Ready to take control?</Typography>
-          <Typography variant="body1" sx={{ opacity: 0.9, mb: 3 }}>
-            Join now and turn your spending data into decisions you feel good about.
+      {/* Stands out */}
+      <Container maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
+        <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
+          <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 7 }}>
+            How TrackSpense stands out
           </Typography>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-            <Button sx={{ px: 3.5, py: 1.25, bgcolor: '#fff', color: '#000', '&:hover': { bgcolor: '#f2f2f2' }, borderRadius: 999 }} onClick={() => navigate(token ? '/dashboard' : '/login')}>
-              {token ? 'Open Dashboard' : 'Login'}
-            </Button>
-            <Button variant="outlined" sx={{ px: 3.5, py: 1.25, color: '#fff', borderColor: 'rgba(255,255,255,0.6)', borderRadius: 999 }} onClick={() => navigate('/register')}>Create Account</Button>
-          </Stack>
+        </motion.div>
+        <Grid container columns={12} spacing={5}>
+          {STANDOUT.map((c, i) => (
+            <Grid size={{ xs: 12, md: 4 }} key={c.title}>
+              <motion.div
+                {...reveal}
+                transition={{ duration: motionTokens.base, ease: motionTokens.easing, delay: i * 0.08 }}
+              >
+                <IconBadge Icon={c.icon} />
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{c.title}</Typography>
+                <Typography variant="body1" color="text.secondary">{c.desc}</Typography>
+              </motion.div>
+            </Grid>
+          ))}
+        </Grid>
+      </Container>
+
+      {/* CTA Footer */}
+      <Box
+        sx={{
+          color: '#fff',
+          background: `linear-gradient(135deg, ${brand.gradientStart} 0%, ${brand.gradientEnd} 100%)`,
+        }}
+      >
+        <Container maxWidth="md" sx={{ py: { xs: 10, md: 14 }, textAlign: 'center' }}>
+          <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
+            <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '3rem' }, mb: 2 }}>
+              Ready to take control?
+            </Typography>
+            <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, mb: 5 }}>
+              Join now and turn your spending data into decisions you feel good about.
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
+              <Button
+                size="large"
+                sx={{ bgcolor: '#fff', color: '#000', '&:hover': { bgcolor: '#f2f2f2' } }}
+                onClick={() => navigate(token ? '/dashboard' : '/login')}
+              >
+                {token ? 'Open Dashboard' : 'Login to start tracking'}
+              </Button>
+              <Button
+                size="large"
+                variant="outlined"
+                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}
+                onClick={() => navigate('/register')}
+              >
+                Create a free account
+              </Button>
+            </Stack>
+          </motion.div>
         </Container>
       </Box>
     </Box>

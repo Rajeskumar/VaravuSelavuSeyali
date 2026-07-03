@@ -6,6 +6,7 @@ import Grid from '@mui/material/Grid';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import EditIcon from '@mui/icons-material/Edit';
+import { motion } from 'framer-motion';
 
 const RecurringPage: React.FC = () => {
   const qc = useQueryClient();
@@ -62,6 +63,7 @@ const RecurringPage: React.FC = () => {
 
   return (
     <Box sx={{ mt: 4 }}>
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Recurring</Typography>
 
       <Card sx={{ mb: 3 }}>
@@ -143,6 +145,7 @@ const RecurringPage: React.FC = () => {
           </TableBody>
         </Table>
       </Paper>
+      </motion.div>
 
       {/* Execute Now dialog */}
       <Dialog open={executeOpen} onClose={() => setExecuteOpen(false)}>

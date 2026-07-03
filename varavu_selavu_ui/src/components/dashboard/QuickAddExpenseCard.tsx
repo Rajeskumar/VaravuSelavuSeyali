@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, Typography, TextField, Button, MenuItem } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { motion } from 'framer-motion';
 import { addExpense, suggestCategory } from '../../api/expenses';
 import { isoToMMDDYYYY } from '../../utils/date';
 import { glassCardSx } from '../../theme';
@@ -78,6 +79,12 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
   const theme = useTheme();
 
   return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+    >
     <Card
       sx={{
         ...glassCardSx(theme),
@@ -133,6 +140,7 @@ const QuickAddExpenseCard: React.FC<Props> = ({ onAdded }) => {
         </Button>
       </CardContent>
     </Card>
+    </motion.div>
   );
 };
 

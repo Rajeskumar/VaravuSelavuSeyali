@@ -1,5 +1,6 @@
 import React from 'react';
 import Plot from 'react-plotly.js';
+import { motion } from 'framer-motion';
 import CategoryDetailsDrawer, { ExpenseItem } from '../common/CategoryDetailsDrawer';
 
 interface Props {
@@ -36,22 +37,29 @@ const CategoryBarChart: React.FC<Props> = ({ categoryTotals, details }) => {
   const items = currentLabel && details ? (details[currentLabel] || []) : [];
   return (
     <>
-      <Plot
-        data={data}
-        layout={layout as any}
-        style={{ width: '100%', height: 400 }}
-        useResizeHandler
-        config={{ displayModeBar: false }}
-        onClick={(evt: any) => {
-          const p = evt?.points?.[0];
-          const label = p?.x as string;
-          if (!label) return;
-          if (details && (details[label]?.length ?? 0) >= 0) {
-            setCurrentLabel(label);
-            setOpen(true);
-          }
-        }}
-      />
+      <motion.div
+        initial={{ opacity: 0, y: 32 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-80px' }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <Plot
+          data={data}
+          layout={layout as any}
+          style={{ width: '100%', height: 400 }}
+          useResizeHandler
+          config={{ displayModeBar: false }}
+          onClick={(evt: any) => {
+            const p = evt?.points?.[0];
+            const label = p?.x as string;
+            if (!label) return;
+            if (details && (details[label]?.length ?? 0) >= 0) {
+              setCurrentLabel(label);
+              setOpen(true);
+            }
+          }}
+        />
+      </motion.div>
       <CategoryDetailsDrawer
         open={open}
         title={`Category: ${currentLabel}`}

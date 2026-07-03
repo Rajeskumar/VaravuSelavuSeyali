@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Plot from 'react-plotly.js';
+import { motion } from 'framer-motion';
 import CategoryDetailsDrawer, { ExpenseItem } from '../common/CategoryDetailsDrawer';
 import { glassCardSx } from '../../theme';
 
@@ -26,6 +27,12 @@ const CategoryBreakdownSunburst: React.FC<Props> = ({ data, title = 'Category Br
   const items = currentLabel && details ? (details[currentLabel] || []) : [];
   const theme = useTheme();
   return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+    >
     <Card
       sx={{
         ...glassCardSx(theme),
@@ -79,6 +86,7 @@ const CategoryBreakdownSunburst: React.FC<Props> = ({ data, title = 'Category Br
         />
       </CardContent>
     </Card>
+    </motion.div>
   );
 };
 

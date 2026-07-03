@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Divider } from '@mui/material';
 import { logout as apiLogout } from '../api/auth';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
+import { motion } from 'framer-motion';
 
 const ProfilePage: React.FC = () => {
   const [email, setEmail] = React.useState('');
@@ -81,6 +82,7 @@ const ProfilePage: React.FC = () => {
 
   return (
     <Box sx={{ mt: 4, maxWidth: 400, mx: 'auto', px: { xs: 1, sm: 2 } }}>
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <Card>
         <CardContent>
           <Typography variant="h5" gutterBottom>
@@ -129,6 +131,7 @@ const ProfilePage: React.FC = () => {
 
         </CardContent>
       </Card>
+      </motion.div>
 
       <Dialog open={openDeleteDialog} onClose={() => !deleting && setOpenDeleteDialog(false)}>
         <DialogTitle>Delete Account</DialogTitle>

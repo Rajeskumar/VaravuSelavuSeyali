@@ -11,6 +11,7 @@ import Divider from '@mui/material/Divider';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import { loginWithGoogle, register } from '../api/auth';
+import { motion } from 'framer-motion';
 
 const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -89,7 +90,13 @@ const RegisterPage: React.FC = () => {
           <Typography>Completing Google sign up…</Typography>
         </Box>
       </Backdrop>
-      <Card sx={{ width: 420, maxWidth: '100%' }} elevation={3}>
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        style={{ width: 420, maxWidth: '100%' }}
+      >
+      <Card sx={{ width: '100%' }} elevation={3}>
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h6" gutterBottom align="center">
             Create Account
@@ -155,6 +162,7 @@ const RegisterPage: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
+      </motion.div>
     </Box>
   );
 };

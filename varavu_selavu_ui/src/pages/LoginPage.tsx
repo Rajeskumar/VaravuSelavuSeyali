@@ -15,7 +15,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { useTheme } from '@mui/material/styles';
 import { login, loginWithGoogle } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
-import { glassCardSx } from '../theme';
+import { glassCardSx, brand, withAlpha } from '../theme';
+import { motion } from 'framer-motion';
 
 const LoginPage: React.FC = () => {
   const theme = useTheme();
@@ -109,7 +110,7 @@ const LoginPage: React.FC = () => {
           justifyContent: 'center',
           p: 4,
           // Layer: tint gradient, local banner (if present), then a hosted fallback
-          backgroundImage: `linear-gradient(135deg, rgba(79,70,229,0.86) 0%, rgba(20,184,166,0.86) 100%), url(${bgUrl}), url(https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1600&auto=format&fit=crop)`,
+          backgroundImage: `linear-gradient(135deg, ${withAlpha(brand.gradientStart, 0.88)} 0%, ${withAlpha(brand.gradientEnd, 0.88)} 100%), url(${bgUrl}), url(https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=1600&auto=format&fit=crop)`,
           backgroundSize: 'cover, cover, cover',
           backgroundPosition: 'center, center, center',
           backgroundRepeat: 'no-repeat',
@@ -123,17 +124,18 @@ const LoginPage: React.FC = () => {
           },
         }}
       >
-        <Typography
-          variant="h4"
-          sx={{
-            maxWidth: 320,
-            fontWeight: 800,
-            lineHeight: 1.15,
-            textShadow: '0 2px 14px rgba(0,0,0,0.4)',
-          }}
-        >
-          Track, analyze & plan your spending.
-        </Typography>
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+          <Typography
+            variant="h3"
+            sx={{
+              maxWidth: 360,
+              lineHeight: 1.1,
+              textShadow: '0 2px 14px rgba(0,0,0,0.4)',
+            }}
+          >
+            Track, analyze &amp; plan your spending.
+          </Typography>
+        </motion.div>
       </Box>
         );
       })()}
@@ -144,11 +146,16 @@ const LoginPage: React.FC = () => {
             <Typography>Signing in with Google…</Typography>
           </Box>
         </Backdrop>
+        <motion.div
+          initial={{ opacity: 0, y: 24, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          style={{ width: 420, maxWidth: '100%' }}
+        >
         <Card
           sx={{
             ...glassCardSx(theme),
-            width: 420,
-            maxWidth: '100%',
+            width: '100%',
           }}
           elevation={0}
         >
@@ -206,6 +213,7 @@ const LoginPage: React.FC = () => {
             </Box>
           </CardContent>
         </Card>
+        </motion.div>
       </Box>
     </Box>
   );

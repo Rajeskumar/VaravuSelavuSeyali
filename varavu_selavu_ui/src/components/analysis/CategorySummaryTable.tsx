@@ -1,6 +1,7 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Typography, Popover, Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { motion } from 'framer-motion';
 import { glassCardSx } from '../../theme';
 
 interface Props {
@@ -26,6 +27,12 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
   const theme = useTheme();
 
   return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-80px' }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+    >
     <TableContainer
       component={Paper}
       sx={{
@@ -102,6 +109,7 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
         </Box>
       </Popover>
     </TableContainer>
+    </motion.div>
   );
 };
 

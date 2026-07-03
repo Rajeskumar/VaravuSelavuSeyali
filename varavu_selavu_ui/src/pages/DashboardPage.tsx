@@ -16,6 +16,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { parseAppDate } from '../utils/date';
 import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
+import { motion } from 'framer-motion';
 
 const DashboardPage: React.FC = () => {
   const [data, setData] = React.useState<AnalysisResponse | null>(null);
@@ -189,19 +190,22 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ animation: 'fadeIn 0.5s ease' }}>
-      <Grid container columns={12} spacing={2} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <MetricCard label="Total Expenses" value={`$${data.total_expenses.toFixed(2)}`} />
+    <Box>
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
+        <Grid container columns={12} spacing={2} sx={{ mb: 2 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <MetricCard label="Total Expenses" value={`$${data.total_expenses.toFixed(2)}`} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <MetricCard label="This Month" value={`$${thisMonthTotal.toFixed(2)}`} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <MetricCard label="This Week" value={`$${thisWeekTotal.toFixed(2)}`} />
+          </Grid>
+          {null}
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <MetricCard label="This Month" value={`$${thisMonthTotal.toFixed(2)}`} />
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <MetricCard label="This Week" value={`$${thisWeekTotal.toFixed(2)}`} />
-        </Grid>
-        {null}
-      </Grid>
+      </motion.div>
+
       {/* Customize controls */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
         {!editingLayout ? (
@@ -217,20 +221,27 @@ const DashboardPage: React.FC = () => {
 
       {/* Customizable grid */}
       <Grid container columns={12} spacing={2} sx={{ mt: 1 }}>
-        {order.map((id) => {
+        {order.map((id, i) => {
           const c = cards[id];
           if (!c) return null;
           return (
             <Grid key={id} size={{ xs: 12, md: c.md }}>
-              <Box
-                draggable={editingLayout}
-                onDragStart={(e) => onDragStart(e, id)}
-                onDragOver={onDragOver}
-                onDrop={(e) => onDrop(e, id)}
-                sx={{ border: editingLayout ? '1px dashed rgba(0,0,0,0.3)' : 'none', borderRadius: 1, cursor: editingLayout ? 'grab' : 'default' }}
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: i * 0.06 }}
               >
-                {c.element}
-              </Box>
+                <Box
+                  draggable={editingLayout}
+                  onDragStart={(e) => onDragStart(e, id)}
+                  onDragOver={onDragOver}
+                  onDrop={(e) => onDrop(e, id)}
+                  sx={{ border: editingLayout ? '1px dashed rgba(0,0,0,0.3)' : 'none', borderRadius: 1, cursor: editingLayout ? 'grab' : 'default' }}
+                >
+                  {c.element}
+                </Box>
+              </motion.div>
             </Grid>
           );
         })}

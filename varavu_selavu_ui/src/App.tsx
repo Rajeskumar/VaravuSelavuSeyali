@@ -29,6 +29,9 @@ import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
 import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
 import FeatureRequestPage from './pages/FeatureRequestPage';
+import NavPills from './components/layout/NavPills';
+import Box from '@mui/material/Box';
+import { brand } from './theme';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
   const token = localStorage.getItem('vs_token');
@@ -82,29 +85,48 @@ const AppContent: React.FC = () => {
         color="transparent"
         elevation={0}
       >
-        <Toolbar>
+        <Toolbar sx={{ gap: 1.5 }}>
           {user && isMobile && (
             <IconButton
               color="inherit"
               aria-label="open drawer"
               edge="start"
               onClick={handleDrawerToggle}
-              sx={{ mr: 2 }}
             >
               <MenuIcon />
             </IconButton>
           )}
-          <AccountBalanceWalletIcon sx={{ mr: 1 }} />
-          <Typography
-            variant="h6"
-            component="div"
-            sx={{ flexGrow: 1, cursor: 'pointer' }}
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}
             onClick={() => navigate('/')}
           >
-            TrackSpense
-          </Typography>
+            <Box
+              sx={{
+                width: 30,
+                height: 30,
+                borderRadius: '9px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundImage: `linear-gradient(135deg, ${brand.gradientStart}, ${brand.gradientEnd})`,
+              }}
+            >
+              <AccountBalanceWalletIcon sx={{ fontSize: 17, color: '#fff' }} />
+            </Box>
+            <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+              TrackSpense
+            </Typography>
+          </Box>
+
+          {user && !isMobile && (
+            <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
+              <NavPills />
+            </Box>
+          )}
+          {(!user || isMobile) && <Box sx={{ flexGrow: 1 }} />}
+
           <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <IconButton color="inherit" onClick={toggleMode} sx={{ mr: 1 }}>
+            <IconButton color="inherit" onClick={toggleMode}>
               {isDark ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
             </IconButton>
           </Tooltip>
@@ -116,10 +138,10 @@ const AppContent: React.FC = () => {
             />
           ) : (
             <Button
-              color="inherit"
+              variant="contained"
+              color="primary"
               startIcon={<LoginIcon />}
               onClick={() => navigate('/login')}
-              sx={{ ml: 2 }}
             >
               Login
             </Button>

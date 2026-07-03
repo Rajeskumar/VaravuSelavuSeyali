@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Card, CardContent, Typography, CircularProgress, Alert, Chip, Divider, IconButton } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import { motion } from 'framer-motion';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import NewReleasesIcon from '@mui/icons-material/NewReleases';
 import { useNavigate } from 'react-router-dom';
 import { getChangeInsights, ChangeInsight } from '../../api/analytics';
+import { glassCardSx } from '../../theme';
 
 interface SmartChangeInsightsCardProps {
   userId: string | null;
@@ -15,6 +18,7 @@ interface SmartChangeInsightsCardProps {
 
 export default function SmartChangeInsightsCard({ userId, year, month }: SmartChangeInsightsCardProps) {
   const navigate = useNavigate();
+  const theme = useTheme();
   const [insights, setInsights] = useState<ChangeInsight[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +70,17 @@ export default function SmartChangeInsightsCard({ userId, year, month }: SmartCh
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {insights.map((insight, idx) => (
-        <Card
+        <motion.div
           key={idx}
+          initial={{ opacity: 0, y: 32 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        >
+        <Card
           variant="outlined"
           sx={{
-            borderRadius: 3,
-            borderColor: 'rgba(0,0,0,0.08)',
-            backgroundColor: 'rgba(255,255,255,0.7)',
-            backdropFilter: 'blur(8px)',
+            ...glassCardSx(theme),
             transition: 'transform 0.2s, box-shadow 0.2s',
             '&:hover': {
               transform: 'translateY(-2px)',
@@ -127,6 +134,7 @@ export default function SmartChangeInsightsCard({ userId, year, month }: SmartCh
             )}
           </CardContent>
         </Card>
+        </motion.div>
       ))}
     </Box>
   );

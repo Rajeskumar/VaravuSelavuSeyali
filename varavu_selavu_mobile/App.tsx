@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
   ActivityIndicator, View, Text, TouchableOpacity, StyleSheet,
-  Animated, Dimensions, Modal, Pressable, Platform, SafeAreaView
+  Dimensions, Modal, Pressable, Platform, SafeAreaView
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -23,12 +23,14 @@ import {
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import Animated, { ZoomIn, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
-import { AppTheme, withAlpha } from './src/theme';
+import { AppTheme, withAlpha, motion } from './src/theme';
 import ToastProvider from './src/components/Toast';
 import RecurringPrompt from './src/components/RecurringPrompt';
+import AnimatedPressable from './src/components/AnimatedPressable';
 
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -128,11 +130,10 @@ function FloatingNavBar({ state, navigation }: BottomTabBarProps) {
           {TAB_ROUTES.slice(0, 2).map((tab) => {
             const focused = activeRouteName === tab.name;
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={tab.name}
                 style={navStyles.tabItem}
                 onPress={() => handleTabPress(tab.name)}
-                activeOpacity={0.7}
               >
                 <Text style={[navStyles.tabIcon, focused && navStyles.tabIconActive]}>
                   {tab.icon}
@@ -140,29 +141,30 @@ function FloatingNavBar({ state, navigation }: BottomTabBarProps) {
                 <Text style={[navStyles.tabLabel, focused && navStyles.tabLabelActive]}>
                   {tab.label}
                 </Text>
-                {focused && <View style={navStyles.activeDot} />}
-              </TouchableOpacity>
+                {focused && (
+                  <Animated.View entering={ZoomIn.springify().damping(14)} style={navStyles.activeDot} />
+                )}
+              </AnimatedPressable>
             );
           })}
 
           {/* ── Inline FAB ── */}
-          <TouchableOpacity
+          <AnimatedPressable
             style={navStyles.inlineFab}
             onPress={handleFABPress}
-            activeOpacity={0.85}
+            scaleTo={0.88}
           >
             <Text style={navStyles.inlineFabPlus}>+</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
 
           {/* Right 2 tabs */}
           {TAB_ROUTES.slice(2).map((tab) => {
             const focused = activeRouteName === tab.name;
             return (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={tab.name}
                 style={navStyles.tabItem}
                 onPress={() => handleTabPress(tab.name)}
-                activeOpacity={0.7}
               >
                 <Text style={[navStyles.tabIcon, focused && navStyles.tabIconActive]}>
                   {tab.icon}
@@ -170,8 +172,10 @@ function FloatingNavBar({ state, navigation }: BottomTabBarProps) {
                 <Text style={[navStyles.tabLabel, focused && navStyles.tabLabelActive]}>
                   {tab.label}
                 </Text>
-                {focused && <View style={navStyles.activeDot} />}
-              </TouchableOpacity>
+                {focused && (
+                  <Animated.View entering={ZoomIn.springify().damping(14)} style={navStyles.activeDot} />
+                )}
+              </AnimatedPressable>
             );
           })}
         </BlurView>
@@ -394,24 +398,23 @@ function CustomDrawer({ visible, onClose, onNavigate }: {
   visible: boolean; onClose: () => void; onNavigate: (s: string) => void;
 }) {
   const { signOut, userEmail } = useAuth();
-  const slideAnim = useRef(new Animated.Value(-DRAWER_W)).current;
+  const slideAnim = useSharedValue(-DRAWER_W);
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const drawerStyles = React.useMemo(() => createDrawerStyles(theme), [theme]);
 
   React.useEffect(() => {
-    Animated.spring(slideAnim, {
-      toValue: visible ? 0 : -DRAWER_W,
-      useNativeDriver: true,
-      bounciness: 0,
-      speed: 20,
-    }).start();
+    slideAnim.value = withSpring(visible ? 0 : -DRAWER_W, motion.spring);
   }, [visible]);
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: slideAnim.value }],
+  }));
 
   return (
     <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
       <Pressable style={drawerStyles.backdrop} onPress={onClose}>
-        <Animated.View style={[drawerStyles.sheet, { transform: [{ translateX: slideAnim }] }]}>
+        <Animated.View style={[drawerStyles.sheet, sheetAnimatedStyle]}>
           <Pressable onPress={(e) => e.stopPropagation()} style={{ flex: 1 }}>
 
             <View style={[drawerStyles.header, { paddingTop: Math.max(insets.top + 12, 40) }]}>

@@ -15,6 +15,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import CircularProgress from '@mui/material/CircularProgress';
 import { keyframes } from '@mui/system';
+import { useTheme } from '@mui/material/styles';
 import heic2any from 'heic2any';
 import {
   addExpense,
@@ -28,6 +29,7 @@ import {
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
+import { glassCardSx } from '../../theme';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
@@ -74,6 +76,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [recurring, setRecurring] = useState(false);
   const [repeatDay, setRepeatDay] = useState<number>(new Date().getDate());
   const typingRef = useRef<NodeJS.Timeout | null>(null);
+  const theme = useTheme();
 
   const spin = keyframes`
     from { transform: rotate(0deg); }
@@ -390,15 +393,11 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   return (
     <Card
       sx={{
+        ...glassCardSx(theme),
         maxWidth: 600,
         mx: 'auto',
         mt: 2,
         p: 2,
-        backdropFilter: 'blur(10px)',
-        backgroundColor: 'rgba(255,255,255,0.25)',
-        borderRadius: 2,
-        boxShadow: '0 8px 32px rgba(31,38,135,0.37)',
-        border: '1px solid rgba(255,255,255,0.18)',
       }}
     >
       <CardContent>

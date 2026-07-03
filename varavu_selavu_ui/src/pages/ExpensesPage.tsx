@@ -21,6 +21,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import AddExpenseForm from '../components/expenses/AddExpenseForm';
 import { listExpenses, deleteExpense, ExpenseRecord } from '../api/expenses';
+import { motion } from 'framer-motion';
 
 const ExpensesPage: React.FC = () => {
   const user = localStorage.getItem('vs_user') || '';
@@ -72,6 +73,7 @@ const ExpensesPage: React.FC = () => {
 
   return (
     <Box sx={{ mt: 4, px: { xs: 1, sm: 2 } }}>
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Expenses
@@ -138,6 +140,7 @@ const ExpensesPage: React.FC = () => {
           </Button>
         </Box>
       )}
+      </motion.div>
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
         <Box sx={{ p: 2 }}>
           <AddExpenseForm

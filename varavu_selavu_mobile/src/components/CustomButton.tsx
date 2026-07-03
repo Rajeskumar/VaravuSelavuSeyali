@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
 import {
-    TouchableOpacity,
     Text,
     StyleSheet,
     ActivityIndicator,
     ViewStyle,
     TextStyle,
-    View,
 } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
+import AnimatedPressable from './AnimatedPressable';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'tinted';
 
@@ -63,10 +62,9 @@ export default function CustomButton({
     ].filter(Boolean) as TextStyle[];
 
     return (
-        <TouchableOpacity
+        <AnimatedPressable
             onPress={onPress}
             disabled={isDisabled}
-            activeOpacity={0.75}
             style={buttonStyles}
         >
             {loading ? (
@@ -80,7 +78,7 @@ export default function CustomButton({
                     <Text style={labelStyles}>{title}</Text>
                 </>
             )}
-        </TouchableOpacity>
+        </AnimatedPressable>
     );
 }
 

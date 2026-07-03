@@ -9,6 +9,7 @@ import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import { forgotPassword } from '../api/auth';
 import Link from "@mui/material/Link";
+import { motion } from 'framer-motion';
 
 const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -43,7 +44,13 @@ const ForgotPasswordPage: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
-      <Card sx={{ width: 420, maxWidth: '100%' }} elevation={3}>
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        style={{ width: 420, maxWidth: '100%' }}
+      >
+      <Card sx={{ width: '100%' }} elevation={3}>
         <CardContent sx={{ p: 4 }}>
           <Typography variant="h6" gutterBottom align="center">
             Forgot Password
@@ -102,6 +109,7 @@ const ForgotPasswordPage: React.FC = () => {
           </Box>
         </CardContent>
       </Card>
+      </motion.div>
     </Box>
   );
 };

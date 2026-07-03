@@ -11,9 +11,9 @@ interface Props {
 
 const MainLayout: React.FC<Props> = ({ children, mobileOpen, handleDrawerToggle }) => {
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box>
       <SideNav mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle} />
-      <Container maxWidth="lg" sx={{ flexGrow: 1, pb: 4, pt: 3 }}>
+      <Container maxWidth="lg" sx={{ pb: 6, pt: 4 }}>
         {children}
       </Container>
     </Box>
