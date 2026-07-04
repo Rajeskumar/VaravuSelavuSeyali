@@ -102,4 +102,5 @@ This is the new "Split & Track" shared expenses feature.
 | Spec | Status | Notes |
 |:---|:---|:---|
 | [TS-GRP-103 — SplitEngine](features/tickets/TS-GRP-103-split-engine.md) | ✅ Built | Pure functions + exhaustive unit tests for split math (§3.4, §3.5, §7.3). |
+| [TS-GRP-101 — ORM models & migrations](features/tickets/TS-GRP-101-schema-migration.md) | ✅ Built | SQLAlchemy models and Alembic migration for groups Phase 1 + E12 account deletion fix. |
 

@@ -14,6 +14,9 @@ from varavu_selavu_service.db.session import Base, get_db
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.db.models import Expense, User, ExpenseItem, RecurringTemplate
 
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
 # SQLite setup for testing with schema translation
 engine = create_engine(
     "sqlite:///:memory:",
@@ -21,6 +24,14 @@ engine = create_engine(
     poolclass=StaticPool,
     execution_options={"schema_translate_map": {"trackspense": None}}
 )
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    if type(dbapi_connection).__module__.startswith("sqlite3"):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def override_get_db():

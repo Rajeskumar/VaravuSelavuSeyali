@@ -1,6 +1,6 @@
 # TS-GRP-101 — ORM models + Alembic migration
 
-**Phase:** 1 · **Build order:** 2nd · **Spec:** §6.1, §6.2, §6.3, §13
+**Phase:** 1 · **Build order:** 2nd · **Spec:** §6.1, §6.2, §6.3, §13 · **Status:** ✅ Completed
 
 ## Scope
 
