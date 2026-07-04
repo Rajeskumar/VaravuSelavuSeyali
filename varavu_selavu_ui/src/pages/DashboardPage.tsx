@@ -43,7 +43,7 @@ const DashboardPage: React.FC = () => {
     }
     (async () => {
       try {
-        const resp = await getAnalysis(user, { year });
+        const resp = await getAnalysis({ year });
         setData(resp);
       } catch (e) {
         setError('Failed to load dashboard data.');
@@ -113,7 +113,7 @@ const DashboardPage: React.FC = () => {
   const fetchData = async () => {
     const user = localStorage.getItem('vs_user');
     if (!user) return;
-    const resp = await getAnalysis(user, { year });
+    const resp = await getAnalysis({ year });
     setData(resp);
   };
 

@@ -82,11 +82,10 @@ interface DateFilters {
 // ─── API Calls ──────────────────────────────────────
 
 export async function getTopItems(
-  userId: string,
   filters: DateFilters = {},
   limit = 20
 ): Promise<ItemInsightSummary[]> {
-  const params = new URLSearchParams({ user_id: userId, limit: String(limit) });
+  const params = new URLSearchParams({ limit: String(limit) });
   if (filters.year) params.set('year', String(filters.year));
   if (filters.month) params.set('month', String(filters.month));
   const res = await fetchWithAuth(`/api/v1/analytics/items?${params}`);
@@ -94,19 +93,17 @@ export async function getTopItems(
   return res.json();
 }
 
-export async function getItemDetail(userId: string, itemName: string): Promise<ItemInsightDetail> {
-  const params = new URLSearchParams({ user_id: userId });
-  const res = await fetchWithAuth(`/api/v1/analytics/items/${encodeURIComponent(itemName)}?${params}`);
+export async function getItemDetail(itemName: string): Promise<ItemInsightDetail> {
+  const res = await fetchWithAuth(`/api/v1/analytics/items/${encodeURIComponent(itemName)}`);
   if (!res.ok) throw new Error('Failed to fetch item detail');
   return res.json();
 }
 
 export async function getTopMerchants(
-  userId: string,
   filters: DateFilters = {},
   limit = 20
 ): Promise<MerchantInsightSummary[]> {
-  const params = new URLSearchParams({ user_id: userId, limit: String(limit) });
+  const params = new URLSearchParams({ limit: String(limit) });
   if (filters.year) params.set('year', String(filters.year));
   if (filters.month) params.set('month', String(filters.month));
   const res = await fetchWithAuth(`/api/v1/analytics/merchants?${params}`);
@@ -114,15 +111,14 @@ export async function getTopMerchants(
   return res.json();
 }
 
-export async function getMerchantDetail(userId: string, merchantName: string): Promise<MerchantInsightDetail> {
-  const params = new URLSearchParams({ user_id: userId });
-  const res = await fetchWithAuth(`/api/v1/analytics/merchants/${encodeURIComponent(merchantName)}?${params}`);
+export async function getMerchantDetail(merchantName: string): Promise<MerchantInsightDetail> {
+  const res = await fetchWithAuth(`/api/v1/analytics/merchants/${encodeURIComponent(merchantName)}`);
   if (!res.ok) throw new Error('Failed to fetch merchant detail');
   return res.json();
 }
 
-export async function getChangeInsights(userId: string, filters: DateFilters = {}): Promise<ChangeInsight[]> {
-  const params = new URLSearchParams({ user_id: userId });
+export async function getChangeInsights(filters: DateFilters = {}): Promise<ChangeInsight[]> {
+  const params = new URLSearchParams();
   if (filters.year) params.set('year', String(filters.year));
   if (filters.month) params.set('month', String(filters.month));
   const res = await fetchWithAuth(`/api/v1/analytics/changes?${params}`);

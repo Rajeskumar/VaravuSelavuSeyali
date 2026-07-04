@@ -28,7 +28,7 @@ const MerchantInsightsPage: React.FC = () => {
   useEffect(() => {
     if (!userId) return;
     setLoading(true);
-    getTopMerchants(userId, {
+    getTopMerchants({
       year: year === 'all' ? undefined : Number(year),
       month: month === 'all' ? undefined : Number(month),
     })
@@ -47,7 +47,7 @@ const MerchantInsightsPage: React.FC = () => {
       (async () => {
         setDetailLoading(true);
         try {
-          const d = await getMerchantDetail(userId, merchantParam);
+          const d = await getMerchantDetail(merchantParam);
           setDetail(d);
         } catch {
           // ignore
@@ -62,7 +62,7 @@ const MerchantInsightsPage: React.FC = () => {
     setDetailLoading(true);
     setDetail(null);
     try {
-      const d = await getMerchantDetail(userId, m.merchant_name);
+      const d = await getMerchantDetail(m.merchant_name);
       setDetail(d);
     } catch {
       // non-fatal

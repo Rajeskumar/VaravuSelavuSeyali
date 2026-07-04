@@ -8,6 +8,7 @@ import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import Divider from '@mui/material/Divider';
+import Link from '@mui/material/Link';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import { loginWithGoogle, register } from '../api/auth';
@@ -96,72 +97,80 @@ const RegisterPage: React.FC = () => {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         style={{ width: 420, maxWidth: '100%' }}
       >
-      <Card sx={{ width: '100%' }} elevation={3}>
-        <CardContent sx={{ p: 4 }}>
-          <Typography variant="h6" gutterBottom align="center">
-            Create Account
-          </Typography>
-          <div ref={googleDiv} style={{ width: '100%', marginBottom: 16 }} />
-          <Divider sx={{ mb: 2 }}>or</Divider>
-          <Box component="form" onSubmit={handleRegister} noValidate>
-            <Grid container spacing={2}>
-              {error && (
+        <Card sx={{ width: '100%' }} elevation={3}>
+          <CardContent sx={{ p: 4 }}>
+            <Typography variant="h6" gutterBottom align="center">
+              Create Account
+            </Typography>
+            <div ref={googleDiv} style={{ width: '100%', marginBottom: 16 }} />
+            <Divider sx={{ mb: 2 }}>or</Divider>
+            <Box component="form" onSubmit={handleRegister} noValidate>
+              <Grid container spacing={2}>
+                {error && (
+                  <Grid size={12}>
+                    <Typography color="error" align="center">{error}</Typography>
+                  </Grid>
+                )}
                 <Grid size={12}>
-                  <Typography color="error" align="center">{error}</Typography>
+                  <TextField
+                    fullWidth
+                    label="Name"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    required
+                    disabled={googleLoading || loading}
+                  />
                 </Grid>
-              )}
-              <Grid size={12}>
-                <TextField
-                  fullWidth
-                  label="Name"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  required
-                  disabled={googleLoading || loading}
-                />
+                <Grid size={12}>
+                  <TextField
+                    fullWidth
+                    label="Email"
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    disabled={googleLoading || loading}
+                  />
+                </Grid>
+                <Grid size={12}>
+                  <TextField
+                    fullWidth
+                    label="Phone"
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    required
+                    disabled={googleLoading || loading}
+                  />
+                </Grid>
+                <Grid size={12}>
+                  <TextField
+                    fullWidth
+                    label="Password"
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    disabled={googleLoading || loading}
+                  />
+                </Grid>
+                <Grid size={12}>
+                  <Button type="submit" variant="contained" fullWidth disabled={loading || googleLoading}>
+                    {loading ? 'Creating...' : 'Create Account'}
+                  </Button>
+                </Grid>
+                <Grid size={12} sx={{ textAlign: 'center', mt: 2 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    By registering, you agree to our{' '}
+                    <Link href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+                    {' '}and{' '}
+                    <Link href={`${process.env.REACT_APP_API_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+                  </Typography>
+                </Grid>
               </Grid>
-              <Grid size={12}>
-                <TextField
-                  fullWidth
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  disabled={googleLoading || loading}
-                />
-              </Grid>
-              <Grid size={12}>
-                <TextField
-                  fullWidth
-                  label="Phone"
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  required
-                  disabled={googleLoading || loading}
-                />
-              </Grid>
-              <Grid size={12}>
-                <TextField
-                  fullWidth
-                  label="Password"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  disabled={googleLoading || loading}
-                />
-              </Grid>
-              <Grid size={12}>
-                <Button type="submit" variant="contained" fullWidth disabled={loading || googleLoading}>
-                  {loading ? 'Creating...' : 'Create Account'}
-                </Button>
-              </Grid>
-            </Grid>
-          </Box>
-        </CardContent>
-      </Card>
+            </Box>
+          </CardContent>
+        </Card>
       </motion.div>
     </Box>
   );

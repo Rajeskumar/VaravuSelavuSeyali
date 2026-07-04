@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -39,3 +41,13 @@ app.add_middleware(
 @app.get("/")
 def root():
     return {"message": "Welcome to the TrackSpense Service!"}
+
+@app.get("/privacy-policy")
+def privacy_policy():
+    path = Path(__file__).resolve().parents[2] / "privacy_policy.html"
+    return FileResponse(path)
+
+@app.get("/terms-of-service")
+def terms_of_service():
+    path = Path(__file__).resolve().parents[2] / "terms_of_service.html"
+    return FileResponse(path)

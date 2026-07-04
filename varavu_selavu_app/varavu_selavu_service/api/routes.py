@@ -110,7 +110,9 @@ def readiness_check():
     tags=["Expenses"],
     summary="Suggest category and subcategory for a description",
 )
+@limiter.limit("10/minute")
 def categorize_expense(
+    request: Request,
     data: CategorizeRequest,
     categorizer: CategorizationService = Depends(get_categorization_service),
     _: str = Depends(auth_required),
@@ -132,10 +134,10 @@ def create_expense(
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
     saved = expense_service.add_expense(
-        user_id=data.user_id,
+        user_id=user_id,
         date=data.date,
         description=data.description,
         category=data.category,
@@ -148,7 +150,7 @@ def create_expense(
     # Asynchronous insight aggregation
     background_tasks.add_task(
         aggregation_svc.on_simple_expense_created,
-        user_email=data.user_id,
+        user_email=user_id,
         merchant_name=data.merchant_name,
         purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y"),
         amount=data.cost
@@ -156,7 +158,7 @@ def create_expense(
     
     # Normalize to response model shape
     expense_payload = {
-        "user_id": saved.get("User ID", data.user_id),
+        "user_id": saved.get("User ID", user_id),
         "date": data.date,
         "description": saved.get("description", data.description),
         "category": saved.get("category", data.category),
@@ -173,11 +175,10 @@ def create_expense(
     summary="List expenses for a user",
 )
 def list_expenses(
-    user_id: str,
     limit: int = Query(30, ge=1),
     offset: int = Query(0, ge=0),
     expense_service: ExpenseService = Depends(get_expense_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
     expenses = expense_service.get_expenses_for_user(user_id)
     expenses.sort(key=lambda r: datetime.strptime(r["date"], "%m/%d/%Y"), reverse=True)
@@ -199,11 +200,11 @@ def update_expense(
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
     saved, old_data = expense_service.update_expense(
         row_id=row_id,
-        user_id=data.user_id,
+        user_id=user_id,
         date=data.date,
         description=data.description,
         category=data.category,
@@ -215,7 +216,7 @@ def update_expense(
     if old_data:
         background_tasks.add_task(
             aggregation_svc.on_simple_expense_updated,
-            user_email=data.user_id,
+            user_email=user_id,
             old_merchant_name=old_data["merchant_name"],
             old_amount=old_data["amount"],
             old_purchased_at=old_data["purchased_at"],
@@ -225,7 +226,7 @@ def update_expense(
         )
         
     expense_payload = {
-        "user_id": saved.get("User ID", data.user_id),
+        "user_id": saved.get("User ID", user_id),
         "date": data.date,
         "description": saved.get("description", data.description),
         "category": saved.get("category", data.category),
@@ -278,13 +279,12 @@ def dashboard():
 
 @router.get("/analytics/changes", response_model=list[ChangeInsight], tags=["Analytics"], summary="Get spend change insights")
 def get_change_insights(
-    user_id: str,
     start_date: str | None = None,
     end_date: str | None = None,
     year: int | None = None,
     month: int | None = None,
     insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
     """
     Returns insight cards explaining what changed in a selected period compared
@@ -391,14 +391,13 @@ def get_merchant_detail(
     summary="Get expense analysis",
 )
 def analysis(
-    user_id: str,
     year: int | None = Query(default=None, ge=1970, le=2100),
     month: int | None = Query(default=None, ge=1, le=12),
     start_date: str | None = None,
     end_date: str | None = None,
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
     """Return analysis for a given user via the AnalysisService."""
     result = analysis_service.analyze(user_id=user_id, year=year, month=month, start_date=start_date, end_date=end_date, use_cache=True)
@@ -422,25 +421,32 @@ def analysis_chat(
     analysis_service: AnalysisService = Depends(get_analysis_service),
     analytics_service: AnalyticsService = Depends(get_analytics_service),
     insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
     """
-    Accepts a chat query and returns a response generated by the chat model.
-    In production the OpenAI API is used, while locally a running Ollama instance
-    provides the responses.
+    Accepts a chat query and returns a response generated by the AI model.
+    The user is derived from the JWT token for security.
     """
-
-    chat_response = call_chat_model(
-        messages=body.messages,
-        user_id=body.user_id,
-        analysis_service=analysis_service,
-        analytics_service=analytics_service,
-        insight_service=insight_service,
-        model=body.model,
-        provider=body.provider
-    )
-
-    return {"response": chat_response}
+    try:
+        chat_response = call_chat_model(
+            messages=body.messages,
+            user_id=user_id,
+            analysis_service=analysis_service,
+            analytics_service=analytics_service,
+            insight_service=insight_service,
+            model=body.model,
+            provider=body.provider
+        )
+        return {"response": chat_response}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import logging
+        logging.getLogger("varavu_selavu.routes").exception("AI chat failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="The AI analyst is temporarily unavailable. Please try again later."
+        )
 
 
 @router.post(
@@ -449,7 +455,9 @@ def analysis_chat(
     tags=["Expenses"],
     summary="OCR and parse a receipt without persisting",
 )
+@limiter.limit("3/minute")
 def parse_receipt(
+    request: Request,
     file: UploadFile = File(...),
     save_ocr_text: bool = False,
     receipt_service: ReceiptService = Depends(get_receipt_service),
@@ -474,7 +482,7 @@ def create_expense_with_items(
     payload: ExpenseWithItemsRequest,
     repo: PostgresRepo = Depends(get_postgres_repo),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
     force: bool = Query(False),
 ):
     header = payload.header
@@ -492,12 +500,12 @@ def create_expense_with_items(
     discount = header.get("discount", 0)
     if abs(subtotal + tax + tip - discount - header["amount"]) > 0.02:
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
-    existing = repo.find_expense_by_fingerprint(payload.user_email, header.get("fingerprint", ""))
+    existing = repo.find_expense_by_fingerprint(user_id, header.get("fingerprint", ""))
     if existing and not force:
         raise HTTPException(status_code=409, detail={"expense_id": existing.get("id")})
-    expense_id = repo.append_expense({**header, "user_email": payload.user_email})
+    expense_id = repo.append_expense({**header, "user_email": user_id})
     try:
-        item_ids = repo.append_items(payload.user_email, expense_id, items)
+        item_ids = repo.append_items(user_id, expense_id, items)
     except Exception:
         repo.delete_expense(expense_id)
         raise
@@ -505,7 +513,7 @@ def create_expense_with_items(
     # Trigger insights aggregation for item + merchant tracking
     try:
         aggregation_svc.on_expense_with_items_created(
-            user_email=payload.user_email,
+            user_email=user_id,
             expense_id=expense_id,
             merchant_name=header.get("merchant_name"),
             purchased_at=header.get("purchased_at") if isinstance(header.get("purchased_at"), datetime) else None,
@@ -522,20 +530,12 @@ def create_expense_with_items(
     "/models",
     response_model=ModelListResponse,
     tags=["Models"],
-    summary="List available LLM models (OpenAI in prod, Ollama locally)",
+    summary="List available LLM models",
 )
 def list_models():
     """Return provider and available model ids based on environment."""
     models_list = []
     
-    # Try to load OpenAI models
-    try:
-        openai_models = list_openai_models()
-        for m in openai_models:
-            models_list.append({"provider": "openai", "id": m, "name": f"OpenAI: {m}"})
-    except Exception:
-        pass
-        
     # Try to load Gemini models
     try:
         gemini_models = list_gemini_models()
@@ -543,7 +543,15 @@ def list_models():
             models_list.append({"provider": "gemini", "id": m, "name": f"Gemini: {m}"})
     except Exception:
         pass
-        
+
+    # Try to load OpenAI models
+    try:
+        openai_models = list_openai_models()
+        for m in openai_models:
+            models_list.append({"provider": "openai", "id": m, "name": f"OpenAI: {m}"})
+    except Exception:
+        pass
+    
     # Try to load Ollama models
     try:
         ollama_models = list_ollama_models()

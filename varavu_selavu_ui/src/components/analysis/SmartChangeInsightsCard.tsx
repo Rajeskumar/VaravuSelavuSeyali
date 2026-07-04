@@ -26,7 +26,7 @@ export default function SmartChangeInsightsCard({ userId, year, month }: SmartCh
   useEffect(() => {
     if (!userId) return;
     setLoading(true);
-    getChangeInsights(userId, { year, month })
+    getChangeInsights({ year, month })
       .then(setInsights)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));

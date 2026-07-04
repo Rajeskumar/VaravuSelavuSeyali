@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,6 +8,7 @@ import { AppTheme } from '../theme';
 import CustomButton from '../components/CustomButton';
 import CustomInput from '../components/CustomInput';
 import { showToast } from '../components/Toast';
+import API_BASE_URL from '../api/apiconfig';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -120,6 +121,19 @@ export default function RegisterScreen() {
               <Text style={styles.footerLink}>Sign In</Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.legalFooter}>
+            <Text style={styles.legalText}>By creating an account, you agree to our</Text>
+            <View style={styles.legalLinksRow}>
+              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
+                <Text style={styles.legalLink}>Terms of Service</Text>
+              </TouchableOpacity>
+              <Text style={styles.legalText}> and </Text>
+              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
+                <Text style={styles.legalLink}>Privacy Policy</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -183,5 +197,22 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 14,
     color: theme.colors.primary,
     fontWeight: '700',
+  },
+  legalFooter: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  legalText: {
+    fontSize: 12,
+    color: theme.colors.textSecondary,
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    marginTop: 2,
+  },
+  legalLink: {
+    fontSize: 12,
+    color: theme.colors.primary,
+    textDecorationLine: 'underline',
   },
 });

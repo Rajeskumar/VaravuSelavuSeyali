@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Divider } from '@mui/material';
+import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Divider, Link } from '@mui/material';
 import { logout as apiLogout } from '../api/auth';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 import { motion } from 'framer-motion';
@@ -131,13 +131,20 @@ const ProfilePage: React.FC = () => {
 
         </CardContent>
       </Card>
+      <Box sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          <Link href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+          {' '}•{' '}
+          <Link href={`${process.env.REACT_APP_API_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>
+        </Typography>
+      </Box>
       </motion.div>
 
       <Dialog open={openDeleteDialog} onClose={() => !deleting && setOpenDeleteDialog(false)}>
         <DialogTitle>Delete Account</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 2 }}>
-            Are you absolutely sure? This will permanently delete your profile, expenses, and all insights. 
+            Are you absolutely sure? All your expenses, receipts, recurring templates, and profile data will be permanently deleted and cannot be recovered.
             Type <strong>DELETE</strong> below to confirm.
           </DialogContentText>
           <TextField

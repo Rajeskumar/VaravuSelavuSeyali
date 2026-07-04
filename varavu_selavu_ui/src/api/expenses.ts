@@ -39,12 +39,10 @@ export interface ExpenseListResponse {
 }
 
 export async function listExpenses(
-  user_id: string,
   offset = 0,
   limit = 30
 ): Promise<ExpenseListResponse> {
   const params = new URLSearchParams({
-    user_id,
     offset: offset.toString(),
     limit: limit.toString(),
   });

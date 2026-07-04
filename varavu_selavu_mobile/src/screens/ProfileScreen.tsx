@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, ActivityIndicator, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, ActivityIndicator, Switch, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
@@ -7,6 +7,7 @@ import { AppTheme } from '../theme';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 import { useAuth } from '../context/AuthContext';
 import * as Haptics from 'expo-haptics';
+import API_BASE_URL from '../api/apiconfig';
 
 export default function ProfileScreen({ navigation }: any) {
   const { signOut, userEmail } = useAuth();
@@ -171,6 +172,18 @@ export default function ProfileScreen({ navigation }: any) {
               <Text style={styles.deleteButtonText}>Delete Account</Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.legalFooter}>
+            <View style={styles.legalLinksRow}>
+              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
+                <Text style={styles.legalLink}>Terms of Service</Text>
+              </TouchableOpacity>
+              <Text style={styles.legalText}> • </Text>
+              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
+                <Text style={styles.legalLink}>Privacy Policy</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -277,5 +290,23 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     color: '#fff',
     fontFamily: 'Inter-Bold',
     fontSize: 16,
+  },
+  legalFooter: {
+    marginTop: 32,
+    alignItems: 'center',
+  },
+  legalText: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontFamily: 'Inter-Regular',
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+  },
+  legalLink: {
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    fontFamily: 'Inter-Regular',
+    textDecorationLine: 'underline',
   },
 });

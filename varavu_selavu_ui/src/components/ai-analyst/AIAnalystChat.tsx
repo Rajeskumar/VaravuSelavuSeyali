@@ -69,7 +69,6 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
       const res = await fetchWithAuth(`/api/v1/analysis/chat`, {
         method: "POST",
         body: JSON.stringify({
-          user_id: userId,
           messages: newMessages,
           model: selectedModel ? selectedModel.id : undefined,
           provider: selectedModel ? selectedModel.provider : undefined,
@@ -84,7 +83,10 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
     } catch (err: any) {
-      setError(err.message ?? "An error occurred");
+      const msg = err.message ?? "An error occurred";
+      // Don't surface raw upstream API errors to the user
+      const isTechnical = /quota|429|500|502|503|api.key|insufficient/i.test(msg);
+      setError(isTechnical ? "The AI analyst is temporarily unavailable. Please try again later." : msg);
     } finally {
       setLoading(false);
     }

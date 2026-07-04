@@ -33,7 +33,7 @@ const ExpensesPage: React.FC = () => {
     isFetchingNextPage,
   } = useInfiniteQuery({
     queryKey: ['expenses', user],
-    queryFn: ({ pageParam = 0 }) => listExpenses(user, pageParam),
+    queryFn: ({ pageParam = 0 }) => listExpenses(pageParam),
     getNextPageParam: (lastPage) => lastPage.next_offset ?? undefined,
     enabled: !!user,
     initialPageParam: 0,

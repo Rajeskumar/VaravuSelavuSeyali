@@ -209,6 +209,14 @@ const LoginPage: React.FC = () => {
                   <Link href="/register" variant="body2">Create account</Link>
                   <Link href="/forgot-password" variant="body2">Forgot password</Link>
                 </Grid>
+                <Grid size={12} sx={{ textAlign: 'center', mt: 2 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    By logging in, you agree to our{' '}
+                    <Link href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+                    {' '}and{' '}
+                    <Link href={`${process.env.REACT_APP_API_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+                  </Typography>
+                </Grid>
               </Grid>
             </Box>
           </CardContent>

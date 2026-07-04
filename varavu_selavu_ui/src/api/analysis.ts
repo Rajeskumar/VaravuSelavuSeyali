@@ -9,8 +9,8 @@ export interface AnalysisResponse {
   filter_info?: { applied_user_col?: string | null; year?: number | null; month?: number | null; row_count?: number };
 }
 
-export async function getAnalysis(user_id: string, opts?: { year?: number; month?: number }): Promise<AnalysisResponse> {
-  const params = new URLSearchParams({ user_id });
+export async function getAnalysis(opts?: { year?: number; month?: number }): Promise<AnalysisResponse> {
+  const params = new URLSearchParams();
   if (opts?.year !== undefined) params.set('year', String(opts.year));
   if (opts?.month !== undefined) params.set('month', String(opts.month));
   // Cache busting to ensure we always get fresh data when filters change

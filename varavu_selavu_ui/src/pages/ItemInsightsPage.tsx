@@ -32,7 +32,7 @@ const ItemInsightsPage: React.FC = () => {
   useEffect(() => {
     if (!userId) return;
     setLoading(true);
-    getTopItems(userId, {
+    getTopItems({
       year: year === 'all' ? undefined : Number(year),
       month: month === 'all' ? undefined : Number(month),
     })
@@ -50,7 +50,7 @@ const ItemInsightsPage: React.FC = () => {
       (async () => {
         setDetailLoading(true);
         try {
-          const d = await getItemDetail(userId, itemParam);
+          const d = await getItemDetail(itemParam);
           setDetail(d);
         } catch {
           // ignore
@@ -66,7 +66,7 @@ const ItemInsightsPage: React.FC = () => {
     setDetail(null);
     try {
       const itemName = item.item_name || item.normalized_name || '';
-      const d = await getItemDetail(userId, itemName);
+      const d = await getItemDetail(itemName);
       setDetail(d);
     } catch {
       // non-fatal

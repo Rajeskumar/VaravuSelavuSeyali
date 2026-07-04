@@ -27,7 +27,7 @@ const ExpenseAnalysisPage: React.FC = () => {
       if (!user) throw new Error('Please login to view analysis.');
       const opts: { year?: number; month?: number } = { year };
       if (!overallYear) opts.month = month;
-      return getAnalysis(user, opts);
+      return getAnalysis(opts);
     },
     enabled: !!user,
   });
