@@ -11,14 +11,16 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from varavu_selavu_service.db.models import (
     ItemInsight,
     ItemPriceHistory,
     MerchantInsight,
     MerchantAggregate,
     ExpenseItem,
+    Expense,
 )
+from varavu_selavu_service.services.insight_analytics_service import classify_confidence
 
 logger = logging.getLogger("varavu_selavu.analytics_service")
 
@@ -85,8 +87,14 @@ class AnalyticsService:
             for store, ps in store_map.items()
         ]
 
+        # TS-ANL-009: don't let a "cheapest merchant" claim stand on a single
+        # store — require at least 2 distinct stores before comparing prices.
+        if len(store_comparison) < 2:
+            store_comparison = []
+
         return {
             **self._item_insight_to_dict(insight),
+            "confidence": classify_confidence(len(history), len(store_map)),
             "price_history": [
                 {
                     "date": h.date.isoformat() if h.date else None,
@@ -195,10 +203,66 @@ class AnalyticsService:
             for v in items_map.values()
         ]
 
+        # Recent transactions + biggest single transaction at this merchant
+        recent_expenses = (
+            self.db.query(Expense)
+            .filter(Expense.user_email == user_email, Expense.merchant_name == merchant_name)
+            .order_by(Expense.purchased_at.desc())
+            .limit(10)
+            .all()
+        )
+        recent_transactions = [
+            {
+                "date": e.purchased_at.isoformat() if e.purchased_at else None,
+                "description": e.description,
+                "amount": float(e.amount or 0),
+            }
+            for e in recent_expenses
+        ]
+
+        highest_expense = (
+            self.db.query(Expense)
+            .filter(Expense.user_email == user_email, Expense.merchant_name == merchant_name)
+            .order_by(desc(Expense.amount))
+            .first()
+        )
+        highest_transaction = (
+            {
+                "date": highest_expense.purchased_at.isoformat() if highest_expense.purchased_at else None,
+                "amount": float(highest_expense.amount or 0),
+            }
+            if highest_expense
+            else None
+        )
+
+        # Spend share vs. all of this user's merchants (all-time, since this
+        # code path is only used when no date scope was requested)
+        total_all_merchants = float(
+            self.db.query(func.sum(MerchantInsight.total_spent))
+            .filter(MerchantInsight.user_email == user_email)
+            .scalar()
+            or 0
+        )
+        spend_share_percent = (
+            round((float(insight.total_spent or 0) / total_all_merchants) * 100, 1)
+            if total_all_merchants > 0
+            else None
+        )
+        average_transaction_amount = (
+            round(float(insight.total_spent or 0) / insight.transaction_count, 2)
+            if insight.transaction_count
+            else 0
+        )
+
         return {
             **self._merchant_insight_to_dict(insight),
             "monthly_aggregates": monthly_aggregates,
             "items_bought": items_bought,
+            "recent_transactions": recent_transactions,
+            "highest_transaction": highest_transaction,
+            "average_transaction_amount": average_transaction_amount,
+            "spend_share_percent": spend_share_percent,
+            "confidence": classify_confidence(insight.transaction_count or 0),
         }
 
     def search_merchants(

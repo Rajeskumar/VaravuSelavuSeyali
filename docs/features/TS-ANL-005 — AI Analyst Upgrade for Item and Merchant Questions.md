@@ -1,3 +1,7 @@
+**Status:** ✅ Built — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+The provider-default bug is fixed. `chat_service.py`'s `call_chat_model` now calls `insight_analytics_service.py`'s `build_rag_context()` on the incoming query before invoking the LangGraph agent; when it matches a specific item/merchant, the resulting detail is injected into the system prompt so the agent starts with the right numbers already in hand, instead of only reaching them via the generic tool-calling fallback (`get_expense_summary`/`get_item_insights`/`get_merchant_insights`, still available for follow-ups). Verified live: an "Ask AI about this item" deep link from Item Insights produced a correctly-grounded answer citing the exact merchant/price data for that item. The architecture is hybrid RAG-injection + tool-calling rather than the spec's original pure keyword-routing design, which is an intentional, reasonable middle ground (see §3 in FEATURE_STATUS.md).
+
 ### TS-ANL-005 — AI Analyst Upgrade for Item and Merchant Questions
 
 **Objective**  

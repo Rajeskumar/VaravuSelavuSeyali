@@ -4,6 +4,8 @@ import {
     Modal, FlatList, ActivityIndicator,
 } from 'react-native';
 import { PieChart, LineChart } from 'react-native-chart-kit';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { useAppTheme } from '../context/ThemeContext';
@@ -22,6 +24,7 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 
 export default function AnalysisScreen() {
     const { accessToken, userEmail } = useAuth();
+    const navigation = useNavigation<any>();
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const [data, setData] = useState<AnalysisResponse | null>(null);
@@ -160,8 +163,35 @@ export default function AnalysisScreen() {
         useShadowColorFromDataset: false,
     };
 
+    const isEmpty = data.total_expenses === 0 && data.category_totals.length === 0;
+
     return (
         <ScreenWrapper scroll>
+            {/* Cross-links to Item/Merchant Insights */}
+            <View style={styles.crossLinkRow}>
+                <TouchableOpacity style={styles.crossLinkChip} onPress={() => navigation.navigate('ItemInsights')} activeOpacity={0.7}>
+                    <Ionicons name="pricetag" size={14} color={theme.colors.primary} />
+                    <Text style={styles.crossLinkText}>Item Insights</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.crossLinkChip} onPress={() => navigation.navigate('MerchantInsights')} activeOpacity={0.7}>
+                    <Ionicons name="storefront" size={14} color={theme.colors.primary} />
+                    <Text style={styles.crossLinkText}>Merchant Insights</Text>
+                </TouchableOpacity>
+            </View>
+
+            {isEmpty ? (
+                <Card style={styles.emptyCard}>
+                    <View style={styles.emptyIconBadge}>
+                        <Ionicons name="stats-chart" size={32} color={theme.colors.primary} />
+                    </View>
+                    <Text style={styles.emptyTitle}>No expenses this month yet</Text>
+                    <Text style={styles.emptySubtitle}>Add an expense to see category breakdowns and trends.</Text>
+                    <TouchableOpacity style={styles.emptyCta} onPress={() => navigation.navigate('Add Expense')} activeOpacity={0.8}>
+                        <Text style={styles.emptyCtaText}>Add an Expense</Text>
+                    </TouchableOpacity>
+                </Card>
+            ) : (
+            <>
             {/* Summary Card */}
             <Card style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>Total This Month</Text>
@@ -221,6 +251,8 @@ export default function AnalysisScreen() {
                     );
                 })}
             </View>
+            </>
+            )}
 
             {/* Drill-down Modal */}
             <Modal visible={drillDownVisible} animationType="slide" transparent>
@@ -294,6 +326,22 @@ export default function AnalysisScreen() {
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
+    crossLinkRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+    crossLinkChip: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: theme.colors.surface, borderWidth: 1, borderColor: theme.colors.border,
+        paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
+    },
+    crossLinkText: { fontSize: 12, fontWeight: '600', color: theme.colors.primary },
+    emptyCard: { alignItems: 'center', paddingVertical: 36 },
+    emptyIconBadge: {
+        width: 64, height: 64, borderRadius: 20, marginBottom: 12,
+        backgroundColor: theme.colors.primarySurface, alignItems: 'center', justifyContent: 'center',
+    },
+    emptyTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginBottom: 6, textAlign: 'center' },
+    emptySubtitle: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 20, paddingHorizontal: 20 },
+    emptyCta: { backgroundColor: theme.colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 24 },
+    emptyCtaText: { color: '#fff', fontWeight: '700', fontSize: 15 },
     summaryCard: { alignItems: 'center', paddingVertical: 28 },
     summaryLabel: { fontSize: 14, color: theme.colors.textSecondary, fontWeight: '500' },
     summaryAmount: { fontSize: 36, fontWeight: '800', color: theme.colors.primary, marginVertical: 6, letterSpacing: -1 },

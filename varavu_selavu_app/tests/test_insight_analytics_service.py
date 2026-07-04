@@ -154,9 +154,10 @@ def test_item_detail(db_session):
     assert len(detail["price_history"]) == 2
     assert detail["price_history"][0]["unit_price"] == 100.0
     assert detail["price_history"][1]["unit_price"] == 150.0
-    assert len(detail["store_comparison"]) == 1
-    assert detail["store_comparison"][0]["store_name"] == "Amazon"
-    assert detail["store_comparison"][0]["avg_price"] == 125.0
+    # TS-ANL-009: both purchases are at the same single store (Amazon), so a
+    # store-comparison / "cheapest merchant" claim is suppressed for lack of
+    # comparable data, even though price history itself still shows.
+    assert detail["store_comparison"] == []
 
 def test_item_detail_filtered(db_session):
     service = InsightAnalyticsService(db_session)
@@ -168,5 +169,6 @@ def test_item_detail_filtered(db_session):
     assert detail["purchase_count"] == 1
     assert len(detail["price_history"]) == 1
     assert detail["price_history"][0]["unit_price"] == 150.0
-    assert len(detail["store_comparison"]) == 1
-    assert detail["store_comparison"][0]["avg_price"] == 150.0
+    # TS-ANL-009: a single purchase at a single store can't support a
+    # store-comparison claim.
+    assert detail["store_comparison"] == []

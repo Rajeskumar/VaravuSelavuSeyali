@@ -1,3 +1,7 @@
+**Status:** ✅ Built — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+`GET /api/v1/analytics/changes` (`calculate_change_insights` in `insight_analytics_service.py`) now implements all 7 required insight types — biggest merchant increase/decrease, biggest category increase, biggest item price increase, new merchant detected, **unusual large transaction** (flagged against the user's own historical average, not just "biggest so far"), and **recurring bill increase** (compared against active `RecurringTemplate`s by description) — and supports all three comparison windows (month-over-month, year-over-year, custom-range). It's purely deterministic (no LLM), as required. Results are now ranked by relative magnitude (`abs(change_percent)`) before the top-5 cutoff, so the most eye-catching change wins a card slot regardless of type. `SmartChangeInsightsCard.tsx` renders the cards with drill-down links into Merchant/Item Insights and a comparison baseline.
+
 ### TS-ANL-004 — Smart Spend Change Insights
 
 **Objective**  

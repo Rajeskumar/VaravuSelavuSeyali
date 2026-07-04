@@ -6,8 +6,28 @@ from sqlalchemy import func, extract, Integer
 import time
 from threading import RLock
 
-from varavu_selavu_service.db.models import Expense, ExpenseItem
+from varavu_selavu_service.db.models import Expense, ExpenseItem, RecurringTemplate
 from varavu_selavu_service.models.api_models import InsightMetrics, MerchantInsightSummary, ItemInsightSummary, ChangeInsight
+
+
+def classify_confidence(transaction_count: int, distinct_merchants: int | None = None) -> str:
+    """
+    TS-ANL-009 confidence classification. `distinct_merchants` only matters for
+    items (it gates "cheapest merchant" style claims on real store diversity);
+    pass None for merchants, where only sample size applies.
+    """
+    if transaction_count >= 6 and (distinct_merchants is None or distinct_merchants >= 2):
+        return "high"
+    if transaction_count >= 3:
+        return "medium"
+    return "low"
+
+
+def canonicalize_name(name: str | None) -> str:
+    """Lightweight canonicalization for grouping near-duplicate merchant names
+    that differ only in whitespace/case (e.g. "Walmart " vs "WALMART")."""
+    return (name or "").strip().lower()
+
 
 class InsightAnalyticsService:
     """
@@ -54,6 +74,105 @@ class InsightAnalyticsService:
 
         return filters
 
+    def _resolve_comparison_periods(
+        self,
+        start_date: str | None,
+        end_date: str | None,
+        year: int | None,
+        month: int | None,
+        default_to_current_month: bool = False,
+    ) -> Optional[tuple]:
+        """
+        Resolves the current and previous comparison periods used for
+        period-over-period change calculations, following the same
+        precedence rules as `_build_date_filters`:
+          1. year + month -> month-over-month (vs. prior calendar month)
+          2. year only -> year-over-year (vs. prior calendar year)
+          3. start_date + end_date -> custom range vs. an equal-length prior range
+          4. nothing -> only resolved if `default_to_current_month` is True
+             (used by change-insight cards, which always need a comparison);
+             otherwise returns None so all-time summaries don't get a
+             misleading "vs last month" delta attached.
+
+        Returns (curr_start, curr_end, prev_start, prev_end) as ISO date
+        strings, or None if there's nothing sensible to compare against.
+        """
+        curr_start = curr_end = prev_start = prev_end = None
+
+        if year is not None and month is not None:
+            curr_start = date(year, month, 1)
+            if month == 12:
+                curr_end = date(year + 1, 1, 1) - timedelta(days=1)
+                prev_start = date(year, 11, 1)
+                prev_end = date(year, 12, 1) - timedelta(days=1)
+            elif month == 1:
+                curr_end = date(year, 2, 1) - timedelta(days=1)
+                prev_start = date(year - 1, 12, 1)
+                prev_end = date(year, 1, 1) - timedelta(days=1)
+            else:
+                curr_end = date(year, month + 1, 1) - timedelta(days=1)
+                prev_start = date(year, month - 1, 1)
+                prev_end = date(year, month, 1) - timedelta(days=1)
+        elif year is not None:
+            curr_start = date(year, 1, 1)
+            curr_end = date(year, 12, 31)
+            prev_start = date(year - 1, 1, 1)
+            prev_end = date(year - 1, 12, 31)
+        elif start_date and end_date:
+            curr_start = datetime.strptime(start_date, "%Y-%m-%d").date()
+            curr_end = datetime.strptime(end_date, "%Y-%m-%d").date()
+            delta = curr_end - curr_start
+            prev_end = curr_start - timedelta(days=1)
+            prev_start = prev_end - delta
+        elif default_to_current_month:
+            today = date.today()
+            curr_start = date(today.year, today.month, 1)
+            curr_end = None
+            if today.month == 1:
+                prev_start = date(today.year - 1, 12, 1)
+            else:
+                prev_start = date(today.year, today.month - 1, 1)
+            prev_end = curr_start - timedelta(days=1)
+
+        if not curr_start or not prev_start:
+            return None
+
+        return (
+            curr_start.strftime("%Y-%m-%d"),
+            curr_end.strftime("%Y-%m-%d") if curr_end else None,
+            prev_start.strftime("%Y-%m-%d"),
+            prev_end.strftime("%Y-%m-%d") if prev_end else None,
+        )
+
+    def _merchant_totals_for_period(
+        self, user_id: str, start_date: str | None, end_date: str | None
+    ) -> Dict[str, float]:
+        """Canonicalized merchant -> total_spent lookup for a raw date range (no year/month precedence)."""
+        canon_key = func.lower(func.trim(Expense.merchant_name))
+        query = self.db.query(canon_key, func.sum(Expense.amount)).filter(
+            Expense.user_email == user_id, Expense.merchant_name != None
+        )
+        if start_date:
+            query = query.filter(Expense.purchased_at >= start_date)
+        if end_date:
+            query = query.filter(Expense.purchased_at <= end_date)
+        return {r[0]: float(r[1] or 0) for r in query.group_by(canon_key).all()}
+
+    def _item_totals_for_period(
+        self, user_id: str, start_date: str | None, end_date: str | None
+    ) -> Dict[str, float]:
+        """Lightweight item -> average_unit_price lookup for a raw date range (no year/month precedence)."""
+        query = (
+            self.db.query(ExpenseItem.normalized_name, func.avg(ExpenseItem.unit_price))
+            .join(Expense, ExpenseItem.expense_id == Expense.id)
+            .filter(Expense.user_email == user_id, ExpenseItem.normalized_name != None)
+        )
+        if start_date:
+            query = query.filter(Expense.purchased_at >= start_date)
+        if end_date:
+            query = query.filter(Expense.purchased_at <= end_date)
+        return {r[0]: float(r[1] or 0) for r in query.group_by(ExpenseItem.normalized_name).all()}
+
     def calculate_merchant_metrics(
         self,
         user_id: str,
@@ -67,11 +186,15 @@ class InsightAnalyticsService:
         Calculates insight metrics grouped by merchant. Uses all expenses with a non-null merchant_name.
         """
         date_filters = self._build_date_filters(start_date, end_date, year, month)
-        
-        # We need sum(amount) and count(*) by merchant
+
+        # Group by a canonicalized (trimmed/lowercased) key so "Walmart" and
+        # "WALMART " don't split into separate rows (TS-ANL-009 canonicalization),
+        # but still display a real, human-readable merchant name.
+        canon_key = func.lower(func.trim(Expense.merchant_name))
         query = (
             self.db.query(
-                Expense.merchant_name,
+                canon_key.label("canon_name"),
+                func.min(Expense.merchant_name).label("merchant_name"),
                 func.sum(Expense.amount).label("total_spent"),
                 func.count(Expense.id).label("transaction_count"),
                 func.min(Expense.purchased_at).label("first_seen"),
@@ -80,22 +203,36 @@ class InsightAnalyticsService:
             .filter(Expense.user_email == user_id)
             .filter(Expense.merchant_name != None)
             .filter(*date_filters)
-            .group_by(Expense.merchant_name)
+            .group_by(canon_key)
             .order_by(func.sum(Expense.amount).desc())
             .limit(limit)
         )
 
         results = query.all()
+
+        periods = self._resolve_comparison_periods(start_date, end_date, year, month)
+        prev_totals = (
+            self._merchant_totals_for_period(user_id, periods[2], periods[3]) if periods else {}
+        )
+
         summaries = []
         for r in results:
-            merchant_name = r[0]
-            total_spent = float(r[1] or 0)
-            transaction_count = int(r[2] or 0)
+            canon_name = r[0]
+            merchant_name = r[1]
+            total_spent = float(r[2] or 0)
+            transaction_count = int(r[3] or 0)
             avg_tx = total_spent / transaction_count if transaction_count > 0 else 0
-            
-            first_seen = r[3].strftime("%Y-%m-%d") if r[3] and not isinstance(r[3], str) else r[3] if r[3] else None
-            last_seen = r[4].strftime("%Y-%m-%d") if r[4] and not isinstance(r[4], str) else r[4] if r[4] else None
-            
+
+            first_seen = r[4].strftime("%Y-%m-%d") if r[4] and not isinstance(r[4], str) else r[4] if r[4] else None
+            last_seen = r[5].strftime("%Y-%m-%d") if r[5] and not isinstance(r[5], str) else r[5] if r[5] else None
+
+            mom_amount = mom_percent = None
+            confidence = classify_confidence(transaction_count)
+            if periods and canon_name in prev_totals and confidence != "low":
+                prev_spent = prev_totals[canon_name]
+                mom_amount = round(total_spent - prev_spent, 2)
+                mom_percent = round((mom_amount / prev_spent) * 100, 1) if prev_spent else None
+
             summary = MerchantInsightSummary(
                 merchant_name=merchant_name,
                 total_spent=total_spent,
@@ -103,6 +240,9 @@ class InsightAnalyticsService:
                 average_transaction_amount=round(avg_tx, 2),
                 first_seen_at=str(first_seen) if first_seen else None,
                 last_seen_at=str(last_seen) if last_seen else None,
+                month_over_month_change_amount=mom_amount,
+                month_over_month_change_percent=mom_percent,
+                confidence=confidence,
             )
             summaries.append(summary)
 
@@ -199,13 +339,76 @@ class InsightAnalyticsService:
             
         items_bought.sort(key=lambda x: x["purchase_count"], reverse=True)
 
+        # Recent transactions + biggest single transaction, within the same scope
+        recent_expenses = (
+            self.db.query(Expense)
+            .filter(Expense.user_email == user_id, Expense.merchant_name == merchant_name)
+            .filter(*date_filters)
+            .order_by(Expense.purchased_at.desc())
+            .limit(10)
+            .all()
+        )
+        recent_transactions = [
+            {
+                "date": e.purchased_at.isoformat() if e.purchased_at else None,
+                "description": e.description,
+                "amount": float(e.amount or 0),
+            }
+            for e in recent_expenses
+        ]
+
+        highest_expense = (
+            self.db.query(Expense)
+            .filter(Expense.user_email == user_id, Expense.merchant_name == merchant_name)
+            .filter(*date_filters)
+            .order_by(Expense.amount.desc())
+            .first()
+        )
+        highest_transaction = (
+            {
+                "date": highest_expense.purchased_at.isoformat() if highest_expense.purchased_at else None,
+                "amount": float(highest_expense.amount or 0),
+            }
+            if highest_expense
+            else None
+        )
+
+        # Spend share vs. all merchants in the same scope
+        total_all_merchants = float(
+            self.db.query(func.sum(Expense.amount))
+            .filter(Expense.user_email == user_id, Expense.merchant_name != None)
+            .filter(*date_filters)
+            .scalar()
+            or 0
+        )
+        spend_share_percent = (
+            round((tot_spent / total_all_merchants) * 100, 1) if total_all_merchants > 0 else None
+        )
+        average_transaction_amount = round(tot_spent / tot_count, 2) if tot_count else 0
+
+        # Month-over-month change for this merchant, if a comparison period resolves
+        periods = self._resolve_comparison_periods(start_date, end_date, year, month)
+        mom_amount = mom_percent = None
+        if periods:
+            prev_totals = self._merchant_totals_for_period(user_id, periods[2], periods[3])
+            if merchant_name in prev_totals:
+                prev_spent = prev_totals[merchant_name]
+                mom_amount = round(tot_spent - prev_spent, 2)
+                mom_percent = round((mom_amount / prev_spent) * 100, 1) if prev_spent else None
+
         return {
             "id": f"detail_{merchant_name}",
             "merchant_name": merchant_name,
             "total_spent": round(tot_spent, 2),
             "transaction_count": tot_count,
             "monthly_aggregates": monthly_aggregates,
-            "items_bought": items_bought
+            "items_bought": items_bought,
+            "recent_transactions": recent_transactions,
+            "highest_transaction": highest_transaction,
+            "average_transaction_amount": average_transaction_amount,
+            "spend_share_percent": spend_share_percent,
+            "month_over_month_change_amount": mom_amount,
+            "month_over_month_change_percent": mom_percent,
         }
 
     def calculate_item_metrics(
@@ -232,6 +435,9 @@ class InsightAnalyticsService:
                 func.min(ExpenseItem.unit_price).label("min_price"),
                 func.max(ExpenseItem.unit_price).label("max_price"),
                 func.avg(ExpenseItem.unit_price).label("avg_price"),
+                func.min(Expense.purchased_at).label("first_seen"),
+                func.max(Expense.purchased_at).label("last_seen"),
+                func.count(func.distinct(Expense.merchant_name)).label("distinct_merchants"),
             )
             .join(Expense, ExpenseItem.expense_id == Expense.id)
             .filter(Expense.user_email == user_id)
@@ -243,6 +449,12 @@ class InsightAnalyticsService:
         )
 
         results = query.all()
+
+        periods = self._resolve_comparison_periods(start_date, end_date, year, month)
+        prev_avg_prices = (
+            self._item_totals_for_period(user_id, periods[2], periods[3]) if periods else {}
+        )
+
         summaries = []
         for r in results:
             item_name = r[0]
@@ -250,10 +462,26 @@ class InsightAnalyticsService:
             transaction_count = int(r[2] or 0)
             total_quantity = float(r[3] or 0)
             avg_tx = total_spent / transaction_count if transaction_count > 0 else 0
-            
+
             min_price = float(r[4] or 0)
             max_price = float(r[5] or 0)
             avg_price = float(r[6] or 0)
+            first_seen = r[7].strftime("%Y-%m-%d") if r[7] and not isinstance(r[7], str) else r[7] if r[7] else None
+            last_seen = r[8].strftime("%Y-%m-%d") if r[8] and not isinstance(r[8], str) else r[8] if r[8] else None
+            distinct_merchants = int(r[9] or 0)
+
+            confidence = classify_confidence(transaction_count, distinct_merchants)
+
+            # For items, "month over month change" tracks the unit-price
+            # movement (personal inflation) rather than total spend, since
+            # that's the metric users actually care about per item. Suppressed
+            # at low confidence so a single purchase can't masquerade as a
+            # price trend (TS-ANL-009).
+            mom_amount = mom_percent = None
+            if periods and item_name in prev_avg_prices and confidence != "low":
+                prev_price = prev_avg_prices[item_name]
+                mom_amount = round(avg_price - prev_price, 2)
+                mom_percent = round((mom_amount / prev_price) * 100, 1) if prev_price else None
 
             summary = ItemInsightSummary(
                 item_name=item_name,
@@ -263,7 +491,13 @@ class InsightAnalyticsService:
                 total_quantity_bought=round(total_quantity, 2),
                 min_unit_price=round(min_price, 2),
                 max_unit_price=round(max_price, 2),
+                confidence=confidence,
                 average_unit_price=round(avg_price, 2),
+                month_over_month_change_amount=mom_amount,
+                month_over_month_change_percent=mom_percent,
+                first_seen_at=str(first_seen) if first_seen else None,
+                last_seen_at=str(last_seen) if last_seen else None,
+                distinct_merchants_count=distinct_merchants,
             )
             summaries.append(summary)
 
@@ -356,7 +590,12 @@ class InsightAnalyticsService:
                 "max_price": round(max(store_prices), 2),
                 "purchase_count": len(store_prices)
             })
-            
+
+        # TS-ANL-009: don't let a "cheapest merchant" claim stand on a single
+        # store — require at least 2 distinct stores before comparing prices.
+        if len(store_comparison) < 2:
+            store_comparison = []
+
         # Add summary fields so it complies with ItemInsightSummary interface + detail
         return {
             "id": f"detail_{item_name}",
@@ -370,6 +609,7 @@ class InsightAnalyticsService:
             "max_unit_price": round(max_price, 2),
             "last_paid_price": round(last_paid, 2),
             "distinct_merchants_count": len(merchants),
+            "confidence": classify_confidence(purchase_count, len(merchants)),
             "price_history": history,
             "store_comparison": store_comparison
         }
@@ -442,58 +682,12 @@ class InsightAnalyticsService:
         Calculates differences between the requested period and the preceding period
         to produce "what changed" insight cards.
         """
-        # Determine current and previous periods
-        curr_start = None
-        curr_end = None
-        prev_start = None
-        prev_end = None
-        
-        if year is not None and month is not None:
-            # Month over month
-            curr_start = date(year, month, 1)
-            # Find next month to get end date
-            if month == 12:
-                curr_end = date(year + 1, 1, 1) - timedelta(days=1)
-                prev_start = date(year, 11, 1)
-                prev_end = date(year, 12, 1) - timedelta(days=1)
-            elif month == 1:
-                curr_end = date(year, 2, 1) - timedelta(days=1)
-                prev_start = date(year - 1, 12, 1)
-                prev_end = date(year, 1, 1) - timedelta(days=1)
-            else:
-                curr_end = date(year, month + 1, 1) - timedelta(days=1)
-                prev_start = date(year, month - 1, 1)
-                prev_end = date(year, month, 1) - timedelta(days=1)
-        elif year is not None:
-            # Year over year
-            curr_start = date(year, 1, 1)
-            curr_end = date(year, 12, 31)
-            prev_start = date(year - 1, 1, 1)
-            prev_end = date(year - 1, 12, 31)
-        elif start_date and end_date:
-            # Custom range
-            curr_start = datetime.strptime(start_date, "%Y-%m-%d").date()
-            curr_end = datetime.strptime(end_date, "%Y-%m-%d").date()
-            delta = curr_end - curr_start
-            prev_end = curr_start - timedelta(days=1)
-            prev_start = prev_end - delta
-            
-        if not curr_start or not prev_start:
-            # Default to current month vs previous month if no valid filters provided
-            today = date.today()
-            curr_start = date(today.year, today.month, 1)
-            if today.month == 1:
-                prev_start = date(today.year - 1, 12, 1)
-            else:
-                prev_start = date(today.year, today.month - 1, 1)
-            prev_end = curr_start - timedelta(days=1)
-            
-        # Helper to convert to iso string for DB filtering
-        cs_str = curr_start.strftime("%Y-%m-%d")
-        ce_str = curr_end.strftime("%Y-%m-%d") if curr_end else None
-        ps_str = prev_start.strftime("%Y-%m-%d")
-        pe_str = prev_end.strftime("%Y-%m-%d") if prev_end else None
-        
+        # Determine current and previous periods (always resolved: change
+        # insights need a comparison window even if the caller passed nothing)
+        cs_str, ce_str, ps_str, pe_str = self._resolve_comparison_periods(
+            start_date, end_date, year, month, default_to_current_month=True
+        )
+
         insights = []
         
         # 1. Biggest Merchant Increase & Decrease
@@ -607,4 +801,89 @@ class InsightAnalyticsService:
                 entity_name=biggest_item_inc[0],
             ))
 
-        return insights[:5] # Return top 5 most interesting insights
+        # 4. Unusual Large Transaction — flag the current period's biggest single
+        # transaction if it's a real outlier against the user's own history, not
+        # just "the biggest one so far" (which would fire every period).
+        baseline_query = self.db.query(func.avg(Expense.amount), func.count(Expense.id)).filter(
+            Expense.user_email == user_id, Expense.purchased_at < cs_str
+        )
+        baseline_avg, baseline_count = baseline_query.one()
+        baseline_avg = float(baseline_avg or 0)
+        baseline_count = int(baseline_count or 0)
+
+        if baseline_count >= 5 and baseline_avg > 0:
+            curr_largest_query = (
+                self.db.query(Expense.amount, Expense.merchant_name, Expense.description)
+                .filter(Expense.user_email == user_id, Expense.purchased_at >= cs_str)
+            )
+            if ce_str:
+                curr_largest_query = curr_largest_query.filter(Expense.purchased_at <= ce_str)
+            largest = curr_largest_query.order_by(Expense.amount.desc()).first()
+
+            if largest:
+                largest_amount = float(largest[0] or 0)
+                if largest_amount >= max(baseline_avg * 3, 100):
+                    label = largest[1] or largest[2] or "a transaction"
+                    pct = (largest_amount / baseline_avg - 1) * 100
+                    insights.append(ChangeInsight(
+                        metric_name=f"Unusually large transaction at {label}",
+                        previous_value=round(baseline_avg, 2),
+                        current_value=round(largest_amount, 2),
+                        change_amount=round(largest_amount - baseline_avg, 2),
+                        change_percent=round(pct, 1),
+                        time_scope="transaction",
+                        entity_name=largest[1] or largest[2],
+                    ))
+
+        # 5. Recurring Bill Increase — compare each active recurring template's
+        # actual spend this period against last period, keyed by description
+        # (the field recurring_service.py stamps onto the created Expense row).
+        active_templates = (
+            self.db.query(RecurringTemplate)
+            .filter(RecurringTemplate.user_email == user_id, RecurringTemplate.status == "Active")
+            .all()
+        )
+
+        recurring_diffs = []
+        for tpl in active_templates:
+            curr_tpl_query = self.db.query(func.sum(Expense.amount)).filter(
+                Expense.user_email == user_id,
+                Expense.description == tpl.description,
+                Expense.purchased_at >= cs_str,
+            )
+            if ce_str:
+                curr_tpl_query = curr_tpl_query.filter(Expense.purchased_at <= ce_str)
+            curr_amount = float(curr_tpl_query.scalar() or 0)
+
+            prev_tpl_query = self.db.query(func.sum(Expense.amount)).filter(
+                Expense.user_email == user_id,
+                Expense.description == tpl.description,
+                Expense.purchased_at >= ps_str,
+            )
+            if pe_str:
+                prev_tpl_query = prev_tpl_query.filter(Expense.purchased_at <= pe_str)
+            prev_amount = float(prev_tpl_query.scalar() or 0)
+
+            if prev_amount > 0 and curr_amount > prev_amount:
+                diff = curr_amount - prev_amount
+                pct = (diff / prev_amount) * 100
+                if diff > 3 and pct > 5:
+                    recurring_diffs.append((tpl.description, curr_amount, prev_amount, diff, pct))
+
+        recurring_diffs.sort(key=lambda x: x[4], reverse=True)
+        if recurring_diffs:
+            biggest_recurring = recurring_diffs[0]
+            insights.append(ChangeInsight(
+                metric_name=f"{biggest_recurring[0]} bill increased",
+                previous_value=round(biggest_recurring[2], 2),
+                current_value=round(biggest_recurring[1], 2),
+                change_amount=round(biggest_recurring[3], 2),
+                change_percent=round(biggest_recurring[4], 1),
+                time_scope="recurring",
+                entity_name=biggest_recurring[0],
+            ))
+
+        # Rank by relative magnitude so the most eye-catching change wins one
+        # of the 3-5 card slots, regardless of which type produced it.
+        insights.sort(key=lambda i: abs(i.change_percent), reverse=True)
+        return insights[:5]

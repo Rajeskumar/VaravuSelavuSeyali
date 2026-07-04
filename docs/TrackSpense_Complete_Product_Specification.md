@@ -1,11 +1,13 @@
 # TrackSpense by Cerebroos — Complete Product & Technical Specification
 
 > **Document Version:** 1.0.0  
-> **Last Updated:** 2026-03-14  
+> **Last Updated:** 2026-03-14 (Feature Catalog §3.4 and Future Roadmap §17 refreshed 2026-07-04 — see note below)  
 > **Product Name:** TrackSpense  
 > **Company:** Cerebroos  
 > **Repository Name:** VaravuSelavuSeyali  
 > **Production Domain:** https://expense.cerebroos.com  
+
+> **⚠️ Freshness note (2026-07-04):** This document was written in March 2026 and much of the analytics/AI section has since shipped or changed shape. For a codebase-verified, up-to-date status of every analytics/insight/AI feature, see **[docs/FEATURE_STATUS.md](FEATURE_STATUS.md)** — that file supersedes this one's §17 Future Roadmap for anything analytics-related. §3.4 below has been patched to add the shipped Item/Merchant/Change Insights features, but the rest of this document (architecture, API reference, schema) has not been fully re-audited.
 
 ---
 
@@ -76,72 +78,73 @@
 ## 3. Feature Catalog
 
 ### 3.1 User Authentication
-| Feature | Description |
-|:---|:---|
-| Email/Password Registration | User registers with name, phone, email, password |
-| Email/Password Login | OAuth2 password flow returning JWT access + refresh tokens |
-| Google OAuth Login | One-tap Google Sign-In via ID token verification |
-| Token Refresh | Refresh tokens (7-day expiry) can be exchanged for new access tokens |
-| Logout | Revokes refresh token (server-side in-memory blacklist) |
-| Forgot Password | Reset password by email lookup |
-| Profile Management | View and update name and phone number |
+| Feature | Description | Status |
+|:---|:---|:---|
+| Email/Password Registration | User registers with name, phone, email, password | ✅ Built |
+| Email/Password Login | OAuth2 password flow returning JWT access + refresh tokens | ✅ Built |
+| Google OAuth Login | One-tap Google Sign-In via ID token verification | ✅ Built |
+| Token Refresh | Refresh tokens (7-day expiry) can be exchanged for new access tokens | ✅ Built |
+| Logout | Revokes refresh token (server-side in-memory blacklist) | ✅ Built |
+| Forgot Password | Reset password by email lookup | ✅ Built |
+| Profile Management | View and update name and phone number | ✅ Built |
 
 ### 3.2 Expense Management (CRUD)
-| Feature | Description |
-|:---|:---|
-| Create Expense | Manual entry: date, description, category, cost, optional merchant name |
-| Read Expenses | Paginated list (default 30 per page), sorted by date descending |
-| Update Expense | Edit any field of an existing expense by row ID |
-| Delete Expense | Soft delete by row ID |
-| Auto-Categorization | AI suggests main category, subcategory, and merchant from description text |
+| Feature | Description | Status |
+|:---|:---|:---|
+| Create Expense | Manual entry: date, description, category, cost, optional merchant name | ✅ Built |
+| Read Expenses | Paginated list (default 30 per page), sorted by date descending | ✅ Built |
+| Update Expense | Edit any field of an existing expense by row ID | ✅ Built |
+| Delete Expense | Soft delete by row ID | ✅ Built |
+| Auto-Categorization | AI suggests main category, subcategory, and merchant from description text | ✅ Built |
 
 ### 3.3 AI Receipt Scanning (OCR)
-| Feature | Description |
-|:---|:---|
-| Receipt Upload | Accept PNG, JPEG, or PDF uploads (max 12 MB) |
-| AI Parsing | Extract merchant, date, total, tax, tip, discount, and individual line items |
-| Item-Level Storage | Each receipt line item stored with name, quantity, unit, unit price, line total |
-| Fingerprint Deduplication | SHA-256 hash of merchant + date + amount + top-3 items prevents duplicate receipts |
-| Expense Confirmation | User reviews parsed data before confirming and saving |
+| Feature | Description | Status |
+|:---|:---|:---|
+| Receipt Upload | Accept PNG, JPEG, or PDF uploads (max 12 MB) | ✅ Built |
+| AI Parsing | Extract merchant, date, total, tax, tip, discount, and individual line items | ✅ Built |
+| Item-Level Storage | Each receipt line item stored with name, quantity, unit, unit price, line total | ✅ Built |
+| Fingerprint Deduplication | SHA-256 hash of merchant + date + amount + top-3 items prevents duplicate receipts | ✅ Built |
+| Expense Confirmation | User reviews parsed data before confirming and saving | ✅ Built |
 
 ### 3.4 Expense Analytics & Dashboard
-| Feature | Description |
-|:---|:---|
-| Category Totals | Aggregate spend per category for filtered period |
-| Top 5 Categories | Ranked by total spend |
-| Monthly Trend | Time-series of monthly total spend |
-| Category Drill-down | Detailed expense list per category |
-| Year/Month Filtering | Filter analysis by year, month, or custom date range |
-| In-Memory Caching | Analysis results cached for 60 seconds (configurable) |
-| Item Insights | Pre-calculated aggregation of total spend, quantity, and average price per item |
-| Merchant Insights | Tracking of lifetime spend and transaction count per merchant including monthly aggregates |
+| Feature | Description | Status |
+|:---|:---|:---|
+| Category Totals | Aggregate spend per category for filtered period | ✅ Built |
+| Top 5 Categories | Ranked by total spend | ✅ Built |
+| Monthly Trend | Time-series of monthly total spend | ✅ Built |
+| Category Drill-down | Detailed expense list per category | ✅ Built |
+| Year/Month Filtering | Filter analysis by year, month, or custom date range | ✅ Built |
+| In-Memory Caching | Analysis results cached for 60 seconds (configurable) | ✅ Built |
+| Item Insights | Save-time aggregation of total spend, quantity, avg/min/max price per item, with price-history and store-comparison views | 🚧 Partial — see [FEATURE_STATUS.md](FEATURE_STATUS.md) (TS-ANL-003) |
+| Merchant Insights | Save-time aggregation of lifetime spend, transaction count, and monthly aggregates per merchant, with detail views | 🚧 Partial — see [FEATURE_STATUS.md](FEATURE_STATUS.md) (TS-ANL-002) |
+| Smart Spend Change Insights | Deterministic "what changed" cards on the Analysis page (biggest mover, new merchant, price increase, etc.) | 🚧 Partial — see [FEATURE_STATUS.md](FEATURE_STATUS.md) (TS-ANL-004) |
 
 ### 3.5 AI Financial Analyst (Chat)
-| Feature | Description |
-|:---|:---|
-| Conversational Interface | Natural-language chat about personal expense data |
-| Context-Aware | Injects user's analysis data (category totals, monthly trends) into LLM context |
-| Multi-Provider | OpenAI (production) or Ollama (local development) |
-| Model Selection | User can choose from available models (e.g., gpt-5-mini, gpt-5) |
-| Date-Scoped Queries | Chat can be scoped to specific year/month or date ranges |
+| Feature | Description | Status |
+|:---|:---|:---|
+| Conversational Interface | Natural-language chat about personal expense data | ✅ Built |
+| Context-Aware | Injects user's analysis data (category totals, monthly trends) into LLM context | ✅ Built |
+| Multi-Provider | OpenAI (production) or Ollama (local development) | ✅ Built |
+| Model Selection | User can choose from available models (e.g., gpt-5-mini, gpt-5) | ✅ Built |
+| Date-Scoped Queries | Chat can be scoped to specific year/month or date ranges | ✅ Built |
 
 ### 3.6 Recurring Expense Management
-| Feature | Description |
-|:---|:---|
-| Template Creation | Define: description, category, day_of_month, default_cost, start_date |
-| Template Status | Active or Paused |
-| Due Computation | Auto-calculates which recurring expenses are due up to current date |
-| Idempotency | Skips months where the expense already exists |
-| Auto-Prompt | On login, prompts user to confirm/skip due recurring expenses |
-| Execute Now | Immediately record a recurring expense for the current month |
-| Template Deletion | Remove a recurring template |
+| Feature | Description | Status |
+|:---|:---|:---|
+| Template Creation | Define: description, category, day_of_month, default_cost, start_date | ✅ Built |
+| Template Status | Active or Paused | ✅ Built |
+| Due Computation | Auto-calculates which recurring expenses are due up to current date | ✅ Built |
+| Idempotency | Skips months where the expense already exists | ✅ Built |
+| Auto-Prompt | On login, prompts user to confirm/skip due recurring expenses | ✅ Built |
+| Execute Now | Immediately record a recurring expense for the current month | ✅ Built |
+| Template Deletion | Remove a recurring template | ✅ Built |
 
 ### 3.7 Email / Feedback System
-| Feature | Description |
-|:---|:---|
-| Feature Request | Submit feature requests via in-app form |
-| Contact Us | General contact form |
-| Email Delivery | SMTP via Gmail relay with HTML-formatted emails |
+| Feature | Description | Status |
+|:---|:---|:---|
+| Feature Request | Submit feature requests via in-app form | ✅ Built |
+| Contact Us | General contact form | ✅ Built |
+| Email Delivery | SMTP via Gmail relay with HTML-formatted emails | ✅ Built |
 
 ### 3.8 Platform Support
 | Platform | Technology | Status |
@@ -1119,22 +1122,27 @@ Or let SQLAlchemy create tables automatically (the ORM models define the schema)
 
 ## 17. Future Roadmap
 
-### Planned Features (from product docs)
+> **Superseded 2026-07-04:** the section below was written when the Item-Level AI Analyst was still "in design." As of this date it has actually shipped (tables, pre-calculation pipeline, API endpoints, and web/mobile UI all exist) — with real gaps, but not the gaps this stale text implies. Treat this whole section as historical; **[docs/FEATURE_STATUS.md](FEATURE_STATUS.md)** is the authoritative, codebase-verified backlog going forward.
 
-#### Item-Level AI Analyst (In Design)
-- New tables: `item_insights`, `item_price_history`, `merchant_insights`, `merchant_aggregates`
-- Pre-calculation pipeline that aggregates item data at expense save time
-- New API endpoints: `GET /analytics/items`, `GET /analytics/items/{name}`, `GET /analytics/merchants`, `GET /analytics/merchants/{name}`
-- RAG-enhanced chat: Intent detection routes to item/merchant data vs. general analysis
-- UI: "Item Insights" and "Merchant Insights" screens on both web and mobile
-- Features: Historical price tracking, store price comparison, personal inflation calculator
+### What actually shipped from the old "Item-Level AI Analyst (In Design)" plan
+- ✅ Tables `item_insights`, `item_price_history`, `merchant_insights`, `merchant_aggregates` — built
+- ✅ Save-time pre-calculation pipeline (background tasks) — built
+- ✅ API endpoints for item/merchant analytics — built
+- ✅ Web + mobile "Item Insights" / "Merchant Insights" screens — built, with UI gaps (see TS-ANL-002/003)
+- ❌ RAG-based intent detection routing to item/merchant data — **not built**; the chat uses a LangGraph tool-calling agent instead (see TS-ANL-005, currently broken — see FEATURE_STATUS.md)
+- ❌ Personal inflation calculator — not built
 
-#### Strategic Vision
-- LLM entity normalization (canonical product/merchant matching)
-- Text-to-SQL agent for complex analytical queries
+### Genuinely remaining backlog (verified not built as of 2026-07-04)
+- Fix the AI Analyst provider-default bug and wire up `build_rag_context()` (TS-ANL-005) — highest priority, see FEATURE_STATUS.md
+- Personal inflation calculator (per-user price-change index over time)
+- LLM entity normalization (canonical product/merchant name matching across spelling variants)
+- Text-to-SQL agent for open-ended analytical queries
 - Discretionary micro-habit detection
-- Proactive dynamic chat prompt suggestions
+- Proactive, dynamic chat prompt suggestions
 - Granular tax categorization for freelancers
+- Real Budgets + savings-goals backend (currently a localStorage-only stub — see [trackspense_feedback.md](features/trackspense_feedback.md) Priority 2)
+
+For full detail, evidence, and recommended build order on every item above, see **[docs/FEATURE_STATUS.md](FEATURE_STATUS.md)**.
 
 ---
 

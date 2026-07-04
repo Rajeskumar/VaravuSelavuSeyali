@@ -1,3 +1,9 @@
+**Status:** ✅ Built (web) — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+Summary list (`MerchantInsightsPage.tsx`) and detail view now include summary KPI cards (top merchant, total spend, avg basket, biggest riser), yearly rollup, recent-transactions list, highest single transaction, spend-share-of-total, an empty state, and a month-over-month delta chip — all backed by `GET /api/v1/analytics/merchants[/{merchant_name}]`, which now also supports date-range filtering on the detail route.
+
+**Remaining gap:** this pass was web-only — `MerchantInsightsScreen.tsx` on mobile was not updated and still reflects the prior, simpler state.
+
 ### TS-ANL-002 — Merchant Insights
 
 **Objective**  

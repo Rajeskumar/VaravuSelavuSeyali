@@ -23,9 +23,10 @@ def test_calculate_merchant_metrics_no_data(mock_db_session):
 
 def test_calculate_merchant_metrics_with_data(mock_db_session):
     """Test that merchant metrics are calculated correctly."""
+    # Query now selects (canon_name, merchant_name, total_spent, transaction_count, first_seen, last_seen)
     mock_expenses = [
-        ("Costco", 500.0, 2, datetime(2023, 1, 10), datetime(2023, 1, 20)),
-        ("Amazon", 300.0, 3, datetime(2023, 1, 5), datetime(2023, 1, 25)),
+        ("costco", "Costco", 500.0, 2, datetime(2023, 1, 10), datetime(2023, 1, 20)),
+        ("amazon", "Amazon", 300.0, 3, datetime(2023, 1, 5), datetime(2023, 1, 25)),
     ]
     mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = mock_expenses
     

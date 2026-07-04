@@ -11,7 +11,7 @@
     {
       "name": "mobile-web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "varavu_selavu_mobile", "run", "web"],
+      "runtimeArgs": ["--prefix", "varavu_selavu_mobile", "run", "web", "--", "--port", "19006"],
       "port": 19006
     }
   ]

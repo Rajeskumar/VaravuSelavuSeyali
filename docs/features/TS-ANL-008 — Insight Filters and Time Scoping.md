@@ -1,3 +1,9 @@
+**Status:** ✅ Built (web) — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+Year/month filters exist and are reactive on both Item and Merchant Insights (web + mobile); the backend supports `start_date`/`end_date` on all relevant endpoints. Web now has a shared `InsightScopeFilter` component with a Month/Custom-range toggle and native date pickers, a `ScopeBadge` showing the active scope on both list and detail headers, and detail pages now pass the list page's active filter through instead of always showing all-time data. Also fixed a live bug in `get_item_detail`/`get_merchant_detail`: both required a `user_id` query param the frontend never sent (silent 422 on every click) — now derived from the auth token, matching every other analytics route.
+
+**Remaining gap:** this pass was web-only — mobile still only has year/month filters, no custom range or scope badge.
+
 ### TS-ANL-008 — Insight Filters and Time Scoping
 
 **Objective**  

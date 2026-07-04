@@ -1,3 +1,10 @@
+**Status:** ✅ Built (web) — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+This is the design that was actually chosen over the competing Medallion-architecture proposal in [AI Financial Analyst Feature.md](AI%20Financial%20Analyst%20Feature.md), and effectively all of it has now shipped on web:
+- **§A (Pre-calculation pipeline):** ✅ Built — `item_insights`/`item_price_history`/`merchant_insights`/`merchant_aggregates` tables, save-time aggregation via background tasks, backfill script. See TS-ANL-006/TS-ANL-012.
+- **§C (Web & mobile Item/Merchant Insights screens):** ✅ Built on web (KPI cards, yearly rollup, confidence badges, etc. all shipped); mobile screens were not updated this pass — see TS-ANL-002/TS-ANL-003.
+- **§B (RAG-based chat intent detection):** ✅ Built, hybrid — `build_rag_context()` is now called from the chat service and injects targeted item/merchant context into the system prompt, with the LangGraph tool-calling agent (`get_expense_summary`/`get_item_insights`/`get_merchant_insights`) still available for follow-ups. See TS-ANL-005.
+
 # Brainstorming & Implementation Plan: Item & Merchant-Level AI Analyst Flow
 
 You raised a great point—sending every single expense line item to the LLM will overwhelm its context window and degrade performance, yet ignoring them means losing valuable insights on specific items, price comparisons, and merchant history. 

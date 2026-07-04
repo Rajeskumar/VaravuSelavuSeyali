@@ -1,3 +1,9 @@
+**Status:** 🚧 Partial — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+Confidence classification now exists: `classify_confidence()` in `insight_analytics_service.py` returns high/medium/low based on transaction count (and, for items, distinct-merchant count), exposed as `confidence` on every `InsightMetrics`-based response (list and detail, both the dynamic and pre-calculated read paths). Suppression is wired to it: month-over-month/price-trend fields are hidden when confidence is low, and item store-comparisons require 2+ distinct merchants before showing at all (verified live — a single-store item correctly shows "Not enough data to compare stores" instead of a claim). Merchant-name grouping is canonicalized (trim + lowercase) so near-duplicate casing/whitespace variants merge into one row, while still displaying a real merchant name.
+
+**Remaining gap:** no item/unit-name canonicalization beyond what receipt OCR already provides, and no fuzzy/vector-based entity resolution (e.g. "Coca Cola" vs "Coke") — that's a materially bigger lift, tracked separately in FEATURE_STATUS.md §3.
+
 ### TS-ANL-009 — Data Quality and Normalization Guardrails
 
 **Objective**  

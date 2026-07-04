@@ -68,13 +68,20 @@ class ChatRequest(BaseModel):
     """
     Payload for the `/analysis/chat` endpoint.
 
-    * `user_id` – the identifier of the user making the request.
     * `messages` - array of message history.
+    * `year`/`month`/`start_date`/`end_date` - optional explicit scope for the
+      "what period is this conversation about" question. Precedence matches
+      every other analytics endpoint: start/end date > year/month > server
+      default (rolling last 3 months). All optional so existing clients that
+      don't send a scope keep working.
     """
-    user_id: str
     messages: List[Dict[str, str]] = []
     model: Optional[str] = None
     provider: Optional[str] = None
+    year: Optional[int] = None
+    month: Optional[int] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 # ---------------------- Response Models ---------------------- #
@@ -184,6 +191,7 @@ class InsightMetrics(BaseModel):
     distinct_merchants_count: Optional[int] = None
     first_seen_at: Optional[str] = None
     last_seen_at: Optional[str] = None
+    confidence: Optional[str] = None  # "high" | "medium" | "low" — see TS-ANL-009
 
 
 class MerchantInsightSummary(InsightMetrics):

@@ -22,6 +22,7 @@ import {
 
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { ZoomIn, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
@@ -383,15 +384,15 @@ const createTabStyles = (theme: AppTheme) => StyleSheet.create({
 // ─── iOS-style Slide-in Drawer ────────────────────────────────────────────────
 const DRAWER_W = Dimensions.get('window').width * 0.80;
 
-const DRAWER_ITEMS = [
-  { key: 'home',            label: 'Home',             icon: '🏠', screen: 'Dashboard'       },
-  { key: 'profile',         label: 'Profile',          icon: '👤', screen: 'Profile'         },
-  { key: 'itemInsights',    label: 'Item Insights',    icon: '🛒', screen: 'ItemInsights'    },
-  { key: 'merchantInsights',label: 'Merchant Insights',icon: '🏪', screen: 'MerchantInsights'},
-  { key: 'recurring',       label: 'Recurring',        icon: '🔁', screen: 'Recurring'       },
-  { key: 'about',           label: 'About',            icon: 'ℹ️', screen: 'About'           },
-  { key: 'feature',         label: 'Feature Request',  icon: '💡', screen: 'FeatureRequest'  },
-  { key: 'contact',         label: 'Contact Us',       icon: '✉️', screen: 'ContactUs'       },
+const DRAWER_ITEMS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
+  { key: 'home',            label: 'Home',             icon: 'home',           screen: 'Dashboard'       },
+  { key: 'profile',         label: 'Profile',          icon: 'person-circle',  screen: 'Profile'         },
+  { key: 'itemInsights',    label: 'Item Insights',    icon: 'pricetag',       screen: 'ItemInsights'    },
+  { key: 'merchantInsights',label: 'Merchant Insights',icon: 'storefront',     screen: 'MerchantInsights'},
+  { key: 'recurring',       label: 'Recurring',        icon: 'sync-circle',    screen: 'Recurring'       },
+  { key: 'about',           label: 'About',            icon: 'information-circle', screen: 'About'      },
+  { key: 'feature',         label: 'Feature Request',  icon: 'bulb',           screen: 'FeatureRequest'  },
+  { key: 'contact',         label: 'Contact Us',       icon: 'mail',           screen: 'ContactUs'       },
 ];
 
 function CustomDrawer({ visible, onClose, onNavigate }: {
@@ -439,10 +440,10 @@ function CustomDrawer({ visible, onClose, onNavigate }: {
                     onPress={() => { onClose(); if (item.screen) onNavigate(item.screen); }}
                   >
                     <View style={drawerStyles.menuIconBox}>
-                      <Text style={{ fontSize: 16 }}>{item.icon}</Text>
+                      <Ionicons name={item.icon} size={18} color={theme.colors.primary} />
                     </View>
                     <Text style={drawerStyles.menuLabel}>{item.label}</Text>
-                    <Text style={drawerStyles.chevron}>›</Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.colors.textTertiary} />
                   </TouchableOpacity>
                   {index < DRAWER_ITEMS.length - 1 && (
                     <View style={drawerStyles.separator} />

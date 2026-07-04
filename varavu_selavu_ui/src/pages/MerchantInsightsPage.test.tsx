@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import MerchantInsightsPage from './MerchantInsightsPage';
 import { MemoryRouter } from 'react-router-dom';
@@ -33,9 +33,11 @@ describe('MerchantInsightsPage', () => {
 
     render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
 
-    expect(await screen.findByText('Costco')).toBeInTheDocument();
-    expect(screen.getByText('Target')).toBeInTheDocument();
-    expect(screen.getByText(/\$450.00/i)).toBeInTheDocument();
+    const list = await screen.findByRole('list');
+    expect(await within(list).findByText('Costco')).toBeInTheDocument();
+    expect(within(list).getByText('Target')).toBeInTheDocument();
+    // Top Merchant summary card + list row both show Costco's total
+    expect(screen.getAllByText(/\$450.00/i).length).toBeGreaterThan(0);
     expect(screen.getByText('5 transactions')).toBeInTheDocument();
   });
 
@@ -58,8 +60,9 @@ describe('MerchantInsightsPage', () => {
 
     render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
 
-    // Click the merchant
-    const merchantButton = await screen.findByText('Costco');
+    // Click the merchant (within the list, since the summary card also shows its name)
+    const list = await screen.findByRole('list');
+    const merchantButton = within(list).getByText('Costco');
     userEvent.click(merchantButton);
 
     // Wait for detail view to load
@@ -70,7 +73,7 @@ describe('MerchantInsightsPage', () => {
     expect(screen.getByText('Paper Towels')).toBeInTheDocument();
     
     // Back button
-    userEvent.click(screen.getByTestId('ArrowBackIcon'));
+    userEvent.click(screen.getByTestId('ArrowBackRoundedIcon'));
     expect(screen.queryByText(/Monthly Spending/i)).not.toBeInTheDocument();
   });
 });

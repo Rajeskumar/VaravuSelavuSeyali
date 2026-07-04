@@ -1,3 +1,7 @@
+**Status:** ✅ Built — verified 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+All four endpoints exist (`GET /api/v1/analytics/merchants[/{merchant_name}]`, `GET /api/v1/analytics/items[/{item_name}]`), all bearer-authed via `auth_required`, all with typed Pydantic response models (`MerchantInsightSummary`, `ItemInsightSummary`, `ChangeInsight`). Both web (`src/api/analytics.ts`) and mobile (`src/api/analytics.ts`) API clients are fully wired.
+
 ### TS-ANL-011 — Insight API Surface and Response Models
 
 **Objective**  

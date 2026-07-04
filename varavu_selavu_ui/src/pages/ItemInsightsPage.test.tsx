@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ItemInsightsPage from './ItemInsightsPage';
 import { MemoryRouter } from 'react-router-dom';
@@ -33,9 +33,10 @@ describe('ItemInsightsPage', () => {
 
     render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
 
-    expect(await screen.findByText('Fuji Apples')).toBeInTheDocument();
-    expect(screen.getByText('Whole Milk')).toBeInTheDocument();
-    expect(screen.getByText(/\$25.00/i)).toBeInTheDocument();
+    const list = await screen.findByRole('list');
+    expect(await within(list).findByText('Fuji Apples')).toBeInTheDocument();
+    expect(within(list).getByText('Whole Milk')).toBeInTheDocument();
+    expect(screen.getAllByText(/\$25.00/i).length).toBeGreaterThan(0);
   });
 
   it('loads and displays details when an item is clicked', async () => {
@@ -53,15 +54,18 @@ describe('ItemInsightsPage', () => {
       price_history: [
         { date: '2025-10-01T12:00:00Z', store_name: 'Walmart', unit_price: 2.5, quantity: 4 }
       ],
+      // 2+ stores required to clear the store-comparison quality gate
       store_comparison: [
-        { store_name: 'Walmart', avg_price: 2.5, min_price: 2.5, max_price: 2.5, purchase_count: 1 }
+        { store_name: 'Walmart', avg_price: 2.5, min_price: 2.5, max_price: 2.5, purchase_count: 1 },
+        { store_name: 'Target', avg_price: 2.75, min_price: 2.75, max_price: 2.75, purchase_count: 1 }
       ]
     });
 
     render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
 
-    // Click the item
-    const itemButton = await screen.findByText('Fuji Apples');
+    // Click the item (within the list, since the summary card also shows its name)
+    const list = await screen.findByRole('list');
+    const itemButton = within(list).getByText('Fuji Apples');
     userEvent.click(itemButton);
 
     // Wait for detail view to load
@@ -72,7 +76,7 @@ describe('ItemInsightsPage', () => {
     expect(screen.getByText(/Price History/i)).toBeInTheDocument();
     
     // Back button works
-    userEvent.click(screen.getByTestId('ArrowBackIcon'));
+    userEvent.click(screen.getByTestId('ArrowBackRoundedIcon'));
     expect(screen.queryByText(/Price Summary/i)).not.toBeInTheDocument();
   });
 });

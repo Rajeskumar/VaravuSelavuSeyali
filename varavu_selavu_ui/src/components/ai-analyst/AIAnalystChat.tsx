@@ -1,5 +1,6 @@
 import { Box, Button, Card, CardContent, FormControl, InputLabel, MenuItem, Select, TextField, Typography, Chip, Tooltip, IconButton, Paper } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { Link as RouterLink } from 'react-router-dom';
 import React, { useState, useRef, useEffect } from "react";
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { fetchWithAuth } from '../../api/api';
@@ -8,6 +9,7 @@ import { glassCardSx } from '../../theme';
 
 interface AIAnalystChatProps {
   userId: string | null;
+  initialQuery?: string;
 }
 
 interface Message {
@@ -22,7 +24,27 @@ const SUGGESTED_PROMPTS = [
     "Where did I buy eggs cheapest?"
 ];
 
-export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
+type PeriodMode = 'default' | 'this_month' | 'this_year' | 'all_time' | 'custom';
+
+const PERIOD_LABELS: Record<PeriodMode, string> = {
+  default: 'Last 3 months',
+  this_month: 'This month',
+  this_year: 'This year',
+  all_time: 'All time',
+  custom: 'Custom range',
+};
+
+/** Resolves the UI period mode into the year/month/start_date/end_date fields the chat API expects. */
+function resolvePeriodPayload(mode: PeriodMode, customStart: string, customEnd: string) {
+  const now = new Date();
+  if (mode === 'this_month') return { year: now.getFullYear(), month: now.getMonth() + 1 };
+  if (mode === 'this_year') return { year: now.getFullYear() };
+  if (mode === 'custom' && customStart && customEnd) return { start_date: customStart, end_date: customEnd };
+  if (mode === 'all_time') return { start_date: '1970-01-01', end_date: now.toISOString().slice(0, 10) };
+  return {}; // 'default' — let the backend apply its rolling last-3-months default
+}
+
+export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatProps) {
   const theme = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [query, setQuery] = useState("");
@@ -31,6 +53,9 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
   const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('default');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -54,6 +79,15 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  const autoSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (initialQuery && !autoSubmittedRef.current) {
+      autoSubmittedRef.current = true;
+      handleSubmit(undefined, initialQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
   const handleSubmit = async (e?: React.FormEvent, overrideQuery?: string) => {
     if (e) e.preventDefault();
     const finalQuery = overrideQuery || query;
@@ -72,6 +106,7 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
           messages: newMessages,
           model: selectedModel ? selectedModel.id : undefined,
           provider: selectedModel ? selectedModel.provider : undefined,
+          ...resolvePeriodPayload(periodMode, customStart, customEnd),
         }),
       });
 
@@ -154,10 +189,10 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
         }}
       >
         <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, p: 2, pb: 1, overflow: 'hidden' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Typography variant="h6">Ask the AI Analyst</Typography>
-              <Tooltip title="By default, the analyst uses the last 3 months of data unless you specify a timeframe (e.g. 'in 2022' or 'last year')." arrow>
+              <Tooltip title="Choose the period this conversation is scoped to — the AI always receives the real expense data for it, not just a guess." arrow>
                 <IconButton size="small">
                   <InfoOutlinedIcon fontSize="small" />
                 </IconButton>
@@ -203,6 +238,43 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
             )}
           </Box>
 
+          {/* Period selector — controls what expense data the AI receives by default */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+            <FormControl size="small" sx={{ minWidth: 160 }}>
+              <InputLabel id="period-label">Period</InputLabel>
+              <Select
+                labelId="period-label"
+                value={periodMode}
+                label="Period"
+                onChange={(e) => setPeriodMode(e.target.value as PeriodMode)}
+              >
+                {(Object.keys(PERIOD_LABELS) as PeriodMode[]).map((mode) => (
+                  <MenuItem key={mode} value={mode}>{PERIOD_LABELS[mode]}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {periodMode === 'custom' && (
+              <>
+                <TextField
+                  size="small"
+                  type="date"
+                  label="From"
+                  InputLabelProps={{ shrink: true }}
+                  value={customStart}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                />
+                <TextField
+                  size="small"
+                  type="date"
+                  label="To"
+                  InputLabelProps={{ shrink: true }}
+                  value={customEnd}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                />
+              </>
+            )}
+          </Box>
+
           {/* Chat History Area */}
           <Box sx={{ flexGrow: 1, overflowY: 'auto', mb: 2, display: 'flex', flexDirection: 'column', gap: 2, pr: 1 }}>
             {messages.length === 0 ? (
@@ -218,7 +290,7 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
                       p: 1.5,
                       px: 2,
                       maxWidth: '85%',
-                      borderRadius: 3,
+                      borderRadius: 1.3,
                       bgcolor: msg.role === 'user' ? 'primary.main' : 'background.paper',
                       color: msg.role === 'user' ? 'primary.contrastText' : 'text.primary',
                       border: msg.role === 'assistant' ? '1px solid rgba(0,0,0,0.1)' : 'none'
@@ -238,7 +310,7 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
             )}
             {loading && (
               <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <Paper elevation={0} sx={{ p: 1.5, px: 2, borderRadius: 3, bgcolor: 'background.paper', border: '1px solid rgba(0,0,0,0.1)' }}>
+                <Paper elevation={0} sx={{ p: 1.5, px: 2, borderRadius: 1.3, bgcolor: 'background.paper', border: '1px solid rgba(0,0,0,0.1)' }}>
                   <Typography variant="body2" color="text.secondary">Thinking...</Typography>
                 </Paper>
               </Box>
@@ -286,6 +358,12 @@ export default function AIAnalystChat({ userId }: AIAnalystChatProps) {
                 Send
               </Button>
             </Box>
+            <Typography variant="caption" color="text.secondary">
+              Prefer browsing instead of asking?{' '}
+              <RouterLink to="/item-insights" style={{ color: 'inherit' }}>Item Insights</RouterLink>
+              {' · '}
+              <RouterLink to="/merchant-insights" style={{ color: 'inherit' }}>Merchant Insights</RouterLink>
+            </Typography>
           </Box>
         </CardContent>
       </Card>

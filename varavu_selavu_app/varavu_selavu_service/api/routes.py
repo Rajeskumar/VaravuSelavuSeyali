@@ -323,14 +323,13 @@ def get_top_items(
 @router.get("/analytics/items/{item_name}", tags=["Analytics"], summary="Get item details")
 def get_item_detail(
     item_name: str,
-    user_id: str = Query(...),
     start_date: str | None = None,
     end_date: str | None = None,
     year: int | None = None,
     month: int | None = None,
     analytics_service: AnalyticsService = Depends(get_analytics_service),
     insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
     if start_date or end_date or year is not None or month is not None:
         detail = insight_service.calculate_item_detail(
@@ -373,13 +372,26 @@ def get_top_merchants(
 @router.get("/analytics/merchants/{merchant_name}", tags=["Analytics"], summary="Get merchant details")
 def get_merchant_detail(
     merchant_name: str,
-    user_id: str = Query(...),
+    start_date: str | None = None,
+    end_date: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
     analytics_service: AnalyticsService = Depends(get_analytics_service),
-    _: str = Depends(auth_required),
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
+    user_id: str = Depends(auth_required),
 ):
-    # We could implement dynamic date filtering for merchant detail too if requested,
-    # but for now we just delegate to AnalyticsService
-    detail = analytics_service.get_merchant_detail(user_email=user_id, merchant_name=merchant_name)
+    if start_date or end_date or year is not None or month is not None:
+        detail = insight_service.calculate_merchant_detail(
+            user_id=user_id,
+            merchant_name=merchant_name,
+            start_date=start_date,
+            end_date=end_date,
+            year=year,
+            month=month,
+        )
+    else:
+        detail = analytics_service.get_merchant_detail(user_email=user_id, merchant_name=merchant_name)
+
     if not detail:
         raise HTTPException(status_code=404, detail="Merchant not found")
     return detail
@@ -435,7 +447,11 @@ def analysis_chat(
             analytics_service=analytics_service,
             insight_service=insight_service,
             model=body.model,
-            provider=body.provider
+            provider=body.provider,
+            year=body.year,
+            month=body.month,
+            start_date=body.start_date,
+            end_date=body.end_date,
         )
         return {"response": chat_response}
     except HTTPException:

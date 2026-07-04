@@ -1,3 +1,7 @@
+**Status:** ✅ Built — verified 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+All four expense mutation endpoints (`POST /expenses`, `POST /expenses/with_items`, `PUT /expenses/{row_id}`, `DELETE /expenses/{row_id}`) trigger aggregation via FastAPI `background_tasks` (async, non-blocking). `ItemInsight`/`ItemPriceHistory`/`MerchantInsight`/`MerchantAggregate` tables exist in the `trackspense` schema. `scripts/backfill_insights.py` provides idempotent historical backfill (clears + replays) with built-in validation. This is the most solidly built of the analytics specs.
+
 ### TS-ANL-006 — Expense Save-Time Aggregation Pipeline
 
 **Objective**  

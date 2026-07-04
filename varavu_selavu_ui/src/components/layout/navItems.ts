@@ -1,11 +1,11 @@
-import HomeIcon from '@mui/icons-material/Home';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import InsightsIcon from '@mui/icons-material/Insights';
-import SmartToyIcon from '@mui/icons-material/SmartToy';
-import AutorenewIcon from '@mui/icons-material/Autorenew';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import StorefrontIcon from '@mui/icons-material/Storefront';
-import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
+import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
+import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
+import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded';
+import SmartToyRoundedIcon from '@mui/icons-material/SmartToyRounded';
+import AutorenewRoundedIcon from '@mui/icons-material/AutorenewRounded';
+import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
+import StorefrontRoundedIcon from '@mui/icons-material/StorefrontRounded';
+import LightbulbRoundedIcon from '@mui/icons-material/LightbulbRounded';
 import { SvgIconComponent } from '@mui/icons-material';
 
 export interface NavItem {
@@ -15,12 +15,12 @@ export interface NavItem {
 }
 
 export const navItems: NavItem[] = [
-  { label: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
-  { label: 'Expenses', icon: ListAltIcon, path: '/expenses' },
-  { label: 'Analysis', icon: InsightsIcon, path: '/analysis' },
-  { label: 'Item Insights', icon: ShoppingCartIcon, path: '/item-insights' },
-  { label: 'Merchant Insights', icon: StorefrontIcon, path: '/merchant-insights' },
-  { label: 'AI Analyst', icon: SmartToyIcon, path: '/ai-analyst' },
-  { label: 'Recurring', icon: AutorenewIcon, path: '/recurring' },
-  { label: 'Submit Idea', icon: LightbulbOutlinedIcon, path: '/feature-request' },
+  { label: 'Dashboard', icon: HomeRoundedIcon, path: '/dashboard' },
+  { label: 'Expenses', icon: ListAltRoundedIcon, path: '/expenses' },
+  { label: 'Analysis', icon: InsightsRoundedIcon, path: '/analysis' },
+  { label: 'Item Insights', icon: ShoppingBagRoundedIcon, path: '/item-insights' },
+  { label: 'Merchant Insights', icon: StorefrontRoundedIcon, path: '/merchant-insights' },
+  { label: 'AI Analyst', icon: SmartToyRoundedIcon, path: '/ai-analyst' },
+  { label: 'Recurring', icon: AutorenewRoundedIcon, path: '/recurring' },
+  { label: 'Submit Idea', icon: LightbulbRoundedIcon, path: '/feature-request' },
 ];

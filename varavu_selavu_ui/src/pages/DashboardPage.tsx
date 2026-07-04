@@ -11,8 +11,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import StorefrontIcon from '@mui/icons-material/Storefront';
+import ShoppingCartIcon from '@mui/icons-material/ShoppingBagRounded';
+import StorefrontIcon from '@mui/icons-material/StorefrontRounded';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { parseAppDate } from '../utils/date';
 import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
@@ -118,7 +118,7 @@ const DashboardPage: React.FC = () => {
   };
 
   const InsightsLinksCard = () => (
-    <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 3, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+    <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
       <Typography variant="h6" gutterBottom fontWeight={600}>Discover Insights</Typography>
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' }}>
         <Button

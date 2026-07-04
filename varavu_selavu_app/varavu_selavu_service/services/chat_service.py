@@ -1,6 +1,8 @@
 import os
 import requests
 import logging
+from datetime import date
+from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
@@ -10,6 +12,38 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
 
 logger = logging.getLogger("varavu_selavu.chat_service")
+
+
+def _resolve_chat_period(
+    year: int | None, month: int | None, start_date: str | None, end_date: str | None
+) -> tuple[str, str, str]:
+    """
+    Resolves the effective date range for a chat turn using real wall-clock
+    time (never left to the LLM to guess "today"). Precedence: explicit
+    start/end date > year/month > rolling last-3-months default.
+
+    Returns (start_date, end_date, label) as ISO date strings plus a human
+    label describing the scope, for use in the system prompt.
+    """
+    today = date.today()
+
+    if start_date or end_date:
+        eff_start = start_date or (today - relativedelta(months=3)).isoformat()
+        eff_end = end_date or today.isoformat()
+        return eff_start, eff_end, f"{eff_start} to {eff_end} (custom range)"
+
+    if year is not None and month is not None:
+        period_start = date(year, month, 1)
+        period_end = (period_start + relativedelta(months=1)) - relativedelta(days=1)
+        return period_start.isoformat(), period_end.isoformat(), f"{period_start.strftime('%B %Y')}"
+
+    if year is not None:
+        return date(year, 1, 1).isoformat(), date(year, 12, 31).isoformat(), str(year)
+
+    # Default: rolling last 3 months, anchored to the real current date.
+    eff_start = (today - relativedelta(months=3)).isoformat()
+    eff_end = today.isoformat()
+    return eff_start, eff_end, "the last 3 months (default)"
 
 
 # --------------------------------------------------------------------------- #
@@ -23,13 +57,17 @@ def call_chat_model(
     analytics_service,
     insight_service,
     model: str | None = None,
-    provider: str | None = None
+    provider: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> str:
     """
-    Invoke a LangGraph ReAct agent to answer the user's question, using tools 
+    Invoke a LangGraph ReAct agent to answer the user's question, using tools
     to dynamically query the database instead of loading everything upfront.
     """
-    
+
     @tool
     def get_expense_summary(start_date: str = None, end_date: str = None) -> str:
         """Get summary of expenses, totals by category, and top categories. Dates are optional YYYY-MM-DD."""
@@ -64,7 +102,9 @@ def call_chat_model(
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
     if not provider:
-        provider = "openai" if env.lower() in {"prod", "production"} else "ollama"
+        provider = "gemini"
+    else:
+        provider = provider.lower()
     
     logger.info("Initializing LangGraph agent", extra={"provider": provider, "env": env, "model": model})
     
@@ -105,27 +145,90 @@ def call_chat_model(
             content = m.get("content", "")
             history_text += f"{role}: {content}\n"
 
-    system_prompt = (
-        "You are a financial analyst assistant. You help users understand their expenses. "
-        "If the user does not specify a timeline for an aggregate query, assume they want data for the last 3 months "
-        "(calculate this relative to today, using your tools). "
-        "Use your tools to query the database and answer the user's questions clearly and concisely. "
-        "Format your answer using markdown. "
-    ) + history_text
-    
-    agent = create_react_agent(llm, tools, prompt=system_prompt)
-    
     # Only pass the final message to the agent as the current input
     if not messages:
         return "Please ask a question."
-        
+
     last_message = messages[-1]
-    lc_messages = [HumanMessage(content=last_message.get("content", ""))]
+    query_text = last_message.get("content", "")
+
+    # Pre-fetch targeted item/merchant context so the agent starts with the
+    # right numbers already in hand instead of having to guess a tool call
+    # (see TS-ANL-005: this is the RAG-style context injection).
+    rag_context_text = ""
+    try:
+        rag_context = insight_service.build_rag_context(user_email=user_id, query=query_text)
+    except Exception:
+        logger.exception("build_rag_context failed; falling back to tool-only context")
+        rag_context = None
+
+    if rag_context:
+        rag_context_text = (
+            f"\n\nRelevant {rag_context['type'].replace('_', ' ')} data for this question "
+            f"(already fetched, use it directly instead of calling a tool unless you need more):\n"
+            f"{rag_context['data']}\n"
+        )
+
+    # Resolve a real default period (today's actual date, not the LLM's guess)
+    # and eagerly fetch the expense summary for it so the model always has
+    # concrete numbers in hand, instead of depending on it correctly guessing
+    # dates and calling get_expense_summary itself.
+    period_start, period_end, period_label = _resolve_chat_period(year, month, start_date, end_date)
+    default_summary_text = ""
+    try:
+        default_summary = analysis_service.analyze(
+            user_id=user_id, start_date=period_start, end_date=period_end, use_cache=False
+        )
+        default_summary_text = (
+            f"\n\nExpense summary for {period_label} ({period_start} to {period_end}), "
+            f"already fetched — use this directly for any aggregate question unless the user "
+            f"asks about a different period, in which case call get_expense_summary again with "
+            f"the new dates:\n{default_summary}\n"
+        )
+    except Exception:
+        logger.exception("Failed to pre-fetch default expense summary for chat")
+
+    today_str = date.today().isoformat()
+    system_prompt = (
+        "You are a financial analyst assistant. You help users understand their expenses. "
+        f"Today's date is {today_str}. Unless the user specifies a different timeframe, the "
+        f"conversation is scoped to {period_label} ({period_start} to {period_end}) — the "
+        "expense summary for this period is provided below. "
+        "Use your tools to query the database for anything not already provided, and answer the "
+        "user's questions clearly and concisely. "
+        "Format your answer using markdown. "
+    ) + default_summary_text + rag_context_text + history_text
+
+    agent = create_react_agent(llm, tools, prompt=system_prompt)
+
+    lc_messages = [HumanMessage(content=query_text)]
             
     try:
-        result = agent.invoke({"messages": lc_messages})
-        final_message = result["messages"][-1]
-        return final_message.content
+        final_message = None
+        # Stream intermediate steps to see exactly what Gemini returns
+        logger.info(f"Starting agent execution with model {model} and provider {provider}...")
+        for event in agent.stream({"messages": lc_messages}):
+            for node_name, node_output in event.items():
+                logger.info(f"Agent step [{node_name}]: {node_output}")
+                if "messages" in node_output:
+                    final_message = node_output["messages"][-1]
+                    
+        if final_message is None:
+            raise ValueError("Agent returned no messages")
+            
+        # Check for Gemini tool calling failures
+        finish_reason = final_message.response_metadata.get('finish_reason') if getattr(final_message, 'response_metadata', None) else None
+        if finish_reason == 'MALFORMED_FUNCTION_CALL':
+            return "I encountered a technical issue while analyzing your data (Malformed Function Call). Please try rephrasing your question or selecting the 'gemini-2.5-pro' model, which handles complex queries better."
+            
+        content = final_message.content
+        if not content and not getattr(final_message, 'tool_calls', []):
+             return "I couldn't generate a response. Please try again or switch to a different model."
+
+        if isinstance(content, list):
+            text_parts = [chunk.get("text", "") if isinstance(chunk, dict) else str(chunk) for chunk in content]
+            return "".join(text_parts)
+        return str(content)
     except Exception as e:
         logger.exception("Agent execution failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(e)}")
@@ -189,7 +292,7 @@ def list_ollama_models() -> list[str]:
 def list_gemini_models() -> list[str]:
     """Return a list of available Gemini models via the API."""
     api_key = os.getenv("GEMINI_API_KEY")
-    default_models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"]
+    default_models = ["gemini-2.5-flash", "gemini-2.5-pro"]
     
     if not api_key:
         return default_models
@@ -204,7 +307,7 @@ def list_gemini_models() -> list[str]:
             name = m.get("name", "")
             if name.startswith("models/"):
                 name = name[7:]
-            if "gemini" in name.lower():
+            if name in ["gemini-2.5-flash", "gemini-2.5-pro"]:
                 models.append(name)
         return models if models else default_models
     except Exception as exc:

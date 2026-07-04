@@ -1,3 +1,7 @@
+**Status:** ✅ Built — verified 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+Correcting the previous "Pending" label — this is actually fully implemented. `scripts/backfill_insights.py` clears all insight tables, replays every existing expense (simple and itemized) through the aggregation service, and runs a validation pass comparing aggregated sums against source-of-truth `SUM(Expense.amount)`/`SUM(ExpenseItem.line_total)` with a $0.05 tolerance, printing pass/fail per check. Reprocessing is idempotent (tables are cleared before each replay). `tests/test_insight_analytics_service.py` covers the underlying aggregation math.
+
 ### TS-ANL-012 — Historical Backfill and Analytics Validation
 
 **Objective**  

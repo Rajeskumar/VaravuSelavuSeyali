@@ -1,5 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Box, Grid, Typography, FormControl, InputLabel, Select, MenuItem, Paper, Divider, Switch, FormControlLabel } from '@mui/material';
+import { Box, Grid, Typography, FormControl, InputLabel, Select, MenuItem, Paper, Divider, Switch, FormControlLabel, Chip, Button } from '@mui/material';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import StorefrontIcon from '@mui/icons-material/StorefrontRounded';
+import ShoppingBasketIcon from '@mui/icons-material/ShoppingBagRounded';
+import QueryStatsIcon from '@mui/icons-material/QueryStatsRounded';
 import { useTheme } from '@mui/material/styles';
 import ExpenseSummaryCards from '../components/analysis/ExpenseSummaryCards';
 import CategoryBarChart from '../components/analysis/CategoryBarChart';
@@ -13,6 +17,7 @@ import { motion } from 'framer-motion';
 
 const ExpenseAnalysisPage: React.FC = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
   const [data, setData] = useState<AnalysisResponse | null>(null);
   const income = 6200; // same default used in legacy app
   const now = useMemo(() => new Date(), []);
@@ -90,7 +95,27 @@ const ExpenseAnalysisPage: React.FC = () => {
         {/* Content */}
         <Grid size={{ xs: 12, md: 9 }}>
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.08 }}>
-            <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>{title}</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>{title}</Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Chip
+                  component={RouterLink as any}
+                  to="/item-insights"
+                  clickable
+                  icon={<ShoppingBasketIcon />}
+                  label="Item Insights"
+                  variant="outlined"
+                />
+                <Chip
+                  component={RouterLink as any}
+                  to="/merchant-insights"
+                  clickable
+                  icon={<StorefrontIcon />}
+                  label="Merchant Insights"
+                  variant="outlined"
+                />
+              </Box>
+            </Box>
 
             {data.filter_info && (
               <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: '#fafafa', ...glass }}>
@@ -100,45 +125,62 @@ const ExpenseAnalysisPage: React.FC = () => {
               </Paper>
             )}
 
-            <Grid container columns={12} spacing={2} sx={{ mb: 2 }}>
-               <Grid size={{ xs: 12, md: 7 }}>
-                  <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
-                    <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
-                    <ExpenseSummaryCards totalExpenses={data.total_expenses} income={income} />
-                  </Paper>
-               </Grid>
-               <Grid size={{ xs: 12, md: 5 }}>
-                   <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
-                     <Typography variant="h6" sx={{ mb: 1 }}>What Changed</Typography>
-                     <SmartChangeInsightsCard userId={user} year={year} month={overallYear ? undefined : month} />
-                   </Paper>
-               </Grid>
-            </Grid>
-
-            <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Top Categories</Typography>
-              <Grid container columns={12}>
-                <Grid size={{ xs: 12 }}>
-                  <CategoryBarChart categoryTotals={data.category_totals} details={data.category_expense_details || {}} />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
-              <Typography variant="h6" sx={{ mb: 1 }}>Category Breakdown</Typography>
-              <CategorySummaryTable categoryTotals={data.category_totals} income={income} details={data.category_expense_details || {}} />
-            </Paper>
-
-            {overallYear ? (
-              <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
-                <Typography variant="h6" sx={{ mb: 1 }}>Monthly Trend</Typography>
-                <Grid container columns={12}>
-                  <Grid size={{ xs: 12 }}>
-                    <MonthlyTrendLineChart monthlyTrend={data.monthly_trend} />
-                  </Grid>
-                </Grid>
+            {data.total_expenses === 0 && data.category_totals.length === 0 ? (
+              <Paper sx={{ ...glass, p: 6, mb: 2, borderRadius: 3, textAlign: 'center' }}>
+                <QueryStatsIcon sx={{ fontSize: 64, color: 'primary.light', mb: 2 }} />
+                <Typography variant="h6" fontWeight={700} gutterBottom>
+                  No expenses for {overallYear ? year : `${monthNames[month - 1]} ${year}`} yet
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                  Add an expense to see category breakdowns, trends, and what changed.
+                </Typography>
+                <Button variant="contained" onClick={() => navigate('/expenses')} startIcon={<ShoppingBasketIcon />}>
+                  Add an Expense
+                </Button>
               </Paper>
-            ) : null}
+            ) : (
+              <>
+                <Grid container columns={12} spacing={2} sx={{ mb: 2 }}>
+                   <Grid size={{ xs: 12, md: 7 }}>
+                      <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
+                        <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
+                        <ExpenseSummaryCards totalExpenses={data.total_expenses} income={income} />
+                      </Paper>
+                   </Grid>
+                   <Grid size={{ xs: 12, md: 5 }}>
+                       <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
+                         <Typography variant="h6" sx={{ mb: 1 }}>What Changed</Typography>
+                         <SmartChangeInsightsCard userId={user} year={year} month={overallYear ? undefined : month} />
+                       </Paper>
+                   </Grid>
+                </Grid>
+
+                <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
+                  <Typography variant="h6" sx={{ mb: 1 }}>Top Categories</Typography>
+                  <Grid container columns={12}>
+                    <Grid size={{ xs: 12 }}>
+                      <CategoryBarChart categoryTotals={data.category_totals} details={data.category_expense_details || {}} />
+                    </Grid>
+                  </Grid>
+                </Paper>
+
+                <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
+                  <Typography variant="h6" sx={{ mb: 1 }}>Category Breakdown</Typography>
+                  <CategorySummaryTable categoryTotals={data.category_totals} income={income} details={data.category_expense_details || {}} />
+                </Paper>
+
+                {overallYear ? (
+                  <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
+                    <Typography variant="h6" sx={{ mb: 1 }}>Monthly Trend</Typography>
+                    <Grid container columns={12}>
+                      <Grid size={{ xs: 12 }}>
+                        <MonthlyTrendLineChart monthlyTrend={data.monthly_trend} />
+                      </Grid>
+                    </Grid>
+                  </Paper>
+                ) : null}
+              </>
+            )}
           </motion.div>
         </Grid>
       </Grid>

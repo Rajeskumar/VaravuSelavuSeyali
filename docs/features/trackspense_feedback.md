@@ -1,65 +1,77 @@
-## 3. Productionizing Trackspense (Web App)
+# Trackspense / CerebroOS — Launch Checklist
 
-I went through the live web app screen by screen. Overall it is **more complete than a prototype but not yet production-ready** — the feature breadth is real; the polish, hardening, and reliability are not there yet.
+*Derived from the consolidated top-5 priorities. Ordered so that blockers come first. Check items off as you go; sub-items are the concrete work under each priority. Suggested owner in brackets — adjust to your team.*
 
-### Feature-by-feature findings
+> Re-verified against the codebase 2026-07-04 — see [FEATURE_STATUS.md](../FEATURE_STATUS.md) for the analytics/AI feature backlog (a separate, larger set of gaps not covered by this checklist).
 
-**Dashboard** — Strong. Three summary tiles (Total Expenses, This Month, This Week), two donut charts (Other Expenses this month; Recurring this month), a 12-month spend-trend line chart, a "Discover Insights" panel (top purchased items, top merchants), a recent-transactions table, an "Upcoming Recurring (next 14 days)" panel, and a Quick-Add-Expense form. There's even a "Customize Layout" control. This is a genuinely good dashboard for the category.
+**Status key:** `[ ]` not started · `[~]` in progress · `[x]` done
 
-**Expenses** — Solid. A clean table (Date, Description, Merchant, Category, Cost) with inline edit and delete per row, and an "Add Expense" modal. The modal is the standout: it captures description, an auto-suggested merchant/store name derived from the description, date, cost, a "Repeat monthly" toggle, main/subcategory, **and receipt upload with a "Parse Receipt" (OCR) option.** Receipt parsing is a real, differentiating feature — many budget apps don't have it.
+---
 
-**Analysis** — Good and unusually thoughtful. Year/month filters, an "Overall Year" toggle, a Summary (expenses vs. income), a "What Changed" panel that surfaces notable shifts ("Spend decreased at Costco −57%," "Price increase for Ranjani Tello mobile recharge +131%"), a Top Categories bar chart, and a "% of Income Spent by Category" breakdown. The "What Changed" and "% of income" framings are above the category baseline.
+## Priority 1 — Fix the two credibility-killers (auth + AI)  ⛔ blocker
 
-**Item Insights / Merchant Insights** — Nice-to-have depth. Top purchased items and top merchants ranked by spend, with year/month filters. This item-level granularity is more than most competitors expose.
+*Nothing else ships safely until these are done.*
 
-**Recurring** — Functional and real. An "Add Template" form (description, category, day of month, default cost, start date, active toggle) and a table with status (Active/Paused), last-processed date, and per-row actions (edit, run-now, delete). This is a proper recurring-transactions engine, not a stub.
+**Auth / data security**
 
-**AI Analyst** — Present but **currently broken in production.** It exposes a provider selector (OpenAI) and a model selector (gpt-5-mini) with suggested prompts. When I asked "What were my top spending categories?" it returned: *"Failed to generate response: Error code: 429 — You exceeded your current quota, please check your plan and billing details … 'code': 'insufficient_quota'."* The OpenAI account behind it is out of credits, so the flagship AI feature fails for users right now. Exposing the raw provider/model and the raw upstream error to end users is also not production behavior.
+- [x] Confirm whether the backend derives the user from a validated session token or trusts the `user_id` query param  [backend]
+- [x] If it trusts the param: enforce server-side that the authenticated session must match the requested `user_id` (fix the IDOR)  [backend]
+- [x] Stop passing email/PII in URLs and query strings; move identity to the auth token / headers  [backend]
+- [ ] Add an automated test that a logged-in user cannot read another user's data by changing the id  [backend]
+- [ ] Audit server logs / analytics to purge any already-captured emails in URLs  [backend]
 
-**Profile / Account** — Basic but complete. Email, name, phone, address, save, logout, and a "Danger Zone" hard-delete account ("cannot be undone"). Good that delete exists (needed for app-store compliance); it should have a confirmation step and a clear data-deletion guarantee.
+**AI Analyst**
 
-**Budgets** — **Missing/broken.** The `/budgets` route renders a blank page. Budgeting is named as a core capability of the app and the brand, but there is no working budgets screen. This is the single biggest functional gap.
+- [x] Move the AI provider API key server-side; never expose provider/model/keys in the client  [backend]
+- [x] Resolve the OpenAI billing/quota so the feature actually responds  [ops]
+- [x] Add per-user rate limits and a cost cap so one user can't exhaust quota  [backend]
+- [x] Replace raw upstream errors (e.g. the `429 insufficient_quota` text) with friendly fallback messages  [frontend]
+- [ ] Decide + document what financial data is sent to the model, and minimize/anonymize it  [product]
 
-### Prototype-quality vs. production-ready assessment
+---
 
-Concrete technical observations from the network layer and behavior:
+## Priority 2 — Close the table-stakes gap (Budgets + goals)  ⛔ blocker
 
-- **Auth / data security — needs review.** API calls identify the user by passing the **email address as a query-string parameter** (e.g., `/api/v1/analysis?user_id=rajeskumarcse@gmail.com`). Two problems: (1) if the backend trusts that parameter instead of deriving the user from a verified session token, it's an Insecure Direct Object Reference — anyone could read another user's data by changing the email; (2) putting an email/PII in URLs leaks it into server logs, analytics, and browser history. This must be verified and, if unfixed, is a hard launch blocker.
-- **Error handling — prototype-grade.** The AI feature surfaces the raw upstream 429/JSON error to the user. There's no graceful fallback or friendly message. Assume other failure paths are similarly raw.
-- **The AI feature itself is down** due to an exhausted OpenAI quota — a billing/ops gap, not just code.
-- **Hosting/infra — reasonable foundation.** Backend runs on Google Cloud Run (`varavu-selavu-backend`, us-central1) with Cloudflare in front and a PWA manifest present. That's a sane, scalable base. Note the internal service name ("varavu selavu") leaks in network calls — cosmetic, but worth renaming before it's public-facing.
-- **Analytics — present** (GA4 installed), which is good, though you'll want product-analytics events, not just page views.
-- **Empty/edge states — unverified and likely thin.** The account is populated with data, so I couldn't see zero-state screens. New users will land on empty dashboards and charts; these need designed empty states or the first-run experience will feel broken.
+- [x] Decide: ship Budgets now, or remove it from all UI/marketing until it exists  [product]
+- [ ] Build the Budgets screen: category budgets vs. actuals with progress indicators  [frontend + backend]
+- [ ] Add basic savings goals (target amount + progress)  [frontend + backend]
+- [x] Fix the blank `/budgets` route (404/redirect if not shipping, real page if shipping)  [frontend]
+- [ ] QA budgets across empty state, over-budget, and mid-month states  [QA]
 
-### Prioritized checklist to public launch
+---
 
-**P0 — blockers (do before any public launch):**
+## Priority 3 — Launch legal + trust foundation (web + mobile)  ⛔ blocker
 
-- Verify server-side auth: confirm the backend derives the user from a validated session token and **ignores** the `user_id` query param; fix if not. Stop passing email/PII in URLs.
-- Fix or gracefully disable the AI Analyst — resolve the OpenAI billing/quota and stop showing raw provider errors; move the API key server-side (never expose provider/keys client-side).
-- Ship a working Budgets screen, or remove Budgets from all messaging until it exists. Don't advertise a feature that renders blank.
-- Add friendly error handling and loading/failure states across the app.
-- Publish a Privacy Policy and Terms (also required for mobile).
+- [x] Publish the Privacy Policy at a stable public URL (draft provided)  [legal/founder]
+- [x] Publish Terms of Service at a stable public URL (draft provided)  [legal/founder]
+- [ ] Have a lawyer review both before public launch  [legal]
+- [x] Link Privacy + Terms in the site footer  [frontend]
+- [x] Link Privacy + Terms inside the app (and in app-store metadata)  [frontend]
+- [ ] Complete Apple App Privacy ("nutrition label") — must match actual data flows incl. AI  [product]
+- [ ] Complete Google Play Data Safety form — must match actual data flows  [product]
+- [x] Confirm in-app account deletion works and clearly deletes data (add confirmation step)  [frontend + backend]
+- [ ] Create a reviewer demo account for the app stores  [ops] — *note: an ad-hoc test account (`demo@trackspense.app`) with ~30 sample expenses was created during a 2026-07-04 session for screenshot purposes. It is not a documented/reproducible seed process and should not be treated as satisfying this item — a real seed script + documented credentials still needed*
 
-**P1 — needed for a credible launch:**
+---
 
-- Design and test empty/first-run states for every screen (dashboard, charts, insights, recurring).
-- Add a confirmation + clear data-deletion guarantee to account delete.
-- Add basic input validation and duplicate/edge handling in expense and recurring forms.
-- Rate-limit and cost-cap the AI feature so a single user can't exhaust quota.
-- Rename the internal backend service and scrub internal names from public responses.
+## Priority 4 — Relaunch the homepage to sell Trackspense  🔵 high
 
-**P2 — polish:**
+- [x] Replace abstract hero art with a real Trackspense screenshot / short product loop  [design]
+- [x] Change hero CTA to a single "Try Trackspense free"; drop or demote "Learn More"  [frontend]
+- [x] Add a product section: 3–4 real screenshots (dashboard, analysis, AI analyst, receipt scan) with benefit captions  [design]
+- [ ] Add a privacy/trust block that substantiates "privacy-first" (where data lives, not sold, export/delete)  [content]
+- [x] Collapse "coming soon" app cards + public roadmap into one understated "what's next" line  [content] — *verified 2026-07-04: the current HomePage.tsx has no "coming soon" cards or roadmap content at all (confirmed via full-text search), so there was nothing left to collapse*
+- [x] Move "Share Your Idea" off the umbrella homepage (into the app or a secondary page)  [frontend]
+- [x] Build a proper footer (Privacy, Terms, Contact, social)  [frontend]
 
-- Product analytics events (activation, retention funnels), not just page views.
-- Performance pass (chart rendering, large transaction lists, pagination).
-- Accessibility and mobile-web responsiveness check.
+---
 
-### Recommended next steps
+## Priority 5 — Scope bank sync + hold the brand-expansion narrative  🟢 roadmap
 
-- Audit the `user_id`-in-URL auth path immediately; treat as a security blocker until proven safe.
-- Either finish Budgets or pull it from the product surface this week.
-- Take the AI key server-side, add quota caps, and replace raw errors with friendly fallbacks.
-- Draft Privacy Policy and Terms now (shared with the mobile launch).
+- [ ] Evaluate aggregators (Plaid or similar): coverage, pricing, compliance, effort  [product/eng]
+- [ ] Scope automatic transaction import + smart auto-categorization  [eng]
+- [ ] Define an explicit "Trackspense has traction" bar (e.g. weekly-retained user count) that unlocks app #2  [founder]
+- [ ] Keep CerebroOS as a light frame; do NOT foreground unbuilt apps until traction bar is met  [founder]
+- [ ] Quietly build the shared-account + design-token spine in parallel (cheap now, costly to retrofit)  [eng]
 
 ---

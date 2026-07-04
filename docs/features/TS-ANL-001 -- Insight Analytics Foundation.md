@@ -1,3 +1,9 @@
+**Status:** ✅ Built — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md) for the full cross-spec backlog)
+
+Canonical metrics, filter precedence, and data-source boundaries (merchant = any expense with `merchant_name`; item = receipt-backed `expense_items` only) are all built correctly — see `insight_analytics_service.py`'s `_build_date_filters`, `calculate_merchant_metrics`, and `calculate_item_metrics`. The `/api/v1/analysis` endpoint is untouched, as required.
+
+`month_over_month_change_amount`/`_percent` are now populated in both `calculate_merchant_metrics` and `calculate_item_metrics` via `_resolve_comparison_periods`, and suppressed when confidence is low (see TS-ANL-009) so a single data point can't masquerade as a trend.
+
 # Insight Analytics Foundation
 
 **Objective**  

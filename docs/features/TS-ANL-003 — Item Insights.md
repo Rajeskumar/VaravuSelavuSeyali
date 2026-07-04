@@ -1,3 +1,9 @@
+**Status:** ✅ Built (web) — updated 2026-07-04 (see [FEATURE_STATUS.md](../FEATURE_STATUS.md))
+
+Summary list, price history, and store comparison work on web and mobile, backed by `GET /api/v1/analytics/items[/{item_name}]`. Good empty states exist ("Upload a receipt to unlock...", "Not enough data to compare stores..."). Web now also has: Personal Inflation / Biggest Price Increase / Most Frequent summary cards, average monthly spend, purchase frequency, confidence badges (high/medium/low, backend-computed per TS-ANL-009), "Ask AI about this item" deep-link chips, and a 2-merchant quality gate on store comparisons.
+
+**Remaining gap:** this pass was web-only — the mobile Item Insights screen was not updated.
+
 ### TS-ANL-003 — Item Insights
 
 **Objective**  

@@ -1,14 +1,13 @@
 import React from 'react';
-import { Box, Container, Typography, Button, Grid, Stack, useTheme } from '@mui/material';
-import AutoGraphIcon from '@mui/icons-material/AutoGraph';
-import InsightsIcon from '@mui/icons-material/Insights';
-import SecurityIcon from '@mui/icons-material/Security';
-import BoltIcon from '@mui/icons-material/Bolt';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
-import { useNavigate } from 'react-router-dom';
+import { Box, Container, Typography, Button, Grid, Stack, useTheme, Link as MuiLink } from '@mui/material';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CloudQueueIcon from '@mui/icons-material/CloudQueue';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { brand, withAlpha, glassCardSx, motion as motionTokens } from '../theme';
+import API_BASE_URL from '../api/apiconfig';
 
 const reveal = {
   initial: { opacity: 0, y: 32 },
@@ -16,92 +15,78 @@ const reveal = {
   viewport: { once: true, margin: '-80px' },
 };
 
-const HeroVisual: React.FC = () => {
-  const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
-  return (
-    <Box sx={{ width: { xs: '100%', sm: 720 }, aspectRatio: '16 / 10', mx: 'auto' }}>
-      <svg viewBox="0 0 960 600" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={isDark ? '#1C1C1E' : '#111827'} />
-            <stop offset="100%" stopColor="#000000" />
-          </linearGradient>
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor={brand.gradientStart} />
-            <stop offset="100%" stopColor={brand.gradientEnd} />
-          </linearGradient>
-          <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={brand.gradientEnd} />
-            <stop offset="100%" stopColor={brand.gradientStart} />
-          </linearGradient>
-          <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="10" stdDeviation="20" floodColor="#000" floodOpacity="0.5" />
-          </filter>
-        </defs>
-        <rect x="40" y="40" width="880" height="520" rx="28" fill="url(#bgGrad)" stroke="rgba(255,255,255,0.08)" filter="url(#shadow)" />
-        <rect x="64" y="64" width="832" height="56" rx="14" fill="rgba(255,255,255,0.06)" />
-        <g opacity="0.9">
-          <rect x="100" y="380" width="36" height="140" fill="url(#barGrad)" rx="10" />
-          <rect x="152" y="340" width="36" height="180" fill="url(#barGrad)" rx="10" opacity="0.9" />
-          <rect x="204" y="300" width="36" height="220" fill="url(#barGrad)" rx="10" opacity="0.8" />
-          <rect x="256" y="360" width="36" height="160" fill="url(#barGrad)" rx="10" opacity="0.85" />
-          <rect x="308" y="320" width="36" height="200" fill="url(#barGrad)" rx="10" opacity="0.9" />
-        </g>
-        <path d="M420 450 C 470 380, 520 420, 570 360 S 670 320, 720 360 S 820 300, 860 340" stroke="url(#lineGrad)" strokeWidth="6" fill="none" opacity="0.9" />
-        <g fill="#fff">
-          <circle cx="420" cy="450" r="5" opacity="0.8" />
-          <circle cx="570" cy="360" r="5" opacity="0.8" />
-          <circle cx="720" cy="360" r="5" opacity="0.8" />
-          <circle cx="860" cy="340" r="5" opacity="0.8" />
-        </g>
-        <g transform="translate(760,220)">
-          <circle r="56" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="16" />
-          <circle r="56" fill="none" stroke={brand.gradientEnd} strokeWidth="16" strokeDasharray="220 200" strokeLinecap="round" transform="rotate(-90)" />
-        </g>
-      </svg>
-    </Box>
-  );
-};
+const asset = (path: string) => `${process.env.PUBLIC_URL || ''}${path}`;
 
-const FEATURES = [
-  { title: 'Smart categorization', desc: 'Learns from your edits to keep entry effortless.', icon: InsightsIcon },
-  { title: 'Trends & forecasts', desc: 'See what changed and what’s next at a glance.', icon: AutoGraphIcon },
-  { title: 'Privacy-first', desc: 'Your data stays yours. No ads. No resale.', icon: SecurityIcon },
+const PRODUCT_SHOTS = [
+  {
+    title: 'See everything at a glance',
+    desc: 'Your dashboard surfaces total spend, this month vs. this week, and a live category breakdown — no spreadsheets required.',
+    image: '/screenshots/dashboard.png',
+  },
+  {
+    title: 'Understand what changed, and why',
+    desc: 'Monthly analysis highlights spend swings and top categories automatically, so you catch surprises before they add up.',
+    image: '/screenshots/analysis.png',
+  },
+  {
+    title: 'Ask questions in plain English',
+    desc: 'The AI Analyst answers questions like "How much did I spend at Amazon?" or "Where did I get eggs cheapest?" using your real data.',
+    image: '/screenshots/ai-analyst.png',
+  },
+  {
+    title: 'Snap a receipt, skip the typing',
+    desc: 'Upload a photo of a receipt and TrackSpense extracts the merchant, items, and total for you.',
+    image: '/screenshots/receipt-scan.png',
+  },
 ];
 
-const STANDOUT = [
-  { title: 'Frictionless input', desc: 'Photo to text, CSV import, and keyboard‑first quick add.', icon: BoltIcon },
-  { title: 'Insights, not overload', desc: 'Clear explanations for spikes and trends — in context.', icon: VisibilityIcon },
-  { title: 'Your data, respected', desc: 'No ads. No resale. Simple export when you want.', icon: ShieldOutlinedIcon },
+const TRUST_POINTS = [
+  {
+    icon: CloudQueueIcon,
+    title: 'Your data, hosted securely',
+    desc: 'Account and expense data are stored in an encrypted cloud database, sent over HTTPS/TLS between your device and our servers.',
+  },
+  {
+    icon: BlockOutlinedIcon,
+    title: 'Never sold, never advertised against',
+    desc: "We don't sell your personal or financial data, and TrackSpense has no ads or ad trackers to monetize your spending habits.",
+  },
+  {
+    icon: LockOutlinedIcon,
+    title: 'AI features, used deliberately',
+    desc: 'Your question and the minimum context needed are sent to our AI provider only when you use the AI Analyst or receipt scan — never in the background.',
+  },
+  {
+    icon: DeleteOutlineIcon,
+    title: 'Delete anytime, for good',
+    desc: 'Permanently delete your account and every expense record from Profile → Delete Account. It’s irreversible by design.',
+  },
 ];
 
-const IconBadge: React.FC<{ Icon: React.ElementType }> = ({ Icon }) => (
+const ProductShot: React.FC<{ image: string; title: string }> = ({ image, title }) => (
   <Box
+    component="img"
+    src={asset(image)}
+    alt={title}
     sx={{
-      width: 52,
-      height: 52,
-      borderRadius: '16px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundImage: `linear-gradient(135deg, ${brand.gradientStart}, ${brand.gradientEnd})`,
-      mb: 2,
+      width: '100%',
+      height: 'auto',
+      display: 'block',
+      borderRadius: 3,
     }}
-  >
-    <Icon sx={{ color: '#fff', fontSize: 26 }} />
-  </Box>
+  />
 );
 
 const HomePage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const token = typeof window !== 'undefined' ? localStorage.getItem('vs_token') : null;
+  const year = new Date().getFullYear();
 
   return (
     <Box sx={{ overflowX: 'hidden' }}>
       {/* Hero */}
-      <Box sx={{ position: 'relative', pt: { xs: 16, md: 20 }, pb: { xs: 10, md: 14 } }}>
+      <Box sx={{ position: 'relative', pt: { xs: 16, md: 20 }, pb: { xs: 8, md: 10 } }}>
         <Box
           sx={{
             position: 'absolute',
@@ -142,61 +127,81 @@ const HomePage: React.FC = () => {
             >
               A calm, fast, privacy-first companion for everyday money decisions. No ads, no clutter — just clarity.
             </Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
+            <Stack alignItems="center" spacing={1.5}>
               <Button
                 size="large"
                 variant="contained"
                 color="primary"
-                onClick={() => navigate(token ? '/dashboard' : '/login')}
+                onClick={() => navigate(token ? '/dashboard' : '/register')}
               >
-                {token ? 'Open Dashboard' : 'Get Started'}
+                {token ? 'Open Dashboard' : 'Try TrackSpense free'}
               </Button>
-              <Button
-                size="large"
-                variant="outlined"
-                color="inherit"
-                onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              <MuiLink
+                component="button"
+                type="button"
+                underline="hover"
+                sx={{ color: 'text.secondary', fontSize: '0.9rem' }}
+                onClick={() => document.getElementById('product')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               >
-                Learn more
-              </Button>
+                See how it works ↓
+              </MuiLink>
             </Stack>
           </motion.div>
 
+          {/* Real product screenshot, framed like a browser window */}
           <motion.div
-            initial={{ opacity: 0, y: 60, scale: 0.96 }}
+            initial={{ opacity: 0, y: 60, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: motionTokens.slow, ease: motionTokens.easing, delay: 0.15 }}
-            style={{ marginTop: 72 }}
+            style={{ marginTop: 64 }}
           >
-            <HeroVisual />
+            <Box sx={{ maxWidth: 1040, mx: 'auto' }}>
+              <ProductShot image="/screenshots/dashboard.png" title="TrackSpense dashboard" />
+            </Box>
           </motion.div>
         </Container>
       </Box>
 
-      {/* Features */}
-      <Container id="features" maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
+      {/* Product showcase — real screenshots */}
+      <Container id="product" maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
         <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
-          <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 7 }}>
-            Thoughtfully designed features
+          <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 2 }}>
+            One app, your whole financial picture
+          </Typography>
+          <Typography variant="h6" sx={{ textAlign: 'center', color: 'text.secondary', fontWeight: 400, maxWidth: 640, mx: 'auto', mb: 8 }}>
+            Every screen below is TrackSpense, running on real data.
           </Typography>
         </motion.div>
-        <Grid container columns={12} spacing={3}>
-          {FEATURES.map((f, i) => (
-            <Grid size={{ xs: 12, md: 4 }} key={f.title}>
-              <motion.div
-                {...reveal}
-                transition={{ duration: motionTokens.base, ease: motionTokens.easing, delay: i * 0.08 }}
-                style={{ height: '100%' }}
-              >
-                <Box sx={{ ...glassCardSx(theme), height: '100%', p: 3.5 }}>
-                  <IconBadge Icon={f.icon} />
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{f.title}</Typography>
-                  <Typography variant="body1" color="text.secondary">{f.desc}</Typography>
-                </Box>
-              </motion.div>
+
+        <Stack spacing={{ xs: 8, md: 10 }}>
+          {PRODUCT_SHOTS.map((shot, i) => (
+            <Grid container columns={12} spacing={5} alignItems="center" key={shot.title} direction={i % 2 === 1 ? 'row-reverse' : 'row'}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <motion.div
+                  {...reveal}
+                  transition={{ duration: motionTokens.base, ease: motionTokens.easing }}
+                >
+                  <Typography variant="h4" sx={{ fontSize: { xs: '1.6rem', md: '2rem' }, mb: 2 }}>
+                    {shot.title}
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary" sx={{ fontSize: '1.05rem' }}>
+                    {shot.desc}
+                  </Typography>
+                </motion.div>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <motion.div
+                  {...reveal}
+                  transition={{ duration: motionTokens.base, ease: motionTokens.easing, delay: 0.1 }}
+                >
+                  <Box sx={{ ...glassCardSx(theme), p: 1.5 }}>
+                    <ProductShot image={shot.image} title={shot.title} />
+                  </Box>
+                </motion.div>
+              </Grid>
             </Grid>
           ))}
-        </Grid>
+        </Stack>
       </Container>
 
       {/* Vision */}
@@ -214,27 +219,52 @@ const HomePage: React.FC = () => {
         </Container>
       </Box>
 
-      {/* Stands out */}
+      {/* Privacy / trust block */}
       <Container maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
         <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
-          <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 7 }}>
-            How TrackSpense stands out
+          <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 2 }}>
+            Privacy-first, substantiated
+          </Typography>
+          <Typography variant="h6" sx={{ textAlign: 'center', color: 'text.secondary', fontWeight: 400, maxWidth: 640, mx: 'auto', mb: 7 }}>
+            Not just a tagline — here's exactly what that means for your data.
           </Typography>
         </motion.div>
-        <Grid container columns={12} spacing={5}>
-          {STANDOUT.map((c, i) => (
-            <Grid size={{ xs: 12, md: 4 }} key={c.title}>
+        <Grid container columns={12} spacing={3}>
+          {TRUST_POINTS.map((point, i) => (
+            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={point.title}>
               <motion.div
                 {...reveal}
                 transition={{ duration: motionTokens.base, ease: motionTokens.easing, delay: i * 0.08 }}
+                style={{ height: '100%' }}
               >
-                <IconBadge Icon={c.icon} />
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>{c.title}</Typography>
-                <Typography variant="body1" color="text.secondary">{c.desc}</Typography>
+                <Box sx={{ ...glassCardSx(theme), height: '100%', p: 3 }}>
+                  <Box
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundImage: `linear-gradient(135deg, ${brand.gradientStart}, ${brand.gradientEnd})`,
+                      mb: 2,
+                    }}
+                  >
+                    <point.icon sx={{ color: '#fff', fontSize: 22 }} />
+                  </Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{point.title}</Typography>
+                  <Typography variant="body2" color="text.secondary">{point.desc}</Typography>
+                </Box>
               </motion.div>
             </Grid>
           ))}
         </Grid>
+        <Typography sx={{ textAlign: 'center', mt: 5, color: 'text.secondary' }}>
+          Read the full{' '}
+          <MuiLink href={`${API_BASE_URL}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</MuiLink>
+          {' '}or{' '}
+          <MuiLink href={`${API_BASE_URL}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</MuiLink>.
+        </Typography>
       </Container>
 
       {/* CTA Footer */}
@@ -252,24 +282,53 @@ const HomePage: React.FC = () => {
             <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, mb: 5 }}>
               Join now and turn your spending data into decisions you feel good about.
             </Typography>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
-              <Button
-                size="large"
-                sx={{ bgcolor: '#fff', color: '#000', '&:hover': { bgcolor: '#f2f2f2' } }}
-                onClick={() => navigate(token ? '/dashboard' : '/login')}
-              >
-                {token ? 'Open Dashboard' : 'Login to start tracking'}
-              </Button>
-              <Button
-                size="large"
-                variant="outlined"
-                sx={{ color: '#fff', borderColor: 'rgba(255,255,255,0.6)' }}
-                onClick={() => navigate('/register')}
-              >
-                Create a free account
-              </Button>
-            </Stack>
+            <Button
+              size="large"
+              sx={{ bgcolor: '#fff', color: '#000', '&:hover': { bgcolor: '#f2f2f2' } }}
+              onClick={() => navigate(token ? '/dashboard' : '/register')}
+            >
+              {token ? 'Open Dashboard' : 'Try TrackSpense free'}
+            </Button>
           </motion.div>
+        </Container>
+      </Box>
+
+      {/* Footer */}
+      <Box component="footer" sx={{ bgcolor: theme.palette.mode === 'dark' ? '#000' : '#F5F5F7', borderTop: `1px solid ${theme.palette.divider}` }}>
+        <Container maxWidth="lg" sx={{ py: 6 }}>
+          <Grid container columns={12} spacing={4}>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>TrackSpense</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Track less. Understand more.
+              </Typography>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>Legal</Typography>
+              <Stack spacing={1}>
+                <MuiLink href={`${API_BASE_URL}/privacy-policy`} target="_blank" rel="noopener noreferrer" color="text.secondary" underline="hover">
+                  Privacy Policy
+                </MuiLink>
+                <MuiLink href={`${API_BASE_URL}/terms-of-service`} target="_blank" rel="noopener noreferrer" color="text.secondary" underline="hover">
+                  Terms of Service
+                </MuiLink>
+              </Stack>
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>Company</Typography>
+              <Stack spacing={1}>
+                <MuiLink component={RouterLink} to="/contact" color="text.secondary" underline="hover">
+                  Contact
+                </MuiLink>
+                <MuiLink component={RouterLink} to="/feature-request" color="text.secondary" underline="hover">
+                  Submit an Idea
+                </MuiLink>
+              </Stack>
+            </Grid>
+          </Grid>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 5 }}>
+            © {year} TrackSpense. All rights reserved.
+          </Typography>
         </Container>
       </Box>
     </Box>
