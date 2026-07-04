@@ -92,3 +92,14 @@ That file already tracks launch-blocker checklist items with `[x]`/`[ ]`. Verifi
 ## 5. How this file was produced
 
 Four parallel codebase audits cross-referenced every requirement bullet in every spec against actual routes, services, DB models, and UI components (file:line evidence collected for each verdict). This is more reliable than trusting the spec docs' own "Future Roadmap" section (in the master spec), which was written in March 2026 and is now stale — e.g. it still describes Item-Level AI Analyst as "In Design" when it's substantially shipped.
+
+---
+
+## 6. TrackSpense Groups (TS-GRP series)
+
+This is the new "Split & Track" shared expenses feature.
+
+| Spec | Status | Notes |
+|:---|:---|:---|
+| [TS-GRP-103 — SplitEngine](features/tickets/TS-GRP-103-split-engine.md) | ✅ Built | Pure functions + exhaustive unit tests for split math (§3.4, §3.5, §7.3). |
+
