@@ -2,7 +2,8 @@ import json
 import logging
 from typing import Dict, List, Optional, Tuple, Union
 
-from varavu_selavu_service.services.chat_service import call_chat_model
+import os
+import requests
 
 logger = logging.getLogger("varavu_selavu.categorization")
 
@@ -114,7 +115,30 @@ class CategorizationService:
                 "with no extra text or code fences. "
                 f"Description: '{description}'."
             )
-            response = call_chat_model(query=prompt, analysis={}, model=None)
+            
+            # Call Gemini directly
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY not configured")
+                
+            model = os.getenv("OCR_MODEL", "gemini-2.5-flash") # Use same model as receipt, or default 2.5-flash
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            
+            body = {
+                "contents": [
+                    {"parts": [{"text": prompt}]}
+                ],
+                "generationConfig": {
+                    "responseMimeType": "application/json"
+                }
+            }
+            
+            resp = requests.post(url, headers={"Content-Type": "application/json"}, json=body, timeout=30)
+            resp.raise_for_status()
+            
+            resp_data = resp.json()
+            response = resp_data["candidates"][0]["content"]["parts"][0]["text"]
+            
             data = self._parse_json_response(response)
             main = data.get("main_category")
             sub = data.get("subcategory")
