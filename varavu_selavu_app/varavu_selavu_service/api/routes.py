@@ -36,7 +36,6 @@ from varavu_selavu_service.services.recurring_service import RecurringService
 from varavu_selavu_service.core.config import Settings
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
-from threading import RLock
 from varavu_selavu_service.auth.routers import router as auth_router
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.api.groups_routes import router as groups_router
@@ -61,13 +60,6 @@ router.include_router(groups_router)
 # Dependency providers
 def get_expense_service(db: Session = Depends(get_db)) -> ExpenseService:
     return ExpenseService(db)
-# Simple in-memory cache for analysis results
-_ANALYSIS_CACHE: dict[
-    tuple[str, int | None, int | None, str | None, str | None],
-    tuple[float, dict],
-] = {}
-_ANALYSIS_CACHE_TTL_SEC = 60  # adjust as needed
-_CACHE_LOCK = RLock()
 
 def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
     return AnalysisService(db=db, ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
@@ -409,12 +401,23 @@ def analysis(
     month: int | None = Query(default=None, ge=1, le=12),
     start_date: str | None = None,
     end_date: str | None = None,
+    scope: str = Query(default="personal", pattern="^(personal|combined|groups)$"),
+    group_id: str | None = None,
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
     user_id: str = Depends(auth_required),
 ):
     """Return analysis for a given user via the AnalysisService."""
-    result = analysis_service.analyze(user_id=user_id, year=year, month=month, start_date=start_date, end_date=end_date, use_cache=True)
+    result = analysis_service.analyze(
+        user_id=user_id,
+        year=year,
+        month=month,
+        start_date=start_date,
+        end_date=end_date,
+        use_cache=True,
+        scope=scope,
+        group_id=group_id,
+    )
     if response is not None:
         # Align Cache-Control header with service TTL
         response.headers["Cache-Control"] = f"public, max-age={analysis_service.ttl_sec}"

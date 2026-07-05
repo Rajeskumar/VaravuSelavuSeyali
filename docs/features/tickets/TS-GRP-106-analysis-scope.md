@@ -1,6 +1,15 @@
 # TS-GRP-106 — AnalysisService scope support + cache key + `group_id IS NULL` guard
 
-**Phase:** 1 · **Build order:** 6th · **Spec:** §8.4, §9.1, §13 · **⚠️ Rollout gate for `GROUPS_ENABLED`**
+**Phase:** 1 · **Build order:** 6th · **Spec:** §8.4, §9.1, §13 · **⚠️ Rollout gate for `GROUPS_ENABLED`** · **Status:** ✅ Completed
+
+## Implementation notes (post-build)
+
+- **The ticket's own pointer to "existing `tests/test_analytics_api.py`" for legacy back-compat verification was slightly off** — that file doesn't actually call `GET /analysis` at all (it covers `/analytics/items`, `/analytics/merchants`, `/analysis/chat`). The real pre-existing legacy baseline lives in `tests/test_analysis_e2e.py::test_analysis_endpoint_e2e`. Verified that test still passes unchanged, and added the new scope-matrix tests to `test_analytics_api.py` per the ticket's literal instruction anyway.
+- **"Byte-identical for scope=personal" is satisfied in the sense that matters, not literally.** Adding `scope`/`spend_breakdown`/`group_summaries` as new top-level keys (and `scope`/`group_id` inside `filter_info`) necessarily changes the JSON body's *shape* the instant the fields exist on `AnalysisResponse`, regardless of what scope is requested — there's no way to extend the schema and have truly zero byte diff. What's preserved exactly: every pre-existing field's *value* for `scope=personal`, and `spend_breakdown`/`group_summaries` are `None` (not computed at all, no wasted query) for that scope. `test_analysis_e2e.py`'s existing assertions pass unmodified.
+- **The share-leg's monthly/category aggregation is done in Python after one JOIN query, not via three separate grouped SQL queries.** The WHERE-clause year/month filters still use the existing `is_sqlite`-branching helper (a real dialect-specific predicate), satisfying the ticket's dual-dialect requirement; the *output-side* month-bucketing doesn't need `to_char`/`strftime` since full ORM row objects are already in hand after the join. Documented inline in `analysis_service.py`.
+- **Spec/ticket gap, not built:** §8.4 describes a `group_id`-scoped `basis=my_share|i_paid|group_total` toggle. The ticket's own "Populate new response fields" list and acceptance criteria never mention `basis` at all — only `group_summaries[]` (which already carries all three of `my_share`/`i_paid`/`group_total` per group). Implemented `group_id` as a real filter (restricts the share leg + `group_summaries` to one group), but did **not** build the `basis` toggle — it's not testable against this ticket's acceptance criteria and would be scope creep. Worth a product decision on whether `basis` is still wanted, and if so, as its own follow-up.
+- **`my_balance` in `group_summaries` is the all-time net(m), not date-scoped** — a "balance" is a running position (spec §3.1), not a spend-analytics number for a specific month; `my_share`/`i_paid`/`group_total` *are* date-scoped like the rest of the response. Deliberate interpretation, not specified explicitly either way in the spec.
+- **Removed the dead `_ANALYSIS_CACHE`/`_CACHE_LOCK`/`RLock` import from `api/routes.py`** — confirmed unused anywhere else in the file before deleting, per the ticket's explicit "optionally delete it while here" note.
 
 ## Scope
 

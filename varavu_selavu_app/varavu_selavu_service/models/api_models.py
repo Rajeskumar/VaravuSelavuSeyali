@@ -146,6 +146,24 @@ class AnalysisFilterInfo(BaseModel):
     year: Optional[int]
     month: Optional[int]
     row_count: int
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    scope: Optional[str] = None
+    group_id: Optional[str] = None
+
+
+class SpendBreakdown(BaseModel):
+    personal: float
+    group_share: float
+
+
+class AnalysisGroupSummary(BaseModel):
+    group_id: str
+    name: str
+    my_share: float
+    i_paid: float
+    group_total: float
+    my_balance: float
 
 
 class AnalysisResponse(BaseModel):
@@ -155,6 +173,9 @@ class AnalysisResponse(BaseModel):
     total_expenses: float
     category_expense_details: Dict[str, List[ExpenseDetail]]
     filter_info: AnalysisFilterInfo
+    scope: Optional[str] = None
+    spend_breakdown: Optional[SpendBreakdown] = None
+    group_summaries: Optional[List[AnalysisGroupSummary]] = None
 
 
 class ChatResponse(BaseModel):
