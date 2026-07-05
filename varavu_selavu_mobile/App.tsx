@@ -46,6 +46,9 @@ import ContactUsScreen from './src/screens/ContactUsScreen';
 import ItemInsightsScreen from './src/screens/ItemInsightsScreen';
 import MerchantInsightsScreen from './src/screens/MerchantInsightsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import GroupsScreen from './src/screens/GroupsScreen';
+import GroupDetailScreen from './src/screens/GroupDetailScreen';
+import JoinGroupScreen from './src/screens/JoinGroupScreen';
 
 import AddExpenseProvider, { AddExpenseContext } from './src/screens/AddExpenseScreen';
 
@@ -386,6 +389,7 @@ const DRAWER_W = Dimensions.get('window').width * 0.80;
 
 const DRAWER_ITEMS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
   { key: 'home',            label: 'Home',             icon: 'home',           screen: 'Dashboard'       },
+  { key: 'groups',          label: '👥 Groups',         icon: 'people',         screen: 'Groups'          },
   { key: 'profile',         label: 'Profile',          icon: 'person-circle',  screen: 'Profile'         },
   { key: 'itemInsights',    label: 'Item Insights',    icon: 'pricetag',       screen: 'ItemInsights'    },
   { key: 'merchantInsights',label: 'Merchant Insights',icon: 'storefront',     screen: 'MerchantInsights'},
@@ -547,6 +551,10 @@ function AppShell() {
         <Stack.Screen name="About"            component={AboutScreen}              options={{ headerShown: true, headerTitle: 'About',              headerBackTitle: '' }} />
         <Stack.Screen name="FeatureRequest"   component={FeatureRequestScreen}     options={{ headerShown: true, headerTitle: 'Feature Request',    headerBackTitle: '' }} />
         <Stack.Screen name="ContactUs"        component={ContactUsScreen}          options={{ headerShown: true, headerTitle: 'Contact',            headerBackTitle: '' }} />
+        {/* ── Groups (TS-GRP-109) ── */}
+        <Stack.Screen name="Groups"           component={GroupsScreen}             options={{ headerShown: false }} />
+        <Stack.Screen name="GroupDetail"      component={GroupDetailScreen}        options={{ headerShown: false }} />
+        <Stack.Screen name="JoinGroup"        component={JoinGroupScreen}          options={{ headerShown: true, headerTitle: 'Join Group', headerBackTitle: '' }} />
       </Stack.Navigator>
       <CustomDrawer visible={drawerOpen} onClose={closeDrawer} onNavigate={handleNavigate} />
     </DrawerContext.Provider>
@@ -566,8 +574,21 @@ function RootNavigator() {
     );
   }
 
+  // Deep-link configuration for invite URLs: trackspense://join/{token}
+  const linking = {
+    prefixes: ['trackspense://', 'https://trackspense.app'],
+    config: {
+      screens: {
+        JoinGroup: 'join/:token',
+        Groups: 'groups',
+        GroupDetail: 'groups/:groupId',
+      },
+    },
+  };
+
   return (
     <NavigationContainer
+      linking={linking}
       theme={{
         dark: isDark,
         colors: {

@@ -1,6 +1,15 @@
 # TS-GRP-109 — Mobile: Groups screens + split editor + deep-link invites
 
-**Phase:** 1 · **Build order:** 9th · **Spec:** §12.1, §12.2, §11 (parity)
+**Phase:** 1 · **Build order:** 9th · **Spec:** §12.1, §12.2, §11 (parity) · **Status:** ✅ Completed
+
+## Implementation notes (post-build)
+
+- **Stats and Activity tabs omitted (Phase 1 optional).** Spec §12.2 lists them as optional for Phase 1. `GroupDetailScreen` ships with Expenses + Balances tabs only. These are left for a follow-up.
+- **Group expense payer in AddExpenseScreen uses first split member as payer.** In Phase 1, the mobile Add Expense sheet doesn't query the group members list before submission (that would require an extra API call on group selection). As a simplification, the first selected split member is used as the payer. A future improvement should query `GET /groups/{id}` on group selection and resolve the current user's `member_id`, matching the web flow.
+- **`expo-linking` is an Expo SDK 54 built-in** (part of `expo` package). No separate `npm install` was needed. The `trackspense://` scheme is registered in `app.json` (`scheme` field + Android `intentFilters`). The `linking` config is set on `NavigationContainer` in `App.tsx`.
+- **`analysis.ts` extended with `scope` and `group_id` params** (TS-GRP-106 parity). Additive-only — existing callers that don't pass `scope` continue to get `scope=personal` from the backend default. No screen was changed to use `scope=combined` (that belongs to a later AnalysisScreen update, similar to TS-GRP-108 for web).
+- **GROUPS_ENABLED gate in AddExpenseScreen** uses the `useQuery(['groups'])` cache — same cache key as GroupsScreen — so there is no additional network round-trip when both screens are mounted. The toggle only renders if the query succeeded (i.e., the backend returned 200, not 404).
+- **Test coverage:** 11 tests, all passing. 6 cover the §3.3 equal-share invariant across edge cases (2 members, 3 members with penny remainder, 7 members, 0 members, 1 member, large amounts). 5 cover deep-link URL parsing.
 
 ## Scope
 

@@ -7,12 +7,23 @@ export interface AnalysisResponse {
   total_expenses: number;
   category_expense_details?: Record<string, { date: string; description: string; category: string; cost: number }[]>;
   filter_info?: { applied_user_col?: string | null; year?: number | null; month?: number | null; row_count?: number };
+  scope?: string | null;
+  spend_breakdown?: { personal: number; group_share: number } | null;
+  group_summaries?: { group_id: string; name: string; my_share: number; i_paid: number; group_total: number; my_balance: number }[] | null;
 }
 
 export async function getAnalysis(
   token: string,
   userId: string,
-  opts?: { year?: number; month?: number; start_date?: string; end_date?: string },
+  opts?: {
+    year?: number;
+    month?: number;
+    start_date?: string;
+    end_date?: string;
+    /** 'personal' (default) | 'combined' | 'groups' */
+    scope?: string;
+    group_id?: string;
+  },
 ): Promise<AnalysisResponse> {
   const params = new URLSearchParams();
   params.append('user_id', userId);
@@ -20,6 +31,8 @@ export async function getAnalysis(
   if (opts?.month !== undefined) params.set('month', String(opts.month));
   if (opts?.start_date) params.set('start_date', opts.start_date);
   if (opts?.end_date) params.set('end_date', opts.end_date);
+  if (opts?.scope) params.set('scope', opts.scope);
+  if (opts?.group_id) params.set('group_id', opts.group_id);
   // Cache busting
   params.set('_ts', String(Date.now()));
 
@@ -34,3 +47,4 @@ export async function getAnalysis(
 
   return response.json();
 }
+
