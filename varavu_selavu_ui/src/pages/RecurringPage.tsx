@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../api/recurring';
+import { suggestCategory } from '../api/expenses';
 import { Box, Typography, Card, CardContent, TextField, Button, Paper, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Snackbar, Alert, CircularProgress, Dialog, FormControlLabel, Switch } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -18,6 +19,7 @@ const RecurringPage: React.FC = () => {
   const [form, setForm] = React.useState({
     description: '',
     category: '',
+    merchant_name: '',
     day_of_month: new Date().getDate(),
     default_cost: 0,
     start_date_iso: new Date().toISOString().split('T')[0],
@@ -25,6 +27,24 @@ const RecurringPage: React.FC = () => {
   });
 
   const [editing, setEditing] = React.useState<RecurringTemplateDTO | null>(null);
+  const typingRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const scheduleFetch = (desc: string) => {
+    if (typingRef.current) clearTimeout(typingRef.current);
+    typingRef.current = setTimeout(async () => {
+      if (!desc.trim()) return;
+      try {
+        const res = await suggestCategory(desc.trim());
+        setForm(f => ({
+          ...f,
+          category: f.category || res.subcategory,
+          merchant_name: f.merchant_name || res.merchant_name || '',
+        }));
+      } catch {
+        // ignore errors
+      }
+    }, 1500);
+  };
 
   const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
@@ -40,7 +60,7 @@ const RecurringPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
       setEditing(null);
-      setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' });
+      setForm({ description: '', category: '', merchant_name: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' });
       setToast({ open: true, message: 'Template saved', severity: 'success' });
     },
     onError: () => {
@@ -70,11 +90,18 @@ const RecurringPage: React.FC = () => {
         <CardContent>
           <Typography variant="subtitle1" sx={{ mb: 2 }}>{editing ? 'Edit Template' : 'Add Template'}</Typography>
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <TextField label="Description" fullWidth value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-            </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <TextField label="Description" fullWidth value={form.description} onChange={e => {
+                const val = e.target.value;
+                setForm(f => ({ ...f, description: val }));
+                scheduleFetch(val);
+              }} onBlur={() => scheduleFetch(form.description)} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <TextField label="Category" fullWidth value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <TextField label="Merchant" fullWidth value={form.merchant_name} onChange={e => setForm(f => ({ ...f, merchant_name: e.target.value }))} />
             </Grid>
             <Grid size={{ xs: 6, md: 2 }}>
               <TextField label="Day of month" type="number" fullWidth value={form.day_of_month} onChange={e => setForm(f => ({ ...f, day_of_month: Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))) }))} />
@@ -94,7 +121,7 @@ const RecurringPage: React.FC = () => {
             <Grid size={{ xs: 12, md: 2 }}>
               <Button variant="contained" onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !form.description || !form.category || form.default_cost <= 0}>Save</Button>
               {editing && (
-                <Button sx={{ ml: 1 }} onClick={() => { setEditing(null); setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' }); }}>Cancel</Button>
+                <Button sx={{ ml: 1 }} onClick={() => { setEditing(null); setForm({ description: '', category: '', merchant_name: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' }); }}>Cancel</Button>
               )}
             </Grid>
           </Grid>
@@ -107,6 +134,7 @@ const RecurringPage: React.FC = () => {
             <TableRow>
               <TableCell>Description</TableCell>
               <TableCell>Category</TableCell>
+              <TableCell>Merchant</TableCell>
               <TableCell>Day</TableCell>
               <TableCell>Default Cost</TableCell>
               <TableCell>Start</TableCell>
@@ -126,13 +154,14 @@ const RecurringPage: React.FC = () => {
               <TableRow key={t.id} hover>
                 <TableCell>{t.description}</TableCell>
                 <TableCell>{t.category}</TableCell>
+                <TableCell>{t.merchant_name || '-'}</TableCell>
                 <TableCell>{t.day_of_month}</TableCell>
                 <TableCell>${t.default_cost.toFixed(2)}</TableCell>
                 <TableCell>{t.start_date_iso}</TableCell>
                 <TableCell>{t.last_processed_iso || '-'}</TableCell>
                 <TableCell>{t.status === 'Paused' ? '⏸️ Paused' : 'Active'}</TableCell>
                 <TableCell align="right">
-                  <IconButton onClick={() => { setEditing(t); setForm({ description: t.description, category: t.category, day_of_month: t.day_of_month, default_cost: t.default_cost, start_date_iso: t.start_date_iso, status: t.status || 'Active' }); }}><EditIcon /></IconButton>
+                  <IconButton onClick={() => { setEditing(t); setForm({ description: t.description, category: t.category, merchant_name: t.merchant_name || '', day_of_month: t.day_of_month, default_cost: t.default_cost, start_date_iso: t.start_date_iso, status: t.status || 'Active' }); }}><EditIcon /></IconButton>
                   <IconButton onClick={() => { setPendingExec(t); setExecAmount(t.default_cost); setExecuteOpen(true); }} disabled={executingId === t.id}>
                     {executingId === t.id ? <CircularProgress size={18} /> : <PlayArrowIcon />}
                   </IconButton>
