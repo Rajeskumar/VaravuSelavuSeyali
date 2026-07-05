@@ -1,6 +1,16 @@
 # TS-GRP-107 — Web: GroupsPage / GroupDetailPage + SplitEditor
 
-**Phase:** 1 · **Build order:** 7th · **Spec:** §11.1, §11.3, §9.3
+**Phase:** 1 · **Build order:** 7th · **Spec:** §11.1, §11.3, §9.3 · **Status:** ✅ Completed
+
+## Implementation notes (post-build)
+
+- **The "hide when `GROUPS_ENABLED` is off" acceptance criterion assumes a client-visible flag surface that doesn't exist yet.** The ticket says "TS-GRP-111 provides the flag surface to the client," but TS-GRP-111 isn't a listed dependency and hasn't been built — there's no `/config`-style endpoint or login-response field exposing the flag today. Resolved pragmatically: the nav entry and routes are registered unconditionally (matching every other nav item), and `GroupsPage` treats a `404` from `GET /groups` (which is exactly what the backend returns when the flag is off, per TS-GRP-102) as a distinct "Groups isn't available yet" empty state rather than crashing. This is a real, working feature-detection fallback, not the dedicated flag surface the ticket describes — worth deciding whether TS-GRP-111 still needs to build a proper flag surface or whether this 404-based detection is sufficient.
+- **New pure utility not in the ticket's file list:** `utils/splitPreview.ts` — a JS port of `SplitEngine`'s largest-remainder rounding algorithm (§3.5), extracted so `SplitEditor`'s live preview is unit-testable independent of the component and demonstrably matches the backend's cent-exact behavior (see its test file, which mirrors `test_split_engine.py`'s own cases).
+- **`LoginPage.tsx` touched, not listed in the ticket's file list, but required** for "`JoinGroupPage` must handle the pre-login → post-auth deep-link case." The app had no existing "return to X after login" mechanism at all; added one narrowly scoped to the invite flow (`sessionStorage` pending-token check in `postLoginDestination()`), leaving the default `/dashboard` post-login behavior unchanged for every other case.
+- **New `api/groups.ts` preserves backend error detail** (`ApiError` with `.status`/`.detail`) instead of collapsing to a generic string like the older `api/expenses.ts`/`api/recurring.ts` clients do — necessary so `SplitEditor`/dialogs can surface the backend's actual `SplitError` messages. Deliberately did not touch the older clients to keep personal-expense behavior unchanged.
+- **Manual smoke test performed end-to-end** against a real local Postgres (`trackspense_dev`, already migrated to the latest schema) with `GROUPS_ENABLED=true` temporarily: register → login → create group → add placeholder member → generate invite link → add an equal-split group expense ($90 → $45/$45 live preview, matching backend exactly) → Balances tab (correct net per member + pairwise transfer) → Settle Up (balances correctly zero out afterward). No console errors at any step. `.env`/test data reverted after.
+- **Two pre-existing test failures found, confirmed unrelated:** `src/App.test.js` and `src/pages/ExpensesPage.test.tsx` fail identically on the unmodified base commit (verified via `git stash`) — a stale confirm-dialog/test mismatch predating this ticket, in personal-`ExpensesPage` territory (TS-GRP-108, not this ticket). Not fixed here to stay in scope; flagged for a separate fix.
+- **Added a `backend` entry to `.claude/launch.json`** (poetry/uvicorn on port 8080) alongside the existing `web-ui`/`mobile-web` entries — needed for the manual smoke test above, and left in as a reusable dev convenience.
 
 ## Scope
 
