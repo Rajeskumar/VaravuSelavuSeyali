@@ -429,6 +429,17 @@ class BalanceResponse(BaseModel):
     simplified: bool
 
 
+# ---------------------- Devices (TS-GRP-110) ---------------------- #
+
+class RegisterDeviceRequest(BaseModel):
+    expo_push_token: str
+    platform: str  # ios|android
+
+
+class RegisterDeviceResponse(BaseModel):
+    success: bool
+
+
 # ---------------------- Email ---------------------- #
 
 class SendEmailRequest(BaseModel):

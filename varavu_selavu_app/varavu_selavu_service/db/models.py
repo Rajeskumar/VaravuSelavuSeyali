@@ -240,3 +240,18 @@ class GroupActivity(Base):
     payload_json = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+
+class DeviceToken(Base):
+    __tablename__ = "device_tokens"
+    __table_args__ = (
+        UniqueConstraint("user_email", "expo_push_token", name="uq_device_tokens_user_token"),
+        {"schema": "trackspense"}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    expo_push_token = Column(String(255), nullable=False, index=True)
+    platform = Column(String(10), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+

@@ -39,6 +39,7 @@ from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.auth.routers import router as auth_router
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.api.groups_routes import router as groups_router
+from varavu_selavu_service.api.devices_routes import router as devices_router
 from varavu_selavu_service.models.api_models import (
     RecurringTemplateDTO,
     UpsertRecurringTemplateRequest,
@@ -56,6 +57,7 @@ settings = Settings()
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router, prefix="/auth")
 router.include_router(groups_router)
+router.include_router(devices_router)
 
 # Dependency providers
 def get_expense_service(db: Session = Depends(get_db)) -> ExpenseService:

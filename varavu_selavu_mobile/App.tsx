@@ -1,13 +1,14 @@
-import React, { useRef, useState, useCallback, createContext, useContext } from 'react';
+import React, { useRef, useState, useCallback, useEffect, createContext, useContext } from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator, BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
   ActivityIndicator, View, Text, TouchableOpacity, StyleSheet,
-  Dimensions, Modal, Pressable, Platform, SafeAreaView
+  Dimensions, Modal, Pressable, Platform, SafeAreaView, Linking
 } from 'react-native';
 import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -51,6 +52,7 @@ import GroupDetailScreen from './src/screens/GroupDetailScreen';
 import JoinGroupScreen from './src/screens/JoinGroupScreen';
 
 import AddExpenseProvider, { AddExpenseContext } from './src/screens/AddExpenseScreen';
+import { extractGroupIdFromNotificationData } from './src/notifications';
 
 const Stack = createNativeStackNavigator();
 
@@ -533,6 +535,24 @@ function AppShell() {
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const handleNavigate = useCallback((screen: string) => navigation.navigate(screen), [navigation]);
+
+  // Tapping a push notification (TS-GRP-110) deep-links straight to the group it's
+  // about, whether the app was foregrounded/backgrounded or launched fresh from it.
+  useEffect(() => {
+    const goToGroup = (data: Record<string, unknown> | undefined) => {
+      const groupId = extractGroupIdFromNotificationData(data);
+      if (groupId) navigation.navigate('GroupDetail', { groupId });
+    };
+
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) goToGroup(response.notification.request.content.data as Record<string, unknown>);
+    });
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      goToGroup(response.notification.request.content.data as Record<string, unknown>);
+    });
+    return () => subscription.remove();
+  }, [navigation]);
 
   return (
     <DrawerContext.Provider value={{ openDrawer, closeDrawer }}>

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { login as apiLogin, LoginPayload, register as apiRegister, RegisterPayload, logout as apiLogout } from '../api/auth';
 import { setLogoutCallback } from '../api/apiFetch';
+import { registerForPushNotifications, unregisterPushNotifications } from '../notifications';
 
 interface AuthState {
   accessToken: string | null;
@@ -25,6 +26,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   });
 
   const signOut = async () => {
+    // Unregister the push token while the access token is still valid — apiFetch
+    // needs it to authenticate the DELETE call.
+    await unregisterPushNotifications();
+
     try {
       const refreshToken = await SecureStore.getItemAsync('refresh_token');
       if (refreshToken) {
@@ -69,6 +74,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('Failed to restore token', e);
       }
       setState({ accessToken: accessToken || null, isLoading: false, userEmail: userEmail || null });
+
+      // "App start" registration (spec §12.3) — covers an already-logged-in user
+      // reopening the app, not just a fresh login.
+      if (accessToken) {
+        registerForPushNotifications();
+      }
     };
 
     bootstrapAsync();
@@ -88,6 +99,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isLoading: false,
         userEmail: email,
       });
+
+      registerForPushNotifications();
     } catch (error) {
       console.error(error);
       throw error;

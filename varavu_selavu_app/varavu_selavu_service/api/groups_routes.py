@@ -1,10 +1,12 @@
+import uuid
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.core.config import Settings
+from varavu_selavu_service.db.models import Expense, ExpenseSplit
 from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.models.api_models import (
     AcceptInviteRequest,
@@ -27,8 +29,16 @@ from varavu_selavu_service.models.api_models import (
 from varavu_selavu_service.services.balance_service import BalanceService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.group_service import GroupService
+from varavu_selavu_service.services.notification_service import NotificationService
 from varavu_selavu_service.services.settlement_service import SettlementService
 from varavu_selavu_service.services.analysis_service import AnalysisService
+
+
+def _to_uuid(value):
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None
 
 
 def require_groups_enabled() -> None:
@@ -60,6 +70,12 @@ def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
     return AnalysisService(db=db, ttl_sec=Settings().ANALYSIS_CACHE_TTL_SEC)
 
 
+def get_notification_service(db: Session = Depends(get_db)) -> NotificationService:
+    # Local provider (mirrors devices_routes.py's) — that module imports
+    # require_groups_enabled from this one, so importing back would be circular.
+    return NotificationService(db)
+
+
 router = APIRouter(prefix="/groups", tags=["Groups"], dependencies=[Depends(require_groups_enabled)])
 
 
@@ -89,10 +105,21 @@ def list_groups(
 @router.post("/invites/accept", response_model=AcceptInviteResponse, summary="Accept a group invite")
 def accept_invite(
     data: AcceptInviteRequest,
+    background_tasks: BackgroundTasks,
     svc: GroupService = Depends(get_group_service),
+    notification_service: NotificationService = Depends(get_notification_service),
     user_email: str = Depends(auth_required),
 ):
-    return svc.accept_invite(token=data.token, acceptor_email=user_email)
+    result = svc.accept_invite(token=data.token, acceptor_email=user_email)
+    # The acceptor is the actor; they're excluded from their own "joined" notification.
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=result["group_id"],
+        actor_email=user_email,
+        event_type="member_joined",
+        new_member_display_name=result["display_name"],
+    )
+    return result
 
 
 @router.get("/{group_id}", response_model=GroupDetailResponse, summary="Group detail")
@@ -134,10 +161,24 @@ def delete_group(
 def add_member(
     group_id: str,
     data: AddMemberRequest,
+    background_tasks: BackgroundTasks,
     svc: GroupService = Depends(get_group_service),
+    notification_service: NotificationService = Depends(get_notification_service),
     user_email: str = Depends(auth_required),
 ):
-    return svc.add_member(group_id, user_email, member_email=data.email, display_name=data.display_name)
+    member = svc.add_member(group_id, user_email, member_email=data.email, display_name=data.display_name)
+    # Only a registered-user seat (status "active") represents an actual join;
+    # placeholders (no email, status "invited") have no account/device to notify about.
+    if member["status"] == "active" and member.get("user_email"):
+        background_tasks.add_task(
+            notification_service.fan_out,
+            group_id=group_id,
+            actor_email=user_email,
+            event_type="member_joined",
+            new_member_display_name=member["display_name"],
+            exclude_emails=[member["user_email"]],
+        )
+    return member
 
 
 @router.delete("/{group_id}/members/{member_id}", summary="Remove a member (admin)")
@@ -181,10 +222,12 @@ def leave_group(
 def create_settlement(
     group_id: str,
     data: RecordSettlementRequest,
+    background_tasks: BackgroundTasks,
     svc: SettlementService = Depends(get_settlement_service),
+    notification_service: NotificationService = Depends(get_notification_service),
     user_email: str = Depends(auth_required),
 ):
-    return svc.create_settlement(
+    settlement = svc.create_settlement(
         group_id=group_id,
         actor_email=user_email,
         from_member_id=data.from_member_id,
@@ -194,6 +237,15 @@ def create_settlement(
         settled_at=data.settled_at,
         notes=data.notes,
     )
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=group_id,
+        actor_email=user_email,
+        event_type="settlement_recorded",
+        amount=settlement["amount"],
+        to_member_id=settlement["to_member_id"],
+    )
+    return settlement
 
 
 @router.get("/{group_id}/settlements", response_model=List[SettlementDTO], summary="Settlement history")
@@ -225,8 +277,11 @@ def delete_settlement(
 def create_group_expense(
     group_id: str,
     data: GroupExpenseRequest,
+    background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
     row = svc.create_expense(
@@ -242,6 +297,23 @@ def create_group_expense(
         split_entries=[e.model_dump() for e in data.split.entries],
     )
     analysis_service.invalidate_cache()
+    eid = _to_uuid(row["row_id"])
+    shares = (
+        {
+            str(s.member_id): float(s.amount_owed)
+            for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+        }
+        if eid is not None
+        else {}
+    )
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=group_id,
+        actor_email=user_email,
+        event_type="expense_added",
+        description=row["description"],
+        shares=shares,
+    )
     return {"success": True, "expense": row}
 
 
@@ -265,10 +337,28 @@ def update_group_expense(
     group_id: str,
     expense_id: str,
     data: GroupExpenseRequest,
+    background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
+    # Capture the pre-edit shares now — GroupExpenseService.update_expense replaces
+    # (deletes + re-inserts) expense_splits atomically, so the "old" values are gone
+    # from the DB by the time the fire-and-forget notification runs. A malformed
+    # expense_id just yields an empty snapshot here; svc.update_expense below is the
+    # one responsible for raising the proper 404 in that case.
+    eid = _to_uuid(expense_id)
+    old_shares = (
+        {
+            str(s.member_id): float(s.amount_owed)
+            for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+        }
+        if eid is not None
+        else {}
+    )
+
     row = svc.update_expense(
         group_id=group_id,
         expense_id=expense_id,
@@ -283,6 +373,19 @@ def update_group_expense(
         split_entries=[e.model_dump() for e in data.split.entries],
     )
     analysis_service.invalidate_cache()
+    new_shares = {
+        str(s.member_id): float(s.amount_owed)
+        for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+    }
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=group_id,
+        actor_email=user_email,
+        event_type="expense_edited",
+        description=row["description"],
+        old_shares=old_shares,
+        new_shares=new_shares,
+    )
     return {"success": True, "expense": row}
 
 
@@ -290,12 +393,33 @@ def update_group_expense(
 def delete_group_expense(
     group_id: str,
     expense_id: str,
+    background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
+    # Snapshot the description before it's gone — svc.delete_expense removes the row
+    # (and cascades expense_payers/expense_splits) before this route can read it back.
+    eid = _to_uuid(expense_id)
+    gid = _to_uuid(group_id)
+    existing = (
+        db.query(Expense).filter(Expense.id == eid, Expense.group_id == gid).first()
+        if eid is not None and gid is not None
+        else None
+    )
+    description = existing.description if existing is not None else None
+
     svc.delete_expense(group_id, expense_id, user_email)
     analysis_service.invalidate_cache()
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=group_id,
+        actor_email=user_email,
+        event_type="expense_deleted",
+        description=description,
+    )
     return {"success": True}
 
 

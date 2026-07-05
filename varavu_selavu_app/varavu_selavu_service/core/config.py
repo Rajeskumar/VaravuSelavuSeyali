@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     GROUPS_ENABLED: bool = False
     PUBLIC_APP_URL: str = "http://localhost:3000"
 
+    # Push notifications (TS-GRP-110) — Expo Push Service, no FCM/APNs plumbing needed.
+    EXPO_PUSH_URL: str = "https://exp.host/--/api/v2/push/send"
+    EXPO_ACCESS_TOKEN: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
