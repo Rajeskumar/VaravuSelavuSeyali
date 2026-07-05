@@ -6,17 +6,25 @@ import CategoryBreakdownSunburst from '../components/dashboard/CategoryBreakdown
 import QuickAddExpenseCard from '../components/dashboard/QuickAddExpenseCard';
 import SpendTrendChart from '../components/dashboard/SpendTrendChart';
 import UpcomingRecurringCard from '../components/dashboard/UpcomingRecurringCard';
+import MyGroupsWidget from '../components/dashboard/MyGroupsWidget';
 import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
+import Snackbar from '@mui/material/Snackbar';
+import Alert from '@mui/material/Alert';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingBagRounded';
 import StorefrontIcon from '@mui/icons-material/StorefrontRounded';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { parseAppDate } from '../utils/date';
 import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
+import { listExpenses } from '../api/expenses';
+import { listAllMyGroupExpenses, UnifiedGroupExpenseRow } from '../api/groups';
+import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { motion } from 'framer-motion';
+
+const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
 
 const DashboardPage: React.FC = () => {
   const [data, setData] = React.useState<AnalysisResponse | null>(null);
@@ -33,6 +41,10 @@ const DashboardPage: React.FC = () => {
   });
   const year = new Date().getFullYear();
   const navigate = useNavigate();
+  const { enabled: groupsEnabled } = useGroupsEnabled();
+  const [groupExpenses, setGroupExpenses] = React.useState<UnifiedGroupExpenseRow[]>([]);
+  const [personalRecent, setPersonalRecent] = React.useState<{ date: string; description: string; category: string; cost: number }[]>([]);
+  const [showCombinedToast, setShowCombinedToast] = React.useState(false);
 
   React.useEffect(() => {
     const user = localStorage.getItem('vs_user');
@@ -43,8 +55,14 @@ const DashboardPage: React.FC = () => {
     }
     (async () => {
       try {
-        const resp = await getAnalysis({ year });
+        // Combined = personal + user's share across all groups (spec §11.2/§17.1);
+        // dashboard layout stays exactly as-is, only the underlying numbers change.
+        const resp = await getAnalysis({ year, scope: 'combined' });
         setData(resp);
+        if (!localStorage.getItem(COMBINED_TOAST_KEY)) {
+          setShowCombinedToast(true);
+          localStorage.setItem(COMBINED_TOAST_KEY, '1');
+        }
       } catch (e) {
         setError('Failed to load dashboard data.');
       } finally {
@@ -66,6 +84,37 @@ const DashboardPage: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
+  // Unified recent-transactions feed: personal + (if enabled) my group shares, merged.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const resp = await listExpenses(0, 50);
+        if (mounted) setPersonalRecent(resp.items.map(e => ({ date: e.date, description: e.description, category: e.category, cost: e.cost })));
+      } catch {
+        if (mounted) setPersonalRecent([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  React.useEffect(() => {
+    if (!groupsEnabled) {
+      setGroupExpenses([]);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const rows = await listAllMyGroupExpenses();
+        if (mounted) setGroupExpenses(rows);
+      } catch {
+        if (mounted) setGroupExpenses([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [groupsEnabled]);
+
   if (loading) return <Typography sx={{ mt: 4 }}>Loading dashboard...</Typography>;
   if (error) return <Typography color="error" sx={{ mt: 4 }}>{error}</Typography>;
   if (!data) return null;
@@ -81,7 +130,20 @@ const DashboardPage: React.FC = () => {
   const thisWeekTotal = expenses
     .filter(e => parseAppDate(e.date) >= weekAgo && parseAppDate(e.date) <= now)
     .reduce((sum, e) => sum + e.cost, 0);
-  const recent = [...expenses]
+  // Unified feed (spec §11.2): personal expenses + my share of group expenses,
+  // group rows tagged with a badge + full amount so "my share" reads as primary.
+  const unifiedRecentSource = [
+    ...personalRecent.map(e => ({ ...e })),
+    ...groupExpenses.map(e => ({
+      date: e.date,
+      description: e.description,
+      category: e.category,
+      cost: e.my_share,
+      groupName: e.group_name,
+      groupTotal: e.cost,
+    })),
+  ];
+  const recent = unifiedRecentSource
     .sort((a, b) => parseAppDate(b.date).getTime() - parseAppDate(a.date).getTime())
     .slice(0, 10);
 
@@ -153,8 +215,9 @@ const DashboardPage: React.FC = () => {
     recent: { id: 'recent', md: 8, element: <RecentActivityList items={recent} /> },
     quickAdd: { id: 'quickAdd', md: 4, element: <QuickAddExpenseCard onAdded={fetchData} /> },
     upcoming: { id: 'upcoming', md: 4, element: <UpcomingRecurringCard /> },
+    ...(groupsEnabled ? { myGroups: { id: 'myGroups', md: 4, element: <MyGroupsWidget /> } } : {}),
   };
-  const defaultOrder = ['sunburstOther', 'sunburstRecurring', 'trend', 'insights', 'recent', 'upcoming', 'quickAdd'];
+  const defaultOrder = ['sunburstOther', 'sunburstRecurring', 'trend', 'insights', 'recent', 'upcoming', 'quickAdd', ...(groupsEnabled ? ['myGroups'] : [])];
   const order = (layoutOrder && layoutOrder.length ? layoutOrder : defaultOrder).filter(id => cards[id]);
 
   // DnD handlers
@@ -246,6 +309,17 @@ const DashboardPage: React.FC = () => {
           );
         })}
       </Grid>
+
+      <Snackbar
+        open={showCombinedToast}
+        autoHideDuration={6000}
+        onClose={() => setShowCombinedToast(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setShowCombinedToast(false)} severity="info" variant="filled" sx={{ width: '100%' }}>
+          Your totals now include your share of group expenses.
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

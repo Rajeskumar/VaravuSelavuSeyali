@@ -66,7 +66,7 @@ class ExpenseService:
         except ValueError:
             parsed_id = row_id # Fallback if someone passed an int ID before migrations
         
-        expense = self.db.query(Expense).filter(Expense.id == parsed_id).first()
+        expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.group_id.is_(None)).first()
         if expense:
             deleted_data = {
                 "user_email": expense.user_email,
@@ -93,7 +93,7 @@ class ExpenseService:
         return None
 
     def get_expenses_for_user(self, user_id: str) -> List[Dict]:
-        expenses = self.db.query(Expense).filter(Expense.user_email == user_id).order_by(Expense.purchased_at.desc()).all()
+        expenses = self.db.query(Expense).filter(Expense.user_email == user_id, Expense.group_id.is_(None)).order_by(Expense.purchased_at.desc()).all()
         results = []
         for r in expenses:
             dt = r.purchased_at
@@ -135,7 +135,7 @@ class ExpenseService:
         except ValueError:
             parsed_id = row_id
         
-        expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.user_email == user_id).first()
+        expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None)).first()
         old_expense_data = None
         if expense:
             old_expense_data = {

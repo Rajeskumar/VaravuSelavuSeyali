@@ -15,17 +15,25 @@ import {
   CircularProgress,
   Snackbar,
   Alert,
+  Chip,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import AddExpenseForm from '../components/expenses/AddExpenseForm';
+import GroupScopeFilter from '../components/common/GroupScopeFilter';
 import { listExpenses, deleteExpense, ExpenseRecord } from '../api/expenses';
+import { listAllMyGroupExpenses, UnifiedGroupExpenseRow } from '../api/groups';
+import { AnalysisScope } from '../api/analysis';
+import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
+import { parseAppDate } from '../utils/date';
 import { motion } from 'framer-motion';
 
 const ExpensesPage: React.FC = () => {
   const user = localStorage.getItem('vs_user') || '';
   const queryClient = useQueryClient();
+  const { enabled: groupsEnabled } = useGroupsEnabled();
+  const [scope, setScope] = React.useState<AnalysisScope>('personal');
   const {
     data,
     fetchNextPage,
@@ -39,6 +47,56 @@ const ExpensesPage: React.FC = () => {
     initialPageParam: 0,
   });
   const expenses = data?.pages.flatMap(p => p.items) ?? [];
+
+  // Groups/Combined scope: a separate, unpaginated fetch (Phase-1 group volumes
+  // are expected to be small, spec §6.5) so these two scopes always show the
+  // full merged set rather than being limited to whatever personal pages the
+  // infinite-query above happens to have loaded so far. Personal scope never
+  // touches these — its table/pagination below is byte-for-byte unchanged.
+  const groupExpensesQuery = useQuery({
+    queryKey: ['all-group-expenses'],
+    queryFn: listAllMyGroupExpenses,
+    enabled: groupsEnabled && scope !== 'personal',
+  });
+  const combinedPersonalQuery = useQuery({
+    queryKey: ['expenses-full-for-combined', user],
+    queryFn: () => listExpenses(0, 500),
+    enabled: !!user && scope === 'combined',
+  });
+
+  interface UnifiedRow {
+    key: string;
+    date: string;
+    description: string;
+    category: string;
+    myShare: number;
+    fullAmount: number;
+    groupName?: string;
+  }
+
+  const unifiedRows: UnifiedRow[] = React.useMemo(() => {
+    const groupRows: UnifiedRow[] = (groupExpensesQuery.data || []).map((e: UnifiedGroupExpenseRow) => ({
+      key: `group-${e.row_id}`,
+      date: e.date,
+      description: e.description,
+      category: e.category,
+      myShare: e.my_share,
+      fullAmount: e.cost,
+      groupName: e.group_name,
+    }));
+    const byDateDesc = (a: UnifiedRow, b: UnifiedRow) => parseAppDate(b.date).getTime() - parseAppDate(a.date).getTime();
+    if (scope === 'groups') return groupRows.sort(byDateDesc);
+    const personalRows: UnifiedRow[] = (combinedPersonalQuery.data?.items || []).map((e) => ({
+      key: `personal-${e.row_id}`,
+      date: e.date,
+      description: e.description,
+      category: e.category,
+      myShare: e.cost,
+      fullAmount: e.cost,
+    }));
+    return [...personalRows, ...groupRows].sort(byDateDesc);
+  }, [scope, groupExpensesQuery.data, combinedPersonalQuery.data]);
+
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ExpenseRecord | null>(null);
   const [deletingId, setDeletingId] = React.useState<number | null>(null);
@@ -74,14 +132,16 @@ const ExpensesPage: React.FC = () => {
   return (
     <Box sx={{ mt: 4, px: { xs: 1, sm: 2 } }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>
           Expenses
         </Typography>
+        {groupsEnabled && <GroupScopeFilter value={scope} onChange={setScope} />}
         <Button variant="contained" onClick={() => { setEditing(null); setOpen(true); }}>
           Add Expense
         </Button>
       </Box>
+      {scope === 'personal' && (
       <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 2 }}>
         <Table size="small" stickyHeader>
           <TableHead>
@@ -133,7 +193,48 @@ const ExpensesPage: React.FC = () => {
           </TableBody>
         </Table>
       </TableContainer>
-      {hasNextPage && (
+      )}
+      {scope !== 'personal' && (
+      <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 2 }}>
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Date</TableCell>
+              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Group</TableCell>
+              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Category</TableCell>
+              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }} align="right">My Share</TableCell>
+              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }} align="right">Full Amount</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {(groupExpensesQuery.isLoading || (scope === 'combined' && combinedPersonalQuery.isLoading)) && (
+              <TableRow>
+                <TableCell colSpan={6} align="center"><CircularProgress size={20} /></TableCell>
+              </TableRow>
+            )}
+            {unifiedRows.map(row => (
+              <TableRow key={row.key} hover sx={{ '&:nth-of-type(odd)': { backgroundColor: 'action.hover' } }}>
+                <TableCell>{row.date}</TableCell>
+                <TableCell>{row.description}</TableCell>
+                <TableCell>{row.groupName ? <Chip size="small" label={row.groupName} /> : '—'}</TableCell>
+                <TableCell>{row.category}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 600 }}>${row.myShare.toFixed(2)}</TableCell>
+                <TableCell align="right" sx={{ color: 'text.secondary' }}>${row.fullAmount.toFixed(2)}</TableCell>
+              </TableRow>
+            ))}
+            {!groupExpensesQuery.isLoading && unifiedRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} align="center">
+                  <Typography color="text.secondary">No expenses in this scope</Typography>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      )}
+      {scope === 'personal' && hasNextPage && (
         <Box sx={{ textAlign: 'center', mb: 2 }}>
           <Button variant="outlined" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
             {isFetchingNextPage ? <CircularProgress size={24} /> : 'Load More'}

@@ -8,7 +8,9 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TableContainer
+  TableContainer,
+  Chip,
+  Box,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { motion } from 'framer-motion';
@@ -20,6 +22,10 @@ interface Activity {
   description: string;
   category: string;
   cost: number;
+  /** Present only for group-sourced rows in the unified feed (spec §11.2) — `cost` is
+   * already the user's share for these; `groupTotal` is the full expense amount. */
+  groupName?: string;
+  groupTotal?: number;
 }
 
 interface Props {
@@ -48,10 +54,10 @@ const RecentActivityList: React.FC<Props> = ({ items }) => {
       <TableContainer sx={{ overflowX: 'hidden' }}>
         <Table size="small" sx={{ tableLayout: 'fixed' }}>
           <colgroup>
-            <col style={{ width: '22%' }} />
-            <col style={{ width: '20%' }} />
-            <col style={{ width: '43%' }} />
-            <col style={{ width: '15%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '39%' }} />
+            <col style={{ width: '25%' }} />
           </colgroup>
           <TableHead>
             <TableRow>
@@ -62,12 +68,26 @@ const RecentActivityList: React.FC<Props> = ({ items }) => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((item) => (
-              <TableRow key={`${item.date}-${item.description}`}>
+            {items.map((item, idx) => (
+              <TableRow key={`${item.date}-${item.description}-${idx}`}>
                 <TableCell sx={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{formatAppDate(item.date)}</TableCell>
                 <TableCell sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{item.category}</TableCell>
-                <TableCell sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{item.description}</TableCell>
-                <TableCell sx={{ whiteSpace: 'nowrap' }} align="right">${item.cost.toFixed(2)}</TableCell>
+                <TableCell sx={{ whiteSpace: 'normal', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                  {item.description}
+                  {item.groupName && (
+                    <Chip size="small" label={item.groupName} sx={{ ml: 1, verticalAlign: 'middle' }} />
+                  )}
+                </TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }} align="right">
+                  {item.groupName ? (
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>${item.cost.toFixed(2)}</Typography>
+                      <Typography variant="caption" color="text.secondary">${(item.groupTotal ?? item.cost).toFixed(2)} total</Typography>
+                    </Box>
+                  ) : (
+                    `$${item.cost.toFixed(2)}`
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {items.length === 0 && (

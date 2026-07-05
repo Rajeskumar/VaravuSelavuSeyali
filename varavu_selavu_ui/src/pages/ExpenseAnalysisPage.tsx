@@ -10,7 +10,9 @@ import CategoryBarChart from '../components/analysis/CategoryBarChart';
 import CategorySummaryTable from '../components/analysis/CategorySummaryTable';
 import MonthlyTrendLineChart from '../components/analysis/MonthlyTrendLineChart';
 import SmartChangeInsightsCard from '../components/analysis/SmartChangeInsightsCard';
-import { getAnalysis, AnalysisResponse } from '../api/analysis';
+import GroupScopeFilter from '../components/common/GroupScopeFilter';
+import { getAnalysis, AnalysisResponse, AnalysisScope } from '../api/analysis';
+import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { useQuery } from '@tanstack/react-query';
 import { glassCardSx } from '../theme';
 import { motion } from 'framer-motion';
@@ -24,13 +26,15 @@ const ExpenseAnalysisPage: React.FC = () => {
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
   const [overallYear, setOverallYear] = useState<boolean>(false);
+  const { enabled: groupsEnabled } = useGroupsEnabled();
+  const [scope, setScope] = useState<AnalysisScope>('personal');
 
   const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
   const { data: qData, isLoading, isError, error } = useQuery({
-    queryKey: ['analysis', user, year, overallYear ? null : month],
+    queryKey: ['analysis', user, year, overallYear ? null : month, scope],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      const opts: { year?: number; month?: number } = { year };
+      const opts: { year?: number; month?: number; scope?: AnalysisScope } = { year, scope };
       if (!overallYear) opts.month = month;
       return getAnalysis(opts);
     },
@@ -83,6 +87,13 @@ const ExpenseAnalysisPage: React.FC = () => {
                     ))}
                   </Select>
                 </FormControl>
+              )}
+              {groupsEnabled && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Scope</Typography>
+                  <GroupScopeFilter value={scope} onChange={setScope} />
+                </>
               )}
               <Divider sx={{ my: 2 }} />
               <Typography variant="body2" color="text.secondary">

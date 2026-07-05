@@ -215,6 +215,27 @@ export async function listGroupExpenses(
   return res.json();
 }
 
+export interface UnifiedGroupExpenseRow extends GroupExpenseRow {
+  group_id: string;
+  group_name: string;
+}
+
+/** All of the user's group expenses across every group they belong to, for the
+ * "Groups"/"Combined" scope views (there is no unified backend list endpoint —
+ * §13.3 of the spec floats one as a future `/expenses?scope=combined` addition,
+ * but it isn't built; Phase 1 group volumes are expected to be small per §6.5,
+ * so an unpaginated per-group fetch is an acceptable simplification here). */
+export async function listAllMyGroupExpenses(): Promise<UnifiedGroupExpenseRow[]> {
+  const groups = await listGroups();
+  const perGroup = await Promise.all(
+    groups.map(async (g) => {
+      const res = await listGroupExpenses(g.group_id, 0, 200);
+      return res.items.map((row) => ({ ...row, group_id: g.group_id, group_name: g.name }));
+    })
+  );
+  return perGroup.flat();
+}
+
 export async function updateGroupExpense(
   groupId: string,
   expenseId: string,

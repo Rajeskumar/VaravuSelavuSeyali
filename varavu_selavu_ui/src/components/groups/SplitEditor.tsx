@@ -30,11 +30,25 @@ interface SplitEditorProps {
   onValidityChange?: (valid: boolean) => void;
   /** Backend 400 message (e.g. from a SplitError), shown inline in addition to local validation. */
   serverError?: string | null;
+  /** Restricts which split types are selectable — defaults to all three (GroupDetailPage's
+   * usage, TS-GRP-107). The receipt/quick-add flow (TS-GRP-108) passes `['equal']` only,
+   * per spec §10.1's Phase-1 scope for that entry point; the tab bar is hidden entirely
+   * when there's nothing to choose between. */
+  allowedTypes?: SplitType[];
 }
 
 const TOLERANCE = 0.01;
+const ALL_TYPES: SplitType[] = ['equal', 'exact', 'percentage'];
 
-const SplitEditor: React.FC<SplitEditorProps> = ({ amount, members, value, onChange, onValidityChange, serverError }) => {
+const SplitEditor: React.FC<SplitEditorProps> = ({
+  amount,
+  members,
+  value,
+  onChange,
+  onValidityChange,
+  serverError,
+  allowedTypes = ALL_TYPES,
+}) => {
   const selectedIds = React.useMemo(() => new Set(value.entries.map((e) => e.member_id)), [value.entries]);
 
   const totalEntered = value.entries.reduce((sum, e) => sum + (e.value || 0), 0);
@@ -96,11 +110,13 @@ const SplitEditor: React.FC<SplitEditorProps> = ({ amount, members, value, onCha
 
   return (
     <Box>
-      <Tabs value={value.type} onChange={handleTabChange} sx={{ mb: 1 }}>
-        <Tab label="Equal" value="equal" />
-        <Tab label="Exact" value="exact" />
-        <Tab label="Percentage" value="percentage" />
-      </Tabs>
+      {allowedTypes.length > 1 && (
+        <Tabs value={value.type} onChange={handleTabChange} sx={{ mb: 1 }}>
+          {allowedTypes.includes('equal') && <Tab label="Equal" value="equal" />}
+          {allowedTypes.includes('exact') && <Tab label="Exact" value="exact" />}
+          {allowedTypes.includes('percentage') && <Tab label="Percentage" value="percentage" />}
+        </Tabs>
+      )}
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
         {members.map((m) => {

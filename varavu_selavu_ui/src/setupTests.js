@@ -4,6 +4,14 @@
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
+// Polyfill for framer-motion's `whileInView` (used by DashboardPage cards), which
+// JSDOM doesn't implement.
+window.IntersectionObserver = class MockIntersectionObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 // Polyfills for Plotly in JSDOM environment
 window.URL.createObjectURL = jest.fn();
 HTMLCanvasElement.prototype.getContext = () => {
