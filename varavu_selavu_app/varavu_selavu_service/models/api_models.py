@@ -338,6 +338,76 @@ class SettlementDTO(BaseModel):
     created_by: Optional[str] = None
 
 
+class GroupSplitEntry(BaseModel):
+    member_id: str
+    value: Optional[float] = None  # required for exact/percentage; unused for equal
+
+
+class GroupSplitConfig(BaseModel):
+    type: str  # equal|exact|percentage (Phase 1)
+    entries: List[GroupSplitEntry] = []
+
+
+class GroupExpensePayerEntry(BaseModel):
+    member_id: str
+    amount_paid: float
+
+
+class GroupExpenseRequest(BaseModel):
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    description: str
+    category: str
+    amount: float
+    merchant_name: Optional[str] = None
+    payers: List[GroupExpensePayerEntry]
+    split: GroupSplitConfig
+
+
+class PayerSummaryItem(BaseModel):
+    member_id: str
+    amount_paid: float
+
+
+class GroupExpenseRow(BaseModel):
+    row_id: str
+    date: str
+    description: str
+    category: str
+    cost: float
+    merchant_name: Optional[str] = None
+    my_share: float
+    payer_summary: List[PayerSummaryItem]
+
+
+class GroupExpenseCreatedResponse(BaseModel):
+    success: bool
+    expense: GroupExpenseRow
+
+
+class GroupExpenseListResponse(BaseModel):
+    items: List[GroupExpenseRow]
+    next_offset: Optional[int] = None
+
+
+class MemberBalance(BaseModel):
+    member_id: str
+    display_name: str
+    net: float
+
+
+class BalanceTransfer(BaseModel):
+    from_member_id: str
+    to_member_id: str
+    amount: float
+
+
+class BalanceResponse(BaseModel):
+    group_id: str
+    members: List[MemberBalance]
+    transfers: List[BalanceTransfer]
+    simplified: bool
+
+
 # ---------------------- Email ---------------------- #
 
 class SendEmailRequest(BaseModel):

@@ -10,18 +10,25 @@ from varavu_selavu_service.models.api_models import (
     AcceptInviteRequest,
     AcceptInviteResponse,
     AddMemberRequest,
+    BalanceResponse,
     CreateGroupRequest,
     CreateInviteRequest,
     CreateInviteResponse,
     GroupDetailResponse,
+    GroupExpenseCreatedResponse,
+    GroupExpenseListResponse,
+    GroupExpenseRequest,
     GroupSummary,
     MemberDTO,
     RecordSettlementRequest,
     SettlementDTO,
     UpdateGroupRequest,
 )
+from varavu_selavu_service.services.balance_service import BalanceService
+from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.settlement_service import SettlementService
+from varavu_selavu_service.services.analysis_service import AnalysisService
 
 
 def require_groups_enabled() -> None:
@@ -37,6 +44,20 @@ def get_group_service(db: Session = Depends(get_db)) -> GroupService:
 
 def get_settlement_service(db: Session = Depends(get_db)) -> SettlementService:
     return SettlementService(db)
+
+
+def get_group_expense_service(db: Session = Depends(get_db)) -> GroupExpenseService:
+    return GroupExpenseService(db)
+
+
+def get_balance_service(db: Session = Depends(get_db)) -> BalanceService:
+    return BalanceService(db)
+
+
+def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
+    # Local provider (mirrors api/routes.py's) — importing that one directly would be
+    # a circular import, since routes.py imports this module's router.
+    return AnalysisService(db=db, ttl_sec=Settings().ANALYSIS_CACHE_TTL_SEC)
 
 
 router = APIRouter(prefix="/groups", tags=["Groups"], dependencies=[Depends(require_groups_enabled)])
@@ -193,3 +214,95 @@ def delete_settlement(
 ):
     svc.delete_settlement(group_id, user_email, settlement_id)
     return {"success": True}
+
+
+@router.post(
+    "/{group_id}/expenses",
+    response_model=GroupExpenseCreatedResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a group expense",
+)
+def create_group_expense(
+    group_id: str,
+    data: GroupExpenseRequest,
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    user_email: str = Depends(auth_required),
+):
+    row = svc.create_expense(
+        group_id=group_id,
+        actor_email=user_email,
+        date=data.date,
+        description=data.description,
+        category=data.category,
+        amount=data.amount,
+        merchant_name=data.merchant_name,
+        payers=[p.model_dump() for p in data.payers],
+        split_type=data.split.type,
+        split_entries=[e.model_dump() for e in data.split.entries],
+    )
+    analysis_service.invalidate_cache()
+    return {"success": True, "expense": row}
+
+
+@router.get("/{group_id}/expenses", response_model=GroupExpenseListResponse, summary="List group expenses")
+def list_group_expenses(
+    group_id: str,
+    limit: int = Query(30, ge=1),
+    offset: int = Query(0, ge=0),
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    user_email: str = Depends(auth_required),
+):
+    return svc.list_group_expenses(group_id, user_email, limit=limit, offset=offset)
+
+
+@router.put(
+    "/{group_id}/expenses/{expense_id}",
+    response_model=GroupExpenseCreatedResponse,
+    summary="Edit a group expense (any member)",
+)
+def update_group_expense(
+    group_id: str,
+    expense_id: str,
+    data: GroupExpenseRequest,
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    user_email: str = Depends(auth_required),
+):
+    row = svc.update_expense(
+        group_id=group_id,
+        expense_id=expense_id,
+        actor_email=user_email,
+        date=data.date,
+        description=data.description,
+        category=data.category,
+        amount=data.amount,
+        merchant_name=data.merchant_name,
+        payers=[p.model_dump() for p in data.payers],
+        split_type=data.split.type,
+        split_entries=[e.model_dump() for e in data.split.entries],
+    )
+    analysis_service.invalidate_cache()
+    return {"success": True, "expense": row}
+
+
+@router.delete("/{group_id}/expenses/{expense_id}", summary="Delete a group expense (any member)")
+def delete_group_expense(
+    group_id: str,
+    expense_id: str,
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    user_email: str = Depends(auth_required),
+):
+    svc.delete_expense(group_id, expense_id, user_email)
+    analysis_service.invalidate_cache()
+    return {"success": True}
+
+
+@router.get("/{group_id}/balances", response_model=BalanceResponse, summary="Net balances (non-simplified)")
+def get_balances(
+    group_id: str,
+    svc: BalanceService = Depends(get_balance_service),
+    user_email: str = Depends(auth_required),
+):
+    return svc.get_balances(group_id, user_email)

@@ -4,17 +4,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from varavu_selavu_service.core.config import Settings
 from varavu_selavu_service.db.models import (
-    ExpensePayer,
-    ExpenseSplit,
     Group,
     GroupInvitation,
     GroupMember,
-    Settlement,
     User,
 )
 
@@ -77,34 +73,23 @@ class GroupService:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
         return member
 
+    def get_member_by_email(self, group_id, email: str) -> Optional[GroupMember]:
+        """Public wrapper around the active-membership lookup, for other services (e.g. GroupExpenseService)."""
+        return self._get_active_membership(group_id, email)
+
     # ------------------------------------------------------------------
-    # Interim balance-zero guard (TS-GRP-104 replaces this with real net balances)
+    # Balance-zero guard (real net(m), via TS-GRP-104's BalanceService)
     # ------------------------------------------------------------------
 
-    def _member_has_activity(self, member_id: uuid.UUID) -> bool:
-        if self.db.query(ExpensePayer).filter(ExpensePayer.member_id == member_id).first():
-            return True
-        if self.db.query(ExpenseSplit).filter(ExpenseSplit.member_id == member_id).first():
-            return True
-        if (
-            self.db.query(Settlement)
-            .filter(or_(Settlement.from_member_id == member_id, Settlement.to_member_id == member_id))
-            .first()
-        ):
-            return True
-        return False
+    def _member_is_settled(self, group_id, member_id: uuid.UUID) -> bool:
+        from varavu_selavu_service.services.balance_service import BalanceService  # local import: avoids a circular import (BalanceService composes GroupService for require_membership)
 
-    def _group_has_activity(self, group_id: uuid.UUID) -> bool:
-        member_ids = [m.id for m in self.db.query(GroupMember.id).filter(GroupMember.group_id == group_id).all()]
-        if not member_ids:
-            return False
-        if self.db.query(ExpensePayer).filter(ExpensePayer.member_id.in_(member_ids)).first():
-            return True
-        if self.db.query(ExpenseSplit).filter(ExpenseSplit.member_id.in_(member_ids)).first():
-            return True
-        if self.db.query(Settlement).filter(Settlement.group_id == group_id).first():
-            return True
-        return False
+        return BalanceService(self.db).member_net(group_id, member_id) == 0
+
+    def _group_is_settled(self, group_id: uuid.UUID) -> bool:
+        from varavu_selavu_service.services.balance_service import BalanceService
+
+        return BalanceService(self.db).group_is_settled(group_id)
 
     # ------------------------------------------------------------------
     # DTO builders
@@ -233,7 +218,7 @@ class GroupService:
         group = self._get_group_or_404(group_id)
         self._require_admin(group_id, email)
 
-        if not force and self._group_has_activity(group.id):
+        if not force and not self._group_is_settled(group.id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Group has outstanding balances; pass force=true to delete anyway",
@@ -305,7 +290,7 @@ class GroupService:
         if member is None:
             raise HTTPException(status_code=404, detail="Member not found")
 
-        if not force and self._member_has_activity(member.id):
+        if not force and not self._member_is_settled(group.id, member.id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Member has a non-zero balance; pass force=true to remove anyway",
@@ -317,7 +302,7 @@ class GroupService:
     def leave_group(self, group_id: str, email: str) -> None:
         member = self.require_membership(group_id, email)
 
-        if self._member_has_activity(member.id):
+        if not self._member_is_settled(group_id, member.id):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Settle your balance before leaving this group",
