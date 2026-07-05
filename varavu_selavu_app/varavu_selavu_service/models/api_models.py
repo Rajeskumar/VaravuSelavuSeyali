@@ -90,6 +90,12 @@ class HealthResponse(BaseModel):
     status: str = "healthy"
 
 
+class FeatureFlagsResponse(BaseModel):
+    # Client-visible flag surface (TS-GRP-111) — lets web/mobile hide Groups nav,
+    # filters, and toggles without relying on a 404 probe against /groups.
+    groups_enabled: bool
+
+
 class DashboardResponse(BaseModel):
     total_expenses: float
     total_categories: int

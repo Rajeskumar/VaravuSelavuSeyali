@@ -6,6 +6,7 @@
  * - Throws `ApiError` on non-2xx responses so callers can check `err.status`.
  */
 import { apiFetch } from './apiFetch';
+import { getConfig } from './config';
 
 // ---------------------------------------------------------------------------
 // Error type (mirrors the web client's ApiError for consistency)
@@ -146,14 +147,15 @@ export interface AcceptInviteResponse {
 // ---------------------------------------------------------------------------
 
 /**
- * Check if the Groups feature is enabled on the backend.
- * Returns true if the endpoint is reachable (200), false if it returns 404.
- * This mirrors the web GroupsPage behaviour for the feature flag check.
+ * Check if the Groups feature is enabled on the backend, via the dedicated
+ * flag surface (TS-GRP-111's GET /config) rather than probing /groups for a
+ * 404 — the endpoint never 404s and doesn't require auth, so this resolves
+ * reliably even before the /groups query itself has run.
  */
 export async function checkGroupsEnabled(): Promise<boolean> {
   try {
-    const res = await apiFetch('/api/v1/groups');
-    return res.status !== 404;
+    const config = await getConfig();
+    return config.groups_enabled;
   } catch {
     return false;
   }

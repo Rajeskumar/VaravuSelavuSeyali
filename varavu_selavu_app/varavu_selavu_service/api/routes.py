@@ -10,6 +10,7 @@ from varavu_selavu_service.models.api_models import (
     CategorizeResponse,
     ChatRequest,
     HealthResponse,
+    FeatureFlagsResponse,
     DashboardResponse,
     ExpenseCreatedResponse,
     ExpenseRow,
@@ -98,6 +99,14 @@ def health_check():
 def readiness_check():
     # Extend with checks to downstream services (e.g., Google Sheets) if needed
     return {"status": "healthy"}
+
+
+@router.get("/config", response_model=FeatureFlagsResponse, tags=["Health"], summary="Client-visible feature flags")
+def get_config():
+    # Reads Settings() fresh (not the module-level `settings` singleton) so it
+    # reflects the same runtime-toggleable value groups_routes.require_groups_enabled
+    # checks — no auth required, this is non-sensitive app config, not user data.
+    return {"groups_enabled": Settings().GROUPS_ENABLED}
 
 
 @router.post(
@@ -410,6 +419,13 @@ def analysis(
     user_id: str = Depends(auth_required),
 ):
     """Return analysis for a given user via the AnalysisService."""
+    if not Settings().GROUPS_ENABLED:
+        # Feature flag gate (TS-GRP-111, spec §13.4). scope/group_id stay accepted
+        # (no error) so already-updated clients don't break, but they're silently
+        # downgraded to personal-only — group data must not be reachable via
+        # /analysis with the flag off, regardless of what a client requests.
+        scope = "personal"
+        group_id = None
     result = analysis_service.analyze(
         user_id=user_id,
         year=year,

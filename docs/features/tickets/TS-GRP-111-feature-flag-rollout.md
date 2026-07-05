@@ -2,6 +2,8 @@
 
 **Phase:** 1 · **Build order:** 11th (last) · **Spec:** §13.4, §16 (exit criteria)
 
+**Status:** ✅ Implemented, pending review (see Implementation notes below)
+
 ## Scope
 
 Gate the entire feature behind a `GROUPS_ENABLED` flag, add the Phase-1 end-to-end tests that prove Priya's stories 1/2/4/5/6, and confirm old clients are unaffected. This is the ticket that flips the feature on.
@@ -39,3 +41,13 @@ Gate the entire feature behind a `GROUPS_ENABLED` flag, add the Phase-1 end-to-e
 - **Flag tests:** with flag off, group routes `404`/`403` and `/analysis` == legacy; with flag on, routes live.
 - **Back-compat test:** a no-`scope` `/analysis` request returns identical shape/values to the pre-feature baseline.
 - Full existing suite (`tests/test_analytics_api.py`, `test_expenses_api.py`, `test_auth.py`, …) must remain green.
+
+## Implementation notes (post-build)
+
+- **Dependencies confirmed merged:** all of TS-GRP-101–110 are on this branch; `GROUPS_ENABLED` already defaulted OFF and `groups_routes.py`'s `require_groups_enabled` router-level dependency already gated every `/groups*` + `/devices*` route (added incrementally in 102/110) — no changes needed there.
+- **Real gap found and fixed:** `GET /analysis` accepted `scope=combined|groups` and `group_id` completely independently of `GROUPS_ENABLED` — with the flag off, a client that still requested `scope=combined` would get real combined data back (silently leaking group spend into "personal-only" mode) if any group expenses existed in the DB. Fixed in `api/routes.py`'s `analysis()` handler: when the flag is off, `scope`/`group_id` are silently downgraded to `personal`/`None` before calling `AnalysisService.analyze()` — no error, matching the ticket's "the scope params remain accepted but behave as personal-only when off" requirement. Covered by `test_groups_e2e.py::test_flag_off_hides_group_routes_and_downgrades_analysis_scope`.
+- **New client-visible flag surface:** `GET /api/v1/config` → `{"groups_enabled": bool}` (new `FeatureFlagsResponse` model, added next to `/healthz`/`/readyz` in `api/routes.py` since those were the only precedent for a small non-user-data GET). No auth required — it's app config, not user data, and needs to be checkable before login too.
+- **Web:** `useGroupsEnabled()` (`src/hooks/useGroupsEnabled.ts`) now calls the new `GET /config` via `src/api/config.ts` instead of probing `listGroups()` for a 404 — same `{enabled, isLoading}` contract, so every consumer (DashboardPage, ExpensesPage, ExpenseAnalysisPage, AddExpenseForm) is unaffected. Updated the 3 test files that previously mocked `listGroups` to control this hook's flag state (`ExpensesPage.test.tsx`, `DashboardPage.test.tsx`) to mock `configApi.getConfig` instead — `GroupsPage.test.tsx` needed no change since `GroupsPage` handles its own 404 directly, not via the hook.
+- **Mobile:** added `src/api/config.ts` and wired the previously-unused `checkGroupsEnabled()` stub (in `src/api/groups.ts`) to call it for real. Did **not** rewire `GroupsScreen`/`AddExpenseScreen`'s existing per-screen `listGroups()`-based flag detection — that logic already works and is already tested (TS-GRP-109), and touching it wasn't necessary to satisfy this ticket's "provides the flag source" scope; flagged here rather than silently expanding the diff.
+- **New backend tests:** `tests/test_groups_e2e.py` (8 tests: Priya's stories 1/2/4/5/6, flag-off/flag-on, and a back-compat shape/value check — the last one is a companion to the more granular assertion already in `tests/test_analytics_api.py::test_analysis_legacy_no_scope_param_defaults_to_personal`, not a replacement), `tests/test_config_endpoint.py` (2 tests), and `tests/test_groups_e2e_pg.py` (2 tests, mirrors `test_analytics_e2e_pg.py`'s structure/skip-guard, wired into `run_e2e_pg_tests.sh`). Full suite: **111 passed, 4 skipped** (2 pre-existing + 2 new Postgres-only tests — skipped here since Docker isn't available in this environment, same as the pre-existing PG suite; not run live, matching precedent).
+- Full web (`33` tests, same 3 pre-existing unrelated failures as every prior ticket) and mobile (`28` tests) suites re-verified green after the hook/test changes.

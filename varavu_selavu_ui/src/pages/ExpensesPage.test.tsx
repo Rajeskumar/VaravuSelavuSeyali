@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ExpensesPage from './ExpensesPage';
 import * as api from '../api/expenses';
 import * as groupsApi from '../api/groups';
+import * as configApi from '../api/config';
 import React from 'react';
 
 jest.mock('heic2any', () => ({
@@ -35,7 +36,7 @@ test('shows expenses and opens form', async () => {
     ],
     next_offset: undefined,
   });
-  jest.spyOn(groupsApi, 'listGroups').mockRejectedValue(new groupsApi.ApiError('Not Found', 404, null));
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   expect(screen.getByText('Coffee')).toBeInTheDocument();
@@ -51,7 +52,7 @@ test('deletes an expense', async () => {
     next_offset: undefined,
   });
   const delSpy = jest.spyOn(api, 'deleteExpense').mockResolvedValue();
-  jest.spyOn(groupsApi, 'listGroups').mockRejectedValue(new groupsApi.ApiError('Not Found', 404, null));
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   fireEvent.click(screen.getByLabelText('delete'));
@@ -70,7 +71,7 @@ test('regression: with groups disabled (404), no scope filter renders and person
     ],
     next_offset: undefined,
   });
-  jest.spyOn(groupsApi, 'listGroups').mockRejectedValue(new groupsApi.ApiError('Not Found', 404, null));
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   expect(screen.queryByRole('button', { name: 'Groups' })).not.toBeInTheDocument();
@@ -84,6 +85,7 @@ test('scope filter switches the queried data and shows the group badge column', 
     ],
     next_offset: undefined,
   });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true });
   jest.spyOn(groupsApi, 'listGroups').mockResolvedValue([
     { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 0 },
   ]);

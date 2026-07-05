@@ -7,6 +7,7 @@ import * as analysisApi from '../api/analysis';
 import * as recurringApi from '../api/recurring';
 import * as expensesApi from '../api/expenses';
 import * as groupsApi from '../api/groups';
+import * as configApi from '../api/config';
 import React from 'react';
 
 const combinedPayload: analysisApi.AnalysisResponse = {
@@ -42,7 +43,7 @@ afterEach(() => {
 
 test('renders combined totals from the analysis payload', async () => {
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
-  jest.spyOn(groupsApi, 'listGroups').mockRejectedValue(new groupsApi.ApiError('Not Found', 404, null));
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
   renderPage();
   await waitFor(() => expect(analysisApi.getAnalysis).toHaveBeenCalledWith(
     expect.objectContaining({ scope: 'combined' })
@@ -52,6 +53,7 @@ test('renders combined totals from the analysis payload', async () => {
 
 test('shows My Groups widget and the combined-totals explainer toast on first visit', async () => {
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true });
   jest.spyOn(groupsApi, 'listGroups').mockResolvedValue([
     { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 12.5 },
   ]);
@@ -63,7 +65,7 @@ test('shows My Groups widget and the combined-totals explainer toast on first vi
 
 test('regression: with no groups (404), dashboard renders without the My Groups widget or toast', async () => {
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
-  jest.spyOn(groupsApi, 'listGroups').mockRejectedValue(new groupsApi.ApiError('Not Found', 404, null));
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
   renderPage();
   await waitFor(() => expect(screen.getAllByText('$500.00').length).toBeGreaterThan(0));
   expect(screen.queryByText('Apartment 4B')).not.toBeInTheDocument();

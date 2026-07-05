@@ -46,7 +46,10 @@ echo "Applying full item/merchant insights migration..."
 PYTHONPATH=. poetry run python -c "
 from sqlalchemy import create_engine
 from varavu_selavu_service.db.session import Base
-from varavu_selavu_service.db.models import User, Expense, ExpenseItem, RecurringTemplate, ItemInsight, ItemPriceHistory, MerchantInsight, MerchantAggregate
+# Importing any model loads the whole models.py module, so every table
+# (including Groups-phase-1 models + device_tokens, TS-GRP-101/110) is already
+# registered on Base.metadata by the time create_all runs below.
+from varavu_selavu_service.db.models import User, Expense, ExpenseItem, RecurringTemplate, ItemInsight, ItemPriceHistory, MerchantInsight, MerchantAggregate, Group, GroupMember, DeviceToken
 # Create connection to the dockerized PG
 eng = create_engine('postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME', execution_options={'schema_translate_map': {'trackspense': 'trackspense'}})
 Base.metadata.create_all(bind=eng)
@@ -58,6 +61,6 @@ print('All PostgreSQL tables created successfully via SQLAlchemy metadata.')
 echo "Running E2E tests against PostgreSQL..."
 export E2E_DATABASE_URL="postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME"
 export PYTHONPATH=.
-poetry run pytest tests/test_analytics_e2e_pg.py -v
+poetry run pytest tests/test_analytics_e2e_pg.py tests/test_groups_e2e_pg.py -v
 
 echo "E2E Testing completed successfully!"
