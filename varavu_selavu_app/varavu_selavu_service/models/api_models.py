@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, conint
+from pydantic import BaseModel, EmailStr, Field, conint
 
 class LoginRequest(BaseModel):
     username: str
@@ -247,6 +247,74 @@ class DueOccurrenceDTO(BaseModel):
 
 class ConfirmRecurringRequest(BaseModel):
     items: List[Dict[str, str | float]]
+
+
+# ---------------------- Groups (TS-GRP series) ---------------------- #
+
+class CreateGroupRequest(BaseModel):
+    name: str
+    group_type: str = "other"  # trip|home|couple|other
+    cover: Optional[str] = None
+    currency: str = "USD"
+
+
+class UpdateGroupRequest(BaseModel):
+    """Phase 1 only covers name/type/cover — default_split/simplify_debts/currency are Phase 2 (spec §5.1)."""
+    name: Optional[str] = None
+    group_type: Optional[str] = None
+    cover: Optional[str] = None
+
+
+class MemberDTO(BaseModel):
+    member_id: str
+    display_name: str
+    role: str
+    status: str
+    user_email: Optional[str] = None
+
+
+class GroupSummary(BaseModel):
+    group_id: str
+    name: str
+    group_type: str
+    member_count: int
+    my_balance: float = 0.0  # real balance computation lands with TS-GRP-104
+
+
+class GroupDetailResponse(BaseModel):
+    group_id: str
+    name: str
+    group_type: str
+    cover: Optional[str] = None
+    currency: str
+    simplify_debts: bool
+    status: str
+    members: List[MemberDTO]
+
+
+class AddMemberRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    display_name: Optional[str] = None
+
+
+class CreateInviteRequest(BaseModel):
+    member_id: str
+
+
+class CreateInviteResponse(BaseModel):
+    token: str
+    url: str
+    expires_at: str
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+
+
+class AcceptInviteResponse(BaseModel):
+    group_id: str
+    member_id: str
+    display_name: str
 
 
 # ---------------------- Email ---------------------- #

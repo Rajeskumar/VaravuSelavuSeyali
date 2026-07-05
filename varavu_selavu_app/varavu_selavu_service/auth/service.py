@@ -2,7 +2,7 @@ from typing import Optional
 import uuid
 
 from sqlalchemy.orm import Session
-from varavu_selavu_service.db.models import User
+from varavu_selavu_service.db.models import User, Expense, GroupMember
 from .security import hash_password, verify_password
 
 _REVOKED_REFRESH_TOKENS: set[str] = set()
@@ -89,6 +89,21 @@ class AuthService:
         if not user:
             return False
         try:
+            # Personal expenses are hard-deleted with the account (expense_items
+            # cascade via expense_id). Group expenses are NOT touched here — the
+            # expenses.user_email FK is ON DELETE SET NULL so they survive the
+            # user delete below, per the "Anonymous User" strategy (spec §6.2/E12).
+            self.db.query(Expense).filter(
+                Expense.user_email == email, Expense.group_id.is_(None)
+            ).delete(synchronize_session=False)
+
+            # Anonymize the user's seat in every group they belonged to. user_email
+            # on these rows is nulled automatically by ON DELETE SET NULL when the
+            # users row is deleted below.
+            self.db.query(GroupMember).filter(GroupMember.user_email == email).update(
+                {"display_name": "Anonymous User"}, synchronize_session=False
+            )
+
             self.db.delete(user)
             self.db.commit()
             return True

@@ -16,7 +16,7 @@ All shipped and working — verified via direct API/route inspection and live te
 
 | Area | Status | Notes |
 |:---|:---|:---|
-| Auth (register/login/Google OAuth/refresh/logout/forgot-password/profile) | ✅ Built | Includes `DELETE /auth/profile` (account deletion) with cascading FK deletes and a real confirmation-dialog UX (type "DELETE" to confirm) |
+| Auth (register/login/Google OAuth/refresh/logout/forgot-password/profile) | ✅ Built | Includes `DELETE /auth/profile` (account deletion) with a real confirmation-dialog UX (type "DELETE" to confirm). As of TS-GRP-112, personal expenses are hard-deleted explicitly (no longer a DB-level cascade) while group expenses survive with the author anonymized — see §6 below |
 | Expense CRUD + AI auto-categorization | ✅ Built | `POST/GET/PUT/DELETE /expenses`, `/expenses/categorize`, `/expenses/with_items` |
 | Receipt OCR scanning | ✅ Built | `/ingest/receipt/parse`, fingerprint dedup, "Upload Receipt" UI on web (Add Expense dialog) |
 | Recurring expense management | ✅ Built | Full CRUD + due/confirm/execute_now |
@@ -103,4 +103,6 @@ This is the new "Split & Track" shared expenses feature.
 |:---|:---|:---|
 | [TS-GRP-103 — SplitEngine](features/tickets/TS-GRP-103-split-engine.md) | ✅ Built | Pure functions + exhaustive unit tests for split math (§3.4, §3.5, §7.3). |
 | [TS-GRP-101 — ORM models & migrations](features/tickets/TS-GRP-101-schema-migration.md) | ✅ Built | SQLAlchemy models and Alembic migration for groups Phase 1 + E12 account deletion fix. |
+| [TS-GRP-112 — Account-deletion cleanup](features/tickets/TS-GRP-112-account-deletion-cleanup.md) | ✅ Built | Fixes `AuthService.delete_user` to hard-delete personal expenses and anonymize `group_members.display_name` to "Anonymous User", matching the "Anonymous User" strategy resolved in the spec (§6.2/§17.3). |
+| [TS-GRP-102 — GroupService + membership](features/tickets/TS-GRP-102-group-service.md) | ✅ Built | Group CRUD, registered/placeholder members, tokenized invites (create/accept), leave/remove with interim balance-zero guard. All routes behind `GROUPS_ENABLED` (default off, §13.4). Real balance checks land with TS-GRP-104. |
 

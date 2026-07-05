@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "change-me"
     JWT_EXPIRE_MINUTES: int = 30
 
+    # Groups (TS-GRP series) — staged rollout flag; off by default so nothing
+    # group-related is reachable until explicitly enabled (spec §13.4).
+    GROUPS_ENABLED: bool = False
+    PUBLIC_APP_URL: str = "http://localhost:3000"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

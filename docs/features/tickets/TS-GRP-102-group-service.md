@@ -1,6 +1,14 @@
 # TS-GRP-102 — GroupService + repo (CRUD, membership, invites)
 
-**Phase:** 1 · **Build order:** 3rd · **Spec:** §5.1, §8.1, §8.6, §14 (E1, E3, E4)
+**Phase:** 1 · **Build order:** 3rd · **Spec:** §5.1, §8.1, §8.6, §14 (E1, E3, E4) · **Status:** ✅ Completed
+
+## Implementation notes (post-build)
+
+- All endpoints gated behind a new `GROUPS_ENABLED` setting (`core/config.py`, default `False`) via a `require_groups_enabled` dependency on the router — returns `404` when disabled, so nothing is reachable until the flag is flipped (this pulls a small piece of TS-GRP-111 forward out of necessity; TS-GRP-111 still owns the actual staged-rollout process).
+- `add_member` validates that a given `email` corresponds to an existing registered `User` before linking (`400` otherwise) — `group_members.user_email` is a real FK to `users.email`, so an unregistered email would otherwise fail as an unhandled `IntegrityError`/500. Not explicitly called out in the original acceptance criteria but required to satisfy "registered email links instantly" without a crash path.
+- `leave` has no `force` option by design (self cannot override their own non-zero balance) — only admin-driven `remove_member` accepts `force=true`. The ticket's bullet ("leave/remove block on non-zero balance without force") reads as it could apply `force` to both; §14 E1's fuller text ("Admin `force=true` removes them") confirms force is an admin capability only. Flagging this interpretation explicitly in case it needs to go back into the spec's wording.
+- `resolve_member`/`require_membership`/interim balance-zero checks (`_member_has_activity`, `_group_has_activity`) are implemented per the ticket's interim-guard instruction and are marked for replacement by TS-GRP-104's `BalanceService`.
+- `PUT /groups/{id}` intentionally covers only `name`/`group_type`/`cover` — per spec §5.1's feature table, default split / simplify-debts toggle / currency are Phase 2, and currency is fixed at creation (E10).
 
 ## Scope
 
