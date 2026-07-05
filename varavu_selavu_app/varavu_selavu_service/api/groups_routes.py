@@ -16,9 +16,12 @@ from varavu_selavu_service.models.api_models import (
     GroupDetailResponse,
     GroupSummary,
     MemberDTO,
+    RecordSettlementRequest,
+    SettlementDTO,
     UpdateGroupRequest,
 )
 from varavu_selavu_service.services.group_service import GroupService
+from varavu_selavu_service.services.settlement_service import SettlementService
 
 
 def require_groups_enabled() -> None:
@@ -30,6 +33,10 @@ def require_groups_enabled() -> None:
 
 def get_group_service(db: Session = Depends(get_db)) -> GroupService:
     return GroupService(db)
+
+
+def get_settlement_service(db: Session = Depends(get_db)) -> SettlementService:
+    return SettlementService(db)
 
 
 router = APIRouter(prefix="/groups", tags=["Groups"], dependencies=[Depends(require_groups_enabled)])
@@ -141,4 +148,48 @@ def leave_group(
     user_email: str = Depends(auth_required),
 ):
     svc.leave_group(group_id, user_email)
+    return {"success": True}
+
+
+@router.post(
+    "/{group_id}/settlements",
+    response_model=SettlementDTO,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a settlement",
+)
+def create_settlement(
+    group_id: str,
+    data: RecordSettlementRequest,
+    svc: SettlementService = Depends(get_settlement_service),
+    user_email: str = Depends(auth_required),
+):
+    return svc.create_settlement(
+        group_id=group_id,
+        actor_email=user_email,
+        from_member_id=data.from_member_id,
+        to_member_id=data.to_member_id,
+        amount=data.amount,
+        method=data.method,
+        settled_at=data.settled_at,
+        notes=data.notes,
+    )
+
+
+@router.get("/{group_id}/settlements", response_model=List[SettlementDTO], summary="Settlement history")
+def list_settlements(
+    group_id: str,
+    svc: SettlementService = Depends(get_settlement_service),
+    user_email: str = Depends(auth_required),
+):
+    return svc.list_settlements(group_id, user_email)
+
+
+@router.delete("/{group_id}/settlements/{settlement_id}", summary="Undo a settlement")
+def delete_settlement(
+    group_id: str,
+    settlement_id: str,
+    svc: SettlementService = Depends(get_settlement_service),
+    user_email: str = Depends(auth_required),
+):
+    svc.delete_settlement(group_id, user_email, settlement_id)
     return {"success": True}

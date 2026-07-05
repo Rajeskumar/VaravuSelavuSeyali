@@ -317,6 +317,27 @@ class AcceptInviteResponse(BaseModel):
     display_name: str
 
 
+class RecordSettlementRequest(BaseModel):
+    from_member_id: str
+    to_member_id: str
+    amount: float
+    method: Optional[str] = None
+    settled_at: Optional[str] = None  # ISO 8601; defaults to now() when omitted
+    notes: Optional[str] = None
+
+
+class SettlementDTO(BaseModel):
+    id: str
+    group_id: str
+    from_member_id: str
+    to_member_id: str
+    amount: float
+    method: Optional[str] = None
+    settled_at: str
+    notes: Optional[str] = None
+    created_by: Optional[str] = None
+
+
 # ---------------------- Email ---------------------- #
 
 class SendEmailRequest(BaseModel):
