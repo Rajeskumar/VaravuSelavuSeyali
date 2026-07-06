@@ -319,7 +319,8 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 10,
       borderRadius: 14,
       padding: 14,
-      ...theme.shadows.xs,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.borderLight,
     },
     cardIcon: {
       width: 44,

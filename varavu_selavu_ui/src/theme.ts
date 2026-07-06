@@ -1,25 +1,57 @@
 import { createTheme, PaletteMode, Theme } from '@mui/material/styles';
 
-// "Apple structure, Revolut color": a mostly neutral, spacious Apple-style
-// canvas (apple.com grays, SF-style type, big pill buttons) carrying a single
-// vivid gradient accent — Apple's own system Blue → Purple — used deliberately
-// for CTAs, active states, and data highlights rather than washed everywhere.
+/**
+ * "Reconcile" — TrackSpense's design language (docs/design/TrackSpense_UX_Design_Spec.md §9).
+ * One flat signature color (jade) on a quiet ink/paper neutral system. No gradients, no
+ * glassmorphism, no blanket hover-lift. Money renders in `ink` by default; jade/ember/gold
+ * carry meaning (positive / negative / ceremony), not decoration — see `directionalColor()`.
+ */
+export const reconcile = {
+  ink: '#191A1E',
+  inkMuted: '#6B6D74',
+  paper: '#F7F7F4',
+  surface: '#FFFFFF',
+  surfaceDark: '#202127',
+  hairline: '#E4E4DF',
+  hairlineDark: '#33343B',
+  jade: '#0FA37F',
+  jadeText: '#0B8A6B', // accessible small-text variant on light backgrounds (§2 a11y floor)
+  jadeDark: '#1CBE94', // ~8% luminance lift for dark-mode contrast (§2)
+  ember: '#DE5B4B',
+  emberDark: '#E8705F',
+  gold: '#C9973F', // ceremony only — reconcile tick, streaks, receipt-parse success. Never a fill.
+  goldDark: '#D9A752',
+  // Reconcile has no dedicated "caution" token (gold is ceremony-only, not generic warning) —
+  // this is a plain, deliberately unglamorous amber kept distinct from `gold` so gold's scarcity
+  // (Design Spec §2: "gold appears maybe twice per session") isn't diluted by routine form/toast
+  // warnings borrowing it.
+  caution: '#B78A2E',
+  cautionDark: '#C99A42',
+  radius: { surface: 10, control: 8, pill: 999 },
+} as const;
+
+/**
+ * Back-compat shim: every pre-Reconcile consumer (App.tsx, HomePage.tsx, LoginPage.tsx,
+ * GroupsPage.tsx — none of them owned by this ticket) builds its own
+ * `linear-gradient(135deg, brand.gradientStart, brand.gradientEnd)` / radial wash inline. Rather
+ * than edit those files, both stops now resolve to the same flat jade, so every existing gradient
+ * call site renders as a flat fill with zero call-site changes (TS-DES-101's own acceptance
+ * criterion). `pop`/`popDark` (Apple system Pink) are dropped — nothing consumed them.
+ */
 export const brand = {
-  gradientStart: '#007AFF', // Apple system Blue (light)
-  gradientEnd: '#AF52DE', // Apple system Purple
-  gradientStartDark: '#0A84FF', // Apple system Blue (dark)
-  gradientEndDark: '#BF5AF2', // Apple system Purple (dark)
-  pop: '#FF2D55', // Apple system Pink — sparing use (badges, highlights)
-  popDark: '#FF375F',
+  gradientStart: reconcile.jade,
+  gradientEnd: reconcile.jade,
+  gradientStartDark: reconcile.jadeDark,
+  gradientEndDark: reconcile.jadeDark,
 };
 
-/** Apple's own scroll/reveal easing — a fast-out, gentle-settle deceleration. */
+/** Reconcile's restrained motion cadence (Design Spec §5): 150ms fades/slides, no bounce. */
 export const motion = {
   easing: [0.16, 1, 0.3, 1] as const,
   easingCss: 'cubic-bezier(0.16, 1, 0.3, 1)',
-  fast: 0.2,
-  base: 0.4,
-  slow: 0.7,
+  fast: 0.15,
+  base: 0.3,
+  slow: 0.45,
 };
 
 export function withAlpha(hex: string, alpha: number): string {
@@ -31,46 +63,74 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /**
- * Shared "frosted glass" card treatment (gradient tint + soft border + glow shadow)
- * used across dashboard/analysis/chat cards. Centralized so every card stays
- * legible in both light and dark mode instead of each file hardcoding its own
- * light-only pastel gradient.
+ * Money-color policy (Design Spec §2): `ink` is the default for every neutral amount. jade/ember
+ * are reserved for signed, directional amounts (owed-to-you / you-owe, over/under budget) and
+ * must always be paired with a sign and a word — never color alone (§2 a11y floor). Components
+ * rendering a directional balance should call this instead of reaching for `success`/`error`
+ * ad hoc, so the "ink unless directional" rule is encoded once, not re-decided per component.
  */
-export function glassCardSx(theme: Theme) {
+export function directionalColor(theme: Theme, net: number): string {
   const isDark = theme.palette.mode === 'dark';
-  return {
-    backdropFilter: 'blur(20px)',
-    background: isDark
-      ? `linear-gradient(135deg, ${withAlpha(brand.gradientStartDark, 0.14)} 0%, ${withAlpha(brand.gradientEndDark, 0.1)} 100%)`
-      : `linear-gradient(135deg, ${withAlpha(brand.gradientStart, 0.06)} 0%, ${withAlpha(brand.gradientEnd, 0.06)} 100%)`,
-    border: isDark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.06)',
-    boxShadow: isDark
-      ? '0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)'
-      : '0 20px 40px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6)',
-    // Kept in proportion to typical card padding (16-24px) — much bigger than
-    // this and the curve crowds titles/icons sitting at the padding edge.
-    borderRadius: 1.5,
-  } as const;
+  if (net > 0) return isDark ? reconcile.jadeDark : reconcile.jadeText;
+  if (net < 0) return isDark ? reconcile.emberDark : reconcile.ember;
+  return theme.palette.text.secondary;
 }
+
+const displayFontFamily = "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif";
+const bodyFontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+/** Apply to any element rendering a money figure — enforces Design Spec §3's tabular-numeral rule. */
+export const tabularNums = { fontVariantNumeric: 'tabular-nums' } as const;
+
+/**
+ * Reconcile's numeral-first type roles (Design Spec §3), exported as reusable `sx` fragments
+ * rather than MUI typography variants — components opt in explicitly (`sx={typeScale.amount}`)
+ * instead of every `variant="h1"` silently picking up the display face. Display face is reserved
+ * for the True Total / big balances / section moments only, per the ticket's scope.
+ */
+export const typeScale = {
+  displayHero: {
+    fontFamily: displayFontFamily,
+    fontWeight: 600,
+    fontSize: '3rem', // 48px, within the spec's 44–56px hero range
+    lineHeight: 1.05,
+    ...tabularNums,
+  },
+  display: {
+    fontFamily: displayFontFamily,
+    fontWeight: 600,
+    fontSize: '2rem', // 32px
+    lineHeight: 1.1,
+    ...tabularNums,
+  },
+  amount: {
+    fontFamily: bodyFontFamily,
+    fontWeight: 600,
+    fontSize: '1rem', // 16–18px range
+    ...tabularNums,
+  },
+  label: {
+    fontFamily: bodyFontFamily,
+    fontWeight: 600,
+    fontSize: '0.6875rem', // 11px
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+  },
+} as const;
 
 export function getTheme(mode: PaletteMode): Theme {
   const isDark = mode === 'dark';
 
-  const primaryMain = isDark ? brand.gradientStartDark : brand.gradientStart;
-  const secondaryMain = isDark ? brand.gradientEndDark : brand.gradientEnd;
-  const gradientStart = isDark ? brand.gradientStartDark : brand.gradientStart;
-  const gradientEnd = isDark ? brand.gradientEndDark : brand.gradientEnd;
+  const primaryMain = isDark ? reconcile.jadeDark : reconcile.jade;
+  const secondaryMain = isDark ? reconcile.paper : reconcile.ink;
+  const hairlineColor = isDark ? reconcile.hairlineDark : reconcile.hairline;
+  const surfaceColor = isDark ? reconcile.surfaceDark : reconcile.surface;
 
-  // Apple.com's own neutral scale.
-  const backgroundDefault = isDark ? '#000000' : '#F5F5F7';
-  const backgroundPaper = isDark ? '#1C1C1E' : '#FFFFFF';
+  const backgroundDefault = isDark ? reconcile.ink : reconcile.paper;
+  const backgroundPaper = surfaceColor;
 
-  const textPrimary = isDark ? '#F5F5F7' : '#1D1D1F';
-  const textSecondary = isDark ? '#98989D' : '#6E6E73';
-
-  const navGlass = isDark ? 'rgba(0,0,0,0.72)' : 'rgba(255,255,255,0.72)';
-  const paperGlass = isDark ? 'rgba(28,28,30,0.6)' : 'rgba(255,255,255,0.6)';
-  const paperGlassBorder = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const textPrimary = isDark ? '#F5F5F2' : reconcile.ink;
+  const textSecondary = isDark ? '#9A9CA3' : reconcile.inkMuted;
 
   return createTheme({
     palette: {
@@ -78,15 +138,15 @@ export function getTheme(mode: PaletteMode): Theme {
       primary: { main: primaryMain },
       secondary: { main: secondaryMain },
       background: { default: backgroundDefault, paper: backgroundPaper },
-      success: { main: isDark ? '#30D158' : '#34C759' },
-      error: { main: isDark ? '#FF453A' : '#FF3B30' },
-      warning: { main: isDark ? '#FF9F0A' : '#FF9500' },
+      success: { main: isDark ? reconcile.jadeDark : reconcile.jadeText },
+      error: { main: isDark ? reconcile.emberDark : reconcile.ember },
+      warning: { main: isDark ? reconcile.cautionDark : reconcile.caution },
       text: { primary: textPrimary, secondary: textSecondary },
-      divider: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+      divider: hairlineColor,
     },
-    shape: { borderRadius: 14 },
+    shape: { borderRadius: reconcile.radius.surface },
     typography: {
-      fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, Roboto, Helvetica, Arial, sans-serif',
+      fontFamily: bodyFontFamily,
       fontSize: 15,
       h1: { fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1.05 },
       h2: { fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.1 },
@@ -106,39 +166,29 @@ export function getTheme(mode: PaletteMode): Theme {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
+          // Flat neutral canvas — no radial/linear wash. Reconcile spends its one signature
+          // color on interaction and state, not on ambient page decoration (Design Spec §1.5).
           body: {
             backgroundColor: backgroundDefault,
-            backgroundImage: isDark
-              ? `radial-gradient(circle at 15% 0%, ${withAlpha(gradientStart, 0.14)} 0%, transparent 45%), radial-gradient(circle at 85% 20%, ${withAlpha(gradientEnd, 0.1)} 0%, transparent 40%)`
-              : `radial-gradient(circle at 15% 0%, ${withAlpha(gradientStart, 0.05)} 0%, transparent 45%), radial-gradient(circle at 85% 20%, ${withAlpha(gradientEnd, 0.05)} 0%, transparent 40%)`,
-            backgroundRepeat: 'no-repeat',
           },
         },
       },
       MuiPaper: {
         styleOverrides: {
           root: {
-            backgroundColor: paperGlass,
-            backdropFilter: 'blur(20px)',
+            backgroundColor: surfaceColor,
             backgroundImage: 'none',
-            border: `1px solid ${paperGlassBorder}`,
+            border: `1px solid ${hairlineColor}`,
           },
         },
       },
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: 20,
-            boxShadow: isDark
-              ? `0 4px 24px rgba(0,0,0,0.4)`
-              : `0 2px 20px rgba(0,0,0,0.05)`,
-            transition: `transform ${motion.base}s ${motion.easingCss}, box-shadow ${motion.base}s ${motion.easingCss}`,
-            '&:hover': {
-              transform: 'translateY(-3px)',
-              boxShadow: isDark
-                ? `0 12px 32px rgba(0,0,0,0.5)`
-                : `0 12px 32px rgba(0,0,0,0.1)`,
-            },
+            borderRadius: reconcile.radius.surface,
+            border: `1px solid ${hairlineColor}`,
+            boxShadow: 'none',
+            transition: `border-color ${motion.fast}s ${motion.easingCss}`,
           },
         },
       },
@@ -146,58 +196,63 @@ export function getTheme(mode: PaletteMode): Theme {
         styleOverrides: {
           root: {
             textTransform: 'none',
-            borderRadius: 980, // Apple's signature pill button
+            borderRadius: reconcile.radius.control,
             paddingLeft: 22,
             paddingRight: 22,
             boxShadow: 'none',
             transition: `all ${motion.fast}s ${motion.easingCss}`,
-            '&:hover': {
-              boxShadow: 'none',
-              transform: 'scale(1.02)',
-            },
-            '&:active': {
-              transform: 'scale(0.98)',
-            },
+            '&:hover': { boxShadow: 'none' },
+            '&:active': { transform: 'scale(0.98)' },
           },
           containedPrimary: {
-            backgroundImage: `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`,
-            '&:hover': {
-              backgroundImage: `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`,
-              filter: 'brightness(1.08)',
-            },
+            backgroundColor: primaryMain,
+            backgroundImage: 'none',
+            '&:hover': { backgroundColor: primaryMain, filter: 'brightness(1.08)' },
           },
           sizeLarge: {
             paddingTop: 12,
             paddingBottom: 12,
             fontSize: '1.05rem',
+            // Large/CTA buttons read as pill, matching the reference prototypes
+            // (ExpenseFeed.jsx / SettleUp.jsx / Dashboard.jsx render every full-width primary
+            // action as rounded-full); ordinary default-size buttons stay at the control radius.
+            borderRadius: reconcile.radius.pill,
           },
+        },
+      },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: { borderRadius: reconcile.radius.control },
+        },
+      },
+      MuiFilledInput: {
+        styleOverrides: {
+          root: { borderRadius: reconcile.radius.control },
         },
       },
       MuiAppBar: {
         styleOverrides: {
           root: {
-            background: navGlass,
+            background: surfaceColor,
             color: textPrimary,
-            backdropFilter: 'blur(20px) saturate(1.8)',
             boxShadow: 'none',
-            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+            borderBottom: `1px solid ${hairlineColor}`,
           },
         },
       },
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            background: navGlass,
+            background: surfaceColor,
             color: textPrimary,
-            backdropFilter: 'blur(20px)',
-            borderRight: `1px solid ${paperGlassBorder}`,
+            borderRight: `1px solid ${hairlineColor}`,
           },
         },
       },
       MuiChip: {
         styleOverrides: {
           root: {
-            borderRadius: 980,
+            borderRadius: reconcile.radius.pill,
             '&.MuiChip-filledPrimary': {
               backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
               color: primaryMain,
@@ -208,19 +263,20 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiLinearProgress: {
         styleOverrides: {
           root: {
-            borderRadius: 980,
+            borderRadius: reconcile.radius.pill,
             backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
           },
           bar: {
-            borderRadius: 980,
-            backgroundImage: `linear-gradient(90deg, ${gradientStart}, ${gradientEnd})`,
+            borderRadius: reconcile.radius.pill,
+            backgroundColor: primaryMain,
+            backgroundImage: 'none',
           },
         },
       },
       MuiListItemButton: {
         styleOverrides: {
           root: {
-            borderRadius: 12,
+            borderRadius: reconcile.radius.control,
             transition: `background-color ${motion.fast}s ${motion.easingCss}`,
             '&.Mui-selected': {
               backgroundColor: isDark ? withAlpha(primaryMain, 0.18) : withAlpha(primaryMain, 0.08),
@@ -238,11 +294,42 @@ export function getTheme(mode: PaletteMode): Theme {
   });
 }
 
-/** Convenience token export for non-MUI usages (e.g. inline SVG gradients). */
+/**
+ * Reconcile's flat "hairline card" treatment — surface background + 1px hairline border, no
+ * blur/gradient/tint, no shadow. Elevation is reserved for real sheets/dialogs (which keep MUI's
+ * default elevation shadow scale, untouched above); ordinary cards use hairline + flat surface
+ * instead (Design Spec §9). Function name kept from the pre-Reconcile "glass card" treatment so
+ * the ~17 existing call sites (Dashboard/Analysis/AI-Analyst/Groups/Login/Home cards) don't need
+ * edits — restyling what each of those screens does with it is follow-on work (TS-DES-102/103/104).
+ */
+export function glassCardSx(theme: Theme) {
+  const isDark = theme.palette.mode === 'dark';
+  return {
+    backgroundColor: isDark ? reconcile.surfaceDark : reconcile.surface,
+    backgroundImage: 'none',
+    border: `1px solid ${isDark ? reconcile.hairlineDark : reconcile.hairline}`,
+    boxShadow: 'none',
+    borderRadius: reconcile.radius.surface / 8, // sx shorthand: theme.spacing(1) = 8px by default
+  } as const;
+}
+
+/** Convenience flat-token export for non-MUI-Theme consumers (inline SVG, chart restyling — TS-DES-105). */
 export function gradientTokens(mode: PaletteMode) {
   return mode === 'dark'
-    ? { start: brand.gradientStartDark, end: brand.gradientEndDark, surfaceSecondary: '#2C2C2E' }
-    : { start: brand.gradientStart, end: brand.gradientEnd, surfaceSecondary: '#F5F5F7' };
+    ? {
+        primary: reconcile.jadeDark,
+        positive: reconcile.jadeDark,
+        negative: reconcile.emberDark,
+        ceremony: reconcile.goldDark,
+        surfaceSecondary: '#2C2C2E',
+      }
+    : {
+        primary: reconcile.jade,
+        positive: reconcile.jadeText,
+        negative: reconcile.ember,
+        ceremony: reconcile.gold,
+        surfaceSecondary: '#F5F5F7',
+      };
 }
 
 const theme = getTheme('light');

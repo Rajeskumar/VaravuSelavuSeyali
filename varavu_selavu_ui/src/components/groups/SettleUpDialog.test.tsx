@@ -33,6 +33,14 @@ test('submitting records a settlement with the defaulted debtor/creditor and ref
     notes: undefined,
   }));
   expect(onSuccess).toHaveBeenCalled();
+
+  // TS-DES-104: the dialog no longer auto-closes on success — it runs a count-to-zero
+  // animation into a "done" resolution screen, and onClose only fires once the user
+  // taps "Done" there (docs/design/prototypes/SettleUp.jsx's stage flow).
+  expect(onClose).not.toHaveBeenCalled();
+  const doneButton = await screen.findByRole('button', { name: /done/i }, { timeout: 2000 });
+  expect(await screen.findByText('All squared up')).toBeInTheDocument();
+  fireEvent.click(doneButton);
   expect(onClose).toHaveBeenCalled();
 });
 

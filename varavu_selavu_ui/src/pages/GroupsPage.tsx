@@ -16,7 +16,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { motion } from 'framer-motion';
 import GroupCard from '../components/groups/GroupCard';
 import { listGroups, createGroup, ApiError } from '../api/groups';
-import { brand, withAlpha } from '../theme';
+import { reconcile, withAlpha } from '../theme';
 
 const GROUP_TYPES = [
   { value: 'trip', label: 'Trip' },
@@ -28,8 +28,7 @@ const GROUP_TYPES = [
 const GroupsPage: React.FC = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const gradientStart = isDark ? brand.gradientStartDark : brand.gradientStart;
-  const gradientEnd = isDark ? brand.gradientEndDark : brand.gradientEnd;
+  const jade = isDark ? reconcile.jadeDark : reconcile.jade;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ['groups'], queryFn: listGroups });
@@ -90,8 +89,7 @@ const GroupsPage: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 24,
-                backgroundImage: `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`,
-                boxShadow: `0 6px 16px ${withAlpha(gradientStart, 0.35)}`,
+                backgroundColor: jade,
               }}
             >
               👥
@@ -129,7 +127,7 @@ const GroupsPage: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 40,
-                background: withAlpha(gradientStart, isDark ? 0.16 : 0.08),
+                background: withAlpha(jade, isDark ? 0.16 : 0.08),
               }}
             >
               👥

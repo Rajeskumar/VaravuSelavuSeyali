@@ -10,14 +10,10 @@ import { useAuth } from '../context/AuthContext';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
+import { categoryPalette, baseChartConfig } from '../utils/chartTheme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
-
-const CHART_COLORS = [
-    '#059669', '#0EA5E9', '#F59E0B', '#EF4444', '#8B5CF6',
-    '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
-];
 
 const screenWidth = Dimensions.get('window').width;
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -126,10 +122,11 @@ export default function AnalysisScreen() {
         );
     }
 
+    const chartColors = categoryPalette(theme);
     const chartData = data.category_totals.map((ct, index) => ({
         name: ct.category,
         amount: ct.total,
-        color: CHART_COLORS[index % CHART_COLORS.length],
+        color: chartColors[index % chartColors.length],
         legendFontColor: theme.colors.textSecondary,
         legendFontSize: 12,
     }));
@@ -139,14 +136,10 @@ export default function AnalysisScreen() {
         : [];
 
     const trendChartConfig = {
-        backgroundGradientFrom: theme.colors.surface,
-        backgroundGradientTo: theme.colors.surface,
-        color: (opacity = 1) => `rgba(5, 150, 105, ${opacity})`,
-        labelColor: () => theme.colors.textSecondary,
+        ...baseChartConfig(theme),
         strokeWidth: 3,
-        decimalPlaces: 0,
         propsForBackgroundLines: {
-            strokeDasharray: '6 4',
+            strokeDasharray: '0',
             stroke: theme.colors.borderLight,
             strokeWidth: 1,
         },
@@ -201,32 +194,14 @@ export default function AnalysisScreen() {
                 </Text>
             </Card>
 
-            {/* Pie Chart */}
-            {chartData.length > 0 && (
-                <Card>
-                    <Text style={[theme.typography.h3, { marginBottom: 16 }]}>Spending Breakdown</Text>
-                    <PieChart
-                        data={chartData}
-                        width={screenWidth - 80}
-                        height={200}
-                        chartConfig={{
-                            color: () => theme.colors.primary,
-                            labelColor: () => theme.colors.text,
-                        }}
-                        accessor="amount"
-                        backgroundColor="transparent"
-                        paddingLeft="0"
-                        absolute
-                    />
-                </Card>
-            )}
-
-            {/* Category Breakdown — Tappable */}
+            {/* Category Breakdown — Tappable. Ranked list is the default/primary category view
+                (Design Spec §4.3's "demote the donut" direction); the pie renders as a small
+                secondary ornament below, not the lead visual. */}
             <View style={styles.breakdownSection}>
                 <Text style={[theme.typography.h3, { marginBottom: 14 }]}>Category Details</Text>
                 {data.category_totals.map((ct, index) => {
                     const pct = data.total_expenses > 0 ? (ct.total / data.total_expenses) * 100 : 0;
-                    const color = CHART_COLORS[index % CHART_COLORS.length];
+                    const color = chartColors[index % chartColors.length];
                     const txCount = data.category_expense_details?.[ct.category]?.length ?? 0;
                     return (
                         <TouchableOpacity
@@ -251,6 +226,27 @@ export default function AnalysisScreen() {
                     );
                 })}
             </View>
+
+            {/* Pie — demoted to a small glanceable ornament under the ranked list, per TS-DES-105. */}
+            {chartData.length > 0 && (
+                <Card style={styles.pieOrnamentCard}>
+                    <Text style={[theme.typography.label, { marginBottom: 8 }]}>At a glance</Text>
+                    <PieChart
+                        data={chartData}
+                        width={140}
+                        height={90}
+                        chartConfig={{
+                            color: () => theme.colors.primary,
+                            labelColor: () => theme.colors.text,
+                        }}
+                        accessor="amount"
+                        backgroundColor="transparent"
+                        paddingLeft="0"
+                        hasLegend={false}
+                        absolute
+                    />
+                </Card>
+            )}
             </>
             )}
 
@@ -347,6 +343,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     summaryAmount: { fontSize: 36, fontWeight: '800', color: theme.colors.primary, marginVertical: 6, letterSpacing: -1 },
     summaryCategories: { fontSize: 13, color: theme.colors.textTertiary },
     breakdownSection: { marginTop: 8 },
+    pieOrnamentCard: { marginTop: 8, alignItems: 'flex-start', alignSelf: 'flex-start' },
     breakdownRow: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surface,
         paddingVertical: 16, paddingHorizontal: 16, borderRadius: 14, marginBottom: 10,

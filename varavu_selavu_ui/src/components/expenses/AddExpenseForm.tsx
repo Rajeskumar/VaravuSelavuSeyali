@@ -35,7 +35,11 @@ import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
 
-const CATEGORY_GROUPS: Record<string, string[]> = {
+// Exported for reuse by the ExpenseFeed/ExpenseDetailSheet (TS-DES-102) — the
+// feed's category tint-dot mapping and the detail sheet's inline category
+// editor both key off these same main-category names rather than maintaining
+// a second category taxonomy.
+export const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
   Transportation: ['Gas/fuel', 'Car', 'Parking', 'Plane', 'Other', 'Bicycle', 'Bus/Train', 'Taxi', 'Hotel'],
   'Food & Drink': ['Groceries', 'Dining out', 'Liquor', 'Other'],
@@ -45,7 +49,7 @@ const CATEGORY_GROUPS: Record<string, string[]> = {
   Utilities: ['Heat/gas', 'Electricity', 'Water', 'Other', 'Cleaning', 'Trash', 'Other', 'TV/Phone/Internet'],
 };
 
-const findMainCategory = (sub: string): string => {
+export const findMainCategory = (sub: string): string => {
   return (
     Object.keys(CATEGORY_GROUPS).find(m => CATEGORY_GROUPS[m].includes(sub)) ||
     Object.keys(CATEGORY_GROUPS)[0]

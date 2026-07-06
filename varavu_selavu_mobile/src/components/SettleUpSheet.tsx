@@ -4,7 +4,7 @@
  * The settlement amount field is pre-populated with the absolute value of
  * the "from" member's net debt to the "to" member, but the user can override.
  */
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,34 @@ import { MemberDTO, MemberBalance, recordSettlement } from '../api/groups';
 import CustomButton from './CustomButton';
 import { showToast } from './Toast';
 import { memberColor, initialsFromName } from './BalanceRow';
+
+type Stage = 'review' | 'settling' | 'done';
+
+/** 900ms cubic-ease-out count-down, matching docs/design/prototypes/SettleUp.jsx's resolution moment. */
+function useCountDown() {
+  const [displayValue, setDisplayValue] = useState(0);
+  const rafRef = useRef<number | undefined>(undefined);
+
+  const runFrom = useCallback((from: number, onDone: () => void) => {
+    const start = Date.now();
+    const duration = 900;
+    function step() {
+      const progress = Math.min(1, (Date.now() - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayValue(from * (1 - eased));
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      } else {
+        onDone();
+      }
+    }
+    rafRef.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
+
+  return { displayValue, setDisplayValue, runFrom };
+}
 
 interface Props {
   visible: boolean;
@@ -59,15 +87,24 @@ export default function SettleUpSheet({
     suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '',
   );
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState<Stage>('review');
+  const { displayValue, setDisplayValue, runFrom } = useCountDown();
 
   const fromMember = members.find((m) => m.member_id === fromMemberId);
   const toMember = members.find((m) => m.member_id === toMemberId);
 
   React.useEffect(() => {
     if (visible) {
-      setAmount(suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '');
+      const initial = suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '';
+      setAmount(initial);
+      setStage('review');
+      setDisplayValue(suggestedAmount > 0 ? suggestedAmount : 0);
     }
-  }, [visible, suggestedAmount]);
+  }, [visible, suggestedAmount, setDisplayValue]);
+
+  React.useEffect(() => {
+    if (stage === 'review') setDisplayValue(parseFloat(amount) || 0);
+  }, [amount, stage, setDisplayValue]);
 
   const handleSubmit = async () => {
     const parsedAmount = parseFloat(amount);
@@ -80,20 +117,25 @@ export default function SettleUpSheet({
       return;
     }
     setLoading(true);
+    setStage('settling');
     try {
       await recordSettlement(groupId, {
         from_member_id: fromMemberId,
         to_member_id: toMemberId,
         amount: parsedAmount,
       });
-      showToast({ message: 'Settlement recorded', type: 'success' });
       onSettled();
-      onClose();
+      runFrom(parsedAmount, () => setStage('done'));
     } catch (e: any) {
       showToast({ message: e.message ?? 'Failed to record settlement', type: 'error' });
+      setStage('review');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDone = () => {
+    onClose();
   };
 
   return (
@@ -108,52 +150,79 @@ export default function SettleUpSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.pill} />
           <Text style={styles.title}>Settle Up</Text>
 
-          {fromMember && toMember ? (
-            <View style={styles.previewRow}>
-              <View style={styles.previewPerson}>
-                <View style={[styles.previewAvatar, { backgroundColor: memberColor(fromMember.member_id) }]}>
-                  <Text style={styles.previewAvatarText}>{initialsFromName(fromMember.display_name)}</Text>
-                </View>
-                <Text style={styles.previewName} numberOfLines={1}>{fromMember.display_name}</Text>
-              </View>
-              <Ionicons name="arrow-forward" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 12 }} />
-              <View style={styles.previewPerson}>
-                <View style={[styles.previewAvatar, { backgroundColor: memberColor(toMember.member_id) }]}>
-                  <Text style={styles.previewAvatarText}>{initialsFromName(toMember.display_name)}</Text>
-                </View>
-                <Text style={styles.previewName} numberOfLines={1}>{toMember.display_name}</Text>
+          {(fromMember && toMember) || stage === 'done' ? (
+            <View style={styles.heroBlock}>
+              <Text style={styles.heroLabel}>{stage === 'done' ? 'All squared up' : 'Settling'}</Text>
+              <View style={styles.heroAmountRow}>
+                {stage === 'done' && (
+                  <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />
+                )}
+                <Text style={[styles.heroAmount, { color: stage === 'done' ? theme.colors.gold : theme.colors.success }]}>
+                  ${(stage === 'done' ? 0 : displayValue).toFixed(2)}
+                </Text>
               </View>
             </View>
           ) : null}
 
-          <View style={styles.amountRow}>
-            <Text style={styles.currencySymbol}>$</Text>
-            <TextInput
-              style={styles.amountInput}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={amount}
-              onChangeText={setAmount}
-              autoFocus
-            />
-          </View>
+          {stage === 'done' ? (
+            <>
+              <Text style={styles.doneSubtext}>
+                {fromMember?.display_name} paid {toMember?.display_name} — balances updated.
+              </Text>
+              <CustomButton title="Done" onPress={handleDone} />
+            </>
+          ) : (
+            <>
+              {fromMember && toMember ? (
+                <View style={[styles.previewRow, stage === 'settling' && styles.previewRowSettling]}>
+                  <View style={styles.previewPerson}>
+                    <View style={[styles.previewAvatar, { backgroundColor: memberColor(fromMember.member_id) }]}>
+                      <Text style={styles.previewAvatarText}>{initialsFromName(fromMember.display_name)}</Text>
+                    </View>
+                    <Text style={styles.previewName} numberOfLines={1}>{fromMember.display_name}</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 12 }} />
+                  <View style={styles.previewPerson}>
+                    <View style={[styles.previewAvatar, { backgroundColor: memberColor(toMember.member_id) }]}>
+                      <Text style={styles.previewAvatarText}>{initialsFromName(toMember.display_name)}</Text>
+                    </View>
+                    <Text style={styles.previewName} numberOfLines={1}>{toMember.display_name}</Text>
+                  </View>
+                </View>
+              ) : null}
 
-          <CustomButton
-            title={loading ? 'Recording…' : 'Record Payment'}
-            onPress={handleSubmit}
-            disabled={loading}
-          />
-          <CustomButton
-            title="Cancel"
-            onPress={onClose}
-            variant="outline"
-          />
+              <View style={styles.amountRow}>
+                <Text style={styles.currencySymbol}>$</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={amount}
+                  onChangeText={setAmount}
+                  editable={stage === 'review'}
+                  autoFocus
+                />
+              </View>
+
+              <CustomButton
+                title={stage === 'settling' ? 'Settling…' : 'Record Payment'}
+                onPress={handleSubmit}
+                disabled={loading}
+              />
+              <CustomButton
+                title="Cancel"
+                onPress={onClose}
+                variant="outline"
+                disabled={loading}
+              />
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -195,6 +264,36 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textSecondary,
       textAlign: 'center',
     },
+    heroBlock: {
+      alignItems: 'center',
+      paddingVertical: 20,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.borderLight,
+      marginTop: 4,
+    },
+    heroLabel: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 13,
+      color: theme.colors.textSecondary,
+    },
+    heroAmountRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    heroAmount: {
+      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontSize: 36,
+      fontVariant: ['tabular-nums'],
+    },
+    doneSubtext: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
     previewRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -204,6 +303,9 @@ const createStyles = (theme: AppTheme) =>
       paddingVertical: 16,
       paddingHorizontal: 12,
       marginTop: 4,
+    },
+    previewRowSettling: {
+      opacity: 0.6,
     },
     previewPerson: { alignItems: 'center', maxWidth: 90 },
     previewAvatar: {

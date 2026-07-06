@@ -9,6 +9,7 @@ import ExpenseSummaryCards from '../components/analysis/ExpenseSummaryCards';
 import CategoryBarChart from '../components/analysis/CategoryBarChart';
 import CategorySummaryTable from '../components/analysis/CategorySummaryTable';
 import MonthlyTrendLineChart from '../components/analysis/MonthlyTrendLineChart';
+import MoneyFlowSankey from '../components/analysis/MoneyFlowSankey';
 import SmartChangeInsightsCard from '../components/analysis/SmartChangeInsightsCard';
 import GroupScopeFilter from '../components/common/GroupScopeFilter';
 import { getAnalysis, AnalysisResponse, AnalysisScope } from '../api/analysis';
@@ -179,6 +180,12 @@ const ExpenseAnalysisPage: React.FC = () => {
                   <Typography variant="h6" sx={{ mb: 1 }}>Category Breakdown</Typography>
                   <CategorySummaryTable categoryTotals={data.category_totals} income={income} details={data.category_expense_details || {}} />
                 </Paper>
+
+                <MoneyFlowSankey
+                  totalExpenses={data.total_expenses}
+                  categoryTotals={data.category_totals}
+                  details={data.category_expense_details || {}}
+                />
 
                 {overallYear ? (
                   <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>

@@ -421,7 +421,8 @@ const createStyles = (theme: AppTheme) =>
       padding: 16,
       borderRadius: 16,
       backgroundColor: theme.colors.surface,
-      ...theme.shadows.xs,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.borderLight,
     },
     balanceBannerLabel: {
       fontFamily: 'Inter-Regular',
@@ -446,7 +447,11 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'center',
       borderRadius: 9,
     },
-    tabItemActive: { backgroundColor: theme.colors.background, ...theme.shadows.xs },
+    tabItemActive: {
+      backgroundColor: theme.colors.background,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.borderLight,
+    },
     tabLabel: {
       fontFamily: 'Inter-SemiBold',
       fontSize: 14,

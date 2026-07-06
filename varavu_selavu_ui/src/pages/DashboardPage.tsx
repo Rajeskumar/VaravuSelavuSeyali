@@ -1,47 +1,37 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import MetricCard from '../components/dashboard/MetricCard';
-import RecentActivityList from '../components/dashboard/RecentActivityList';
-import CategoryBreakdownSunburst from '../components/dashboard/CategoryBreakdownSunburst';
-import QuickAddExpenseCard from '../components/dashboard/QuickAddExpenseCard';
-import SpendTrendChart from '../components/dashboard/SpendTrendChart';
-import UpcomingRecurringCard from '../components/dashboard/UpcomingRecurringCard';
-import MyGroupsWidget from '../components/dashboard/MyGroupsWidget';
-import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
-import Paper from '@mui/material/Paper';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingBagRounded';
-import StorefrontIcon from '@mui/icons-material/StorefrontRounded';
-import { getAnalysis, AnalysisResponse } from '../api/analysis';
-import { parseAppDate } from '../utils/date';
-import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
-import { listExpenses } from '../api/expenses';
-import { listAllMyGroupExpenses, UnifiedGroupExpenseRow } from '../api/groups';
-import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { motion } from 'framer-motion';
+import TrueTotalHero, { TrueTotalLens } from '../components/dashboard/TrueTotalHero';
+import SpendSpectrum from '../components/dashboard/SpendSpectrum';
+import MyGroupsStrip from '../components/dashboard/MyGroupsStrip';
+import { getAnalysis, AnalysisResponse } from '../api/analysis';
+import { parseAppDate, formatAppDate } from '../utils/date';
+import { listExpenses } from '../api/expenses';
+import { listAllMyGroupExpenses, listGroups, UnifiedGroupExpenseRow, GroupSummary } from '../api/groups';
+import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
+import { reconcile, tabularNums } from '../theme';
 
 const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
+const RECENT_FEED_LIMIT = 6;
+
+function formatMoney(n: number): string {
+  const sign = n < 0 ? '−' : '';
+  return `${sign}$${Math.abs(n).toFixed(2)}`;
+}
 
 const DashboardPage: React.FC = () => {
   const [data, setData] = React.useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [templates, setTemplates] = React.useState<RecurringTemplateDTO[] | null>(null);
-  const [editingLayout, setEditingLayout] = React.useState(false);
-  const [layoutOrder, setLayoutOrder] = React.useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('vs_dashboard_layout_v1') || '[]');
-    } catch {
-      return [];
-    }
-  });
+  const [lens, setLens] = React.useState<TrueTotalLens>('my_share');
   const year = new Date().getFullYear();
   const navigate = useNavigate();
   const { enabled: groupsEnabled } = useGroupsEnabled();
+  const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [groupExpenses, setGroupExpenses] = React.useState<UnifiedGroupExpenseRow[]>([]);
   const [personalRecent, setPersonalRecent] = React.useState<{ date: string; description: string; category: string; cost: number }[]>([]);
   const [showCombinedToast, setShowCombinedToast] = React.useState(false);
@@ -56,7 +46,7 @@ const DashboardPage: React.FC = () => {
     (async () => {
       try {
         // Combined = personal + user's share across all groups (spec §11.2/§17.1);
-        // dashboard layout stays exactly as-is, only the underlying numbers change.
+        // the True Total hero re-scopes this same fetched payload via its lens.
         const resp = await getAnalysis({ year, scope: 'combined' });
         setData(resp);
         if (!localStorage.getItem(COMBINED_TOAST_KEY)) {
@@ -70,19 +60,6 @@ const DashboardPage: React.FC = () => {
       }
     })();
   }, [year]);
-
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const t = await listRecurringTemplates();
-        if (mounted) setTemplates(t);
-      } catch {
-        if (mounted) setTemplates([]);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
 
   // Unified recent-transactions feed: personal + (if enabled) my group shares, merged.
   React.useEffect(() => {
@@ -101,15 +78,22 @@ const DashboardPage: React.FC = () => {
   React.useEffect(() => {
     if (!groupsEnabled) {
       setGroupExpenses([]);
+      setGroups([]);
       return;
     }
     let mounted = true;
     (async () => {
       try {
-        const rows = await listAllMyGroupExpenses();
-        if (mounted) setGroupExpenses(rows);
+        const [rows, groupList] = await Promise.all([listAllMyGroupExpenses(), listGroups()]);
+        if (mounted) {
+          setGroupExpenses(rows);
+          setGroups(groupList);
+        }
       } catch {
-        if (mounted) setGroupExpenses([]);
+        if (mounted) {
+          setGroupExpenses([]);
+          setGroups([]);
+        }
       }
     })();
     return () => { mounted = false; };
@@ -119,17 +103,6 @@ const DashboardPage: React.FC = () => {
   if (error) return <Typography color="error" sx={{ mt: 4 }}>{error}</Typography>;
   if (!data) return null;
 
-  const expenses = data.category_expense_details
-    ? Object.values(data.category_expense_details).flat()
-    : [];
-  const now = new Date();
-  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const thisMonthTotal = data.monthly_trend.find(m => m.month === thisMonthKey)?.total || 0;
-  const weekAgo = new Date();
-  weekAgo.setDate(now.getDate() - 7);
-  const thisWeekTotal = expenses
-    .filter(e => parseAppDate(e.date) >= weekAgo && parseAppDate(e.date) <= now)
-    .reduce((sum, e) => sum + e.cost, 0);
   // Unified feed (spec §11.2): personal expenses + my share of group expenses,
   // group rows tagged with a badge + full amount so "my share" reads as primary.
   const unifiedRecentSource = [
@@ -145,170 +118,113 @@ const DashboardPage: React.FC = () => {
   ];
   const recent = unifiedRecentSource
     .sort((a, b) => parseAppDate(b.date).getTime() - parseAppDate(a.date).getTime())
-    .slice(0, 10);
+    .slice(0, RECENT_FEED_LIMIT);
 
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  // Build split totals for current month: recurring (by template) vs other (by category)
-  const templateMap = new Map<string, RecurringTemplateDTO>((templates || []).map(t => [`${t.description}||${t.category}`, t]));
-  const recurringTotals: Record<string, number> = {};
-  const otherTotals: Record<string, number> = {};
-  const recurringDetailMap: Record<string, { date: string; description: string; cost: number }[]> = {};
-  const otherDetailMap: Record<string, { date: string; description: string; cost: number }[]> = {};
-  expenses.forEach(e => {
-    const d = parseAppDate(e.date);
-    if (d >= monthStart && d <= now) {
-      const key = `${e.description}||${e.category}`;
-      const t = templateMap.get(key);
-      if (t) {
-        const label = t.description; // group recurring by template description for clarity
-        recurringTotals[label] = (recurringTotals[label] || 0) + e.cost;
-        (recurringDetailMap[label] = recurringDetailMap[label] || []).push({ date: e.date, description: e.description, cost: e.cost });
-      } else {
-        otherTotals[e.category] = (otherTotals[e.category] || 0) + e.cost;
-        (otherDetailMap[e.category] = otherDetailMap[e.category] || []).push({ date: e.date, description: e.description, cost: e.cost });
-      }
-    }
-  });
-  const sunburstRecurring = Object.entries(recurringTotals).map(([category, total]) => ({ category, total }));
-  const sunburstOther = Object.entries(otherTotals).map(([category, total]) => ({ category, total }));
-
-  const fetchData = async () => {
-    const user = localStorage.getItem('vs_user');
-    if (!user) return;
-    const resp = await getAnalysis({ year });
-    setData(resp);
-  };
-
-  const InsightsLinksCard = () => (
-    <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-      <Typography variant="h6" gutterBottom fontWeight={600}>Discover Insights</Typography>
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' }}>
-        <Button
-          variant="outlined"
-          color="primary"
-          startIcon={<ShoppingCartIcon />}
-          onClick={() => navigate('/item-insights')}
-          sx={{ justifyContent: 'flex-start', py: 1.5, borderRadius: 2 }}
-        >
-          View Top Purchased Items
-        </Button>
-        <Button
-          variant="outlined"
-          color="secondary"
-          startIcon={<StorefrontIcon />}
-          onClick={() => navigate('/merchant-insights')}
-          sx={{ justifyContent: 'flex-start', py: 1.5, borderRadius: 2 }}
-        >
-          View Top Merchants
-        </Button>
-      </Box>
-    </Paper>
-  );
-
-
-  // Card registry for customizable layout
-  const cards: Record<string, { id: string; md: number; element: React.ReactNode }> = {
-    sunburstOther: { id: 'sunburstOther', md: 8, element: <CategoryBreakdownSunburst title="Other Expenses (This Month)" data={sunburstOther} details={otherDetailMap} /> },
-    sunburstRecurring: { id: 'sunburstRecurring', md: 4, element: <CategoryBreakdownSunburst title="Recurring (This Month)" data={sunburstRecurring} details={recurringDetailMap} /> },
-    trend: { id: 'trend', md: 8, element: <SpendTrendChart data={data.monthly_trend.slice(-12)} /> },
-    insights: { id: 'insights', md: 4, element: <InsightsLinksCard /> },
-    recent: { id: 'recent', md: 8, element: <RecentActivityList items={recent} /> },
-    quickAdd: { id: 'quickAdd', md: 4, element: <QuickAddExpenseCard onAdded={fetchData} /> },
-    upcoming: { id: 'upcoming', md: 4, element: <UpcomingRecurringCard /> },
-    ...(groupsEnabled ? { myGroups: { id: 'myGroups', md: 4, element: <MyGroupsWidget /> } } : {}),
-  };
-  const defaultOrder = ['sunburstOther', 'sunburstRecurring', 'trend', 'insights', 'recent', 'upcoming', 'quickAdd', ...(groupsEnabled ? ['myGroups'] : [])];
-  const order = (layoutOrder && layoutOrder.length ? layoutOrder : defaultOrder).filter(id => cards[id]);
-
-  // DnD handlers
-  const onDragStart = (e: React.DragEvent<HTMLDivElement>, id: string) => {
-    e.dataTransfer.setData('text/plain', id);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    if (!editingLayout) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-  const onDrop = (e: React.DragEvent<HTMLDivElement>, targetId: string) => {
-    if (!editingLayout) return;
-    e.preventDefault();
-    const sourceId = e.dataTransfer.getData('text/plain');
-    if (!sourceId || sourceId === targetId) return;
-    const newOrder = [...order];
-    const from = newOrder.indexOf(sourceId);
-    const to = newOrder.indexOf(targetId);
-    if (from === -1 || to === -1) return;
-    newOrder.splice(from, 1);
-    newOrder.splice(to, 0, sourceId);
-    setLayoutOrder(newOrder);
-  };
-  const saveLayout = () => {
-    localStorage.setItem('vs_dashboard_layout_v1', JSON.stringify(order));
-    setEditingLayout(false);
-  };
-  const resetLayout = () => {
-    localStorage.removeItem('vs_dashboard_layout_v1');
-    setLayoutOrder(defaultOrder);
-  };
+  const now = new Date();
+  const periodLabel = `${now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} · everything`;
+  const groupSummaries = data.group_summaries || [];
+  const personalTotal = data.spend_breakdown ? data.spend_breakdown.personal : data.total_expenses;
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: 480, mx: 'auto' }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-        <Grid container columns={12} spacing={2} sx={{ mb: 2 }}>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <MetricCard label="Total Expenses" value={`$${data.total_expenses.toFixed(2)}`} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <MetricCard label="This Month" value={`$${thisMonthTotal.toFixed(2)}`} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <MetricCard label="This Week" value={`$${thisWeekTotal.toFixed(2)}`} />
-          </Grid>
-          {null}
-        </Grid>
+        <TrueTotalHero
+          lens={lens}
+          onLensChange={setLens}
+          personalTotal={personalTotal}
+          spendBreakdown={data.spend_breakdown}
+          groupSummaries={groupSummaries}
+          groupsEnabled={groupsEnabled}
+          periodLabel={periodLabel}
+        />
       </motion.div>
 
-      {/* Customize controls */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-        {!editingLayout ? (
-          <Button size="small" variant="outlined" onClick={() => setEditingLayout(true)}>Customize Layout</Button>
-        ) : (
-          <>
-            <Button size="small" variant="contained" onClick={saveLayout}>Save Layout</Button>
-            <Button size="small" variant="text" onClick={resetLayout}>Reset</Button>
-            <Typography variant="caption" sx={{ alignSelf: 'center', color: 'text.secondary' }}>Drag cards to reorder</Typography>
-          </>
-        )}
-      </Box>
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-60px' }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <Box sx={{ mb: 3 }}>
+          <SpendSpectrum data={data.category_totals} />
+        </Box>
+      </motion.div>
 
-      {/* Customizable grid */}
-      <Grid container columns={12} spacing={2} sx={{ mt: 1 }}>
-        {order.map((id, i) => {
-          const c = cards[id];
-          if (!c) return null;
-          return (
-            <Grid key={id} size={{ xs: 12, md: c.md }}>
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: i * 0.06 }}
+      {groupsEnabled && groups.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.06 }}
+        >
+          <Box sx={{ mb: 3 }}>
+            <MyGroupsStrip groups={groups} groupSummaries={groupSummaries} />
+          </Box>
+        </motion.div>
+      )}
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-60px' }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.12 }}
+      >
+        <Box sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.06em' }}>
+              RECENT
+            </Typography>
+            <Typography
+              variant="caption"
+              onClick={() => navigate('/expenses')}
+              sx={{ color: 'text.secondary', cursor: 'pointer', display: 'flex', alignItems: 'center', '&:hover': { color: 'text.primary' } }}
+            >
+              See all ›
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              backgroundColor: 'background.paper',
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: `${reconcile.radius.surface}px`,
+              overflow: 'hidden',
+            }}
+          >
+            {recent.length === 0 && (
+              <Box sx={{ p: 2 }}>
+                <Typography color="text.secondary" align="center">No recent transactions</Typography>
+              </Box>
+            )}
+            {recent.map((item, idx) => (
+              <Box
+                key={`${item.date}-${item.description}-${idx}`}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1.5,
+                  borderBottom: idx < recent.length - 1 ? '1px solid' : 'none',
+                  borderColor: 'divider',
+                }}
               >
-                <Box
-                  draggable={editingLayout}
-                  onDragStart={(e) => onDragStart(e, id)}
-                  onDragOver={onDragOver}
-                  onDrop={(e) => onDrop(e, id)}
-                  sx={{ border: editingLayout ? '1px dashed rgba(0,0,0,0.3)' : 'none', borderRadius: 1, cursor: editingLayout ? 'grab' : 'default' }}
-                >
-                  {c.element}
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }} noWrap>
+                    {item.description}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: 'text.secondary' }} noWrap>
+                    {formatAppDate(item.date)} · {(item as any).groupName ? `${(item as any).groupName} · your share` : item.category}
+                  </Typography>
                 </Box>
-              </motion.div>
-            </Grid>
-          );
-        })}
-      </Grid>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', ...tabularNums }}>
+                  {formatMoney(item.cost)}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </motion.div>
 
       <Snackbar
         open={showCombinedToast}

@@ -20,6 +20,7 @@ import {
   Inter_700Bold,
   Inter_900Black,
 } from '@expo-google-fonts/inter';
+import { SpaceGrotesk_600SemiBold } from '@expo-google-fonts/space-grotesk';
 
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -653,6 +654,9 @@ export default function App() {
     'Inter-SemiBold': Inter_600SemiBold,
     'Inter-Bold':     Inter_700Bold,
     'Inter-Black':    Inter_900Black,
+    // Reconcile display face (docs/design/TrackSpense_UX_Design_Spec.md §3) — True Total / big
+    // balances only, per src/theme.ts's `displayHero`/`display` typography roles.
+    'SpaceGrotesk-SemiBold': SpaceGrotesk_600SemiBold,
   });
 
   if (!fontsLoaded) {

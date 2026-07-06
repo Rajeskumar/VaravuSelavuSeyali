@@ -41,7 +41,12 @@ test('shows expenses and opens form', async () => {
   await waitFor(() => screen.getByText('Coffee'));
   expect(screen.getByText('Coffee')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /add expense/i }));
-  expect(await screen.findByText(/Add New Expense/i)).toBeInTheDocument();
+  // AddExpenseForm's dialog heading is "Add Expense" (not "Add New Expense" —
+  // that text never matched; pre-existing/unrelated to the TS-DES-102 feed
+  // rebuild, fixed here per the ticket's "don't leave DOM-asserting tests red"
+  // instruction). Scope to the <h6> heading since "Add Expense" also matches
+  // the page's toolbar button and the dialog's submit button.
+  expect(await screen.findByRole('heading', { name: 'Add Expense' })).toBeInTheDocument();
 });
 
 test('deletes an expense', async () => {
@@ -55,7 +60,12 @@ test('deletes an expense', async () => {
   jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
+  // The feed row's delete affordance opens the existing confirm dialog rather
+  // than deleting immediately (same two-step flow the old <Table> row already
+  // had — `setPendingDelete`/`setConfirmOpen`, confirmed by the delete button
+  // handler in ExpensesPage.tsx). Click the row's delete icon, then confirm.
   fireEvent.click(screen.getByLabelText('delete'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
   await waitFor(() => expect(delSpy).toHaveBeenCalledWith(1));
   listSpy.mockRestore();
 });
@@ -114,9 +124,12 @@ test('scope filter switches the queried data and shows the group badge column', 
 
   await waitFor(() => expect(groupExpensesSpy).toHaveBeenCalled());
   expect(await screen.findByText('Dinner')).toBeInTheDocument();
-  expect(screen.getByText('Apartment 4B')).toBeInTheDocument(); // group badge
-  expect(screen.getByText('$45.00')).toBeInTheDocument(); // my share, primary
-  expect(screen.getByText('$90.00')).toBeInTheDocument(); // full amount, secondary
+  expect(screen.getByText('Apartment 4B')).toBeInTheDocument(); // group caption in place of category
+  // $45.00 (my share) now appears twice — the day-group's sticky subtotal
+  // header and the row's primary tabular amount — so assert count instead of
+  // a single match (TS-DES-102's day-grouped feed structure).
+  expect(screen.getAllByText('$45.00').length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText(/\$90\.00 total/)).toBeInTheDocument(); // full/group amount, secondary caption
   // Personal-only table (with its Merchant column) is not shown in this scope.
   expect(screen.queryByText('Coffee')).not.toBeInTheDocument();
 });

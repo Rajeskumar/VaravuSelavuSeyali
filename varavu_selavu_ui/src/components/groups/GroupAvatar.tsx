@@ -8,23 +8,22 @@ const GROUP_TYPE_EMOJI: Record<string, string> = {
   other: '👥',
 };
 
-// A small curated set of gradient pairs (kept in the app's existing blue→purple
-// family, spec §11.3-adjacent) so group tiles read as colorful/distinct without
-// looking randomly hashed/muddy the way raw HSL-from-id would.
-const GRADIENTS = [
-  ['#007AFF', '#AF52DE'], // blue → purple (brand default)
-  ['#FF9500', '#FF2D55'], // orange → pink
-  ['#34C759', '#007AFF'], // green → blue
-  ['#AF52DE', '#FF2D55'], // purple → pink
-  ['#00C7BE', '#007AFF'], // teal → blue
-  ['#FF9500', '#AF52DE'], // orange → purple
+// A small curated set of flat, muted tile colors (Reconcile has no gradient —
+// Design Spec §1/§2) so group tiles read as colorful/distinct without looking
+// randomly hashed/muddy the way raw HSL-from-id would.
+const TILE_COLORS = [
+  '#7E8CA3', // slate
+  '#C97B4D', // clay
+  '#5E9C8F', // teal-green
+  '#B98CC2', // mauve
+  '#A3A86B', // olive
+  '#C77B9E', // rose
 ];
 
-function gradientForSeed(seed: string): string {
+function tileColorForSeed(seed: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
-  const [start, end] = GRADIENTS[Math.abs(hash) % GRADIENTS.length];
-  return `linear-gradient(135deg, ${start} 0%, ${end} 100%)`;
+  return TILE_COLORS[Math.abs(hash) % TILE_COLORS.length];
 }
 
 interface GroupAvatarProps {
@@ -42,12 +41,11 @@ const GroupAvatar: React.FC<GroupAvatarProps> = ({ seed, groupType = 'other', si
       height: size,
       minWidth: size,
       borderRadius: size / 3,
-      background: gradientForSeed(seed),
+      backgroundColor: tileColorForSeed(seed),
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       fontSize: size * 0.5,
-      boxShadow: `0 4px 14px ${'rgba(0,0,0,0.15)'}`,
     }}
   >
     {GROUP_TYPE_EMOJI[groupType] || GROUP_TYPE_EMOJI.other}

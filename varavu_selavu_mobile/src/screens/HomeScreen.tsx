@@ -11,6 +11,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CategoryDonutChart from '../components/CategoryDonutChart';
+import CategoryRankedList from '../components/CategoryRankedList';
 import TrendLineChart from '../components/TrendLineChart';
 
 // ─── Category icon map ───────────────────────────────────────────────────────
@@ -453,10 +454,15 @@ export default function HomeScreen() {
         )}
 
         {/* ── Analytics ─────────────────────────────────────── */}
+        {/* TS-DES-105: ranked list leads (Design Spec §4.3's "demote the donut" direction); the
+            donut renders as a small secondary ornament in the same card, not the primary visual. */}
         <View style={styles.analyticsSpacer} />
         <SectionHeader title="Analytics" />
         <View style={styles.chartPad}>
-          <CategoryDonutChart data={donutData} title="Monthly Breakdown" />
+          <CategoryRankedList data={monthlyData?.category_totals || []} title="Monthly Breakdown" />
+          <View style={styles.donutOrnamentRow}>
+            <CategoryDonutChart data={donutData} title="At a glance" compact />
+          </View>
           <TrendLineChart title="6-Month Trend" />
         </View>
       </ScrollView>
@@ -536,4 +542,5 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   emptySubtitle: { fontFamily: 'Inter-Regular', fontSize: 15, color: theme.colors.textTertiary },
   analyticsSpacer: { height: 24 },
   chartPad: { paddingHorizontal: 20 },
+  donutOrnamentRow: { alignItems: 'flex-start' },
 });

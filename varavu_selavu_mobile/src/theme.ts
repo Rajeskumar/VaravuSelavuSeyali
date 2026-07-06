@@ -19,6 +19,9 @@ export interface ThemeColors {
   secondary: string;
   secondarySurface: string;
 
+  // Kept for back-compat with every existing `LinearGradient colors={[gradientStart, gradientEnd]}`
+  // call site (~10 screens) — see TS-DES-101. Reconcile has no gradient, so both stops resolve to
+  // the same flat jade and those call sites render as a flat fill with zero edits.
   gradientStart: string;
   gradientEnd: string;
 
@@ -43,85 +46,90 @@ export interface ThemeColors {
   border: string;
   borderLight: string;
 
-  highlight: string;
   overlay: string;
+
+  /** Ceremony-only accent (Design Spec §2) — reconcile tick / settle-up "all squared up" moment. Never a fill. */
+  gold: string;
 }
 
-// "Apple structure, Revolut color": Apple's own system Blue → Purple gradient
-// as the single vivid brand accent, carried on Apple's neutral gray canvas.
+// "Reconcile" (docs/design/TrackSpense_UX_Design_Spec.md §9): one flat signature color (jade) on
+// a quiet ink/paper neutral system. No gradients. Money is `text` (ink) by default; jade/ember/gold
+// carry meaning (positive / negative / ceremony) — see `directionalColor()` below.
 const lightColors: ThemeColors = {
-  primary: '#007AFF',        // Apple system Blue
-  primaryLight: '#409CFF',
-  primaryDark: '#0051D5',
-  primarySurface: '#E8F2FF',
-  secondary: '#AF52DE',      // Apple system Purple
-  secondarySurface: '#F5E9FC',
+  primary: '#0FA37F',        // jade
+  primaryLight: '#3DBE9E',
+  primaryDark: '#0B8A6B',    // jadeText — accessible small-text variant
+  primarySurface: '#E3F5EF',
+  secondary: '#191A1E',      // ink — neutral secondary action, not a second brand hue
+  secondarySurface: '#ECECE7',
 
-  gradientStart: '#007AFF',
-  gradientEnd: '#AF52DE',
+  gradientStart: '#0FA37F',
+  gradientEnd: '#0FA37F',
 
-  background: '#F5F5F7',     // apple.com neutral gray
+  background: '#F7F7F4',     // paper
   surface: '#FFFFFF',
-  surfaceSecondary: '#F5F5F7',
+  surfaceSecondary: '#EFEFEA',
   surfaceElevated: '#FFFFFF',
 
-  text: '#1D1D1F',
-  textSecondary: '#6E6E73',
+  text: '#191A1E',           // ink
+  textSecondary: '#6B6D74',  // ink-muted
   textTertiary: '#8E8E93',
   textQuaternary: '#C7C7CC',
   textInverse: '#FFFFFF',
 
-  success: '#34C759',
-  successSurface: '#E6F9EA',
-  error: '#FF3B30',
-  errorSurface: '#FFEBEA',
-  warning: '#FF9500',
-  warningSurface: '#FFF3E0',
+  success: '#0B8A6B',        // jadeText (positive semantic doubles with brand, per §2)
+  successSurface: '#E3F5EF',
+  error: '#DE5B4B',          // ember
+  errorSurface: '#FBEAE7',
+  warning: '#B78A2E',        // caution — deliberately distinct from `gold`'s ceremony-only role
+  warningSurface: '#F5EEDD',
 
   border: '#D2D2D7',
-  borderLight: '#E5E5EA',
+  borderLight: '#E4E4DF',    // hairline
 
-  highlight: '#FF2D55',      // Apple system Pink — sparing accent
-  overlay: 'rgba(0,0,0,0.4)',
+  overlay: 'rgba(25,26,30,0.4)',
+
+  gold: '#C9973F',
 };
 
 const darkColors: ThemeColors = {
-  primary: '#0A84FF',        // Apple system Blue (dark)
-  primaryLight: '#409CFF',
-  primaryDark: '#0040DD',
-  primarySurface: '#122840',
-  secondary: '#BF5AF2',      // Apple system Purple (dark)
-  secondarySurface: '#2B1735',
+  primary: '#1CBE94',        // jade, ~8% luminance lift for dark-mode contrast (§2)
+  primaryLight: '#3DBE9E',
+  primaryDark: '#17A17E',
+  primarySurface: '#0F2A22',
+  secondary: '#F7F7F4',      // paper — inverted neutral secondary action on dark backgrounds
+  secondarySurface: '#2A2B31',
 
-  gradientStart: '#0A84FF',
-  gradientEnd: '#BF5AF2',
+  gradientStart: '#1CBE94',
+  gradientEnd: '#1CBE94',
 
-  background: '#000000',
-  surface: '#1C1C1E',
-  surfaceSecondary: '#2C2C2E',
-  surfaceElevated: '#1C1C1E',
+  background: '#191A1E',     // ink — Reconcile's dark-mode background (§2)
+  surface: '#202127',
+  surfaceSecondary: '#28292F',
+  surfaceElevated: '#202127',
 
-  text: '#F5F5F7',
-  textSecondary: '#98989D',
+  text: '#F5F5F2',
+  textSecondary: '#9A9CA3',
   textTertiary: '#8E8E93',
   textQuaternary: '#48484A',
-  textInverse: '#1D1D1F',
+  textInverse: '#191A1E',
 
-  success: '#30D158',
-  successSurface: '#0F2818',
-  error: '#FF453A',
-  errorSurface: '#3A1210',
-  warning: '#FF9F0A',
-  warningSurface: '#3A2708',
+  success: '#1CBE94',
+  successSurface: '#0F2A22',
+  error: '#E8705F',          // ember, ~8% luminance lift for dark-mode contrast (§2)
+  errorSurface: '#3A211C',
+  warning: '#C99A42',
+  warningSurface: '#332B18',
 
   border: '#38383A',
-  borderLight: '#2C2C2E',
+  borderLight: '#33343B',    // hairline (dark)
 
-  highlight: '#FF375F',
   overlay: 'rgba(0,0,0,0.6)',
+
+  gold: '#D9A752',
 };
 
-/** Spring/timing presets for react-native-reanimated — tuned for an Apple-like, gentle settle. */
+/** Spring/timing presets for react-native-reanimated — reused for the hero-count / settle-up count-to-zero moments (§5). */
 export const motion = {
   spring: { damping: 18, stiffness: 220, mass: 0.9 },
   springBouncy: { damping: 12, stiffness: 260, mass: 0.9 },
@@ -137,13 +145,17 @@ export const spacing = {
   xxl: 48,
 };
 
+// Reconcile radius scale (Design Spec §9): 10px surfaces / 8px controls / pill for lens+chips.
+// `full` stays a distinct, large numeric value reserved for pill-shaped CTA/lens/chip components
+// (e.g. CustomButton, matching the reference prototypes' full-width rounded-full primary actions)
+// rather than the general card/surface default.
 export const borderRadius = {
-  xs: 8,
-  sm: 12,
-  md: 16,
-  lg: 20,
-  xl: 24,
-  xxl: 32,
+  xs: 8,   // control
+  sm: 8,   // control
+  md: 10,  // surface
+  lg: 10,  // surface
+  xl: 10,  // surface
+  xxl: 12, // large surface (sheets) — one step up from the flat 10px card radius
   full: 9999,
 };
 
@@ -155,6 +167,21 @@ function buildTypography(colors: ThemeColors) {
       semiBold: 'Inter-SemiBold',
       bold: 'Inter-Bold',
       black: 'Inter-Black',
+      display: 'SpaceGrotesk-SemiBold', // Reconcile display face — hero numbers/section moments only
+    },
+    // True Total / big balance — Design Spec §3 `display-hero` (44–56px).
+    displayHero: {
+      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontSize: 48,
+      color: colors.text,
+      fontVariant: ['tabular-nums'] as const,
+    },
+    // Screen balances, big stats — §3 `display` (32px).
+    display: {
+      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontSize: 32,
+      color: colors.text,
+      fontVariant: ['tabular-nums'] as const,
     },
     h1: {
       fontFamily: 'Inter-Black',
@@ -184,6 +211,13 @@ function buildTypography(colors: ThemeColors) {
       fontSize: 17,
       color: colors.text,
       lineHeight: 22,
+    },
+    // Every list/row figure — §3 `amount` (16–18px, tabular-nums mandatory).
+    amount: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 17,
+      color: colors.text,
+      fontVariant: ['tabular-nums'] as const,
     },
     callout: {
       fontFamily: 'Inter-Regular',
@@ -216,36 +250,38 @@ function buildTypography(colors: ThemeColors) {
 }
 
 function buildShadows(mode: ThemeMode, colors: ThemeColors) {
-  // Dark surfaces need much softer/less-opaque shadows (black shadow on black
-  // is invisible) — lean on a faint glow instead of a drop shadow.
+  // Reconcile: "elevation reserved for sheets only; everything else uses hairline + tint" (§9).
+  // Ordinary card/row tiers collapse to ~zero so `borderLight` (hairline) does the separation
+  // work instead; only real bottom-sheet/modal-equivalent surfaces keep a visible shadow.
   const opacityScale = mode === 'dark' ? 0.5 : 1;
   return {
     xs: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.04 * opacityScale,
-      shadowRadius: 4,
-      elevation: 1,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      elevation: 0,
     },
     sm: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06 * opacityScale,
-      shadowRadius: 12,
-      elevation: 2,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      elevation: 0,
     },
     md: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.08 * opacityScale,
-      shadowRadius: 20,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0,
+      shadowRadius: 0,
+      elevation: 0,
     },
+    // "Sheets only" tiers below keep real elevation.
     lg: {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 8 },
+      shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.1 * opacityScale,
-      shadowRadius: 28,
+      shadowRadius: 20,
       elevation: 8,
     },
     fab: {
@@ -298,6 +334,18 @@ export const darkTheme = buildTheme('dark');
 // Static default kept for any file not yet migrated to useAppTheme().
 export const theme = lightTheme;
 
+/**
+ * Money-color policy (Design Spec §2): `text` (ink) is the default for every neutral amount.
+ * `success`/`error` (jade/ember) are reserved for signed, directional amounts (owed-to-you /
+ * you-owe) and must always be paired with a sign and a word — never color alone. Call this
+ * instead of reaching for `colors.success`/`colors.error` ad hoc.
+ */
+export function directionalColor(t: AppTheme, net: number): string {
+  if (net > 0) return t.colors.success;
+  if (net < 0) return t.colors.error;
+  return t.colors.textTertiary;
+}
+
 export function createGlobalStyles(t: AppTheme) {
   return StyleSheet.create({
     container: {
@@ -309,6 +357,8 @@ export function createGlobalStyles(t: AppTheme) {
       borderRadius: t.borderRadius.xl,
       padding: t.spacing.lg,
       marginBottom: t.spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.colors.borderLight,
       ...t.shadows.sm,
     },
     listSection: {
@@ -316,6 +366,8 @@ export function createGlobalStyles(t: AppTheme) {
       borderRadius: t.borderRadius.xl,
       overflow: 'hidden',
       marginBottom: t.spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.colors.borderLight,
       ...t.shadows.sm,
     },
     separator: {
