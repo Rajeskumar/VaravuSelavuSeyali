@@ -17,11 +17,13 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { MemberDTO, MemberBalance, recordSettlement } from '../api/groups';
 import CustomButton from './CustomButton';
 import { showToast } from './Toast';
+import { memberColor, initialsFromName } from './BalanceRow';
 
 interface Props {
   visible: boolean;
@@ -112,9 +114,21 @@ export default function SettleUpSheet({
           <Text style={styles.title}>Settle Up</Text>
 
           {fromMember && toMember ? (
-            <Text style={styles.subtitle}>
-              {fromMember.display_name} pays {toMember.display_name}
-            </Text>
+            <View style={styles.previewRow}>
+              <View style={styles.previewPerson}>
+                <View style={[styles.previewAvatar, { backgroundColor: memberColor(fromMember.member_id) }]}>
+                  <Text style={styles.previewAvatarText}>{initialsFromName(fromMember.display_name)}</Text>
+                </View>
+                <Text style={styles.previewName} numberOfLines={1}>{fromMember.display_name}</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 12 }} />
+              <View style={styles.previewPerson}>
+                <View style={[styles.previewAvatar, { backgroundColor: memberColor(toMember.member_id) }]}>
+                  <Text style={styles.previewAvatarText}>{initialsFromName(toMember.display_name)}</Text>
+                </View>
+                <Text style={styles.previewName} numberOfLines={1}>{toMember.display_name}</Text>
+              </View>
+            </View>
           ) : null}
 
           <View style={styles.amountRow}>
@@ -180,6 +194,31 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 15,
       color: theme.colors.textSecondary,
       textAlign: 'center',
+    },
+    previewRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.primarySurface,
+      borderRadius: 16,
+      paddingVertical: 16,
+      paddingHorizontal: 12,
+      marginTop: 4,
+    },
+    previewPerson: { alignItems: 'center', maxWidth: 90 },
+    previewAvatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 6,
+    },
+    previewAvatarText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 16 },
+    previewName: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 13,
+      color: theme.colors.text,
     },
     amountRow: {
       flexDirection: 'row',

@@ -40,11 +40,18 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
-import BalanceRow from '../components/BalanceRow';
+import BalanceRow, { memberColor } from '../components/BalanceRow';
 import SettleUpSheet from '../components/SettleUpSheet';
 import { showToast } from '../components/Toast';
 
 type Tab = 'expenses' | 'balances';
+
+const GROUP_TYPE_EMOJI: Record<string, string> = {
+  other: '👥',
+  trip: '✈️',
+  home: '🏠',
+  couple: '💑',
+};
 
 export default function GroupDetailScreen() {
   const { theme } = useAppTheme();
@@ -107,6 +114,11 @@ export default function GroupDetailScreen() {
 
   // Find current user's member ID (may be null for placeholder members)
   const myMember = members.find((m) => m.user_email === userEmail);
+  const myBalance = balances.find((b) => b.member_id === myMember?.member_id)?.net ?? 0;
+  const balanceColor =
+    myBalance > 0 ? (theme.colors.success ?? '#34C759') : myBalance < 0 ? theme.colors.error : theme.colors.textSecondary;
+  const balanceLabel =
+    myBalance > 0 ? `You're owed $${myBalance.toFixed(2)}` : myBalance < 0 ? `You owe $${Math.abs(myBalance).toFixed(2)}` : "You're all settled up";
 
   const handleSettleUp = (balance: MemberBalance) => {
     if (!myMember) return;
@@ -175,6 +187,9 @@ export default function GroupDetailScreen() {
 
     return (
       <View style={styles.expenseCard}>
+        <View style={styles.expenseIcon}>
+          <Ionicons name="receipt-outline" size={18} color={theme.colors.textSecondary} />
+        </View>
         <View style={styles.expenseLeft}>
           <Text style={styles.expenseDesc} numberOfLines={1}>
             {item.description}
@@ -209,6 +224,9 @@ export default function GroupDetailScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
+        <View style={styles.groupIcon}>
+          <Text style={styles.groupIconEmoji}>{GROUP_TYPE_EMOJI[detail.group_type] ?? '👥'}</Text>
+        </View>
         <Text style={styles.groupName} numberOfLines={1}>
           {detail.name}
         </Text>
@@ -218,6 +236,12 @@ export default function GroupDetailScreen() {
         >
           <Ionicons name="person-add" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
+      </View>
+
+      {/* Balance summary */}
+      <View style={styles.balanceBanner}>
+        <Text style={styles.balanceBannerLabel}>Your balance in this group</Text>
+        <Text style={[styles.balanceBannerAmount, { color: balanceColor }]}>{balanceLabel}</Text>
       </View>
 
       {/* Tab bar */}
@@ -374,6 +398,16 @@ const createStyles = (theme: AppTheme) =>
       borderBottomColor: theme.colors.borderLight,
     },
     backBtn: { marginRight: 8, padding: 4 },
+    groupIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: theme.colors.primarySurface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+    groupIconEmoji: { fontSize: 17 },
     groupName: {
       flex: 1,
       fontFamily: 'Inter-Bold',
@@ -381,6 +415,24 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.text,
     },
     inviteBtn: { padding: 4 },
+    balanceBanner: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      padding: 16,
+      borderRadius: 16,
+      backgroundColor: theme.colors.surface,
+      ...theme.shadows.xs,
+    },
+    balanceBannerLabel: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      marginBottom: 2,
+    },
+    balanceBannerAmount: {
+      fontFamily: 'Inter-Bold',
+      fontSize: 20,
+    },
     tabBar: {
       flexDirection: 'row',
       backgroundColor: theme.colors.surfaceSecondary,
@@ -417,10 +469,20 @@ const createStyles = (theme: AppTheme) =>
     },
     expenseCard: {
       flexDirection: 'row',
+      alignItems: 'center',
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.borderLight,
+    },
+    expenseIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: theme.colors.surfaceSecondary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 12,
     },
     expenseLeft: { flex: 1 },
     expenseDesc: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.text },

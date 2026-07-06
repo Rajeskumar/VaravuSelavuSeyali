@@ -1,13 +1,15 @@
 import React from 'react';
 import Box from '@mui/material/Box';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import Checkbox from '@mui/material/Checkbox';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
+import Avatar from '@mui/material/Avatar';
 import InputAdornment from '@mui/material/InputAdornment';
+import { useTheme } from '@mui/material/styles';
 import { MemberDTO } from '../../api/groups';
 import { previewEqualSplit, previewPercentageSplit } from '../../utils/splitPreview';
+import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
+import SegmentedTabs from '../common/SegmentedTabs';
 
 export type SplitType = 'equal' | 'exact' | 'percentage';
 
@@ -78,7 +80,9 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
     );
   }, [value, amount]);
 
-  const handleTabChange = (_: React.SyntheticEvent, newType: SplitType) => {
+  const theme = useTheme();
+
+  const handleTabChange = (newType: SplitType) => {
     const participantIds = members.map((m) => m.member_id);
     const entries: SplitEditorEntry[] = participantIds.map((member_id) => ({
       member_id,
@@ -111,32 +115,59 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
   return (
     <Box>
       {allowedTypes.length > 1 && (
-        <Tabs value={value.type} onChange={handleTabChange} sx={{ mb: 1 }}>
-          {allowedTypes.includes('equal') && <Tab label="Equal" value="equal" />}
-          {allowedTypes.includes('exact') && <Tab label="Exact" value="exact" />}
-          {allowedTypes.includes('percentage') && <Tab label="Percentage" value="percentage" />}
-        </Tabs>
+        <Box sx={{ mb: 1.5 }}>
+          <SegmentedTabs<SplitType>
+            value={value.type}
+            onChange={handleTabChange}
+            options={([
+              { value: 'equal', label: 'Equal' },
+              { value: 'exact', label: 'Exact' },
+              { value: 'percentage', label: 'Percentage' },
+            ] as { value: SplitType; label: string }[]).filter((o) => allowedTypes.includes(o.value))}
+          />
+        </Box>
       )}
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {members.map((m) => {
+      <Box
+        sx={{
+          borderRadius: 3,
+          overflow: 'hidden',
+          border: `1px solid ${theme.palette.divider}`,
+        }}
+      >
+        {members.map((m, idx) => {
           const checked = selectedIds.has(m.member_id);
           const entry = value.entries.find((e) => e.member_id === m.member_id);
           return (
-            <Box key={m.member_id} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              key={m.member_id}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                px: 1.5,
+                py: 1,
+                borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
+                backgroundColor: checked ? 'transparent' : theme.palette.action.disabledBackground,
+                opacity: checked ? 1 : 0.6,
+              }}
+            >
               <Checkbox
                 checked={checked}
                 onChange={(e) => toggleMember(m.member_id, e.target.checked)}
                 inputProps={{ 'aria-label': `Include ${m.display_name}` }}
               />
-              <Typography sx={{ flex: 1 }}>{m.display_name}</Typography>
+              <Avatar sx={{ width: 32, height: 32, fontSize: 13, bgcolor: colorFromMemberId(m.member_id) }}>
+                {initialsFromName(m.display_name)}
+              </Avatar>
+              <Typography sx={{ flex: 1, fontWeight: 600 }}>{m.display_name}</Typography>
               {checked && value.type !== 'equal' && (
                 <TextField
                   size="small"
                   type="number"
                   value={entry?.value ?? 0}
                   onChange={(e) => updateEntryValue(m.member_id, parseFloat(e.target.value) || 0)}
-                  sx={{ width: 130 }}
+                  sx={{ width: 120 }}
                   inputProps={{ 'aria-label': `${value.type === 'exact' ? 'Amount' : 'Percentage'} for ${m.display_name}` }}
                   InputProps={
                     value.type === 'exact'
@@ -146,7 +177,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
                 />
               )}
               {checked && (
-                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 72, textAlign: 'right' }}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: 72, textAlign: 'right', fontWeight: 600 }}>
                   ${(preview[m.member_id] ?? 0).toFixed(2)}
                 </Typography>
               )}

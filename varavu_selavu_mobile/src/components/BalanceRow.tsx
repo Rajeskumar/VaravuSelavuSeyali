@@ -17,7 +17,7 @@ interface Props {
 }
 
 /** Derive a deterministic color from a member ID string. */
-function memberColor(memberId: string): string {
+export function memberColor(memberId: string): string {
   const COLORS = [
     '#007AFF', '#34C759', '#FF9500', '#AF52DE',
     '#FF2D55', '#5AC8FA', '#FFCC00', '#FF6B35',
@@ -27,6 +27,16 @@ function memberColor(memberId: string): string {
     hash = (hash * 31 + memberId.charCodeAt(i)) & 0xffff;
   }
   return COLORS[hash % COLORS.length];
+}
+
+/** Up to 2 initials from a display name, e.g. "Group Tester" -> "GT". */
+export function initialsFromName(name: string): string {
+  return name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export default function BalanceRow({ balance, isCurrentUser = false }: Props) {
@@ -49,12 +59,7 @@ export default function BalanceRow({ balance, isCurrentUser = false }: Props) {
     ? `Owes $${Math.abs(net).toFixed(2)}`
     : 'Settled up';
 
-  const initials = balance.display_name
-    .split(' ')
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
+  const initials = initialsFromName(balance.display_name);
 
   return (
     <View style={[styles.row, isCurrentUser && styles.rowHighlighted]}>

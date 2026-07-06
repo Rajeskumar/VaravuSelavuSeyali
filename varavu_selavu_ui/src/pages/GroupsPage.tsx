@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -15,6 +16,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { motion } from 'framer-motion';
 import GroupCard from '../components/groups/GroupCard';
 import { listGroups, createGroup, ApiError } from '../api/groups';
+import { brand, withAlpha } from '../theme';
 
 const GROUP_TYPES = [
   { value: 'trip', label: 'Trip' },
@@ -24,6 +26,10 @@ const GROUP_TYPES = [
 ];
 
 const GroupsPage: React.FC = () => {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  const gradientStart = isDark ? brand.gradientStartDark : brand.gradientStart;
+  const gradientEnd = isDark ? brand.gradientEndDark : brand.gradientEnd;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({ queryKey: ['groups'], queryFn: listGroups });
@@ -57,7 +63,7 @@ const GroupsPage: React.FC = () => {
   if (notEnabled) {
     return (
       <Box sx={{ mt: 4 }}>
-        <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 2 }}>
+        <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
           <GroupsRoundedIcon sx={{ fontSize: 64, color: 'primary.light', mb: 2 }} />
           <Typography variant="h6" fontWeight={700} gutterBottom>
             Groups isn't available yet
@@ -73,11 +79,33 @@ const GroupsPage: React.FC = () => {
   return (
     <Box sx={{ mt: 4 }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            👥 Groups
-          </Typography>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4, flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box
+              sx={{
+                width: 48,
+                height: 48,
+                borderRadius: 2.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 24,
+                backgroundImage: `linear-gradient(135deg, ${gradientStart} 0%, ${gradientEnd} 100%)`,
+                boxShadow: `0 6px 16px ${withAlpha(gradientStart, 0.35)}`,
+              }}
+            >
+              👥
+            </Box>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                Groups
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Split bills and track shared expenses
+              </Typography>
+            </Box>
+          </Box>
+          <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
             Create Group
           </Button>
         </Box>
@@ -89,22 +117,37 @@ const GroupsPage: React.FC = () => {
         )}
 
         {!isLoading && groups.length === 0 && (
-          <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 2 }}>
-            <GroupsRoundedIcon sx={{ fontSize: 64, color: 'primary.light', mb: 2 }} />
+          <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
+            <Box
+              sx={{
+                width: 88,
+                height: 88,
+                borderRadius: '50%',
+                mx: 'auto',
+                mb: 3,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 40,
+                background: withAlpha(gradientStart, isDark ? 0.16 : 0.08),
+              }}
+            >
+              👥
+            </Box>
             <Typography variant="h6" fontWeight={700} gutterBottom>
               No groups yet
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 380, mx: 'auto' }}>
               Create a group to split rent, trips, or shared bills with roommates and friends.
             </Typography>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+            <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
               Create your first group
             </Button>
           </Paper>
         )}
 
         {!isLoading && groups.length > 0 && (
-          <Grid container spacing={2}>
+          <Grid container spacing={2.5}>
             {groups.map((g) => (
               <Grid key={g.group_id} size={{ xs: 12, sm: 6, md: 4 }}>
                 <GroupCard group={g} onClick={() => navigate(`/groups/${g.group_id}`)} />

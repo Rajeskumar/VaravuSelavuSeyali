@@ -17,8 +17,10 @@ import {
   Alert,
   Chip,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import AddExpenseForm from '../components/expenses/AddExpenseForm';
 import GroupScopeFilter from '../components/common/GroupScopeFilter';
@@ -30,6 +32,7 @@ import { parseAppDate } from '../utils/date';
 import { motion } from 'framer-motion';
 
 const ExpensesPage: React.FC = () => {
+  const theme = useTheme();
   const user = localStorage.getItem('vs_user') || '';
   const queryClient = useQueryClient();
   const { enabled: groupsEnabled } = useGroupsEnabled();
@@ -195,44 +198,70 @@ const ExpensesPage: React.FC = () => {
       </TableContainer>
       )}
       {scope !== 'personal' && (
-      <TableContainer component={Paper} sx={{ borderRadius: 2, mb: 2 }}>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Date</TableCell>
-              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Description</TableCell>
-              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Group</TableCell>
-              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }}>Category</TableCell>
-              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }} align="right">My Share</TableCell>
-              <TableCell sx={{ fontWeight: 600, backgroundColor: 'primary.main', color: 'primary.contrastText' }} align="right">Full Amount</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {(groupExpensesQuery.isLoading || (scope === 'combined' && combinedPersonalQuery.isLoading)) && (
-              <TableRow>
-                <TableCell colSpan={6} align="center"><CircularProgress size={20} /></TableCell>
-              </TableRow>
-            )}
-            {unifiedRows.map(row => (
-              <TableRow key={row.key} hover sx={{ '&:nth-of-type(odd)': { backgroundColor: 'action.hover' } }}>
-                <TableCell>{row.date}</TableCell>
-                <TableCell>{row.description}</TableCell>
-                <TableCell>{row.groupName ? <Chip size="small" label={row.groupName} /> : '—'}</TableCell>
-                <TableCell>{row.category}</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 600 }}>${row.myShare.toFixed(2)}</TableCell>
-                <TableCell align="right" sx={{ color: 'text.secondary' }}>${row.fullAmount.toFixed(2)}</TableCell>
-              </TableRow>
-            ))}
-            {!groupExpensesQuery.isLoading && unifiedRows.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
-                  <Typography color="text.secondary">No expenses in this scope</Typography>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Paper sx={{ borderRadius: 3, overflow: 'hidden', mb: 2 }}>
+        {(groupExpensesQuery.isLoading || (scope === 'combined' && combinedPersonalQuery.isLoading)) && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress size={20} />
+          </Box>
+        )}
+        {unifiedRows.map((row, idx) => (
+          <Box
+            key={row.key}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              px: 2.5,
+              py: 1.75,
+              borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
+              transition: 'background-color 0.15s ease',
+              '&:hover': { backgroundColor: theme.palette.action.hover },
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                color: 'text.secondary',
+              }}
+            >
+              <ReceiptLongRoundedIcon fontSize="small" />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Typography variant="body1" sx={{ fontWeight: 600 }} noWrap>
+                  {row.description}
+                </Typography>
+                {row.groupName && <Chip size="small" label={row.groupName} />}
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {row.category} · {row.date}
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+              <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                ${row.myShare.toFixed(2)}
+              </Typography>
+              {row.groupName && (
+                <Typography variant="caption" color="text.secondary">
+                  ${row.fullAmount.toFixed(2)} total
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        ))}
+        {!groupExpensesQuery.isLoading && unifiedRows.length === 0 && (
+          <Box sx={{ py: 4, textAlign: 'center' }}>
+            <Typography color="text.secondary">No expenses in this scope</Typography>
+          </Box>
+        )}
+      </Paper>
       )}
       {scope === 'personal' && hasNextPage && (
         <Box sx={{ textAlign: 'center', mb: 2 }}>

@@ -28,11 +28,12 @@ import {
 } from '../../api/expenses';
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
-import { FormControlLabel, Switch, InputAdornment, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
 import { glassCardSx } from '../../theme';
 import { listGroups, getGroup, createGroupExpense, GroupSummary, GroupDetailResponse, ApiError } from '../../api/groups';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
+import SegmentedTabs from '../common/SegmentedTabs';
 
 const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
@@ -516,16 +517,15 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             </Grid>
             {groupsEnabled && !existing && (
               <Grid size={12}>
-                <ToggleButtonGroup
-                  size="small"
-                  exclusive
+                <SegmentedTabs
                   value={mode}
-                  onChange={(_, next) => next && setMode(next)}
-                  aria-label="Personal or group expense"
-                >
-                  <ToggleButton value="personal">Personal</ToggleButton>
-                  <ToggleButton value="group">Group</ToggleButton>
-                </ToggleButtonGroup>
+                  onChange={setMode}
+                  ariaLabel="Personal or group expense"
+                  options={[
+                    { value: 'personal', label: 'Personal' },
+                    { value: 'group', label: 'Group' },
+                  ]}
+                />
               </Grid>
             )}
             {mode === 'group' && !existing && (

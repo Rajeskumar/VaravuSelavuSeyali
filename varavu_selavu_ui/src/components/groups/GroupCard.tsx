@@ -1,19 +1,12 @@
 import React from 'react';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
-import CardContent from '@mui/material/CardContent';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
-import PeopleAltRoundedIcon from '@mui/icons-material/PeopleAltRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import GroupAvatar from './GroupAvatar';
 import { GroupSummary } from '../../api/groups';
-
-const GROUP_TYPE_EMOJI: Record<string, string> = {
-  trip: '✈️',
-  home: '🏠',
-  couple: '💑',
-  other: '👥',
-};
 
 interface GroupCardProps {
   group: GroupSummary;
@@ -31,21 +24,25 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick }) => {
 
   return (
     <Card>
-      <CardActionArea onClick={onClick}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              {GROUP_TYPE_EMOJI[group.group_type] || '👥'} {group.name}
+      <CardActionArea onClick={onClick} sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+          <GroupAvatar seed={group.group_id} groupType={group.group_type} size={52} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
+              {group.name}
             </Typography>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'text.secondary', mb: 1.5 }}>
-            <PeopleAltRoundedIcon fontSize="small" />
-            <Typography variant="body2">
+            <Typography variant="body2" color="text.secondary">
               {group.member_count} member{group.member_count === 1 ? '' : 's'}
             </Typography>
           </Box>
-          <Chip size="small" color={balanceColor as any} label={balanceLabel} />
-        </CardContent>
+          <ChevronRightRoundedIcon sx={{ color: 'text.disabled' }} />
+        </Box>
+        <Chip
+          size="small"
+          color={balanceColor as any}
+          label={balanceLabel}
+          sx={{ mt: 1.75, fontWeight: 600 }}
+        />
       </CardActionArea>
     </Card>
   );

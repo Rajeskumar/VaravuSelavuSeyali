@@ -5,8 +5,13 @@ import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
+import Avatar from '@mui/material/Avatar';
 import InputAdornment from '@mui/material/InputAdornment';
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import { useTheme } from '@mui/material/styles';
 import { createSettlement, ApiError, MemberBalance } from '../../api/groups';
+import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
+import { withAlpha } from '../../theme';
 
 interface SettleUpDialogProps {
   open: boolean;
@@ -17,6 +22,8 @@ interface SettleUpDialogProps {
 }
 
 const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members, onClose, onSuccess }) => {
+  const theme = useTheme();
+  const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name || '';
   const [fromMemberId, setFromMemberId] = React.useState('');
   const [toMemberId, setToMemberId] = React.useState('');
   const [amount, setAmount] = React.useState<number>(0);
@@ -67,6 +74,45 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
         <Typography variant="h6" sx={{ mb: 2 }}>
           Settle Up
         </Typography>
+
+        {fromMemberId && toMemberId && fromMemberId !== toMemberId && (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1.5,
+              p: 2,
+              mb: 2.5,
+              borderRadius: 3,
+              backgroundColor: withAlpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.12 : 0.06),
+            }}
+          >
+            <Box sx={{ textAlign: 'center' }}>
+              <Avatar sx={{ width: 40, height: 40, mx: 'auto', mb: 0.5, bgcolor: colorFromMemberId(fromMemberId) }}>
+                {initialsFromName(nameFor(fromMemberId))}
+              </Avatar>
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                {nameFor(fromMemberId)}
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
+              <ArrowForwardRoundedIcon />
+              <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: 'primary.main' }}>
+                ${amount ? amount.toFixed(2) : '0.00'}
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: 'center' }}>
+              <Avatar sx={{ width: 40, height: 40, mx: 'auto', mb: 0.5, bgcolor: colorFromMemberId(toMemberId) }}>
+                {initialsFromName(nameFor(toMemberId))}
+              </Avatar>
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                {nameFor(toMemberId)}
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
             select

@@ -1,31 +1,30 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Dialog from '@mui/material/Dialog';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
-import Table from '@mui/material/Table';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import TableCell from '@mui/material/TableCell';
-import TableBody from '@mui/material/TableBody';
 import Paper from '@mui/material/Paper';
+import Card from '@mui/material/Card';
 import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import Divider from '@mui/material/Divider';
 import AddIcon from '@mui/icons-material/Add';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
+import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
+import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import { motion } from 'framer-motion';
 import MemberAvatarStack from '../components/groups/MemberAvatarStack';
+import GroupAvatar from '../components/groups/GroupAvatar';
+import SegmentedTabs from '../components/common/SegmentedTabs';
 import SplitEditor, { SplitEditorValue } from '../components/groups/SplitEditor';
 import BalanceList from '../components/groups/BalanceList';
 import SettleUpDialog from '../components/groups/SettleUpDialog';
@@ -40,6 +39,7 @@ import {
   MemberDTO,
 } from '../api/groups';
 import { isoToMMDDYYYY } from '../utils/date';
+import { glassCardSx } from '../theme';
 
 type TabKey = 'expenses' | 'balances';
 
@@ -47,6 +47,7 @@ const GroupDetailPage: React.FC = () => {
   const { id: groupId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const theme = useTheme();
   const [tab, setTab] = React.useState<TabKey>('expenses');
   const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
@@ -71,6 +72,9 @@ const GroupDetailPage: React.FC = () => {
   });
 
   const members: MemberDTO[] = groupQuery.data?.members || [];
+  const myEmail = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
+  const myMember = members.find((m) => m.user_email === myEmail);
+  const myBalance = balancesQuery.data?.members.find((m) => m.member_id === myMember?.member_id)?.net ?? 0;
 
   // --- Add expense dialog ---
   const [addOpen, setAddOpen] = React.useState(false);
@@ -177,89 +181,140 @@ const GroupDetailPage: React.FC = () => {
 
   const group = groupQuery.data;
 
+  const balanceLabel = myBalance > 0 ? `You're owed $${myBalance.toFixed(2)}` : myBalance < 0 ? `You owe $${Math.abs(myBalance).toFixed(2)}` : "You're all settled up";
+  const balanceColor = myBalance > 0 ? theme.palette.success.main : myBalance < 0 ? theme.palette.error.main : theme.palette.text.secondary;
+
   return (
     <Box sx={{ mt: 4 }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
           <IconButton onClick={() => navigate('/groups')} size="small">
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            {group.name}
-          </Typography>
-        </Box>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-          <MemberAvatarStack members={members} />
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button size="small" onClick={() => setMemberDialogOpen(true)}>
-              Add Member
-            </Button>
+          <GroupAvatar seed={group.group_id} groupType={group.group_type} size={44} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
+              {group.name}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {members.length} member{members.length === 1 ? '' : 's'}
+            </Typography>
           </Box>
+          <MemberAvatarStack members={members} />
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<PersonAddAlt1RoundedIcon />}
+            onClick={() => setMemberDialogOpen(true)}
+            sx={{ flexShrink: 0 }}
+          >
+            Add Member
+          </Button>
         </Box>
 
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-          {members.map((m) => (
-            <Chip
-              key={m.member_id}
-              label={m.status === 'invited' ? `${m.display_name} (pending)` : m.display_name}
-              size="small"
-              onDelete={m.status === 'invited' ? () => setInviteMember(m) : undefined}
-              deleteIcon={m.status === 'invited' ? <MailOutlineIcon fontSize="small" /> : undefined}
-            />
-          ))}
-        </Box>
+        <Card sx={{ ...glassCardSx(theme), p: 2.5, mb: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+          <Box>
+            <Typography variant="caption" color="text.secondary">Your balance in this group</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: balanceColor }}>
+              {balanceLabel}
+            </Typography>
+          </Box>
+          {members.some((m) => m.status === 'invited') && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {members.filter((m) => m.status === 'invited').map((m) => (
+                <Chip
+                  key={m.member_id}
+                  label={`${m.display_name} · pending`}
+                  size="small"
+                  onDelete={() => setInviteMember(m)}
+                  deleteIcon={<MailOutlineIcon fontSize="small" />}
+                />
+              ))}
+            </Box>
+          )}
+        </Card>
 
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
-          <Tab label="Expenses" value="expenses" />
-          <Tab label="Balances" value="balances" />
-        </Tabs>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1.5 }}>
+          <SegmentedTabs
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'expenses', label: 'Expenses' },
+              { value: 'balances', label: 'Balances' },
+            ]}
+          />
+          {tab === 'expenses' ? (
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} disabled={members.length === 0}>
+              Add Expense
+            </Button>
+          ) : (
+            <Button variant="contained" onClick={() => setSettleOpen(true)} disabled={members.length < 2}>
+              Settle Up
+            </Button>
+          )}
+        </Box>
 
         {tab === 'expenses' && (
           <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} disabled={members.length === 0}>
-                Add Expense
-              </Button>
-            </Box>
             {expensesQuery.isLoading && (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                 <CircularProgress />
               </Box>
             )}
             {!expensesQuery.isLoading && (expensesQuery.data?.items.length ?? 0) === 0 && (
-              <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 2 }}>
+              <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
                 <Typography color="text.secondary">No group expenses yet.</Typography>
               </Paper>
             )}
             {!expensesQuery.isLoading && (expensesQuery.data?.items.length ?? 0) > 0 && (
-              <Paper sx={{ borderRadius: 2 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell align="right">My Share</TableCell>
-                      <TableCell align="right">Total</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {expensesQuery.data?.items.map((row) => (
-                      <TableRow key={row.row_id} hover>
-                        <TableCell>{row.date}</TableCell>
-                        <TableCell>{row.description}</TableCell>
-                        <TableCell>{row.category}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          ${row.my_share.toFixed(2)}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: 'text.secondary' }}>
-                          ${row.cost.toFixed(2)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+                {expensesQuery.data?.items.map((row, idx) => (
+                  <Box
+                    key={row.row_id}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      px: 2.5,
+                      py: 1.75,
+                      borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
+                      transition: 'background-color 0.15s ease',
+                      '&:hover': { backgroundColor: theme.palette.action.hover },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 2,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                        color: 'text.secondary',
+                      }}
+                    >
+                      <ReceiptLongRoundedIcon fontSize="small" />
+                    </Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 600 }} noWrap>
+                        {row.description}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {row.category} · {row.date}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                        ${row.my_share.toFixed(2)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        ${row.cost.toFixed(2)} total
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
               </Paper>
             )}
           </Box>
@@ -267,11 +322,6 @@ const GroupDetailPage: React.FC = () => {
 
         {tab === 'balances' && (
           <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-              <Button variant="contained" onClick={() => setSettleOpen(true)} disabled={members.length < 2}>
-                Settle Up
-              </Button>
-            </Box>
             {balancesQuery.isLoading && (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                 <CircularProgress />
@@ -356,10 +406,17 @@ const GroupDetailPage: React.FC = () => {
           <Typography variant="h6" sx={{ mb: 2 }}>
             Add Member
           </Typography>
-          <Tabs value={memberMode} onChange={(_, v) => setMemberMode(v)} sx={{ mb: 2 }}>
-            <Tab label="Registered email" value="email" />
-            <Tab label="Placeholder name" value="placeholder" />
-          </Tabs>
+          <Box sx={{ mb: 2 }}>
+            <SegmentedTabs
+              value={memberMode}
+              onChange={setMemberMode}
+              fullWidth
+              options={[
+                { value: 'email', label: 'Registered email' },
+                { value: 'placeholder', label: 'Placeholder name' },
+              ]}
+            />
+          </Box>
           {memberMode === 'email' ? (
             <TextField
               label="Email"

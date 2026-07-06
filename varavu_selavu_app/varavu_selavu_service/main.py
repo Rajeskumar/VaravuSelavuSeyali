@@ -32,6 +32,10 @@ origins = settings.CORS_ALLOW_ORIGINS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,        # or ["*"] to allow all, but use specific domains in prod
+    # Local dev only: CRA's preview server falls back to a random port when 3000 is
+    # busy (e.g. a second instance alongside one already running). Regex avoids
+    # having to hardcode/update the allowlist every time that happens.
+    allow_origin_regex=r"http://localhost:\d+" if settings.ENVIRONMENT == "local" else None,
     allow_credentials=True,       # allow cookies, Authorization headers
     allow_methods=["*"],          # GET, POST, PUT, etc.
     allow_headers=["*"],          # allow all headers

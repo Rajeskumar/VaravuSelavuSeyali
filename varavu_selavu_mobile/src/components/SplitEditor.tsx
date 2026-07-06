@@ -10,6 +10,7 @@ import { View, Text, StyleSheet, Switch } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { MemberDTO } from '../api/groups';
+import { memberColor } from './BalanceRow';
 
 export type SplitType = 'equal'; // Phase 2 will add: | 'exact' | 'percentage'
 
@@ -82,7 +83,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount }: P
         const isSelected = selectedIds.has(member.member_id);
         return (
           <View key={member.member_id} style={styles.row}>
-            <View style={styles.avatarBox}>
+            <View style={[styles.avatarBox, { backgroundColor: memberColor(member.member_id) }]}>
               <Text style={styles.avatarText}>
                 {member.display_name.charAt(0).toUpperCase()}
               </Text>

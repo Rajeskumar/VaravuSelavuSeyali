@@ -1,7 +1,6 @@
 import React from 'react';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { AnalysisScope } from '../../api/analysis';
+import SegmentedTabs from './SegmentedTabs';
 
 interface GroupScopeFilterProps {
   value: AnalysisScope;
@@ -14,17 +13,17 @@ interface GroupScopeFilterProps {
  * toggle). Callers are expected to only render this once TS-GRP-107's
  * useGroupsEnabled() hook confirms the flag is on. */
 const GroupScopeFilter: React.FC<GroupScopeFilterProps> = ({ value, onChange, size = 'small' }) => (
-  <ToggleButtonGroup
-    size={size}
-    exclusive
+  <SegmentedTabs<AnalysisScope>
     value={value}
-    onChange={(_, next) => next && onChange(next)}
-    aria-label="Spend scope"
-  >
-    <ToggleButton value="personal">Personal</ToggleButton>
-    <ToggleButton value="groups">Groups</ToggleButton>
-    <ToggleButton value="combined">Combined</ToggleButton>
-  </ToggleButtonGroup>
+    onChange={onChange}
+    size={size}
+    ariaLabel="Spend scope"
+    options={[
+      { value: 'personal', label: 'Personal' },
+      { value: 'groups', label: 'Groups' },
+      { value: 'combined', label: 'Combined' },
+    ]}
+  />
 );
 
 export default GroupScopeFilter;
