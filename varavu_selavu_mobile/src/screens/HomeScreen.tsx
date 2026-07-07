@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl,
   ActivityIndicator,
@@ -7,12 +7,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
+import { getChangeInsights, ChangeInsight } from '../api/analytics';
+import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CategoryDonutChart from '../components/CategoryDonutChart';
 import CategoryRankedList from '../components/CategoryRankedList';
 import TrendLineChart from '../components/TrendLineChart';
+import WhatChangedTeaser from '../components/WhatChangedTeaser';
+import DueSoonStrip from '../components/DueSoonStrip';
+import CustomButton from '../components/CustomButton';
+import { showToast } from '../components/Toast';
+import { onExpenseChanged } from '../utils/expenseEvents';
+import { AddExpenseContext } from './AddExpenseScreen';
 
 // ─── Category icon map ───────────────────────────────────────────────────────
 const categoryEmojis: Record<string, string> = {
@@ -48,8 +56,13 @@ const formatCurrency = (amount: number) =>
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+export interface MomDelta {
+  amount: number;
+  percent: number;
+}
+
 /** Prominent "Today" card style hero */
-function HeroCard({ yearlyTotal, monthlyTotal }: { yearlyTotal: number; monthlyTotal: number }) {
+function HeroCard({ yearlyTotal, monthlyTotal, momDelta }: { yearlyTotal: number; monthlyTotal: number; momDelta?: MomDelta | null }) {
   const { theme } = useAppTheme();
   const heroStyles = useMemo(() => createHeroStyles(theme), [theme]);
   const currentMonth = new Date().toLocaleString('default', { month: 'long' });
@@ -69,7 +82,17 @@ function HeroCard({ yearlyTotal, monthlyTotal }: { yearlyTotal: number; monthlyT
       </View>
 
       {/* Big number */}
-      <Text style={heroStyles.amount}>{formatCurrency(yearlyTotal)}</Text>
+      <Text style={[heroStyles.amount, !momDelta && heroStyles.amountNoDelta]}>{formatCurrency(yearlyTotal)}</Text>
+
+      {/* Month-over-month delta (TS-DES-112) — omitted entirely when there's no prior-month
+          data to compare against (e.g. a brand-new user's first month). White text matches this
+          card's existing on-gradient convention (eyebrow/badge/stat labels); the up/down glyph
+          carries the direction rather than color, since jade-on-jade would be unreadable. */}
+      {momDelta && (
+        <Text style={heroStyles.momDelta}>
+          {momDelta.amount > 0 ? '▲' : '▼'} {momDelta.amount > 0 ? '+' : ''}{momDelta.percent.toFixed(0)}% vs last month
+        </Text>
+      )}
 
       {/* Divider line */}
       <View style={heroStyles.divider} />
@@ -129,6 +152,15 @@ const createHeroStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 42,
     color: '#FFFFFF',
     letterSpacing: -1.5,
+    marginBottom: 6,
+  },
+  amountNoDelta: {
+    marginBottom: 20,
+  },
+  momDelta: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
     marginBottom: 20,
   },
   divider: {
@@ -345,21 +377,29 @@ export default function HomeScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [yearlyData, setYearlyData] = useState<AnalysisResponse | null>(null);
   const [monthlyData, setMonthlyData] = useState<AnalysisResponse | null>(null);
+  const [changeInsights, setChangeInsights] = useState<ChangeInsight[]>([]);
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplateDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { openAddExpense } = useContext(AddExpenseContext);
 
   const fetchData = async () => {
     if (!accessToken || !userEmail) return;
     try {
       const now = new Date();
-      const [yearResult, monthResult] = await Promise.all([
+      const [yearResult, monthResult, insightsResult, templatesResult] = await Promise.all([
         getAnalysis(accessToken, userEmail, { year: now.getFullYear() }),
         getAnalysis(accessToken, userEmail, { year: now.getFullYear(), month: now.getMonth() + 1 }),
+        getChangeInsights(userEmail, { year: now.getFullYear(), month: now.getMonth() + 1 }).catch(() => []),
+        listRecurringTemplates().catch(() => []),
       ]);
       setYearlyData(yearResult);
       setMonthlyData(monthResult);
+      setChangeInsights(insightsResult);
+      setRecurringTemplates(templatesResult);
     } catch (e) {
       console.error('fetchData error', e);
+      showToast({ message: 'Failed to load dashboard data', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -369,6 +409,25 @@ export default function HomeScreen() {
   useEffect(() => {
     if (isFocused) { setLoading(true); fetchData(); }
   }, [isFocused]);
+
+  // TS-DES-112: the global "+" opens as a Modal overlay (not a navigator screen), so
+  // useIsFocused() never toggles when it closes — refetch on the expense-changed signal too.
+  useEffect(() => onExpenseChanged(() => fetchData()), [accessToken, userEmail]);
+
+  // TS-DES-112: month-over-month delta from the year-wide fetch's own `monthly_trend`, which
+  // already spans every month of the year (no separate trend-only fetch needed, unlike web).
+  const momDelta = useMemo(() => {
+    const trend = yearlyData?.monthly_trend;
+    if (!trend) return null;
+    const now = new Date();
+    const thisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    const thisTotal = trend.find((m) => m.month === thisKey)?.total;
+    const prevTotal = trend.find((m) => m.month === prevKey)?.total;
+    if (thisTotal == null || prevTotal == null || prevTotal <= 0) return null;
+    return { amount: thisTotal - prevTotal, percent: ((thisTotal - prevTotal) / prevTotal) * 100 };
+  }, [yearlyData]);
 
   const donutData = useMemo(() => {
     if (!monthlyData?.category_totals) return [];
@@ -423,8 +482,12 @@ export default function HomeScreen() {
             <ActivityIndicator color={theme.colors.primary} />
           </View>
         ) : (
-          <HeroCard yearlyTotal={yearlyTotal} monthlyTotal={monthlyTotal} />
+          <HeroCard yearlyTotal={yearlyTotal} monthlyTotal={monthlyTotal} momDelta={momDelta} />
         )}
+
+        {/* ── What Changed / Due Soon (TS-DES-112) ──────────── */}
+        <WhatChangedTeaser insights={changeInsights} onPress={() => navigation.navigate('Analysis')} />
+        <DueSoonStrip templates={recurringTemplates} onPress={() => navigation.navigate('Recurring')} />
 
         {/* ── Quick Actions ─────────────────────────────────── */}
         <QuickActions navigation={navigation} />
@@ -439,7 +502,13 @@ export default function HomeScreen() {
           <View style={styles.emptyCard}>
             <Text style={styles.emptyIcon}>🧾</Text>
             <Text style={styles.emptyTitle}>No recent expenses</Text>
-            <Text style={styles.emptySubtitle}>Tap the + button to add one</Text>
+            <Text style={styles.emptySubtitle}>Add your first expense to see it here</Text>
+            <CustomButton
+              title="Add an Expense"
+              onPress={openAddExpense}
+              fullWidth={false}
+              style={{ marginTop: 16, paddingHorizontal: 32 }}
+            />
           </View>
         ) : (
           <View style={styles.listCard}>

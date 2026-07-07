@@ -13,6 +13,7 @@ import { sendChatMessage, ChatPayload, ChatMessage } from '../api/chat';
 import { apiFetch } from '../api/apiFetch';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
+import SegmentedTabs from '../components/SegmentedTabs';
 
 const SUGGESTED_PROMPTS = [
     "What were my top spending categories?",
@@ -25,30 +26,13 @@ interface DisplayMessage {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    scope?: string;
 }
 
 interface ModelOption {
     provider: string;
     id: string;
     name: string;
-}
-
-type PeriodMode = 'default' | 'this_month' | 'this_year' | 'all_time';
-
-const PERIOD_LABELS: Record<PeriodMode, string> = {
-    default: 'Last 3 months',
-    this_month: 'This month',
-    this_year: 'This year',
-    all_time: 'All time',
-};
-
-/** Resolves the UI period mode into the year/month/start_date/end_date fields the chat API expects. */
-function resolvePeriodPayload(mode: PeriodMode) {
-    const now = new Date();
-    if (mode === 'this_month') return { year: now.getFullYear(), month: now.getMonth() + 1 };
-    if (mode === 'this_year') return { year: now.getFullYear() };
-    if (mode === 'all_time') return { start_date: '1970-01-01', end_date: now.toISOString().slice(0, 10) };
-    return {}; // 'default' — let the backend apply its rolling last-3-months default
 }
 
 export default function AIAnalystScreen() {
@@ -67,12 +51,7 @@ export default function AIAnalystScreen() {
     // Model selector state
     const [models, setModels] = useState<ModelOption[]>([]);
     const [provider, setProvider] = useState<string>('');
-    const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
-    const [modelPickerVisible, setModelPickerVisible] = useState(false);
-
-    // Period selector state — controls what expense data the AI receives by default
-    const [periodMode, setPeriodMode] = useState<PeriodMode>('default');
-    const [periodPickerVisible, setPeriodPickerVisible] = useState(false);
+    const [selectedSpeed, setSelectedSpeed] = useState<'fast' | 'deep'>('fast');
 
     // Typing indicator animation
     const dot1 = useRef(new Animated.Value(0)).current;
@@ -88,9 +67,7 @@ export default function AIAnalystScreen() {
                     const data = await res.json();
                     setModels(data.models || []);
                     setProvider(data.provider || '');
-                    if (data.models?.length && !selectedModel) {
-                        setSelectedModel(data.models[0]);
-                    }
+                    // Fast/deep selection relies on this state
                 }
             } catch {
                 // Non-fatal
@@ -141,6 +118,16 @@ export default function AIAnalystScreen() {
         setLoading(true);
 
         try {
+            // Resolve Fast/Deep
+            let targetModel: ModelOption | undefined;
+            if (models.length > 0) {
+                if (selectedSpeed === 'fast') {
+                    targetModel = models.find(m => /mini|flash|fast/i.test(m.id)) || models[0];
+                } else {
+                    targetModel = models.find(m => /pro|gpt-4o$|deep/i.test(m.id)) || models[models.length - 1];
+                }
+            }
+
             // Map our DisplayMessage to ChatMessage for the API
             const apiMessages: ChatMessage[] = newHistory.map(m => ({
                 role: m.role,
@@ -150,9 +137,9 @@ export default function AIAnalystScreen() {
             const payload: ChatPayload = {
                 user_id: userEmail || '',
                 messages: apiMessages,
-                model: selectedModel ? selectedModel.id : undefined,
-                provider: selectedModel ? selectedModel.provider : undefined,
-                ...resolvePeriodPayload(periodMode),
+                model: targetModel ? targetModel.id : undefined,
+                provider: targetModel ? targetModel.provider : undefined,
+                // We no longer send manual period/scope. The backend will use its default.
             };
 
             const response = await sendChatMessage(accessToken || '', payload);
@@ -160,6 +147,7 @@ export default function AIAnalystScreen() {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
                 content: response,
+                scope: 'This month · My Expenses', // Placeholder for intent context
             };
             setMessages((prev) => [...prev, assistantMsg]);
         } catch (error: any) {
@@ -196,10 +184,17 @@ export default function AIAnalystScreen() {
                         <Ionicons name="sparkles" size={16} color={theme.colors.primary} />
                     </View>
                 )}
-                <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-                    <Text style={[styles.bubbleText, isUser ? styles.userText : styles.assistantText]}>
-                        {item.content}
-                    </Text>
+                <View style={{ flex: 1, alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+                    <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+                        <Text style={[styles.bubbleText, isUser ? styles.userText : styles.assistantText]}>
+                            {item.content}
+                        </Text>
+                    </View>
+                    {!isUser && item.scope && (
+                        <Text style={styles.scopeChip}>
+                            Looked at: {item.scope}
+                        </Text>
+                    )}
                 </View>
                 {isUser && (
                     <View style={[styles.avatarBadge, { backgroundColor: theme.colors.primary }]}>
@@ -244,31 +239,15 @@ export default function AIAnalystScreen() {
                 <View style={styles.headerTitleRow}>
                     <Text style={styles.headerTitle}>AI Analyst</Text>
                 </View>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <TouchableOpacity
-                        style={[styles.modelBtn, { maxWidth: 110 }]}
-                        onPress={() => setPeriodPickerVisible(true)}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="calendar" size={13} color={theme.colors.textSecondary} style={{ marginRight: 5 }} />
-                        <Text style={styles.modelBtnText} numberOfLines={1}>
-                            {PERIOD_LABELS[periodMode]}
-                        </Text>
-                        <Ionicons name="chevron-down" size={11} color={theme.colors.textTertiary} style={{ marginLeft: 3 }} />
-                    </TouchableOpacity>
-                    {models.length > 0 && (
-                        <TouchableOpacity
-                            style={[styles.modelBtn, { maxWidth: 110 }]}
-                            onPress={() => setModelPickerVisible(true)}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons name="hardware-chip" size={13} color={theme.colors.textSecondary} style={{ marginRight: 5 }} />
-                            <Text style={styles.modelBtnText} numberOfLines={1}>
-                                {selectedModel ? selectedModel.name : 'Select Model'}
-                            </Text>
-                            <Ionicons name="chevron-down" size={11} color={theme.colors.textTertiary} style={{ marginLeft: 3 }} />
-                        </TouchableOpacity>
-                    )}
+                <View style={{ width: 140 }}>
+                    <SegmentedTabs
+                        options={[
+                            { value: 'fast', label: 'Fast' },
+                            { value: 'deep', label: 'Deep' }
+                        ]}
+                        value={selectedSpeed}
+                        onChange={(v) => setSelectedSpeed(v as 'fast' | 'deep')}
+                    />
                 </View>
             </View>
 
@@ -295,14 +274,8 @@ export default function AIAnalystScreen() {
                             </View>
                             <Text style={styles.emptyTitle}>AI Financial Analyst</Text>
                             <Text style={styles.emptySubtitle}>
-                                Ask me anything about your expenses, specific items, or merchants.
+                                Ask anything about your spending — I'll figure out the right period, and whether to include group expenses, from what you ask.
                             </Text>
-                            <TouchableOpacity style={styles.emptyPeriodBadge} onPress={() => setPeriodPickerVisible(true)} activeOpacity={0.7}>
-                                <Ionicons name="information-circle" size={13} color={theme.colors.primary} />
-                                <Text style={styles.emptyPeriodText}>
-                                    Scoped to {PERIOD_LABELS[periodMode].toLowerCase()} — tap to change
-                                </Text>
-                            </TouchableOpacity>
 
                             <View style={styles.suggestionsContainer}>
                                 <Text style={styles.suggestionsTitle}>Try asking:</Text>
@@ -371,61 +344,7 @@ export default function AIAnalystScreen() {
                 </View>
             </KeyboardAvoidingView>
 
-            {/* Model Picker Modal */}
-            <Modal visible={modelPickerVisible} animationType="slide" transparent>
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setModelPickerVisible(false)}
-                >
-                    <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
-                        <View style={styles.modalHandle} />
-                        <Text style={styles.modalTitle}>
-                            Select Model {provider ? `(${provider})` : ''}
-                        </Text>
-                        {models.map((m) => (
-                            <TouchableOpacity
-                                key={m.id}
-                                style={[styles.modelOption, selectedModel?.id === m.id && styles.modelOptionActive]}
-                                onPress={() => { setSelectedModel(m); setModelPickerVisible(false); }}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[styles.modelOptionText, selectedModel?.id === m.id && styles.modelOptionTextActive]}>
-                                    {m.name}
-                                </Text>
-                                {selectedModel?.id === m.id && <Text style={styles.modelCheck}>✓</Text>}
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </TouchableOpacity>
-            </Modal>
 
-            {/* Period Picker Modal */}
-            <Modal visible={periodPickerVisible} animationType="slide" transparent>
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setPeriodPickerVisible(false)}
-                >
-                    <View style={[styles.modalContent, { paddingBottom: insets.bottom + 20 }]}>
-                        <View style={styles.modalHandle} />
-                        <Text style={styles.modalTitle}>What period is this about?</Text>
-                        {(Object.keys(PERIOD_LABELS) as PeriodMode[]).map((mode) => (
-                            <TouchableOpacity
-                                key={mode}
-                                style={[styles.modelOption, periodMode === mode && styles.modelOptionActive]}
-                                onPress={() => { setPeriodMode(mode); setPeriodPickerVisible(false); }}
-                                activeOpacity={0.7}
-                            >
-                                <Text style={[styles.modelOptionText, periodMode === mode && styles.modelOptionTextActive]}>
-                                    {PERIOD_LABELS[mode]}
-                                </Text>
-                                {periodMode === mode && <Text style={styles.modelCheck}>✓</Text>}
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </TouchableOpacity>
-            </Modal>
         </LinearGradient>
     );
 }
@@ -529,18 +448,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.colors.text, marginBottom: 6 },
     emptySubtitle: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 36 },
-    emptyPeriodBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 6,
-        borderRadius: 12,
-        backgroundColor: theme.colors.primarySurface,
-        marginBottom: 20,
-    },
-    emptyPeriodText: { fontSize: 13, fontWeight: '600', color: theme.colors.primary },
     browseRow: { marginTop: 24, alignItems: 'center' },
     browseRowText: { fontSize: 13, color: theme.colors.textSecondary },
     browseLinksRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
@@ -558,26 +465,10 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         ...theme.shadows.sm
     },
     suggestionText: { fontSize: 14, color: theme.colors.primary, textAlign: 'center', fontWeight: '500' },
-    // Model picker modal
-    modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-    modalContent: {
-        backgroundColor: theme.colors.surface,
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 24,
+    scopeChip: {
+        fontSize: 11,
+        color: theme.colors.textSecondary,
+        marginTop: 6,
+        marginLeft: 4,
     },
-    modalHandle: {
-        width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.border,
-        alignSelf: 'center', marginBottom: 16,
-    },
-    modalTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.text, marginBottom: 16 },
-    modelOption: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, marginBottom: 6,
-        backgroundColor: theme.colors.background,
-    },
-    modelOptionActive: { backgroundColor: theme.colors.primarySurface, borderWidth: 1, borderColor: theme.colors.primary },
-    modelOptionText: { fontSize: 15, fontWeight: '500', color: theme.colors.text },
-    modelOptionTextActive: { color: theme.colors.primary, fontWeight: '700' },
-    modelCheck: { fontSize: 18, color: theme.colors.primary, fontWeight: '700' },
 });

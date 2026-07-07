@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
@@ -17,6 +17,7 @@ import {
   ItemInsightSummary, ItemInsightDetail,
 } from '../api/analytics';
 import { ListSkeleton, HeroSkeleton } from '../components/SkeletonLoader';
+import { AddExpenseContext } from './AddExpenseScreen';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -50,6 +51,7 @@ function monthSpan(firstSeenAt?: string | null, lastSeenAt?: string | null): num
 export default function ItemInsightsScreen() {
   const { userEmail } = useAuth();
   const navigation = useNavigation<any>();
+  const { openAddExpense } = useContext(AddExpenseContext);
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -311,7 +313,7 @@ export default function ItemInsightsScreen() {
           <Ionicons name="receipt-outline" size={48} color={theme.colors.textTertiary} />
           <Text style={styles.emptyText}>No item insights yet</Text>
           <Text style={styles.emptySubtext}>Upload a receipt to unlock item-level insights.</Text>
-           <TouchableOpacity style={styles.ctaButton} onPress={() => navigation.navigate('Add Expense')}>
+           <TouchableOpacity style={styles.ctaButton} onPress={openAddExpense}>
               <Text style={styles.ctaButtonText}>Add Receipt Expense</Text>
            </TouchableOpacity>
         </View>

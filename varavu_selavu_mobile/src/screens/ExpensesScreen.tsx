@@ -14,6 +14,7 @@ import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
+import { onExpenseChanged } from '../utils/expenseEvents';
 
 // Category emoji mapping
 const categoryEmojis: Record<string, string> = {
@@ -83,6 +84,10 @@ export default function ExpensesScreen() {
             fetchExpenses(true);
         }
     }, [isFocused, accessToken, userEmail]);
+
+    // TS-DES-112: the global "+" opens as a Modal overlay (not a navigator screen), so
+    // useIsFocused() never toggles when it closes — refetch on the expense-changed signal too.
+    useEffect(() => onExpenseChanged(() => fetchExpenses(true)), [accessToken, userEmail]);
 
     const handleDelete = (rowId: number) => {
         Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
@@ -380,9 +385,12 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         marginLeft: 8,
     },
     cost: {
+        // Money-color policy (theme.ts): error/success are reserved for signed, directional
+        // amounts paired with a sign + word. A plain expense row isn't a balance owed — ink is
+        // the correct default here, not a blanket ember.
         fontSize: 17,
         fontWeight: '700',
-        color: theme.colors.error,
+        color: theme.colors.text,
         marginBottom: 8,
     },
     actions: {
@@ -393,7 +401,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 10,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: theme.colors.surfaceSecondary,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -459,7 +467,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     pickerChip: {
         paddingHorizontal: 14, paddingVertical: 8,
-        borderRadius: 16, backgroundColor: '#F1F5F9',
+        borderRadius: 16, backgroundColor: theme.colors.surfaceSecondary,
     },
     pickerChipActive: {
         backgroundColor: theme.colors.primary,
@@ -471,7 +479,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         color: '#FFFFFF',
     },
     merchantBadge: {
-        backgroundColor: '#EFF6FF',
+        backgroundColor: theme.colors.primarySurface,
         paddingHorizontal: 7,
         paddingVertical: 2,
         borderRadius: 6,
@@ -479,6 +487,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     merchantText: {
         fontSize: 11,
         fontWeight: '500',
-        color: '#3B82F6',
+        color: theme.colors.primary,
     },
 });

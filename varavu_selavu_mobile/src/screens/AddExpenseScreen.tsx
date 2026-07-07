@@ -14,6 +14,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
+import { notifyExpenseChanged } from '../utils/expenseEvents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
@@ -182,6 +183,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast({ message: 'Group expense added', type: 'success' });
+        notifyExpenseChanged();
         closeAddExpense();
       } catch (error: any) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -206,6 +208,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
       }, accessToken);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast({ message: 'Expense saved', type: 'success' });
+      notifyExpenseChanged();
       closeAddExpense();
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

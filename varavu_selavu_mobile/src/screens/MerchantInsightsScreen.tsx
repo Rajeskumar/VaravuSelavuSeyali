@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
@@ -16,6 +16,7 @@ import {
   MerchantInsightSummary, MerchantInsightDetail,
 } from '../api/analytics';
 import { ListSkeleton, HeroSkeleton } from '../components/SkeletonLoader';
+import { AddExpenseContext } from './AddExpenseScreen';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -29,6 +30,7 @@ function confidenceColor(theme: AppTheme, confidence?: string | null) {
 export default function MerchantInsightsScreen() {
   const { userEmail } = useAuth();
   const navigation = useNavigation<any>();
+  const { openAddExpense } = useContext(AddExpenseContext);
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -325,7 +327,7 @@ export default function MerchantInsightsScreen() {
           <Ionicons name="storefront-outline" size={48} color={theme.colors.textTertiary} />
           <Text style={styles.emptyText}>No merchant data found</Text>
           <Text style={styles.emptySubtext}>Add merchant names to your expenses to improve merchant insights.</Text>
-           <TouchableOpacity style={styles.ctaButton} onPress={() => navigation.navigate('Add Expense')}>
+           <TouchableOpacity style={styles.ctaButton} onPress={openAddExpense}>
               <Text style={styles.ctaButtonText}>Add an Expense</Text>
            </TouchableOpacity>
         </View>
