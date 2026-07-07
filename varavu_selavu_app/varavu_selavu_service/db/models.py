@@ -207,6 +207,19 @@ class ExpenseSplit(Base):
     basis_type = Column(String(20), nullable=False)
     basis_value = Column(Numeric(12, 4))
 
+class ExpenseItemSplit(Base):
+    __tablename__ = "expense_item_splits"
+    __table_args__ = (
+        UniqueConstraint("expense_item_id", "member_id", name="uq_expense_item_splits_item_member"),
+        {"schema": "trackspense"}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    expense_item_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.expense_items.id", ondelete="CASCADE"), nullable=False)
+    member_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.group_members.id", ondelete="CASCADE"), nullable=False, index=True)
+    ratio = Column(Numeric(7, 4), CheckConstraint("ratio > 0 AND ratio <= 1", name="chk_expense_item_splits_ratio"), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+
 class Settlement(Base):
     __tablename__ = "settlements"
     __table_args__ = (

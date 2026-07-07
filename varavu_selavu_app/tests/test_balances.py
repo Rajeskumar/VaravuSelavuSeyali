@@ -197,3 +197,71 @@ def test_leave_allowed_when_net_balance_is_zero_despite_activity(test_client, db
     assert res.status_code == 200
     member = db_session.query(GroupMember).filter(GroupMember.id == uuid.UUID(m["b@test.com"])).first()
     assert member.status == "left"
+
+def test_multi_payer_transfers_attribution(test_client, db_session):
+    """
+    Scenario: A pays 60, B pays 40 (Total 100).
+    Split exactly: A=30, B=30, C=40.
+    C owes 40. A fronted 60/100 (60%). B fronted 40/100 (40%).
+    So C owes A 40 * 60% = 24.
+    C owes B 40 * 40% = 16.
+    
+    A's debt to themself: 30.
+    A's debt to B: 30 * 40% = 12.
+    
+    B's debt to A: 30 * 60% = 18.
+    B's debt to themself: 12.
+    
+    Net pairs:
+    A and B: A owes B 12, B owes A 18 => B owes A 6.
+    C and A: C owes A 24.
+    C and B: C owes B 16.
+    """
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Multi-payer",
+            "category": "Food",
+            "amount": 100.00,
+            "payers": [
+                {"member_id": m["test@user.com"], "amount_paid": 60.00},
+                {"member_id": m["b@test.com"], "amount_paid": 40.00}
+            ],
+            "split": {
+                "type": "exact", 
+                "entries": [
+                    {"member_id": m["test@user.com"], "value": 30.00},
+                    {"member_id": m["b@test.com"], "value": 30.00},
+                    {"member_id": m["c@test.com"], "value": 40.00}
+                ]
+            },
+        },
+    )
+
+    res = test_client.get(f"/api/v1/groups/{group_id}/balances")
+    assert res.status_code == 200
+    body = res.json()
+
+    # Verify nets
+    nets = {row["member_id"]: row["net"] for row in body["members"]}
+    assert nets[m["test@user.com"]] == 30.00 # Paid 60 - Owed 30 = 30
+    assert nets[m["b@test.com"]] == 10.00 # Paid 40 - Owed 30 = 10
+    assert nets[m["c@test.com"]] == -40.00 # Paid 0 - Owed 40 = -40
+
+    # Verify transfers
+    transfers = body["transfers"]
+    
+    # We expect: C owes A 24, C owes B 16, B owes A 6.
+    # We map them into a dictionary for easy checking.
+    tx_map = {}
+    for tx in transfers:
+        key = (tx["from_member_id"], tx["to_member_id"])
+        tx_map[key] = tx["amount"]
+
+    assert tx_map.get((m["c@test.com"], m["test@user.com"])) == 24.00
+    assert tx_map.get((m["c@test.com"], m["b@test.com"])) == 16.00
+    assert tx_map.get((m["b@test.com"], m["test@user.com"])) == 6.00
+

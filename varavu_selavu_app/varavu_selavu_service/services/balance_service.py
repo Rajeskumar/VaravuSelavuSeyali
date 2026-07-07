@@ -84,15 +84,32 @@ class BalanceService:
             sign = 1 if str(debtor_id) == a else -1
             pair_net[key] = pair_net.get(key, Decimal("0.00")) + sign * amount
 
+        import decimal
         expenses = self.db.query(Expense).filter(Expense.group_id == group_id).all()
         for exp in expenses:
-            payer_row = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == exp.id).first()
-            if payer_row is None:
+            payer_rows = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == exp.id).all()
+            if not payer_rows:
                 continue
+            
+            total_paid = sum(p.amount_paid for p in payer_rows)
+            if total_paid == Decimal('0.00'):
+                continue
+                
             splits = self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == exp.id).all()
             for s in splits:
-                if s.member_id != payer_row.member_id:
-                    _add(debtor_id=s.member_id, creditor_id=payer_row.member_id, amount=s.amount_owed)
+                debt_amount = s.amount_owed
+                if debt_amount == Decimal('0.00'):
+                    continue
+                    
+                allocated_sum = Decimal('0.00')
+                for i, p in enumerate(payer_rows):
+                    if i == len(payer_rows) - 1:
+                        portion = debt_amount - allocated_sum
+                    else:
+                        portion = (debt_amount * (p.amount_paid / total_paid)).quantize(Decimal('0.01'), rounding=decimal.ROUND_HALF_UP)
+                        allocated_sum += portion
+                        
+                    _add(debtor_id=s.member_id, creditor_id=p.member_id, amount=portion)
 
         settlements = self.db.query(Settlement).filter(Settlement.group_id == group_id).all()
         for st in settlements:

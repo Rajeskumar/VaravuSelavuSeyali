@@ -393,7 +393,13 @@ class GroupSplitEntry(BaseModel):
 
 
 class GroupSplitConfig(BaseModel):
-    type: str  # equal|exact|percentage (Phase 1)
+    """
+    Configuration for how an expense is divided among members.
+    type: 'equal', 'exact', 'percentage', 'shares', 'adjustment' (Phase 1 & 2)
+    entries: List of member-specific values (amounts or percentages or shares/adjustments).
+             Required for all types except 'equal'.
+    """
+    type: str = Field(..., description="The split mechanism: equal, exact, percentage, shares, or adjustment")
     entries: List[GroupSplitEntry] = []
 
 
@@ -410,6 +416,37 @@ class GroupExpenseRequest(BaseModel):
     merchant_name: Optional[str] = None
     payers: List[GroupExpensePayerEntry]
     split: GroupSplitConfig
+
+
+class GroupExpenseItemEntry(BaseModel):
+    line_no: int
+    item_name: str
+    normalized_name: str | None = None
+    category_id: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
+    line_total: float
+    tax: float | None = 0
+    discount: float | None = 0
+    attributes_json: str | None = None
+    member_ratios: Dict[str, float]
+
+
+class GroupExpenseWithItemsRequest(BaseModel):
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    description: str
+    category: str
+    amount: float
+    merchant_name: Optional[str] = None
+    payers: List[GroupExpensePayerEntry]
+    items: List[GroupExpenseItemEntry]
+
+
+class GroupExpenseWithItemsResponse(BaseModel):
+    expense_id: str
+    item_ids: List[str]
+    my_share: float
 
 
 class PayerSummaryItem(BaseModel):

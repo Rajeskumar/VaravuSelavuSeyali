@@ -20,6 +20,7 @@ from varavu_selavu_service.models.api_models import (
     GroupExpenseCreatedResponse,
     GroupExpenseListResponse,
     GroupExpenseRequest,
+    GroupExpenseWithItemsRequest,
     GroupSummary,
     MemberDTO,
     RecordSettlementRequest,
@@ -295,6 +296,54 @@ def create_group_expense(
         payers=[p.model_dump() for p in data.payers],
         split_type=data.split.type,
         split_entries=[e.model_dump() for e in data.split.entries],
+    )
+    analysis_service.invalidate_cache()
+    eid = _to_uuid(row["row_id"])
+    shares = (
+        {
+            str(s.member_id): float(s.amount_owed)
+            for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+        }
+        if eid is not None
+        else {}
+    )
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=group_id,
+        actor_email=user_email,
+        event_type="expense_added",
+        description=row["description"],
+        shares=shares,
+    )
+    return {"success": True, "expense": row}
+
+
+@router.post(
+    "/{group_id}/expenses/itemized",
+    response_model=GroupExpenseCreatedResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an itemized group expense",
+)
+def create_itemized_group_expense(
+    group_id: str,
+    data: GroupExpenseWithItemsRequest,
+    background_tasks: BackgroundTasks,
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    db: Session = Depends(get_db),
+    user_email: str = Depends(auth_required),
+):
+    row = svc.create_itemized_expense(
+        group_id=group_id,
+        actor_email=user_email,
+        date=data.date,
+        description=data.description,
+        category=data.category,
+        amount=data.amount,
+        merchant_name=data.merchant_name,
+        payers=[p.model_dump() for p in data.payers],
+        items=[i.model_dump() for i in data.items],
     )
     analysis_service.invalidate_cache()
     eid = _to_uuid(row["row_id"])

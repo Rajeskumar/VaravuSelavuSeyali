@@ -9,8 +9,6 @@ from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit,
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.split_engine import SplitError, resolve_split, validate_payers
 
-_SINGLE_PAYER_MESSAGE = "Only a single payer is supported in Phase 1"
-
 
 def _to_uuid(value) -> Optional[uuid.UUID]:
     try:
@@ -54,10 +52,10 @@ class GroupExpenseService:
             raise HTTPException(status_code=400, detail=f"member_id(s) not in this group: {sorted(missing)}")
 
     def _validate_and_resolve(self, group_id: uuid.UUID, amount: float, payers: List[dict], split_type: str, split_entries: List[dict]):
-        if len(payers) != 1:
-            raise HTTPException(status_code=400, detail=_SINGLE_PAYER_MESSAGE)
-
         payer_ids = [p["member_id"] for p in payers]
+        if len(payer_ids) != len(set(payer_ids)):
+            raise HTTPException(status_code=400, detail="Duplicate member_id in payers")
+            
         entry_ids = [e["member_id"] for e in split_entries]
         if len(entry_ids) != len(set(entry_ids)):
             raise HTTPException(status_code=400, detail="Duplicate member_id in split entries")
@@ -244,3 +242,125 @@ class GroupExpenseService:
         self.db.delete(expense)
         self.db.commit()
         # expense_payers/expense_splits cascade via the FK ondelete=CASCADE (TS-GRP-101).
+
+    def create_itemized_expense(
+        self,
+        group_id: str,
+        actor_email: str,
+        date: str,
+        description: str,
+        category: str,
+        amount: float,
+        merchant_name: Optional[str],
+        payers: List[dict],
+        items: List[dict],
+        fingerprint: Optional[str] = None
+    ) -> Dict:
+        self.group_service.require_membership(group_id, actor_email)
+        gid = _to_uuid(group_id)
+
+        payer_ids = [p["member_id"] for p in payers]
+        if len(payer_ids) != len(set(payer_ids)):
+            raise HTTPException(status_code=400, detail="Duplicate member_id in payers")
+        
+        # Verify payers exist in group
+        self._validate_members_in_group(gid, set(payer_ids))
+
+        try:
+            validate_payers(amount, payers)
+        except SplitError as e:
+            raise HTTPException(status_code=400, detail={"message": str(e), **e.details})
+
+        # Calculate totals from items to pass to item resolver
+        tax = sum(i.get("tax", 0) for i in items)
+        tip = 0 # Currently not passed in itemized structure, assumed handled via extra item or explicitly zero
+        discount = sum(i.get("discount", 0) for i in items)
+
+        # Ensure all referenced members exist
+        item_members = set()
+        for i in items:
+            for mid in i.get("member_ratios", {}):
+                item_members.add(mid)
+        self._validate_members_in_group(gid, item_members)
+
+        from varavu_selavu_service.services.item_split_engine import resolve_itemized_split
+        
+        try:
+            split_results = resolve_itemized_split(items, tax=tax, tip=tip, discount=discount, total_amount=amount)
+        except SplitError as e:
+            raise HTTPException(status_code=400, detail={"message": str(e), **e.details})
+
+        expense = Expense(
+            id=uuid.uuid4(),
+            user_email=actor_email,
+            group_id=gid,
+            split_type="itemized",
+            purchased_at=self._parse_date(date),
+            category_id=category,
+            amount=amount,
+            merchant_name=merchant_name,
+            description=description,
+            fingerprint=fingerprint
+        )
+        self.db.add(expense)
+        self.db.flush()
+
+        for p in payers:
+            self.db.add(
+                ExpensePayer(
+                    id=uuid.uuid4(),
+                    expense_id=expense.id,
+                    member_id=_to_uuid(p["member_id"]),
+                    amount_paid=p["amount_paid"],
+                )
+            )
+            
+        for r in split_results:
+            self.db.add(
+                ExpenseSplit(
+                    id=uuid.uuid4(),
+                    expense_id=expense.id,
+                    member_id=_to_uuid(r.member_id),
+                    amount_owed=r.amount_owed,
+                    basis_type=r.basis_type,
+                    basis_value=r.basis_value,
+                )
+            )
+            
+        from varavu_selavu_service.db.models import ExpenseItem, ExpenseItemSplit
+        
+        for item in items:
+            expense_item = ExpenseItem(
+                id=uuid.uuid4(),
+                expense_id=expense.id,
+                user_email=actor_email,
+                line_no=item["line_no"],
+                item_name=item["item_name"],
+                normalized_name=item.get("normalized_name"),
+                category_id=item.get("category_id"),
+                quantity=item.get("quantity"),
+                unit=item.get("unit"),
+                unit_price=item.get("unit_price"),
+                line_total=item["line_total"],
+                tax=item.get("tax", 0),
+                discount=item.get("discount", 0),
+                attributes_json=item.get("attributes_json"),
+            )
+            self.db.add(expense_item)
+            self.db.flush()
+            
+            # Record item splits
+            for mid, ratio in item.get("member_ratios", {}).items():
+                ratio_val = float(ratio)
+                item_split = ExpenseItemSplit(
+                    id=uuid.uuid4(),
+                    expense_item_id=expense_item.id,
+                    member_id=_to_uuid(mid),
+                    ratio=ratio_val,
+                    amount=item["line_total"] * ratio_val
+                )
+                self.db.add(item_split)
+
+        self.db.commit()
+
+        return self._expense_row(expense, actor_email)
