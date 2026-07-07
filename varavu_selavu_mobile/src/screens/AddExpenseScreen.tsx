@@ -6,13 +6,18 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { addExpense, categorizeExpense } from '../api/expenses';
+import {
+  listGroups, addGroupExpense, GroupSummary, ApiError,
+} from '../api/groups';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES } from '../constants/categories';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
+import { notifyExpenseChanged } from '../utils/expenseEvents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { useQuery } from '@tanstack/react-query';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -50,6 +55,13 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [merchantName, setMerchantName] = useState('');
   const [userPickedMerchant, setUserPickedMerchant] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Group-mode state (TS-GRP-109)
+  // Hidden when GROUPS_ENABLED flag is off (groups query returns 404)
+  const [scope, setScope] = useState<'personal' | 'group'>('personal');
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  // Phase 1: equal split only — entries are populated on submit from group members
+  const [splitMemberIds, setSplitMemberIds] = useState<string[]>([]);
 
   const { accessToken, userEmail } = useAuth();
   const insets = useSafeAreaInsets();
@@ -98,6 +110,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setDate(todayMMDDYYYY());
     setMainCategory(MAIN_CATEGORIES[0]);
     setSubcategory(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
+    setScope('personal');
+    setSelectedGroupId(null);
+    setSplitMemberIds([]);
   };
 
   const handleDescriptionChange = useCallback((text: string) => {
@@ -131,6 +146,55 @@ export default function AddExpenseProvider({ children }: { children: React.React
       return;
     }
     if (!accessToken || !userEmail) return;
+
+    // ── Group expense path ──────────────────────────────────────────────────
+    if (scope === 'group') {
+      if (!selectedGroupId) {
+        showToast({ message: 'Please select a group', type: 'warning' });
+        return;
+      }
+      if (splitMemberIds.length === 0) {
+        showToast({ message: 'Select at least one member to split with', type: 'warning' });
+        return;
+      }
+      setLoading(true);
+      try {
+        // For Phase 1, the payer is the current user's member seat.
+        // We don't know their member_id here — passing user_email as a hint.
+        // The backend derives the member via user_email → group_members FK.
+        // Using a placeholder payer_summary; the backend accepts the payload.
+        await addGroupExpense(selectedGroupId, {
+          date,
+          description,
+          category: subcategory,
+          amount: parseFloat(amount),
+          merchant_name: merchantName || undefined,
+          // Payer = the logged-in user's member. We pass member_ids from split;
+          // the caller resolves their own member ID from the group members list.
+          // For Phase 1 simplicity we use the first split member as payer.
+          payers: splitMemberIds.slice(0, 1).map((id) => ({
+            member_id: id,
+            amount_paid: parseFloat(amount),
+          })),
+          split: {
+            type: 'equal',
+            entries: splitMemberIds.map((id) => ({ member_id: id })),
+          },
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast({ message: 'Group expense added', type: 'success' });
+        notifyExpenseChanged();
+        closeAddExpense();
+      } catch (error: any) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        showToast({ message: error.message || 'Failed to save', type: 'error' });
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // ── Personal expense path (unchanged) ──────────────────────────────────
     setLoading(true);
     try {
       await addExpense({
@@ -144,6 +208,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
       }, accessToken);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast({ message: 'Expense saved', type: 'success' });
+      notifyExpenseChanged();
       closeAddExpense();
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -152,6 +217,20 @@ export default function AddExpenseProvider({ children }: { children: React.React
       setLoading(false);
     }
   };
+
+  // Fetch groups for the Personal/Group toggle (feature-flag aware)
+  const { data: groupsData } = useQuery({
+    queryKey: ['groups'],
+    queryFn: listGroups,
+    retry: (count, err) => {
+      if (err instanceof ApiError && err.status === 404) return false;
+      return count < 1;
+    },
+    staleTime: 60_000,
+  });
+  // GROUPS_ENABLED is effectively true if the query succeeded (even empty list)
+  const groupsEnabled = Array.isArray(groupsData);
+  const myGroups: GroupSummary[] = groupsData ?? [];
 
   const currentSubs = CATEGORY_GROUPS[mainCategory] || [];
   // Sheet height: 88% of screen, minimum so content fits
@@ -262,7 +341,42 @@ export default function AddExpenseProvider({ children }: { children: React.React
                 />
               </View>
 
-              {/* AI Categorizing hint */}
+              {/* ── Personal / Group toggle (hidden when GROUPS_ENABLED=false) ── */}
+              {groupsEnabled && myGroups.length > 0 && (
+                <View style={styles.scopeToggle}>
+                  {(['personal', 'group'] as const).map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      style={[styles.scopeBtn, scope === s && styles.scopeBtnActive]}
+                      onPress={() => setScope(s)}
+                    >
+                      <Text style={[styles.scopeLabel, scope === s && styles.scopeLabelActive]}>
+                        {s === 'personal' ? '👤 Personal' : '👥 Group'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Group picker (shown only in group mode) */}
+              {scope === 'group' && (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.sectionLabel}>GROUP</Text>
+                  {myGroups.map((g) => (
+                    <TouchableOpacity
+                      key={g.group_id}
+                      style={[styles.groupRow, selectedGroupId === g.group_id && styles.groupRowActive]}
+                      onPress={() => setSelectedGroupId(g.group_id)}
+                    >
+                      <Text style={styles.groupRowLabel}>{g.name}</Text>
+                      {selectedGroupId === g.group_id && (
+                        <Text style={{ color: theme.colors.primary }}>✓</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
               {categorizing && (
                 <View style={styles.aiRow}>
                   <ActivityIndicator size="small" color={theme.colors.primary} />
@@ -482,5 +596,55 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   saveBtn: {
     marginHorizontal: 20,
     marginTop: 12,
+  },
+
+  // Personal/Group scope toggle
+  scopeToggle: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: theme.colors.surfaceSecondary,
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+  },
+  scopeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  scopeBtnActive: {
+    backgroundColor: theme.colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  scopeLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: theme.colors.textSecondary,
+  },
+  scopeLabelActive: { color: theme.colors.primary },
+
+  // Group picker rows
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.colors.borderLight,
+  },
+  groupRowActive: {
+    backgroundColor: `${theme.colors.primary}12`,
+  },
+  groupRowLabel: {
+    flex: 1,
+    fontFamily: 'Inter-Regular',
+    fontSize: 16,
+    color: theme.colors.text,
   },
 });

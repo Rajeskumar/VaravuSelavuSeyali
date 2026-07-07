@@ -1,46 +1,64 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../api/recurring';
-import { Box, Typography, Card, CardContent, TextField, Button, Paper, Table, TableHead, TableRow, TableCell, TableBody, IconButton, Snackbar, Alert, CircularProgress, Dialog, FormControlLabel, Switch } from '@mui/material';
-import Grid from '@mui/material/Grid';
-import DeleteIcon from '@mui/icons-material/Delete';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import EditIcon from '@mui/icons-material/Edit';
+import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, RecurringTemplateDTO } from '../api/recurring';
+import { suggestCategory } from '../api/expenses';
+import { Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControlLabel, Switch, Drawer, useTheme, IconButton, CircularProgress } from '@mui/material';
+import AddIcon from '@mui/icons-material/AddRounded';
+import CloseIcon from '@mui/icons-material/CloseRounded';
 import { motion } from 'framer-motion';
 
+import { RecurringCard } from '../components/recurring/RecurringCard';
+import { typeScale } from '../theme';
+
 const RecurringPage: React.FC = () => {
+  const theme = useTheme();
   const qc = useQueryClient();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['recurring-templates'],
     queryFn: () => listRecurringTemplates(),
   });
 
+  const [formOpen, setFormOpen] = React.useState(false);
   const [form, setForm] = React.useState({
+    id: '',
     description: '',
     category: '',
+    merchant_name: '',
     day_of_month: new Date().getDate(),
     default_cost: 0,
     start_date_iso: new Date().toISOString().split('T')[0],
     status: 'Active',
   });
+  
+  const [editing, setEditing] = React.useState<boolean>(false);
+  const typingRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  const [editing, setEditing] = React.useState<RecurringTemplateDTO | null>(null);
+  const scheduleFetch = (desc: string) => {
+    if (typingRef.current) clearTimeout(typingRef.current);
+    typingRef.current = setTimeout(async () => {
+      if (!desc.trim()) return;
+      try {
+        const res = await suggestCategory(desc.trim());
+        setForm(f => ({
+          ...f,
+          category: f.category || res.subcategory,
+          merchant_name: f.merchant_name || res.merchant_name || '',
+        }));
+      } catch {
+        // ignore errors
+      }
+    }, 1500);
+  };
 
   const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
-  const [deletingId, setDeletingId] = React.useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<RecurringTemplateDTO | null>(null);
-  const [executeOpen, setExecuteOpen] = React.useState(false);
-  const [pendingExec, setPendingExec] = React.useState<RecurringTemplateDTO | null>(null);
-  const [execAmount, setExecAmount] = React.useState<number>(0);
-  const [executingId, setExecutingId] = React.useState<string | null>(null);
 
   const saveMut = useMutation({
-    mutationFn: () => upsertRecurringTemplate(form),
+    mutationFn: (payload: any) => upsertRecurringTemplate(payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
-      setEditing(null);
-      setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' });
+      setFormOpen(false);
       setToast({ open: true, message: 'Template saved', severity: 'success' });
     },
     onError: () => {
@@ -48,164 +66,234 @@ const RecurringPage: React.FC = () => {
     }
   });
 
+  const toggleMut = useMutation({
+    mutationFn: (payload: any) => upsertRecurringTemplate(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recurring-templates'] });
+    },
+    onError: () => {
+      setToast({ open: true, message: 'Failed to update status', severity: 'error' });
+    }
+  });
+
   const delMut = useMutation({
     mutationFn: (id: string) => deleteRecurringTemplate(id),
-    onMutate: (id: string) => setDeletingId(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
       setToast({ open: true, message: 'Template deleted', severity: 'success' });
     },
     onError: () => setToast({ open: true, message: 'Failed to delete template', severity: 'error' }),
-    onSettled: () => setDeletingId(null),
   });
 
   const templates = data || [];
+  const activeCount = templates.filter(t => t.status === 'Active').length;
+  const activeCost = templates.filter(t => t.status === 'Active').reduce((sum, t) => sum + t.default_cost, 0);
+
+  const handleAddClick = () => {
+    setEditing(false);
+    setForm({
+      id: '',
+      description: '',
+      category: '',
+      merchant_name: '',
+      day_of_month: new Date().getDate(),
+      default_cost: 0,
+      start_date_iso: new Date().toISOString().split('T')[0],
+      status: 'Active',
+    });
+    setFormOpen(true);
+  };
+
+  const handleEditClick = (t: RecurringTemplateDTO) => {
+    setEditing(true);
+    setForm({
+      id: t.id,
+      description: t.description,
+      category: t.category,
+      merchant_name: t.merchant_name || '',
+      day_of_month: t.day_of_month,
+      default_cost: t.default_cost,
+      start_date_iso: t.start_date_iso,
+      status: t.status || 'Active',
+    });
+    setFormOpen(true);
+  };
+
+  const handleFormSubmit = () => {
+    // If not editing, id is blank, so we just don't pass it or let the backend generate it.
+    // Actually the backend endpoint for upsert expects just the fields for create if we don't pass id?
+    // Wait, the python backend upserts on matching (description, merchant_name, category) if id is omitted or missing.
+    // If we have an id, we should pass it. But the UpsertRecurringTemplatePayload does not have `id`.
+    // Let's pass what `UpsertRecurringTemplatePayload` expects.
+    saveMut.mutate({
+      description: form.description,
+      category: form.category,
+      merchant_name: form.merchant_name,
+      day_of_month: form.day_of_month,
+      default_cost: form.default_cost,
+      start_date_iso: form.start_date_iso,
+      status: form.status,
+    });
+  };
+
+  const handleToggle = (item: RecurringTemplateDTO, newStatus: string) => {
+    toggleMut.mutate({
+      description: item.description,
+      category: item.category,
+      merchant_name: item.merchant_name,
+      day_of_month: item.day_of_month,
+      default_cost: item.default_cost,
+      start_date_iso: item.start_date_iso,
+      status: newStatus,
+    });
+  };
 
   return (
-    <Box sx={{ mt: 4 }}>
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 2 }}>Recurring</Typography>
+    <Box sx={{ maxWidth: 600, mx: 'auto', pb: 8, pt: 2 }}>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography sx={{ ...typeScale.display, fontSize: '1.75rem' }}>
+            Recurring
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleAddClick}
+            sx={{ borderRadius: 999, fontWeight: 600 }}
+          >
+            Add
+          </Button>
+        </Box>
+        <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 3 }}>
+          {activeCount} active · ${activeCost.toFixed(2)}/mo
+        </Typography>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="subtitle1" sx={{ mb: 2 }}>{editing ? 'Edit Template' : 'Add Template'}</Typography>
+        {isLoading && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+             <CircularProgress />
+          </Box>
+        )}
+        
+        {isError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {(error as Error)?.message || 'Failed to load templates'}
+          </Alert>
+        )}
+
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+          {templates.map(item => (
+            <RecurringCard
+              key={item.id}
+              item={item}
+              onToggle={handleToggle}
+              onEdit={handleEditClick}
+              onDelete={(t) => { setPendingDelete(t); setConfirmDeleteOpen(true); }}
+            />
+          ))}
+          {templates.length === 0 && !isLoading && !isError && (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Typography variant="body1" color="text.secondary">
+                No recurring expenses set up yet.
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </motion.div>
+
+      {/* Add/Edit Form Drawer (Bottom Sheet) */}
+      <Drawer
+        anchor="bottom"
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        PaperProps={{
+          sx: {
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            maxWidth: 600,
+            margin: '0 auto',
+            width: '100%',
+            maxHeight: '90vh',
+          },
+        }}
+      >
+        <Box sx={{ px: 3, pt: 2, pb: 4 }}>
+          <Box sx={{ width: 40, height: 4, bgcolor: 'divider', borderRadius: 2, mx: 'auto', mb: 3 }} />
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+            <Typography sx={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
+              {editing ? 'Edit Template' : 'Add Template'}
+            </Typography>
+            <IconButton onClick={() => setFormOpen(false)} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+
           <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <TextField label="Description" fullWidth value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField label="Description" fullWidth value={form.description} onChange={e => {
+                const val = e.target.value;
+                setForm(f => ({ ...f, description: val }));
+                scheduleFetch(val);
+              }} onBlur={() => scheduleFetch(form.description)} />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Category" fullWidth value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
             </Grid>
-            <Grid size={{ xs: 6, md: 2 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField label="Merchant" fullWidth value={form.merchant_name} onChange={e => setForm(f => ({ ...f, merchant_name: e.target.value }))} />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 3 }}>
               <TextField label="Day of month" type="number" fullWidth value={form.day_of_month} onChange={e => setForm(f => ({ ...f, day_of_month: Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))) }))} />
             </Grid>
-            <Grid size={{ xs: 6, md: 2 }}>
-              <TextField label="Default cost" type="number" fullWidth value={form.default_cost} onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
+            <Grid size={{ xs: 6, sm: 3 }}>
+              <TextField label="Cost/mo" type="number" fullWidth value={form.default_cost} onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
             </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Start date" type="date" fullWidth value={form.start_date_iso} onChange={e => setForm(f => ({ ...f, start_date_iso: e.target.value }))} InputLabelProps={{ shrink: true }} />
             </Grid>
-            <Grid size={{ xs: 12, md: 2 }} display="flex" alignItems="center">
+            <Grid size={{ xs: 12, sm: 6 }} sx={{ display: 'flex', alignItems: 'center' }}>
               <FormControlLabel
                 control={<Switch checked={form.status === 'Paused'} onChange={e => setForm(f => ({ ...f, status: e.target.checked ? 'Paused' : 'Active' }))} />}
                 label={form.status === 'Paused' ? 'Paused' : 'Active'}
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <Button variant="contained" onClick={() => saveMut.mutate()} disabled={saveMut.isPending || !form.description || !form.category || form.default_cost <= 0}>Save</Button>
-              {editing && (
-                <Button sx={{ ml: 1 }} onClick={() => { setEditing(null); setForm({ description: '', category: '', day_of_month: new Date().getDate(), default_cost: 0, start_date_iso: new Date().toISOString().split('T')[0], status: 'Active' }); }}>Cancel</Button>
-              )}
-            </Grid>
           </Grid>
-        </CardContent>
-      </Card>
-
-      <Paper>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell>Description</TableCell>
-              <TableCell>Category</TableCell>
-              <TableCell>Day</TableCell>
-              <TableCell>Default Cost</TableCell>
-              <TableCell>Start</TableCell>
-              <TableCell>Last Processed</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isLoading && (
-              <TableRow><TableCell colSpan={7}>Loading...</TableCell></TableRow>
-            )}
-            {isError && (
-              <TableRow><TableCell colSpan={7} style={{ color: 'red' }}>{(error as Error)?.message || 'Failed to load'}</TableCell></TableRow>
-            )}
-            {templates.map(t => (
-              <TableRow key={t.id} hover>
-                <TableCell>{t.description}</TableCell>
-                <TableCell>{t.category}</TableCell>
-                <TableCell>{t.day_of_month}</TableCell>
-                <TableCell>${t.default_cost.toFixed(2)}</TableCell>
-                <TableCell>{t.start_date_iso}</TableCell>
-                <TableCell>{t.last_processed_iso || '-'}</TableCell>
-                <TableCell>{t.status === 'Paused' ? '⏸️ Paused' : 'Active'}</TableCell>
-                <TableCell align="right">
-                  <IconButton onClick={() => { setEditing(t); setForm({ description: t.description, category: t.category, day_of_month: t.day_of_month, default_cost: t.default_cost, start_date_iso: t.start_date_iso, status: t.status || 'Active' }); }}><EditIcon /></IconButton>
-                  <IconButton onClick={() => { setPendingExec(t); setExecAmount(t.default_cost); setExecuteOpen(true); }} disabled={executingId === t.id}>
-                    {executingId === t.id ? <CircularProgress size={18} /> : <PlayArrowIcon />}
-                  </IconButton>
-                  <IconButton onClick={() => { setPendingDelete(t); setConfirmOpen(true); }} disabled={deletingId === t.id}>
-                    {deletingId === t.id ? <CircularProgress size={18} /> : <DeleteIcon />}
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Paper>
-      </motion.div>
-
-      {/* Execute Now dialog */}
-      <Dialog open={executeOpen} onClose={() => setExecuteOpen(false)}>
-        <Box sx={{ p: 3, minWidth: 340 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>Add this month’s expense now?</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            This will create the expense immediately and mark this month as processed so it won’t be added again automatically.
-          </Typography>
-          <TextField
-            label="Amount"
-            type="number"
-            value={execAmount}
-            onChange={e => setExecAmount(parseFloat(e.target.value) || 0)}
+          
+          <Button
+            variant="contained"
+            color="primary"
             fullWidth
-            sx={{ mb: 2 }}
-          />
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-            <Button onClick={() => setExecuteOpen(false)}>Cancel</Button>
-            <Button
-              variant="contained"
-              onClick={async () => {
-                if (!pendingExec) return;
-                try {
-                  setExecutingId(pendingExec.id);
-                  const resp = await executeRecurringNow(pendingExec.id, execAmount);
-                  qc.invalidateQueries({ queryKey: ['recurring-templates'] });
-                  setToast({ open: true, message: resp.created ? 'Expense added and month marked processed' : 'Month marked processed (already added)', severity: 'success' });
-                } catch (e) {
-                  setToast({ open: true, message: 'Failed to execute template', severity: 'error' });
-                } finally {
-                  setExecutingId(null);
-                  setExecuteOpen(false);
-                }
-              }}
-            >
-              Execute Now
-            </Button>
-          </Box>
+            onClick={handleFormSubmit}
+            disabled={saveMut.isPending || !form.description || !form.category || form.default_cost <= 0}
+            sx={{ mt: 4, py: 1.5, fontSize: 15, fontWeight: 600, borderRadius: 20 }}
+          >
+            Save Template
+          </Button>
         </Box>
-      </Dialog>
+      </Drawer>
 
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <Box sx={{ p: 3, minWidth: 320 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>Delete template?</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      {/* Delete Confirm Dialog */}
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+        <DialogTitle sx={{ fontFamily: 'Inter', fontWeight: 700 }}>Delete template?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
             This will stop future prompts for this recurring expense.
           </Typography>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-            <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
-            <Button color="error" variant="contained"
-              onClick={() => {
-                const id = pendingDelete?.id;
-                setConfirmOpen(false);
-                if (id) delMut.mutate(id);
-              }}
-            >
-              Delete
-            </Button>
-          </Box>
-        </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setConfirmDeleteOpen(false)} sx={{ fontWeight: 600 }}>Cancel</Button>
+          <Button color="error" variant="contained"
+            onClick={() => {
+              const id = pendingDelete?.id;
+              setConfirmDeleteOpen(false);
+              if (id) delMut.mutate(id);
+            }}
+            sx={{ fontWeight: 600, borderRadius: 999 }}
+          >
+            Delete
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Snackbar

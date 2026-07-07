@@ -1,7 +1,9 @@
 import React from 'react';
 import Plot from 'react-plotly.js';
 import { motion } from 'framer-motion';
+import { useTheme } from '@mui/material/styles';
 import CategoryDetailsDrawer, { ExpenseItem } from '../common/CategoryDetailsDrawer';
+import { baseChartLayout, baseChartConfig, categoryPalette } from '../../utils/chartTheme';
 
 interface Props {
   categoryTotals: { category: string; total: number }[];
@@ -9,9 +11,10 @@ interface Props {
 }
 
 const CategoryBarChart: React.FC<Props> = ({ categoryTotals, details }) => {
+  const theme = useTheme();
   const x = categoryTotals.map(c => c.category);
   const y = categoryTotals.map(c => c.total);
-  const palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'];
+  const palette = categoryPalette(theme.palette.mode);
   const colors = x.map((_, idx) => palette[idx % palette.length]);
   const data = [
     {
@@ -23,14 +26,13 @@ const CategoryBarChart: React.FC<Props> = ({ categoryTotals, details }) => {
       textposition: 'outside' as const,
     },
   ];
+  const base = baseChartLayout(theme.palette.mode);
   const layout = {
-    title: '📊 Categorywise Spend',
-    xaxis: { title: 'Category' },
-    yaxis: { title: 'Amount ($)' },
+    ...base,
+    xaxis: { ...base.xaxis, title: { text: 'Category' } },
+    yaxis: { ...base.yaxis, title: { text: 'Amount ($)' } },
     autosize: true,
-    margin: { t: 40, l: 40, r: 10, b: 40 },
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)'
+    margin: { t: 20, l: 48, r: 10, b: 40 },
   };
   const [open, setOpen] = React.useState(false);
   const [currentLabel, setCurrentLabel] = React.useState('');
@@ -48,7 +50,7 @@ const CategoryBarChart: React.FC<Props> = ({ categoryTotals, details }) => {
           layout={layout as any}
           style={{ width: '100%', height: 400 }}
           useResizeHandler
-          config={{ displayModeBar: false }}
+          config={baseChartConfig}
           onClick={(evt: any) => {
             const p = evt?.points?.[0];
             const label = p?.x as string;

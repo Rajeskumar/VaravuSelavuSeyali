@@ -1,6 +1,6 @@
 # TrackSpense Groups — Shared Expenses Product & Technical Specification
 
-> **Document Version:** 0.9.0 (Draft for review)
+> **Document Version:** 0.9.2 (Draft — decisions #1, #2 resolved; reconciled against live codebase 2026-07-04)
 > **Created:** 2026-07-04
 > **Feature Codename:** TrackSpense Groups ("Split & Track")
 > **Feature ID Prefix:** TS-GRP-###
@@ -206,7 +206,7 @@ Splits are computed at full precision, then rounded to cents using **largest-rem
 | Split types: shares / adjustment | §3.4 | P2 |
 | Multiple payers | Two+ members front portions of one bill | P2 |
 | Itemized receipt split ⭐ | OCR line items → assign to members, any ratio; tax/tip pro-rated | P2 |
-| Edit/delete group expense | Any member may edit; change logged to activity feed; balances recomputed | P1 |
+| Edit/delete group expense | **Any member may edit or delete any group expense** (decided 2026-07); change logged to activity feed; balances recomputed; **all other members receive a push notification** | P1 |
 | Expense comments | Threaded comments per expense | P3 |
 | Convert personal ↔ group | Move an existing personal expense into a group (splits added) and back | P2 |
 
@@ -237,7 +237,8 @@ Splits are computed at full precision, then rounded to cents using **largest-rem
 |:---|:---|:---|
 | Recurring group expenses | `recurring_templates` gains `group_id` + split config; existing due/confirm flow reused | P2 |
 | Activity feed | Per-group event log: added/edited/deleted expense, settlement, member joined/left | P2 |
-| Notifications | Push/email: "Arun added 'Groceries' — your share is $23.50" | P3 |
+| Mobile push notifications | **Push only — no email** (decided 2026-07). All group members (except the actor) notified on: expense added / edited / deleted, settlement recorded, member joined. Via Expo Push Notifications. | P1 (core events) |
+| Notification preferences | Per-group mute, per-event-type toggles | P3 |
 | Edit history | Per-expense change log (who changed what) | P3 |
 
 ### 5.6 AI Features (TS-GRP-006)
@@ -252,7 +253,11 @@ Splits are computed at full precision, then rounded to cents using **largest-rem
 
 ## 6. Data Model
 
-All new tables live in the existing `trackspense` PostgreSQL schema. UUID PKs via `gen_random_uuid()`, consistent with current design.
+All new tables live in the existing `trackspense` PostgreSQL schema, consistent with current design.
+
+> **⚠️ Implementation mechanism (confirmed against the repo).** The DDL below is **illustrative of intent, not the artifact to hand-write.** The live schema is defined by the SQLAlchemy ORM models in `db/models.py` and applied via **Alembic** (`alembic/versions/`, `target_metadata = Base.metadata`, autogenerate). `db/schema.sql` is a **stale reference document** — it already omits columns present in later migrations (e.g. `users.address`) and must not be treated as authoritative. Therefore each table below is delivered as **(a) a new ORM model class in `db/models.py`, and (b) an Alembic migration.** Optionally update `db/schema.sql` afterward to keep the doc current, but it is not the source of truth.
+>
+> **⚠️ Portable column types (required for the test suite).** The unit/integration tests run against **SQLite in-memory** (`tests/conftest.py` uses `schema_translate_map {trackspense→None}` + `Base.metadata.create_all`). Existing models therefore avoid Postgres-only constructs: UUID PKs use `default=uuid.uuid4` (Python-side, **not** `gen_random_uuid()`), JSON columns use SQLAlchemy `JSON` (**not** `JSONB`), timestamps use `DateTime(timezone=True)`. **All new models must follow the same convention** so `create_all` succeeds on SQLite. The raw-SQL snippets in this section (`gen_random_uuid()`, `JSONB`, `TIMESTAMPTZ`) describe the Postgres target only; the ORM definitions are the deliverable.
 
 ### 6.1 New Tables
 
@@ -275,7 +280,7 @@ CREATE TABLE trackspense.groups (
 CREATE TABLE trackspense.group_members (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id        UUID NOT NULL REFERENCES trackspense.groups(id) ON DELETE CASCADE,
-    user_email      VARCHAR(255) REFERENCES trackspense.users(email),  -- NULL for placeholders
+    user_email      VARCHAR(255) REFERENCES trackspense.users(email) ON DELETE SET NULL,  -- NULL for placeholders; SET NULL so account deletion converts the seat to a placeholder (see E12)
     display_name    VARCHAR(255) NOT NULL,
     role            VARCHAR(20)  NOT NULL DEFAULT 'member',   -- admin|member
     status          VARCHAR(20)  NOT NULL DEFAULT 'active',   -- active|invited|left
@@ -337,7 +342,7 @@ CREATE TABLE trackspense.settlements (
     method          VARCHAR(50),                              -- cash|venmo|upi|other
     settled_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     notes           TEXT,
-    created_by      VARCHAR(255) NOT NULL,
+    created_by      VARCHAR(255) NOT NULL REFERENCES trackspense.users(email),  -- FK for consistency with groups.created_by
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (from_member_id <> to_member_id)
 );
@@ -351,6 +356,17 @@ CREATE TABLE trackspense.group_activity (
     entity_id       UUID,
     payload_json    JSONB,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ===== Push notification device tokens (mobile) =====
+CREATE TABLE trackspense.device_tokens (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_email      VARCHAR(255) NOT NULL REFERENCES trackspense.users(email) ON DELETE CASCADE,
+    expo_push_token VARCHAR(255) NOT NULL,                    -- ExponentPushToken[...]
+    platform        VARCHAR(10)  NOT NULL,                    -- ios|android
+    last_seen_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    UNIQUE (user_email, expo_push_token)
 );
 ```
 
@@ -367,6 +383,15 @@ ALTER TABLE trackspense.recurring_templates
     ADD COLUMN group_id     UUID REFERENCES trackspense.groups(id),
     ADD COLUMN split_config JSONB;          -- {"type":"equal","participants":[member_ids]} etc.
 ```
+
+> ✅ **RESOLVED (2026-07): Account-deletion FK Strategy (blocks E12).** Today `expenses.user_email` is `REFERENCES trackspense.users(email) ON DELETE CASCADE` (and `expense_items.user_email` likewise). This is fine while every expense is personal, but it **breaks group history**: if a user deletes their account, the cascade wipes the group expenses they authored, destroying other members' consumption history and breaking the zero-sum balance invariant (§3.3).
+>
+> **The Strategy ("Anonymous User"):** The DB constraints on `expenses.user_email` and `expense_items.user_email` are relaxed to `ON DELETE SET NULL` and the columns made nullable. Application-level deletion logic guarantees that when an account is deleted:
+> - Personal expenses (`group_id IS NULL`) are hard-deleted.
+> - Group expenses are retained, with `user_email` set to `NULL`.
+> - In `group_members`, the deleted user's `user_email` naturally cascades to `NULL` (via its own `ON DELETE SET NULL`), and their `display_name` is rewritten to `"Anonymous User"`.
+>
+> Because this touches an existing NOT-NULL / CASCADE column, it is an explicit Alembic migration, not an additive-only change — call it out in TS-GRP-101.
 
 ### 6.3 New Indexes
 
@@ -489,14 +514,18 @@ All new endpoints under `/api/v1`, JWT-authenticated, following existing convent
 | `DELETE` | `/groups/{group_id}/settlements/{id}` | Undo settlement (activity logged) |
 | `GET` | `/groups/{group_id}/activity?limit=&offset=` | Activity feed |
 | `GET` | `/friends/balances` | Cross-group net balance per person (Phase 3) |
+| `POST` | `/devices/register` | Register Expo push token `{expo_push_token, platform}` (upsert) |
+| `DELETE` | `/devices/register` | Unregister token on logout |
 
 ### 8.4 Analytics (extended, not new)
 
 Existing `GET /analysis` gains a scope parameter:
 
 ```
-GET /analysis?user_id=&year=&month=&scope=combined|personal|groups&group_id=
+GET /analysis?year=&month=&start_date=&end_date=&scope=combined|personal|groups&group_id=
 ```
+
+> **Note (confirmed against routes.py):** `/analysis` takes **no `user_id` parameter** — the user is derived from the JWT `sub` (the email) via `auth_required`, matching the recent "remove redundant user_id params" refactor. Group request bodies (§8.5) likewise omit `user_id`. The existing endpoint already accepts `start_date`/`end_date`; `scope` and `group_id` are the only additions here.
 
 - `scope=personal` (legacy behavior, default for old clients — see §13)
 - `scope=combined` → personal expenses + my `expense_splits.amount_owed` (new default for updated clients)
@@ -516,6 +545,8 @@ GET /analysis?user_id=&year=&month=&scope=combined|personal|groups&group_id=
 ```
 
 ### 8.5 New Pydantic Models (sketch)
+
+> **Note on `date` (MM/DD/YYYY ↔ TIMESTAMPTZ).** The codebase has **two divergent write paths**: `ExpenseService.add_expense` parses `MM/DD/YYYY` into a **naive** `datetime` (no tzinfo), while `PostgresRepo.append_expense` (the `/with_items` path) attaches `tzinfo=utc`. `GroupExpenseRequest.date` keeps the `MM/DD/YYYY` contract; the new `GroupExpenseService` must pick **one** conversion deliberately — recommend reusing `ExpenseService`'s `MM/DD/YYYY → datetime` logic for the non-itemized path and `PostgresRepo`'s for `with_items`, and ideally reconciling the tz handling between them. `member_id` values are resolved server-side; no `user_id` appears in group request bodies (JWT `sub` identifies the actor, who is then mapped to their `member_id` within the group).
 
 ```json
 // GroupExpenseRequest
@@ -580,7 +611,13 @@ SELECT e.category_id, SUM(s.amount_owed)
  GROUP BY e.category_id
 ```
 
-`AnalysisService` merges the two legs and feeds the existing category-totals / top-5 / monthly-trend / drill-down pipeline unchanged. The 60s in-memory cache keys gain `scope` + `group_id`.
+`AnalysisService` merges the two legs and feeds the existing category-totals / top-5 / monthly-trend / drill-down pipeline unchanged.
+
+> **⚠️ The personal leg is NOT purely additive — it must retrofit a `group_id IS NULL` guard.** Group expenses are stored with `expenses.user_email = <creator>`, so the moment the `group_id` column exists and a group expense is created, the **existing** `AnalysisService` query (which filters only by `user_email`) counts that creator's group expenses at their **full amount**, on top of the new "my share" leg — double-counting. The current code has no such guard because the column doesn't exist yet. TS-GRP-106 must add `Expense.group_id.is_(None)` to the existing personal/combined filters. **Consequence for rollout:** this guard must land before `GROUPS_ENABLED` is turned on in any environment where group expenses can be written (see §16 sequencing note).
+>
+> **⚠️ Dual-dialect requirement.** `AnalysisService` already branches on `is_sqlite` for every date function (`strftime` vs `extract`/`to_char`) because tests run on SQLite in-memory. The new "my share" leg (the `UNION ALL` / `expense_splits` join above) must be expressed in the ORM with the same SQLite/Postgres handling — the raw SQL here is the Postgres target only.
+>
+> **Cache key.** The in-memory cache is **already** keyed by a 5-tuple `(user_id, year, month, start_date, end_date)` (not `(user_id, year, month)`). It extends to a **7-tuple** by appending `scope` and `group_id`. TTL and write-invalidation are unchanged.
 
 ### 9.2 Insight Pipelines (Item / Merchant / Change)
 
@@ -645,8 +682,8 @@ Unchanged — group expenses use the same `CategorizationService` and the same 7
 
 ### 11.2 Modified Pages
 
-- **DashboardPage:** scope segmented control (Personal / Groups / Combined); "You owe / You are owed" summary card; per-group balance chips.
-- **ExpensesPage:** unified list gains a group badge column + scope filter; group expense rows show "my share" prominently and full amount secondary.
+- **DashboardPage (decided 2026-07 — layout unchanged):** all existing metric cards, charts, and widgets stay exactly as they are; their **numbers silently become combined** (personal spend + user's share across all groups). No scope toggle on the dashboard — combined *is* the dashboard. Two additions only: (1) a compact **"My Groups" widget** (group name, my balance chip, tap → `/groups/:id`), and (2) the **recent-transactions list becomes a unified feed** — personal entries plus group entries the user participates in, group entries carrying a group badge and showing *my share* as the primary amount (full amount secondary). A one-time explainer toast on first post-launch load: "Your totals now include your share of group expenses."
+- **ExpensesPage:** unified list gains a group badge column + scope filter (Personal / Groups / Combined — the filter lives here and on Analysis, not the dashboard); group expense rows show "my share" prominently and full amount secondary.
 - **Add/Edit Expense form:** Personal/Group toggle → group picker → payer picker → `SplitEditor` component (per-type inputs with live validation + rounding preview).
 - **ExpenseAnalysisPage:** scope filter wired to `GET /analysis?scope=`.
 - **AIAnalystPage:** optional group scope chip.
@@ -671,11 +708,21 @@ MUI v7 + existing glassmorphism theme; member avatars use initials + determinist
 
 `GroupsScreen`, `GroupDetailScreen`, `SettleUpSheet` (bottom sheet), `SplitEditor` (RN), `BalanceRow`, `ActivityList`. Charts reuse `CategoryDonutChart` / `TrendLineChart` with the two-series my-share/group-total variant.
 
+### 12.3 Push Notifications (P1 — mobile only, no email)
+
+- **Stack:** `expo-notifications` + Expo Push Service (free tier; no FCM/APNs plumbing needed beyond credentials in EAS).
+- **Registration:** on login / app start, the app requests permission, obtains an `ExponentPushToken`, and registers it via `POST /devices/register`. Token deleted on logout.
+- **Backend:** new `NotificationService` — on group mutations, fan out to all group members except the actor via Expo's push API (`https://exp.host/--/api/v2/push/send`), batched. Fire-and-forget with retry queue; a push failure never fails the originating request.
+- **P1 event set:** expense added / edited / deleted; settlement recorded; member joined. Payload deep-links to the group (`trackspense://groups/{id}`).
+- **Copy examples:** "Arun added *Groceries* in Apartment 4B — your share is $23.50" · "Meera edited *Dinner at Luigi's* — your share changed $30.00 → $27.00" · "Arun settled up: paid you $42.17".
+- **Edit notifications include the delta** on the recipient's share whenever it changed — this is the trust mechanism backing the any-member-can-edit policy.
+- Web clients see the same events in the group Activity feed (P2); **no email notifications for group updates** by decision.
+
 ---
 
 ## 13. Migration & Backward Compatibility
 
-1. **Schema migration is additive.** `expenses.group_id` is nullable; all existing rows remain personal. Zero data migration needed.
+1. **Schema migration is mostly additive.** New tables + nullable `expenses.group_id` / `expenses.split_type` require no data backfill; all existing rows remain personal. **One exception:** the `expenses.user_email` / `expense_items.user_email` FK is reworked from `ON DELETE CASCADE` to preserve group history on account deletion (see §6.2 and §14 E12) — that is a non-additive column/constraint change and must ship as an explicit Alembic migration in TS-GRP-101. Delivered as ORM models + Alembic (autogenerate), not hand-edited `schema.sql`.
 2. **API compatibility.** `GET /analysis` without `scope` returns `scope=personal` (identical to today) so old mobile builds keep working. New clients send `scope=combined` explicitly.
 3. **Existing endpoints untouched.** `/expenses` CRUD continues to manage personal expenses only; group expenses live under `/groups/{id}/expenses`. (Unified read: `/expenses?scope=combined` returns both, additive param.)
 4. **Feature flag.** `GROUPS_ENABLED` env var gates all group routes + UI entry points for a staged rollout.
@@ -698,7 +745,7 @@ MUI v7 + existing glassmorphism theme; member avatars use initials + determinist
 | E9 | Zero-share participant | Not stored — omit from splits instead. |
 | E10 | Currency (v1) | Group currency fixed at creation, USD default; mixed-currency groups are Phase 3 (Open-Exchange-Rates-style conversion). |
 | E11 | Personal → group conversion | Original expense gains group_id + splits; the converter becomes sole payer by default. Audit entry logged. |
-| E12 | User deletes account | Their member rows become placeholders (`user_email → NULL`, name retained) so group history and balances stay intact for others. |
+| E12 | User deletes account | Their `group_members` rows become placeholders (`user_email → NULL` via `ON DELETE SET NULL`, `display_name` overwritten to `"Anonymous User"`) so group history and balances stay intact for others. **Requires the `expenses`/`expense_items` `user_email` CASCADE rework in §6.2** — otherwise the account-delete cascade destroys the group expenses they authored. Personal expenses will still be hard-deleted with the account. |
 
 ---
 
@@ -718,9 +765,9 @@ MUI v7 + existing glassmorphism theme; member avatars use initials + determinist
 
 ### Phase 1 — MVP "Split the Bill" (target: 4–6 weeks of build)
 
-**Backend:** groups/members/invites CRUD · group expenses with equal/exact/percentage splits (single payer) · split-resolution engine + invariants · balances endpoint (non-simplified) · settlements record/list · `scope` param on `/analysis` · feature flag.
-**Web:** GroupsPage, GroupDetailPage (Expenses+Balances tabs), SplitEditor (3 types), SettleUpDialog, dashboard scope toggle, receipt-scan group toggle (equal split).
-**Mobile:** GroupsScreen, GroupDetailScreen, split editor, settle-up sheet, deep-link invites.
+**Backend:** groups/members/invites CRUD · group expenses with equal/exact/percentage splits (single payer) · split-resolution engine + invariants · balances endpoint (non-simplified) · settlements record/list · `scope` param on `/analysis` (dashboard consumes `combined`) · `NotificationService` + `/devices/register` + push fan-out for core events · feature flag.
+**Web:** GroupsPage, GroupDetailPage (Expenses+Balances tabs), SplitEditor (3 types), SettleUpDialog, dashboard combined numbers + My Groups widget + unified recent transactions (layout otherwise unchanged), receipt-scan group toggle (equal split).
+**Mobile:** GroupsScreen, GroupDetailScreen, split editor, settle-up sheet, deep-link invites, `expo-notifications` registration + notification handling.
 **Exit criteria:** Priya's stories 1, 2, 4, 5, 6 fully work; invariant tests green; old clients unaffected.
 
 ### Phase 2 — Parity & Differentiation (6–8 weeks)
@@ -729,32 +776,36 @@ Shares + adjustment splits · multiple payers · **itemized receipt splits** (It
 
 ### Phase 3 — Polish & Growth
 
-Notifications (push/email) · comments + edit history · cross-group friend balances · settle-by-expense · payment deep links · multi-currency · CSV export · AI split suggestions · Change Insights group-aware · materialized balances if perf requires.
+Notification preferences (per-group mute, per-event toggles) · comments + edit history · cross-group friend balances · settle-by-expense · payment deep links · multi-currency · CSV export · AI split suggestions · Change Insights group-aware · materialized balances if perf requires.
 
 ### Suggested Implementation Order (Phase 1 tickets)
 
-1. TS-GRP-101: Schema migration (groups, members, invites, payers, splits, settlements, activity; `expenses.group_id`)
-2. TS-GRP-102: `GroupService` + repo (CRUD, membership, invites)
-3. TS-GRP-103: `SplitEngine` (pure functions + exhaustive unit tests — build this first, it's the risk center)
-4. TS-GRP-104: Group expense endpoints + `BalanceService`
-5. TS-GRP-105: Settlements endpoints
-6. TS-GRP-106: `AnalysisService` scope support + cache key changes
+1. TS-GRP-103: `SplitEngine` (pure functions + exhaustive unit tests). **Pulled to first** — it has zero DB dependency and is the risk center; nothing blocks it, and it can proceed in parallel with 101.
+2. TS-GRP-101: Schema migration — ORM models in `db/models.py` + **Alembic** migration (groups, members, invites, payers, splits, item_splits, settlements, activity; `expenses.group_id`/`split_type`). **Includes the non-additive `expenses`/`expense_items` `user_email` CASCADE rework** required by E12 (§6.2). Portable types only (SQLite tests). *(schema.sql is a doc, not the deliverable.)*
+3. TS-GRP-102: `GroupService` + repo (CRUD, membership, invites); email→`member_id` resolution + membership `403` guard reused by all group routes.
+4. TS-GRP-105: Settlements record/list — built **before/with** the balances endpoint, since `BalanceService.net(m)` references settlement rows.
+5. TS-GRP-104: Group expense endpoints + `BalanceService` (non-simplified balances).
+6. TS-GRP-106: `AnalysisService` scope support + 7-tuple cache key. **Includes the `group_id IS NULL` guard on the existing personal/combined query (§9.1).** ⚠️ **Rollout gate:** this guard must be merged before `GROUPS_ENABLED` is enabled anywhere group expenses can be written, or personal/combined analytics double-count. As long as the feature flag (111) stays off until 106 lands, the ordering is safe.
 7. TS-GRP-107: Web GroupsPage/GroupDetailPage + SplitEditor
 8. TS-GRP-108: Web dashboard/expenses scope integration + receipt flow toggle
 9. TS-GRP-109: Mobile screens + deep links
-10. TS-GRP-110: Feature flag, e2e tests, staged rollout
+10. TS-GRP-110: `NotificationService` + `device_tokens` + Expo push (mobile registration + backend fan-out)
+11. TS-GRP-111: Feature flag (`GROUPS_ENABLED`), e2e tests, staged rollout. **Flag stays OFF until 106 is merged** (see rollout gate above).
+
+*(Ticket IDs retain their original numbers; only the build order is resequenced. Note the renumbered execution: 103 → 101 → 102 → 105 → 104 → 106 → 107…111.)*
 
 ---
 
 ## 17. Open Questions for Product Review
 
-1. **Default analytics scope for existing users** — flip to `combined` automatically at launch, or keep `personal` until the user opts in? (Recommendation: combined, with a one-time explainer toast.)
-2. **Who can edit group expenses** — any member (Splitwise model, recommended for v1) or only the payer/creator/admin?
-3. **Placeholder spending caps** — should a placeholder be allowed as sole payer, or require at least one registered payer? (Spec currently allows it — E3.)
-4. **Invite channel** — email via existing Gmail SMTP, share-link only, or both? (Spec assumes both; SMTP path reuses `email_service.py`.)
-5. **Category on splits** — v1 inherits the expense category for all shares. Do we ever need per-member category overrides (e.g., one person's portion is a business expense)? Deferred unless a strong case emerges.
-6. **Simplify-debts default** — Splitwise defaults OFF per group; keep that? (Recommendation: yes — surprising transfers erode trust.)
-7. **Monetization hook** — is itemized splitting a premium feature (Splitwise gates OCR behind Pro), or free to drive adoption? (Recommendation: free at launch; it's the wedge.)
+1. ✅ **RESOLVED (2026-07): Default analytics scope for existing users** — dashboard flips to `combined` automatically at launch. Dashboard layout and components are unchanged; the numbers simply include the user's group shares. A one-time explainer toast informs the user. New "My Groups" widget + unified recent-transactions feed added; detailed group views live on the dedicated Groups page. See §11.2.
+2. ✅ **RESOLVED (2026-07): Who can edit group expenses** — any group member can edit/delete any group expense (Splitwise model). All other members are notified via **mobile push notifications only — no email** for these updates. Edit notifications state the recipient's share delta. See §12.3.
+3. ✅ **RESOLVED (2026-07): Account Deletion Strategy** — Opted for the "Anonymous User" strategy (`ON DELETE SET NULL` for group expenses). Personal expenses are hard-deleted.
+4. **Placeholder spending caps** — should a placeholder be allowed as sole payer, or require at least one registered payer? (Spec currently allows it — E3.)
+5. **Invite channel** — email via existing Gmail SMTP, share-link only, or both? (Spec assumes both; SMTP path reuses `email_service.py`.)
+6. **Category on splits** — v1 inherits the expense category for all shares. Do we ever need per-member category overrides (e.g., one person's portion is a business expense)? Deferred unless a strong case emerges.
+7. **Simplify-debts default** — Splitwise defaults OFF per group; keep that? (Recommendation: yes — surprising transfers erode trust.)
+8. **Monetization hook** — is itemized splitting a premium feature (Splitwise gates OCR behind Pro), or free to drive adoption? (Recommendation: free at launch; it's the wedge.)
 
 ---
 

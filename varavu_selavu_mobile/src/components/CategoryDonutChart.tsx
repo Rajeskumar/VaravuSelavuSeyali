@@ -2,19 +2,9 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { G, Path, Circle } from 'react-native-svg';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, withAlpha } from '../theme';
+import { categoryPalette, categoryHexPalette } from '../utils/chartTheme';
 import Card from './Card';
-
-const CHART_COLORS = [
-    '#059669', '#0EA5E9', '#F59E0B', '#EF4444', '#8B5CF6',
-    '#EC4899', '#14B8A6', '#F97316', '#6366F1', '#84CC16',
-];
-
-const SUB_CHART_COLORS = [
-    '#34D399', '#38BDF8', '#FCD34D', '#F87171', '#A78BFA',
-    '#F472B6', '#5EEAD4', '#FB923C', '#818CF8', '#A3E635',
-    '#6EE7B7', '#7DD3FC', '#FDE68A', '#FCA5A5', '#C4B5FD',
-];
 
 interface CategoryData {
     category: string;
@@ -25,15 +15,26 @@ interface CategoryData {
 interface CategoryDonutChartProps {
     data: CategoryData[];
     title?: string;
+    /**
+     * TS-DES-105: per the Reconcile redesign, the donut is demoted to a small glanceable
+     * secondary ornament — the ranked category list is the default mobile category view now.
+     * Pass `compact` when this chart sits alongside/below a ranked list instead of leading a
+     * screen; it shrinks the chart and drops the legend (the ranked list nearby covers that).
+     */
+    compact?: boolean;
 }
 
 const screenWidth = Dimensions.get('window').width;
-const SIZE = Math.min(screenWidth - 100, 260);
-const CENTER = SIZE / 2;
-const OUTER_RADIUS = SIZE / 2 - 8;
-const OUTER_WIDTH = 28;
-const INNER_RADIUS = OUTER_RADIUS - OUTER_WIDTH - 6;
-const INNER_WIDTH = 18;
+
+function sizeFor(compact: boolean) {
+    const size = compact ? Math.min(screenWidth - 220, 120) : Math.min(screenWidth - 100, 260);
+    const center = size / 2;
+    const outerWidth = compact ? 14 : 28;
+    const outerRadius = size / 2 - (compact ? 4 : 8);
+    const innerWidth = compact ? 9 : 18;
+    const innerRadius = outerRadius - outerWidth - (compact ? 3 : 6);
+    return { SIZE: size, CENTER: center, OUTER_RADIUS: outerRadius, OUTER_WIDTH: outerWidth, INNER_RADIUS: innerRadius, INNER_WIDTH: innerWidth };
+}
 
 function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
     // Clamp to avoid full circle issues
@@ -53,10 +54,18 @@ function describeArc(cx: number, cy: number, r: number, startAngle: number, endA
     return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
 }
 
-export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }: CategoryDonutChartProps) {
+export default function CategoryDonutChart({ data, title = 'Expense Breakdown', compact = false }: CategoryDonutChartProps) {
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const grandTotal = useMemo(() => data.reduce((s, d) => s + d.total, 0), [data]);
+    const { SIZE, CENTER, OUTER_RADIUS, OUTER_WIDTH, INNER_RADIUS, INNER_WIDTH } = useMemo(() => sizeFor(compact), [compact]);
+    const chartColors = useMemo(() => categoryPalette(theme), [theme]);
+    // Subcategory ring cycles the plain hex base palette (not the pre-mixed `chartColors`, which
+    // already contains `withAlpha`-derived rgba entries) so a single alpha pass here stays valid.
+    const subChartColors = useMemo(() => {
+        const base = categoryHexPalette(theme);
+        return base.map((c) => withAlpha(c, 0.7));
+    }, [theme]);
 
     const outerArcs = useMemo(() => {
         let startAngle = 0;
@@ -64,7 +73,7 @@ export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }
             const sweep = grandTotal > 0 ? (cat.total / grandTotal) * 360 : 0;
             const arc = {
                 path: describeArc(CENTER, CENTER, OUTER_RADIUS - OUTER_WIDTH / 2, startAngle, startAngle + sweep),
-                color: CHART_COLORS[i % CHART_COLORS.length],
+                color: chartColors[i % chartColors.length],
                 label: cat.category,
                 total: cat.total,
                 pct: grandTotal > 0 ? ((cat.total / grandTotal) * 100).toFixed(1) : '0',
@@ -72,7 +81,7 @@ export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }
             startAngle += sweep;
             return arc;
         });
-    }, [data, grandTotal]);
+    }, [data, grandTotal, CENTER, OUTER_RADIUS, OUTER_WIDTH, chartColors]);
 
     const innerArcs = useMemo(() => {
         const arcs: { path: string; color: string }[] = [];
@@ -84,7 +93,7 @@ export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }
                     const sweep = grandTotal > 0 ? (sub.total / grandTotal) * 360 : 0;
                     arcs.push({
                         path: describeArc(CENTER, CENTER, INNER_RADIUS - INNER_WIDTH / 2, startAngle, startAngle + sweep),
-                        color: SUB_CHART_COLORS[colorIdx % SUB_CHART_COLORS.length],
+                        color: subChartColors[colorIdx % subChartColors.length],
                     });
                     startAngle += sweep;
                     colorIdx++;
@@ -93,14 +102,14 @@ export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }
                 const sweep = grandTotal > 0 ? (cat.total / grandTotal) * 360 : 0;
                 arcs.push({
                     path: describeArc(CENTER, CENTER, INNER_RADIUS - INNER_WIDTH / 2, startAngle, startAngle + sweep),
-                    color: SUB_CHART_COLORS[colorIdx % SUB_CHART_COLORS.length],
+                    color: subChartColors[colorIdx % subChartColors.length],
                 });
                 startAngle += sweep;
                 colorIdx++;
             }
         });
         return arcs;
-    }, [data, grandTotal]);
+    }, [data, grandTotal, CENTER, INNER_RADIUS, INNER_WIDTH, subChartColors]);
 
     if (data.length === 0 || grandTotal === 0) {
         return (
@@ -114,8 +123,8 @@ export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }
     }
 
     return (
-        <Card>
-            <Text style={[theme.typography.h3, { marginBottom: 16 }]}>{title}</Text>
+        <Card style={compact ? styles.compactCard : undefined}>
+            <Text style={[compact ? theme.typography.label : theme.typography.h3, { marginBottom: compact ? 8 : 16 }]}>{title}</Text>
             <View style={styles.chartContainer}>
                 <Svg width={SIZE} height={SIZE}>
                     {/* Inner ring — subcategories */}
@@ -146,34 +155,39 @@ export default function CategoryDonutChart({ data, title = 'Expense Breakdown' }
                         ))}
                     </G>
                     {/* Center label */}
-                    <Circle cx={CENTER} cy={CENTER} r={INNER_RADIUS - INNER_WIDTH - 4} fill={theme.colors.surface} />
+                    <Circle cx={CENTER} cy={CENTER} r={Math.max(INNER_RADIUS - INNER_WIDTH - 4, 0)} fill={theme.colors.surface} />
                 </Svg>
 
                 {/* Center total overlay */}
                 <View style={styles.centerLabel}>
-                    <Text style={styles.centerAmount}>${grandTotal.toFixed(0)}</Text>
-                    <Text style={styles.centerSubtext}>total</Text>
+                    <Text style={compact ? styles.centerAmountCompact : styles.centerAmount}>${grandTotal.toFixed(0)}</Text>
+                    {!compact && <Text style={styles.centerSubtext}>total</Text>}
                 </View>
             </View>
 
-            {/* Legend */}
-            <View style={styles.legend}>
-                {outerArcs.slice(0, 5).map((arc, i) => (
-                    <View key={arc.label} style={styles.legendItem}>
-                        <View style={[styles.legendDot, { backgroundColor: arc.color }]} />
-                        <Text style={styles.legendLabel} numberOfLines={1}>{arc.label}</Text>
-                        <Text style={styles.legendPct}>{arc.pct}%</Text>
-                    </View>
-                ))}
-                {outerArcs.length > 5 && (
-                    <Text style={styles.legendMore}>+{outerArcs.length - 5} more</Text>
-                )}
-            </View>
+            {/* Legend — dropped in compact mode; the ranked list next to it already shows this. */}
+            {!compact && (
+                <View style={styles.legend}>
+                    {outerArcs.slice(0, 5).map((arc, i) => (
+                        <View key={arc.label} style={styles.legendItem}>
+                            <View style={[styles.legendDot, { backgroundColor: arc.color }]} />
+                            <Text style={styles.legendLabel} numberOfLines={1}>{arc.label}</Text>
+                            <Text style={styles.legendPct}>{arc.pct}%</Text>
+                        </View>
+                    ))}
+                    {outerArcs.length > 5 && (
+                        <Text style={styles.legendMore}>+{outerArcs.length - 5} more</Text>
+                    )}
+                </View>
+            )}
         </Card>
     );
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
+    compactCard: {
+        alignSelf: 'flex-start',
+    },
     chartContainer: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -189,6 +203,12 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         fontWeight: '800',
         color: theme.colors.text,
         letterSpacing: -0.5,
+    },
+    centerAmountCompact: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: theme.colors.text,
+        letterSpacing: -0.2,
     },
     centerSubtext: {
         fontSize: 12,

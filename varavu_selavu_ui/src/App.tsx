@@ -5,7 +5,7 @@ import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useTheme, useMediaQuery, IconButton, Tooltip } from '@mui/material';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+
 import MenuIcon from '@mui/icons-material/Menu';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
@@ -30,6 +30,9 @@ import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
 import FeatureRequestPage from './pages/FeatureRequestPage';
 import ContactPage from './pages/ContactPage';
+import GroupsPage from './pages/GroupsPage';
+import GroupDetailPage from './pages/GroupDetailPage';
+import JoinGroupPage from './pages/JoinGroupPage';
 import NavPills from './components/layout/NavPills';
 import Box from '@mui/material/Box';
 import { brand } from './theme';
@@ -102,18 +105,16 @@ const AppContent: React.FC = () => {
             onClick={() => navigate('/')}
           >
             <Box
+              component="img"
+              src="/icon.png"
+              alt="TrackSpense Logo"
               sx={{
                 width: 30,
                 height: 30,
-                borderRadius: '9px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundImage: `linear-gradient(135deg, ${brand.gradientStart}, ${brand.gradientEnd})`,
+                borderRadius: '8px',
+                objectFit: 'cover'
               }}
-            >
-              <AccountBalanceWalletIcon sx={{ fontSize: 17, color: '#fff' }} />
-            </Box>
+            />
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
               TrackSpense
             </Typography>
@@ -157,8 +158,12 @@ const AppContent: React.FC = () => {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/feature-request" element={<FeatureRequestPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        {/* Public: must be reachable pre-login (deep link from an invite email/text); resumes after auth via LoginPage. */}
+        <Route path="/groups/join/:token" element={<JoinGroupPage />} />
         <Route path="/dashboard" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><DashboardPage /></MainLayout></RequireAuth>} />
         <Route path="/expenses" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpensesPage /></MainLayout></RequireAuth>} />
+        <Route path="/groups" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupsPage /></MainLayout></RequireAuth>} />
+        <Route path="/groups/:id" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupDetailPage /></MainLayout></RequireAuth>} />
         <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
         <Route path="/recurring" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><RecurringPage /></MainLayout></RequireAuth>} />
         <Route path="/ai-analyst" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AIAnalystPage /></MainLayout></RequireAuth>} />

@@ -17,6 +17,15 @@ import { login, loginWithGoogle } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
 import { glassCardSx, brand, withAlpha } from '../theme';
 import { motion } from 'framer-motion';
+import { PENDING_INVITE_KEY } from './JoinGroupPage';
+
+/** After login, resumes a pending group invite (see JoinGroupPage) instead of the
+ * default /dashboard destination — this app has no general "return to" mechanism,
+ * so the invite flow is the one deliberate exception. */
+function postLoginDestination(): string {
+  const token = sessionStorage.getItem(PENDING_INVITE_KEY);
+  return token ? `/groups/join/${token}` : '/dashboard';
+}
 
 const LoginPage: React.FC = () => {
   const theme = useTheme();
@@ -58,7 +67,7 @@ const LoginPage: React.FC = () => {
             localStorage.setItem('vs_refresh', data.refresh_token);
             if (data.email) localStorage.setItem('vs_user', data.email);
             window.dispatchEvent(new Event('vs_auth_changed'));
-            navigate('/dashboard');
+            navigate(postLoginDestination());
           } catch {
             setError('Google login failed');
           } finally {
@@ -86,7 +95,7 @@ const LoginPage: React.FC = () => {
       localStorage.setItem('vs_refresh', response.refresh_token);
       localStorage.setItem('vs_user', response.email || email);
       window.dispatchEvent(new Event('vs_auth_changed'));
-      navigate('/dashboard');
+      navigate(postLoginDestination());
     } catch (err) {
       setError('Invalid credentials or server error');
     } finally {

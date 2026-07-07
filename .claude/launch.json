@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "backend",
+      "runtimeExecutable": "poetry",
+      "runtimeArgs": ["-C", "varavu_selavu_app", "run", "uvicorn", "varavu_selavu_service.main:app", "--host", "0.0.0.0", "--port", "8080"],
+      "port": 8080
+    },
+    {
       "name": "web-ui",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "varavu_selavu_ui", "start"],

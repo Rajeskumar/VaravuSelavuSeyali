@@ -10,6 +10,7 @@ from varavu_selavu_service.models.api_models import (
     CategorizeResponse,
     ChatRequest,
     HealthResponse,
+    FeatureFlagsResponse,
     DashboardResponse,
     ExpenseCreatedResponse,
     ExpenseRow,
@@ -36,9 +37,16 @@ from varavu_selavu_service.services.recurring_service import RecurringService
 from varavu_selavu_service.core.config import Settings
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
-from threading import RLock
 from varavu_selavu_service.auth.routers import router as auth_router
 from varavu_selavu_service.auth.security import auth_required
+from varavu_selavu_service.api.groups_routes import (
+    router as groups_router,
+    get_group_service,
+    get_balance_service,
+)
+from varavu_selavu_service.services.group_service import GroupService
+from varavu_selavu_service.services.balance_service import BalanceService
+from varavu_selavu_service.api.devices_routes import router as devices_router
 from varavu_selavu_service.models.api_models import (
     RecurringTemplateDTO,
     UpsertRecurringTemplateRequest,
@@ -55,17 +63,12 @@ settings = Settings()
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router, prefix="/auth")
+router.include_router(groups_router)
+router.include_router(devices_router)
 
 # Dependency providers
 def get_expense_service(db: Session = Depends(get_db)) -> ExpenseService:
     return ExpenseService(db)
-# Simple in-memory cache for analysis results
-_ANALYSIS_CACHE: dict[
-    tuple[str, int | None, int | None, str | None, str | None],
-    tuple[float, dict],
-] = {}
-_ANALYSIS_CACHE_TTL_SEC = 60  # adjust as needed
-_CACHE_LOCK = RLock()
 
 def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
     return AnalysisService(db=db, ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
@@ -102,6 +105,14 @@ def health_check():
 def readiness_check():
     # Extend with checks to downstream services (e.g., Google Sheets) if needed
     return {"status": "healthy"}
+
+
+@router.get("/config", response_model=FeatureFlagsResponse, tags=["Health"], summary="Client-visible feature flags")
+def get_config():
+    # Reads Settings() fresh (not the module-level `settings` singleton) so it
+    # reflects the same runtime-toggleable value groups_routes.require_groups_enabled
+    # checks — no auth required, this is non-sensitive app config, not user data.
+    return {"groups_enabled": Settings().GROUPS_ENABLED}
 
 
 @router.post(
@@ -407,12 +418,30 @@ def analysis(
     month: int | None = Query(default=None, ge=1, le=12),
     start_date: str | None = None,
     end_date: str | None = None,
+    scope: str = Query(default="personal", pattern="^(personal|combined|groups)$"),
+    group_id: str | None = None,
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
     user_id: str = Depends(auth_required),
 ):
     """Return analysis for a given user via the AnalysisService."""
-    result = analysis_service.analyze(user_id=user_id, year=year, month=month, start_date=start_date, end_date=end_date, use_cache=True)
+    if not Settings().GROUPS_ENABLED:
+        # Feature flag gate (TS-GRP-111, spec §13.4). scope/group_id stay accepted
+        # (no error) so already-updated clients don't break, but they're silently
+        # downgraded to personal-only — group data must not be reachable via
+        # /analysis with the flag off, regardless of what a client requests.
+        scope = "personal"
+        group_id = None
+    result = analysis_service.analyze(
+        user_id=user_id,
+        year=year,
+        month=month,
+        start_date=start_date,
+        end_date=end_date,
+        use_cache=True,
+        scope=scope,
+        group_id=group_id,
+    )
     if response is not None:
         # Align Cache-Control header with service TTL
         response.headers["Cache-Control"] = f"public, max-age={analysis_service.ttl_sec}"
@@ -433,6 +462,8 @@ def analysis_chat(
     analysis_service: AnalysisService = Depends(get_analysis_service),
     analytics_service: AnalyticsService = Depends(get_analytics_service),
     insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
+    group_service: GroupService = Depends(get_group_service),
+    balance_service: BalanceService = Depends(get_balance_service),
     user_id: str = Depends(auth_required),
 ):
     """
@@ -440,12 +471,15 @@ def analysis_chat(
     The user is derived from the JWT token for security.
     """
     try:
-        chat_response = call_chat_model(
+        result = call_chat_model(
             messages=body.messages,
             user_id=user_id,
             analysis_service=analysis_service,
             analytics_service=analytics_service,
             insight_service=insight_service,
+            group_service=group_service,
+            balance_service=balance_service,
+            groups_enabled=settings.GROUPS_ENABLED,
             model=body.model,
             provider=body.provider,
             year=body.year,
@@ -453,7 +487,11 @@ def analysis_chat(
             start_date=body.start_date,
             end_date=body.end_date,
         )
-        return {"response": chat_response}
+        return {
+            "response": result.response,
+            "resolved_period": result.resolved_period,
+            "resolved_scope": result.resolved_scope,
+        }
     except HTTPException:
         raise
     except Exception as exc:

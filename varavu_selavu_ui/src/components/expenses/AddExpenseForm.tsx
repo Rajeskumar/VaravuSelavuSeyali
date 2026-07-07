@@ -30,8 +30,16 @@ import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
 import { glassCardSx } from '../../theme';
+import { listGroups, getGroup, createGroupExpense, GroupSummary, GroupDetailResponse, ApiError } from '../../api/groups';
+import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
+import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
+import SegmentedTabs from '../common/SegmentedTabs';
 
-const CATEGORY_GROUPS: Record<string, string[]> = {
+// Exported for reuse by the ExpenseFeed/ExpenseDetailSheet (TS-DES-102) — the
+// feed's category tint-dot mapping and the detail sheet's inline category
+// editor both key off these same main-category names rather than maintaining
+// a second category taxonomy.
+export const CATEGORY_GROUPS: Record<string, string[]> = {
   Home: ['Rent', 'Electronics', 'Furniture', 'Household supplies', 'Maintenance', 'Mortgage', 'Other', 'Pets', 'Services'],
   Transportation: ['Gas/fuel', 'Car', 'Parking', 'Plane', 'Other', 'Bicycle', 'Bus/Train', 'Taxi', 'Hotel'],
   'Food & Drink': ['Groceries', 'Dining out', 'Liquor', 'Other'],
@@ -41,7 +49,7 @@ const CATEGORY_GROUPS: Record<string, string[]> = {
   Utilities: ['Heat/gas', 'Electricity', 'Water', 'Other', 'Cleaning', 'Trash', 'Other', 'TV/Phone/Internet'],
 };
 
-const findMainCategory = (sub: string): string => {
+export const findMainCategory = (sub: string): string => {
   return (
     Object.keys(CATEGORY_GROUPS).find(m => CATEGORY_GROUPS[m].includes(sub)) ||
     Object.keys(CATEGORY_GROUPS)[0]
@@ -77,6 +85,60 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [repeatDay, setRepeatDay] = useState<number>(new Date().getDate());
   const typingRef = useRef<NodeJS.Timeout | null>(null);
   const theme = useTheme();
+
+  // Personal/Group toggle (spec §10.1/§11.2) — only offered on fresh creates;
+  // editing an existing (always-personal) expense never shows this.
+  const { enabled: groupsEnabled } = useGroupsEnabled();
+  const [mode, setMode] = useState<'personal' | 'group'>('personal');
+  const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [groupDetail, setGroupDetail] = useState<GroupDetailResponse | null>(null);
+  const [payerId, setPayerId] = useState('');
+  const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
+  const [splitValid, setSplitValid] = useState(false);
+  const [groupSubmitError, setGroupSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!groupsEnabled || existing) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const g = await listGroups();
+        if (mounted) setGroups(g);
+      } catch {
+        if (mounted) setGroups([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [groupsEnabled, existing]);
+
+  useEffect(() => {
+    if (!selectedGroupId) {
+      setGroupDetail(null);
+      setPayerId('');
+      setSplitEntries([]);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const detail = await getGroup(selectedGroupId);
+        if (!mounted) return;
+        setGroupDetail(detail);
+        const me = localStorage.getItem('vs_user');
+        const myMember = detail.members.find(m => m.user_email === me);
+        setPayerId(myMember?.member_id || detail.members[0]?.member_id || '');
+        setSplitEntries(detail.members.map(m => ({ member_id: m.member_id })));
+      } catch {
+        if (mounted) {
+          setGroupDetail(null);
+          setPayerId('');
+          setSplitEntries([]);
+        }
+      }
+    })();
+    return () => { mounted = false; };
+  }, [selectedGroupId]);
 
   const spin = keyframes`
     from { transform: rotate(0deg); }
@@ -304,6 +366,9 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const saveDisabled = () => {
     const requiredFilled =
       description.trim() !== '' && cost > 0 && expenseDate && subcategory && mainCategory;
+    if (mode === 'group' && !existing) {
+      return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payerId || !splitValid;
+    }
     return (
       saving || parsing || converting || !requiredFilled
     );
@@ -320,6 +385,33 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     try {
       setSaving(true);
       const formattedDate = isoToMMDDYYYY(expenseDate);
+      if (mode === 'group' && !existing) {
+        // Phase 1 (spec §10.1/TS-GRP-104): equal split on the total only — no
+        // itemized group expenses yet, even if the receipt parsed line items.
+        setGroupSubmitError(null);
+        try {
+          await createGroupExpense(selectedGroupId, {
+            date: formattedDate,
+            description,
+            category: subcategory,
+            amount: cost,
+            merchant_name: merchantName || undefined,
+            payers: [{ member_id: payerId, amount_paid: cost }],
+            split: { type: 'equal', entries: splitEntries },
+          });
+          setMessage('Group expense added successfully.');
+          setDescription('');
+          setCost(0);
+          setDraft(null);
+          setFile(null);
+          onSuccess?.();
+        } catch (err) {
+          const msg = err instanceof ApiError ? err.message : 'Failed to add group expense.';
+          setGroupSubmitError(msg);
+          onError?.(msg);
+        }
+        return;
+      }
       if (existing) {
         const payload: AddExpensePayload = {
           user_id: user,
@@ -427,6 +519,70 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 required
               />
             </Grid>
+            {groupsEnabled && !existing && (
+              <Grid size={12}>
+                <SegmentedTabs
+                  value={mode}
+                  onChange={setMode}
+                  ariaLabel="Personal or group expense"
+                  options={[
+                    { value: 'personal', label: 'Personal' },
+                    { value: 'group', label: 'Group' },
+                  ]}
+                />
+              </Grid>
+            )}
+            {mode === 'group' && !existing && (
+              <>
+                <Grid size={12}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Group"
+                    value={selectedGroupId}
+                    sx={glassFieldSx}
+                    onChange={(e) => setSelectedGroupId(e.target.value)}
+                    required
+                  >
+                    {groups.map((g) => (
+                      <MenuItem key={g.group_id} value={g.group_id}>{g.name}</MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                {groupDetail && (
+                  <>
+                    <Grid size={12}>
+                      <TextField
+                        select
+                        fullWidth
+                        label="Paid by"
+                        value={payerId}
+                        sx={glassFieldSx}
+                        onChange={(e) => setPayerId(e.target.value)}
+                      >
+                        {groupDetail.members.map((m) => (
+                          <MenuItem key={m.member_id} value={m.member_id}>{m.display_name}</MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                    <Grid size={12}>
+                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                        Split equally among
+                      </Typography>
+                      <SplitEditor
+                        amount={cost}
+                        members={groupDetail.members}
+                        value={{ type: 'equal', entries: splitEntries }}
+                        onChange={(v) => setSplitEntries(v.entries)}
+                        onValidityChange={setSplitValid}
+                        allowedTypes={['equal']}
+                        serverError={groupSubmitError}
+                      />
+                    </Grid>
+                  </>
+                )}
+              </>
+            )}
             <Grid size={12}>
               <TextField
                 fullWidth
@@ -483,7 +639,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
               />
             </Grid>
-            {/* Recurring toggle */}
+            {/* Recurring toggle — personal only; group recurring templates are Phase 2 (spec §11.2 RecurringPage). */}
+            {mode === 'personal' && (
             <Grid size={12}>
               <FormControlLabel
                 control={<Switch checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />}
@@ -505,6 +662,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 </Box>
               )}
             </Grid>
+            )}
             <Divider sx={{ width: '100%', my: 1 }} />
             {/* Category selection */}
             <Grid size={6}>
@@ -597,7 +755,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 </Typography>
               )}
             </Grid>
-            {draft && (
+            {/* Itemized receipt editing is personal-only in Phase 1 — group expenses
+                are equal-split-on-the-total only (spec §10.1, TS-GRP-104 has no
+                itemized group endpoint yet). */}
+            {mode === 'personal' && draft && (
               <>
                 <Grid size={12}>
                   <Typography variant="subtitle1">Items</Typography>

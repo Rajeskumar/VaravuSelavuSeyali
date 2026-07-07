@@ -31,6 +31,11 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         borderRadius: theme.borderRadius.xl,
         padding: 20,
         marginBottom: 12,
+        // Reconcile's shadow tokens zero out this tier (elevation reserved for sheets only —
+        // see theme.ts's buildShadows comment), so the hairline border is what actually
+        // separates the card from the background, matching createGlobalStyles()'s card style.
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: theme.colors.borderLight,
         ...theme.shadows.sm,
     },
     noPadding: {

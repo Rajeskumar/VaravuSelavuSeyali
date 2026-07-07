@@ -2,8 +2,10 @@ import React from 'react';
 import Plot from 'react-plotly.js';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
+import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import { motion } from 'framer-motion';
+import { baseChartLayout, baseChartConfig, categoryPalette } from '../../utils/chartTheme';
 
 interface Props {
   categoryTotals: { category: string; total: number }[];
@@ -14,7 +16,7 @@ const TopCategoriesChart: React.FC<Props> = ({ categoryTotals }) => {
   const top = categoryTotals.slice(0, 6);
   const x = top.map(c => c.category);
   const y = top.map(c => c.total);
-  const colors = [theme.palette.primary.main, theme.palette.secondary.main, '#F59E0B', '#EF4444', '#10B981', '#6366F1'];
+  const colors = categoryPalette(theme.palette.mode);
   const data = [
     {
       x,
@@ -26,10 +28,11 @@ const TopCategoriesChart: React.FC<Props> = ({ categoryTotals }) => {
     },
   ];
 
+  const base = baseChartLayout(theme.palette.mode);
   const layout = {
-    title: '🔝 Top 5 Expense Categories',
-    xaxis: { title: 'Category' },
-    yaxis: { title: 'Cost' },
+    ...base,
+    xaxis: { ...base.xaxis, title: { text: 'Category' } },
+    yaxis: { ...base.yaxis, title: { text: 'Cost' } },
   };
 
   return (
@@ -42,7 +45,8 @@ const TopCategoriesChart: React.FC<Props> = ({ categoryTotals }) => {
     >
       <Card sx={{ height: '100%' }}>
         <CardContent>
-          <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100%', height: 350 }} />
+          <Typography variant="h6" gutterBottom>Top Expense Categories</Typography>
+          <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100%', height: 350 }} config={baseChartConfig} />
         </CardContent>
       </Card>
     </motion.div>

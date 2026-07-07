@@ -130,3 +130,73 @@ def test_full_expense_ingestion_and_analytics_flow(db_session_real):
     detail = res_detail.json()
     assert len(detail["price_history"]) > 0
     assert detail["price_history"][0]["store_name"] == "Target Validation"
+
+def test_e12_regression_pg_account_deletion_survives(db_session_real):
+    from varavu_selavu_service.db.models import Group, GroupMember, Expense, ExpensePayer, ExpenseSplit
+    
+    # Create user A and B
+    user_a = User(email="e12_pg_a@test.com", password_hash="hash", name="User A")
+    user_b = User(email="e12_pg_b@test.com", password_hash="hash", name="User B")
+    db_session_real.add_all([user_a, user_b])
+    db_session_real.commit()
+
+    # Create Group authored by A
+    group = Group(name="E12 PG Group", created_by=user_a.email)
+    db_session_real.add(group)
+    db_session_real.commit()
+
+    # Add A and B to group
+    member_a = GroupMember(group_id=group.id, user_email=user_a.email, display_name="A")
+    member_b = GroupMember(group_id=group.id, user_email=user_b.email, display_name="B")
+    db_session_real.add_all([member_a, member_b])
+    db_session_real.commit()
+    
+    member_a_id = member_a.id
+
+    # Create group expense authored by A
+    expense = Expense(
+        user_email=user_a.email,
+        group_id=group.id,
+        split_type="equal",
+        category_id="test",
+        amount=100.00
+    )
+    db_session_real.add(expense)
+    db_session_real.commit()
+    expense_id = expense.id
+
+    # Add splits for A and B, payer A
+    payer = ExpensePayer(expense_id=expense.id, member_id=member_a.id, amount_paid=100.00)
+    split_a = ExpenseSplit(expense_id=expense.id, member_id=member_a.id, amount_owed=50.00, basis_type="equal")
+    split_b = ExpenseSplit(expense_id=expense.id, member_id=member_b.id, amount_owed=50.00, basis_type="equal")
+    db_session_real.add_all([payer, split_a, split_b])
+    db_session_real.commit()
+
+    # Delete User A
+    db_session_real.delete(user_a)
+    db_session_real.commit()
+
+    # Assert group expense, expense_splits, and expense_payers still exist
+    exp = db_session_real.query(Expense).filter(Expense.id == expense_id).first()
+    assert exp is not None
+    assert exp.user_email is None  # ON DELETE SET NULL triggered by PG
+
+    s_a = db_session_real.query(ExpenseSplit).filter(ExpenseSplit.member_id == member_a_id).first()
+    assert s_a is not None
+
+    p_a = db_session_real.query(ExpensePayer).filter(ExpensePayer.member_id == member_a_id).first()
+    assert p_a is not None
+
+    # Assert A's group_members row is now a placeholder (user_email IS NULL)
+    m_a = db_session_real.query(GroupMember).filter(GroupMember.id == member_a_id).first()
+    assert m_a is not None
+    assert m_a.user_email is None
+
+    # Teardown remaining test data
+    db_session_real.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).delete()
+    db_session_real.query(ExpensePayer).filter(ExpensePayer.expense_id == expense_id).delete()
+    db_session_real.query(Expense).filter(Expense.id == expense_id).delete()
+    db_session_real.query(GroupMember).filter(GroupMember.group_id == group.id).delete()
+    db_session_real.query(Group).filter(Group.id == group.id).delete()
+    db_session_real.query(User).filter(User.email == "e12_pg_b@test.com").delete()
+    db_session_real.commit()

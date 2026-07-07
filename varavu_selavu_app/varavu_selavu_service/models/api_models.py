@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, conint
+from pydantic import BaseModel, EmailStr, Field, conint
 
 class LoginRequest(BaseModel):
     username: str
@@ -90,6 +90,12 @@ class HealthResponse(BaseModel):
     status: str = "healthy"
 
 
+class FeatureFlagsResponse(BaseModel):
+    # Client-visible flag surface (TS-GRP-111) — lets web/mobile hide Groups nav,
+    # filters, and toggles without relying on a 404 probe against /groups.
+    groups_enabled: bool
+
+
 class DashboardResponse(BaseModel):
     total_expenses: float
     total_categories: int
@@ -146,6 +152,24 @@ class AnalysisFilterInfo(BaseModel):
     year: Optional[int]
     month: Optional[int]
     row_count: int
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    scope: Optional[str] = None
+    group_id: Optional[str] = None
+
+
+class SpendBreakdown(BaseModel):
+    personal: float
+    group_share: float
+
+
+class AnalysisGroupSummary(BaseModel):
+    group_id: str
+    name: str
+    my_share: float
+    i_paid: float
+    group_total: float
+    my_balance: float
 
 
 class AnalysisResponse(BaseModel):
@@ -155,10 +179,35 @@ class AnalysisResponse(BaseModel):
     total_expenses: float
     category_expense_details: Dict[str, List[ExpenseDetail]]
     filter_info: AnalysisFilterInfo
+    scope: Optional[str] = None
+    spend_breakdown: Optional[SpendBreakdown] = None
+    group_summaries: Optional[List[AnalysisGroupSummary]] = None
+
+
+class ResolvedPeriod(BaseModel):
+    """
+    The concrete date range the chat agent actually used for a turn (TS-ANL-013)
+    — resolved from a natural-language phrase in the query, an explicit
+    year/month/start_date/end_date param, or the current-month default, in that
+    precedence order. `source` tells the client which of the three happened.
+    """
+    start_date: str  # YYYY-MM-DD
+    end_date: str  # YYYY-MM-DD
+    label: str  # human-readable, e.g. "July 2026", "Q2 2026", "the last 3 months"
+    source: Literal["parsed_from_query", "explicit_param", "default"]
+
+
+class ResolvedScope(BaseModel):
+    """The personal-vs-group scope the chat agent resolved for a turn (TS-ANL-013)."""
+    kind: Literal["personal", "group"]
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
     response: str
+    resolved_period: ResolvedPeriod
+    resolved_scope: ResolvedScope
 
 
 class ErrorResponse(BaseModel):
@@ -247,6 +296,176 @@ class DueOccurrenceDTO(BaseModel):
 
 class ConfirmRecurringRequest(BaseModel):
     items: List[Dict[str, str | float]]
+
+
+# ---------------------- Groups (TS-GRP series) ---------------------- #
+
+class CreateGroupRequest(BaseModel):
+    name: str
+    group_type: str = "other"  # trip|home|couple|other
+    cover: Optional[str] = None
+    currency: str = "USD"
+
+
+class UpdateGroupRequest(BaseModel):
+    """Phase 1 only covers name/type/cover — default_split/simplify_debts/currency are Phase 2 (spec §5.1)."""
+    name: Optional[str] = None
+    group_type: Optional[str] = None
+    cover: Optional[str] = None
+
+
+class MemberDTO(BaseModel):
+    member_id: str
+    display_name: str
+    role: str
+    status: str
+    user_email: Optional[str] = None
+
+
+class GroupSummary(BaseModel):
+    group_id: str
+    name: str
+    group_type: str
+    member_count: int
+    my_balance: float = 0.0  # real balance computation lands with TS-GRP-104
+
+
+class GroupDetailResponse(BaseModel):
+    group_id: str
+    name: str
+    group_type: str
+    cover: Optional[str] = None
+    currency: str
+    simplify_debts: bool
+    status: str
+    members: List[MemberDTO]
+
+
+class AddMemberRequest(BaseModel):
+    email: Optional[EmailStr] = None
+    display_name: Optional[str] = None
+
+
+class CreateInviteRequest(BaseModel):
+    member_id: str
+
+
+class CreateInviteResponse(BaseModel):
+    token: str
+    url: str
+    expires_at: str
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+
+
+class AcceptInviteResponse(BaseModel):
+    group_id: str
+    member_id: str
+    display_name: str
+
+
+class RecordSettlementRequest(BaseModel):
+    from_member_id: str
+    to_member_id: str
+    amount: float
+    method: Optional[str] = None
+    settled_at: Optional[str] = None  # ISO 8601; defaults to now() when omitted
+    notes: Optional[str] = None
+
+
+class SettlementDTO(BaseModel):
+    id: str
+    group_id: str
+    from_member_id: str
+    to_member_id: str
+    amount: float
+    method: Optional[str] = None
+    settled_at: str
+    notes: Optional[str] = None
+    created_by: Optional[str] = None
+
+
+class GroupSplitEntry(BaseModel):
+    member_id: str
+    value: Optional[float] = None  # required for exact/percentage; unused for equal
+
+
+class GroupSplitConfig(BaseModel):
+    type: str  # equal|exact|percentage (Phase 1)
+    entries: List[GroupSplitEntry] = []
+
+
+class GroupExpensePayerEntry(BaseModel):
+    member_id: str
+    amount_paid: float
+
+
+class GroupExpenseRequest(BaseModel):
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    description: str
+    category: str
+    amount: float
+    merchant_name: Optional[str] = None
+    payers: List[GroupExpensePayerEntry]
+    split: GroupSplitConfig
+
+
+class PayerSummaryItem(BaseModel):
+    member_id: str
+    amount_paid: float
+
+
+class GroupExpenseRow(BaseModel):
+    row_id: str
+    date: str
+    description: str
+    category: str
+    cost: float
+    merchant_name: Optional[str] = None
+    my_share: float
+    payer_summary: List[PayerSummaryItem]
+
+
+class GroupExpenseCreatedResponse(BaseModel):
+    success: bool
+    expense: GroupExpenseRow
+
+
+class GroupExpenseListResponse(BaseModel):
+    items: List[GroupExpenseRow]
+    next_offset: Optional[int] = None
+
+
+class MemberBalance(BaseModel):
+    member_id: str
+    display_name: str
+    net: float
+
+
+class BalanceTransfer(BaseModel):
+    from_member_id: str
+    to_member_id: str
+    amount: float
+
+
+class BalanceResponse(BaseModel):
+    group_id: str
+    members: List[MemberBalance]
+    transfers: List[BalanceTransfer]
+    simplified: bool
+
+
+# ---------------------- Devices (TS-GRP-110) ---------------------- #
+
+class RegisterDeviceRequest(BaseModel):
+    expo_push_token: str
+    platform: str  # ios|android
+
+
+class RegisterDeviceResponse(BaseModel):
+    success: bool
 
 
 # ---------------------- Email ---------------------- #

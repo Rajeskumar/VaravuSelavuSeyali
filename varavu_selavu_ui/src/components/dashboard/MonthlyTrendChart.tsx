@@ -2,8 +2,10 @@ import React from 'react';
 import Plot from 'react-plotly.js';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
+import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import { motion } from 'framer-motion';
+import { baseChartLayout, baseChartConfig } from '../../utils/chartTheme';
 
 interface Props {
   monthlyTrend: { month: string; total: number }[];
@@ -24,10 +26,11 @@ const MonthlyTrendChart: React.FC<Props> = ({ monthlyTrend }) => {
     },
   ];
 
+  const base = baseChartLayout(theme.palette.mode);
   const layout = {
-    title: '📈 Monthly Expense Trends',
-    xaxis: { title: 'Month' },
-    yaxis: { title: 'Cost' },
+    ...base,
+    xaxis: { ...base.xaxis, title: { text: 'Month' } },
+    yaxis: { ...base.yaxis, title: { text: 'Cost' } },
   };
 
   return (
@@ -40,7 +43,8 @@ const MonthlyTrendChart: React.FC<Props> = ({ monthlyTrend }) => {
     >
       <Card sx={{ height: '100%' }}>
         <CardContent>
-          <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100%', height: 350 }} />
+          <Typography variant="h6" gutterBottom>Monthly Expense Trends</Typography>
+          <Plot data={data} layout={layout} style={{ width: '100%', minWidth: 280, maxWidth: '100%', height: 350 }} config={baseChartConfig} />
         </CardContent>
       </Card>
     </motion.div>

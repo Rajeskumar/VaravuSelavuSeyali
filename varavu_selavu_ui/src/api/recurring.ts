@@ -7,6 +7,7 @@ export interface RecurringTemplateDTO {
   day_of_month: number; // 1-31
   default_cost: number;
   start_date_iso: string; // YYYY-MM-DD
+  merchant_name?: string;
   last_processed_iso?: string;
   status?: string;
 }
@@ -17,6 +18,7 @@ export interface UpsertRecurringTemplatePayload {
   day_of_month: number;
   default_cost: number;
   start_date_iso?: string;
+  merchant_name?: string;
   status?: string;
 }
 

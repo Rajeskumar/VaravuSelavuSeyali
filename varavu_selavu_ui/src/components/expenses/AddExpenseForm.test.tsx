@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AddExpenseForm from './AddExpenseForm';
 import * as api from '../../api/expenses';
 import React from 'react';
@@ -6,6 +7,18 @@ import React from 'react';
 jest.mock('heic2any', () => ({
   default: jest.fn(async () => new Blob(['converted'], { type: 'image/png' })),
 }), { virtual: true });
+
+// AddExpenseForm now uses useGroupsEnabled() (react-query) for its Personal/Group
+// toggle (TS-GRP-108) — every render needs a QueryClientProvider ancestor even
+// when the query itself is disabled (no vs_user in localStorage in this file).
+function renderForm(props: React.ComponentProps<typeof AddExpenseForm> = {}) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <AddExpenseForm {...props} />
+    </QueryClientProvider>
+  );
+}
 
 // Ensure parseReceipt mock returns main_category_name and category_name
 const mockDraft = {
@@ -31,7 +44,7 @@ test('add and delete items, save enabled on mismatch', async () => {
     main_category: 'Food & Drink',
     subcategory: 'Groceries',
   });
-  render(<AddExpenseForm />);
+  renderForm();
   expect(screen.getAllByText(/Upload Receipt/i).length).toBeGreaterThan(0);
   const file = new File(['dummy'], 'r.png', { type: 'image/png' });
   fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });

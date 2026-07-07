@@ -4,7 +4,8 @@ import { LineChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysis } from '../api/analysis';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme, withAlpha } from '../theme';
+import { AppTheme } from '../theme';
+import { baseChartConfig } from '../utils/chartTheme';
 import Card from './Card';
 
 const screenWidth = Dimensions.get('window').width;
@@ -56,27 +57,8 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
     }, [fetchTrend]);
 
     const chartConfig = {
-        backgroundGradientFrom: theme.colors.surface,
-        backgroundGradientTo: theme.colors.surface,
-        color: (opacity = 1) => withAlpha(theme.colors.primary, opacity),
-        labelColor: () => theme.colors.textSecondary,
+        ...baseChartConfig(theme),
         strokeWidth: 3,
-        decimalPlaces: 0,
-        propsForBackgroundLines: {
-            strokeWidth: 0, // Removed grid lines
-        },
-        propsForLabels: {
-            fontFamily: 'Inter-Medium',
-            fontSize: 11,
-        },
-        propsForDots: {
-            r: '4',
-            strokeWidth: '2',
-            stroke: theme.colors.primary,
-            fill: theme.colors.surface,
-        },
-        fillShadowGradientFrom: theme.colors.primary,
-        fillShadowGradientTo: theme.colors.surface,
         fillShadowGradientFromOpacity: 0.25,
         fillShadowGradientToOpacity: 0.0,
     };
@@ -100,9 +82,10 @@ export default function TrendLineChart({ title = '6-Month Trend' }: TrendLineCha
                         height={200}
                         chartConfig={chartConfig}
                         bezier
-                        withInnerLines={false}
+                        withInnerLines
                         withOuterLines={false}
                         withVerticalLines={false}
+                        withHorizontalLines
                         fromZero
                         style={styles.chart}
                     />

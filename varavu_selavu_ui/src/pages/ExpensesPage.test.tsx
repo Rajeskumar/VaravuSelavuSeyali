@@ -3,6 +3,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ExpensesPage from './ExpensesPage';
 import * as api from '../api/expenses';
+import * as groupsApi from '../api/groups';
+import * as configApi from '../api/config';
 import React from 'react';
 
 jest.mock('heic2any', () => ({
@@ -15,7 +17,17 @@ beforeEach(() => {
 
 afterEach(() => {
   localStorage.clear();
+  jest.restoreAllMocks();
 });
+
+function renderPage() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <ExpensesPage />
+    </QueryClientProvider>
+  );
+}
 
 test('shows expenses and opens form', async () => {
   jest.spyOn(api, 'listExpenses').mockResolvedValue({
@@ -24,16 +36,17 @@ test('shows expenses and opens form', async () => {
     ],
     next_offset: undefined,
   });
-  const qc = new QueryClient();
-  render(
-    <QueryClientProvider client={qc}>
-      <ExpensesPage />
-    </QueryClientProvider>
-  );
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   expect(screen.getByText('Coffee')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /add expense/i }));
-  expect(await screen.findByText(/Add New Expense/i)).toBeInTheDocument();
+  // AddExpenseForm's dialog heading is "Add Expense" (not "Add New Expense" —
+  // that text never matched; pre-existing/unrelated to the TS-DES-102 feed
+  // rebuild, fixed here per the ticket's "don't leave DOM-asserting tests red"
+  // instruction). Scope to the <h6> heading since "Add Expense" also matches
+  // the page's toolbar button and the dialog's submit button.
+  expect(await screen.findByRole('heading', { name: 'Add Expense' })).toBeInTheDocument();
 });
 
 test('deletes an expense', async () => {
@@ -44,14 +57,79 @@ test('deletes an expense', async () => {
     next_offset: undefined,
   });
   const delSpy = jest.spyOn(api, 'deleteExpense').mockResolvedValue();
-  const qc = new QueryClient();
-  render(
-    <QueryClientProvider client={qc}>
-      <ExpensesPage />
-    </QueryClientProvider>
-  );
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  renderPage();
   await waitFor(() => screen.getByText('Coffee'));
+  // The feed row's delete affordance opens the existing confirm dialog rather
+  // than deleting immediately (same two-step flow the old <Table> row already
+  // had — `setPendingDelete`/`setConfirmOpen`, confirmed by the delete button
+  // handler in ExpensesPage.tsx). Click the row's delete icon, then confirm.
   fireEvent.click(screen.getByLabelText('delete'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
   await waitFor(() => expect(delSpy).toHaveBeenCalledWith(1));
   listSpy.mockRestore();
+});
+
+// ---------------------------------------------------------------------------
+// TS-GRP-108: Personal/Groups/Combined scope filter + group badge column
+// ---------------------------------------------------------------------------
+
+test('regression: with groups disabled (404), no scope filter renders and personal list is unaffected', async () => {
+  jest.spyOn(api, 'listExpenses').mockResolvedValue({
+    items: [
+      { row_id: 1, user_id: 'user', date: '01/01/2024', description: 'Coffee', category: 'Food & Drink', cost: 3 },
+    ],
+    next_offset: undefined,
+  });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  renderPage();
+  await waitFor(() => screen.getByText('Coffee'));
+  expect(screen.queryByRole('button', { name: 'Groups' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Combined' })).not.toBeInTheDocument();
+});
+
+test('scope filter switches the queried data and shows the group badge column', async () => {
+  jest.spyOn(api, 'listExpenses').mockResolvedValue({
+    items: [
+      { row_id: 1, user_id: 'user', date: '01/01/2024', description: 'Coffee', category: 'Food & Drink', cost: 3 },
+    ],
+    next_offset: undefined,
+  });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true });
+  jest.spyOn(groupsApi, 'listGroups').mockResolvedValue([
+    { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 0 },
+  ]);
+  // ExpensesPage calls the composed listAllMyGroupExpenses() (which internally
+  // calls listGroups/listGroupExpenses as local, un-mockable intra-module refs),
+  // so the composed function itself is what needs mocking here.
+  const groupExpensesSpy = jest.spyOn(groupsApi, 'listAllMyGroupExpenses').mockResolvedValue([
+    {
+      row_id: 'ge1',
+      date: '01/15/2024',
+      description: 'Dinner',
+      category: 'Food & Drink',
+      cost: 90,
+      my_share: 45,
+      payer_summary: [],
+      group_id: 'g1',
+      group_name: 'Apartment 4B',
+    },
+  ]);
+
+  renderPage();
+  await waitFor(() => screen.getByText('Coffee'));
+
+  const groupsToggle = await screen.findByRole('button', { name: 'Groups' });
+  fireEvent.click(groupsToggle);
+
+  await waitFor(() => expect(groupExpensesSpy).toHaveBeenCalled());
+  expect(await screen.findByText('Dinner')).toBeInTheDocument();
+  expect(screen.getByText('Apartment 4B')).toBeInTheDocument(); // group caption in place of category
+  // $45.00 (my share) now appears twice — the day-group's sticky subtotal
+  // header and the row's primary tabular amount — so assert count instead of
+  // a single match (TS-DES-102's day-grouped feed structure).
+  expect(screen.getAllByText('$45.00').length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText(/\$90\.00 total/)).toBeInTheDocument(); // full/group amount, secondary caption
+  // Personal-only table (with its Merchant column) is not shown in this scope.
+  expect(screen.queryByText('Coffee')).not.toBeInTheDocument();
 });
