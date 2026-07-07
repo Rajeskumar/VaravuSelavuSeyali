@@ -8,11 +8,16 @@ import { motion } from 'framer-motion';
 import TrueTotalHero, { TrueTotalLens } from '../components/dashboard/TrueTotalHero';
 import SpendSpectrum from '../components/dashboard/SpendSpectrum';
 import MyGroupsStrip from '../components/dashboard/MyGroupsStrip';
+import WhatChangedTeaser from '../components/dashboard/WhatChangedTeaser';
+import DueSoonStrip from '../components/dashboard/DueSoonStrip';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
+import { getChangeInsights, ChangeInsight } from '../api/analytics';
+import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
 import { parseAppDate, formatAppDate } from '../utils/date';
 import { listExpenses } from '../api/expenses';
 import { listAllMyGroupExpenses, listGroups, UnifiedGroupExpenseRow, GroupSummary } from '../api/groups';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
+import { onExpenseChanged } from '../utils/expenseEvents';
 import { reconcile, tabularNums } from '../theme';
 
 const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
@@ -28,13 +33,25 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [lens, setLens] = React.useState<TrueTotalLens>('my_share');
-  const year = new Date().getFullYear();
+  const now = React.useMemo(() => new Date(), []);
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
   const navigate = useNavigate();
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [groupExpenses, setGroupExpenses] = React.useState<UnifiedGroupExpenseRow[]>([]);
   const [personalRecent, setPersonalRecent] = React.useState<{ date: string; description: string; category: string; cost: number }[]>([]);
   const [showCombinedToast, setShowCombinedToast] = React.useState(false);
+  const [changeInsights, setChangeInsights] = React.useState<ChangeInsight[]>([]);
+  const [recurringTemplates, setRecurringTemplates] = React.useState<RecurringTemplateDTO[]>([]);
+  const [yearTrend, setYearTrend] = React.useState<{ month: string; total: number }[]>([]);
+  // TS-DES-111: bumped whenever the global Add Expense FAB (MainLayout.tsx)
+  // saves — DashboardPage fetches via plain useEffect rather than react-query,
+  // so it can't rely on query-cache invalidation and needs its own signal to
+  // refetch while mounted.
+  const [refreshKey, setRefreshKey] = React.useState(0);
+
+  React.useEffect(() => onExpenseChanged(() => setRefreshKey((k) => k + 1)), []);
 
   React.useEffect(() => {
     const user = localStorage.getItem('vs_user');
@@ -47,7 +64,9 @@ const DashboardPage: React.FC = () => {
       try {
         // Combined = personal + user's share across all groups (spec §11.2/§17.1);
         // the True Total hero re-scopes this same fetched payload via its lens.
-        const resp = await getAnalysis({ year, scope: 'combined' });
+        // TS-DES-111: current month only — previously fetched the whole calendar
+        // year (year with no month) while the hero label claimed to be month-scoped.
+        const resp = await getAnalysis({ year, month, scope: 'combined' });
         setData(resp);
         if (!localStorage.getItem(COMBINED_TOAST_KEY)) {
           setShowCombinedToast(true);
@@ -59,7 +78,52 @@ const DashboardPage: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [year]);
+  }, [year, month, refreshKey]);
+
+  // TS-DES-111: a separate, year-wide fetch purely for `monthly_trend` — once the
+  // main fetch above is scoped to a single month (the bug fix), its own
+  // `monthly_trend` only ever contains that one month, so there's no prior-month
+  // entry left to diff against for the hero's month-over-month delta.
+  React.useEffect(() => {
+    const user = localStorage.getItem('vs_user');
+    if (!user) return;
+    (async () => {
+      try {
+        const resp = await getAnalysis({ year, scope: 'combined' });
+        setYearTrend(resp.monthly_trend);
+      } catch {
+        setYearTrend([]);
+      }
+    })();
+  }, [year, refreshKey]);
+
+  // TS-DES-111: top "what changed" teaser, same current-month scope as the main fetch.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const insights = await getChangeInsights({ year, month });
+        if (mounted) setChangeInsights(insights);
+      } catch {
+        if (mounted) setChangeInsights([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [year, month, refreshKey]);
+
+  // TS-DES-111: "Due Soon" strip.
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const templates = await listRecurringTemplates();
+        if (mounted) setRecurringTemplates(templates);
+      } catch {
+        if (mounted) setRecurringTemplates([]);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   // Unified recent-transactions feed: personal + (if enabled) my group shares, merged.
   React.useEffect(() => {
@@ -73,7 +137,7 @@ const DashboardPage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [refreshKey]);
 
   React.useEffect(() => {
     if (!groupsEnabled) {
@@ -120,10 +184,26 @@ const DashboardPage: React.FC = () => {
     .sort((a, b) => parseAppDate(b.date).getTime() - parseAppDate(a.date).getTime())
     .slice(0, RECENT_FEED_LIMIT);
 
-  const now = new Date();
   const periodLabel = `${now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} · everything`;
   const groupSummaries = data.group_summaries || [];
   const personalTotal = data.spend_breakdown ? data.spend_breakdown.personal : data.total_expenses;
+
+  // TS-DES-111: month-over-month delta for the hero, from the separate
+  // year-wide `yearTrend` fetch (the main `data` fetch is scoped to a single
+  // month, so its own monthly_trend has nothing to compare against). Null
+  // (not zero) when there's no previous-month entry, e.g. a brand-new user's
+  // first month, or when the previous month spills into the prior year and
+  // that year's data isn't part of this fetch (rare edge case — January's
+  // "last month" is December of the prior year; treated as "no data" rather
+  // than issuing a third fetch for one extra month).
+  const thisMonthKey = `${year}-${String(month).padStart(2, '0')}`;
+  const prevDate = new Date(year, month - 2, 1);
+  const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+  const thisMonthTrend = yearTrend.find(m => m.month === thisMonthKey)?.total;
+  const prevMonthTrend = yearTrend.find(m => m.month === prevMonthKey)?.total;
+  const momDelta = (thisMonthTrend != null && prevMonthTrend != null && prevMonthTrend > 0)
+    ? { amount: thisMonthTrend - prevMonthTrend, percent: ((thisMonthTrend - prevMonthTrend) / prevMonthTrend) * 100 }
+    : null;
 
   return (
     <Box sx={{ maxWidth: 480, mx: 'auto' }}>
@@ -136,6 +216,7 @@ const DashboardPage: React.FC = () => {
           groupSummaries={groupSummaries}
           groupsEnabled={groupsEnabled}
           periodLabel={periodLabel}
+          momDelta={momDelta}
         />
       </motion.div>
 
@@ -146,7 +227,29 @@ const DashboardPage: React.FC = () => {
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
         <Box sx={{ mb: 3 }}>
+          <WhatChangedTeaser insights={changeInsights} />
+        </Box>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-60px' }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <Box sx={{ mb: 3 }}>
           <SpendSpectrum data={data.category_totals} />
+        </Box>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-60px' }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.04 }}
+      >
+        <Box sx={{ mb: 3 }}>
+          <DueSoonStrip templates={recurringTemplates} />
         </Box>
       </motion.div>
 

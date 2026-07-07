@@ -15,7 +15,14 @@ const AIAnalystPage: React.FC = () => {
     <Box sx={{ mt: 4 }}>
       <Paper elevation={2} sx={{
         ...glassCardSx(theme),
-        p: 2,
+        p: 0,
+        height: '75vh',
+        minHeight: 600,
+        maxWidth: 700,
+        mx: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
       }}>
         <AIAnalystChat userId={user} initialQuery={initialQuery} />
       </Paper>

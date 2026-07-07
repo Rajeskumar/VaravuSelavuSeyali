@@ -5,7 +5,7 @@ import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useTheme, useMediaQuery, IconButton, Tooltip } from '@mui/material';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+
 import MenuIcon from '@mui/icons-material/Menu';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
@@ -105,18 +105,16 @@ const AppContent: React.FC = () => {
             onClick={() => navigate('/')}
           >
             <Box
+              component="img"
+              src="/icon.png"
+              alt="TrackSpense Logo"
               sx={{
                 width: 30,
                 height: 30,
-                borderRadius: '9px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundImage: `linear-gradient(135deg, ${brand.gradientStart}, ${brand.gradientEnd})`,
+                borderRadius: '8px',
+                objectFit: 'cover'
               }}
-            >
-              <AccountBalanceWalletIcon sx={{ fontSize: 17, color: '#fff' }} />
-            </Box>
+            />
             <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
               TrackSpense
             </Typography>

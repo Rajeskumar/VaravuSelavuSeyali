@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import DashboardPage from './DashboardPage';
 import * as analysisApi from '../api/analysis';
+import * as analyticsApi from '../api/analytics';
 import * as recurringApi from '../api/recurring';
 import * as expensesApi from '../api/expenses';
 import * as groupsApi from '../api/groups';
@@ -34,6 +35,7 @@ beforeEach(() => {
   localStorage.setItem('vs_user', 'user');
   jest.spyOn(recurringApi, 'listRecurringTemplates').mockResolvedValue([]);
   jest.spyOn(expensesApi, 'listExpenses').mockResolvedValue({ items: [], next_offset: undefined });
+  jest.spyOn(analyticsApi, 'getChangeInsights').mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -45,8 +47,12 @@ test('renders combined totals from the analysis payload', async () => {
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
   jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
   renderPage();
+  // TS-DES-111: must fetch the current month specifically, not the whole year —
+  // this is the exact assertion that would have caught the original bug (the
+  // old version of this test only checked `scope`, which stayed green whether
+  // or not `month` was ever sent).
   await waitFor(() => expect(analysisApi.getAnalysis).toHaveBeenCalledWith(
-    expect.objectContaining({ scope: 'combined' })
+    expect.objectContaining({ scope: 'combined', month: new Date().getMonth() + 1 })
   ));
   await waitFor(() => expect(screen.getAllByText('$500.00').length).toBeGreaterThan(0));
 });

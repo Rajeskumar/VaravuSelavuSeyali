@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, EmailStr, Field, conint
 
@@ -184,8 +184,30 @@ class AnalysisResponse(BaseModel):
     group_summaries: Optional[List[AnalysisGroupSummary]] = None
 
 
+class ResolvedPeriod(BaseModel):
+    """
+    The concrete date range the chat agent actually used for a turn (TS-ANL-013)
+    — resolved from a natural-language phrase in the query, an explicit
+    year/month/start_date/end_date param, or the current-month default, in that
+    precedence order. `source` tells the client which of the three happened.
+    """
+    start_date: str  # YYYY-MM-DD
+    end_date: str  # YYYY-MM-DD
+    label: str  # human-readable, e.g. "July 2026", "Q2 2026", "the last 3 months"
+    source: Literal["parsed_from_query", "explicit_param", "default"]
+
+
+class ResolvedScope(BaseModel):
+    """The personal-vs-group scope the chat agent resolved for a turn (TS-ANL-013)."""
+    kind: Literal["personal", "group"]
+    group_id: Optional[str] = None
+    group_name: Optional[str] = None
+
+
 class ChatResponse(BaseModel):
     response: str
+    resolved_period: ResolvedPeriod
+    resolved_scope: ResolvedScope
 
 
 class ErrorResponse(BaseModel):

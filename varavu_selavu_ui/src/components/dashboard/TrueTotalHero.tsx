@@ -32,6 +32,11 @@ export function computeLensTotal(
   return groupSummaries.reduce((sum, g) => sum + g[lens], personal);
 }
 
+export interface MomDelta {
+  amount: number;
+  percent: number;
+}
+
 interface Props {
   lens: TrueTotalLens;
   onLensChange: (lens: TrueTotalLens) => void;
@@ -40,16 +45,21 @@ interface Props {
   groupSummaries: AnalysisGroupSummary[];
   groupsEnabled: boolean;
   periodLabel: string;
+  /** Month-over-month delta (TS-DES-111) — null when there's no previous-month
+   * data to compare against (e.g. a brand-new user's first month). */
+  momDelta?: MomDelta | null;
 }
 
 /** The "True Total + lens" hero (TS-DES-103): one display-face number, a
  * reconciled/pending status line, and the My Share/I Paid/Group Total lens that
  * re-scopes that same number. Reuses the shared `SegmentedTabs` control rather
  * than a bespoke lens switch. */
-const TrueTotalHero: React.FC<Props> = ({ lens, onLensChange, personalTotal, groupSummaries, groupsEnabled, periodLabel }) => {
+const TrueTotalHero: React.FC<Props> = ({ lens, onLensChange, personalTotal, groupSummaries, groupsEnabled, periodLabel, momDelta }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const goldColor = isDark ? reconcile.goldDark : reconcile.gold;
+  const jadeColor = isDark ? reconcile.jadeDark : reconcile.jadeText;
+  const emberColor = isDark ? reconcile.emberDark : reconcile.ember;
 
   const total = computeLensTotal(lens, personalTotal, groupSummaries);
   const hasGroups = groupsEnabled && groupSummaries.length > 0;
@@ -66,6 +76,15 @@ const TrueTotalHero: React.FC<Props> = ({ lens, onLensChange, personalTotal, gro
       <Typography component="div" sx={{ ...typeScale.displayHero, color: 'text.primary' }}>
         {formatMoney(total)}
       </Typography>
+
+      {momDelta && (
+        <Typography
+          variant="caption"
+          sx={{ color: momDelta.amount > 0 ? emberColor : momDelta.amount < 0 ? jadeColor : 'text.secondary', mt: 0.5, fontWeight: 600 }}
+        >
+          {momDelta.amount > 0 ? '+' : ''}{momDelta.percent.toFixed(0)}% vs last month
+        </Typography>
+      )}
 
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1.5, minHeight: 20 }}>
         {hasGroups ? (

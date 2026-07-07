@@ -28,4 +28,8 @@ res = call_chat_model(
     model="llama3.1"
 )
 
-print("RESULT:", res)
+# call_chat_model now returns a ChatResult (TS-ANL-013) — response text plus the
+# resolved period/scope — instead of a bare string.
+print("RESPONSE:", res.response)
+print("RESOLVED PERIOD:", res.resolved_period)
+print("RESOLVED SCOPE:", res.resolved_scope)

@@ -17,6 +17,15 @@ from varavu_selavu_service.db.session import Base, get_db
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.db.models import User, Expense, ExpenseItem, ItemInsight, MerchantInsight, Group, GroupMember
 from varavu_selavu_service.services.analysis_service import AnalysisService
+from varavu_selavu_service.services.chat_service import ChatResult
+from varavu_selavu_service.models.api_models import ResolvedPeriod, ResolvedScope
+
+# Shared fake resolution (TS-ANL-013) for mocked call_chat_model returns below —
+# these tests are about item/merchant intent, not period/scope resolution itself
+# (see test_chat_period_scope_resolution.py for that), so a fixed stand-in value
+# is fine here.
+_FAKE_RESOLVED_PERIOD = ResolvedPeriod(start_date="2023-05-01", end_date="2023-05-31", label="May 2023", source="explicit_param")
+_FAKE_RESOLVED_SCOPE = ResolvedScope(kind="personal")
 
 @pytest.fixture(scope="function")
 def analytics_db_session(db_session):
@@ -90,7 +99,11 @@ def test_get_merchant_detail(test_client, analytics_db_session):
 
 @patch("varavu_selavu_service.api.routes.call_chat_model")
 def test_analysis_chat_with_item_intent(mock_call_chat_model, test_client, analytics_db_session):
-    mock_call_chat_model.return_value = "Apples cost $2.00 on average."
+    mock_call_chat_model.return_value = ChatResult(
+        response="Apples cost $2.00 on average.",
+        resolved_period=_FAKE_RESOLVED_PERIOD,
+        resolved_scope=_FAKE_RESOLVED_SCOPE,
+    )
     # Asking about an item should trigger the item intent
     response = test_client.post(
         "/api/v1/analysis/chat",
@@ -104,11 +117,19 @@ def test_analysis_chat_with_item_intent(mock_call_chat_model, test_client, analy
     # Testing that it returns 200 and a chat response is enough,
     # as the actual LLM call might be mocked or return a generated string based on context
     assert response.status_code == 200
-    assert "response" in response.json()
+    data = response.json()
+    assert "response" in data
+    # TS-ANL-013: the route must surface the resolved period/scope structured fields too.
+    assert data["resolved_period"]["label"] == "May 2023"
+    assert data["resolved_scope"]["kind"] == "personal"
 
 @patch("varavu_selavu_service.api.routes.call_chat_model")
 def test_analysis_chat_with_merchant_intent(mock_call_chat_model, test_client, analytics_db_session):
-    mock_call_chat_model.return_value = "You spent $150.0 at Walmart."
+    mock_call_chat_model.return_value = ChatResult(
+        response="You spent $150.0 at Walmart.",
+        resolved_period=_FAKE_RESOLVED_PERIOD,
+        resolved_scope=_FAKE_RESOLVED_SCOPE,
+    )
     # Asking about a merchant should trigger the merchant intent
     response = test_client.post(
         "/api/v1/analysis/chat",

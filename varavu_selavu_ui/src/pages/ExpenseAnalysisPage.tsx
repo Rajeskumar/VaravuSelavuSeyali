@@ -1,207 +1,200 @@
 import React, { useMemo, useState } from 'react';
-import { Box, Grid, Typography, FormControl, InputLabel, Select, MenuItem, Paper, Divider, Switch, FormControlLabel, Chip, Button } from '@mui/material';
+import { Box, Typography, Paper, CircularProgress, Alert, Chip, Button, IconButton, Menu, MenuItem } from '@mui/material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import StorefrontIcon from '@mui/icons-material/StorefrontRounded';
 import ShoppingBasketIcon from '@mui/icons-material/ShoppingBagRounded';
 import QueryStatsIcon from '@mui/icons-material/QueryStatsRounded';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonthRounded';
 import { useTheme } from '@mui/material/styles';
-import ExpenseSummaryCards from '../components/analysis/ExpenseSummaryCards';
-import CategoryBarChart from '../components/analysis/CategoryBarChart';
-import CategorySummaryTable from '../components/analysis/CategorySummaryTable';
-import MonthlyTrendLineChart from '../components/analysis/MonthlyTrendLineChart';
-import MoneyFlowSankey from '../components/analysis/MoneyFlowSankey';
-import SmartChangeInsightsCard from '../components/analysis/SmartChangeInsightsCard';
-import GroupScopeFilter from '../components/common/GroupScopeFilter';
-import { getAnalysis, AnalysisResponse, AnalysisScope } from '../api/analysis';
-import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { useQuery } from '@tanstack/react-query';
-import { glassCardSx } from '../theme';
 import { motion } from 'framer-motion';
+
+import { getAnalysis, AnalysisResponse, AnalysisScope } from '../api/analysis';
+import { ChangeInsight } from '../api/analytics';
+import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
+import { glassCardSx, typeScale } from '../theme';
+
+// New Reconcile components
+import { AnalysisLensSwitch } from '../components/analysis/AnalysisLensSwitch';
+import { TrendNavigator } from '../components/analysis/TrendNavigator';
+import { WhatChangedRail } from '../components/analysis/WhatChangedRail';
+import { CategorySpectrum } from '../components/analysis/CategorySpectrum';
+import { AskSheet } from '../components/analysis/AskSheet';
+
+// Keep existing Sankey for signature visual
+import MoneyFlowSankey from '../components/analysis/MoneyFlowSankey';
+
+const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const ExpenseAnalysisPage: React.FC = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const [data, setData] = useState<AnalysisResponse | null>(null);
-  const income = 6200; // same default used in legacy app
   const now = useMemo(() => new Date(), []);
+  
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
-  const [overallYear, setOverallYear] = useState<boolean>(false);
-  const { enabled: groupsEnabled } = useGroupsEnabled();
   const [scope, setScope] = useState<AnalysisScope>('personal');
+  const [askInsight, setAskInsight] = useState<ChangeInsight | null>(null);
+  
+  // Year/Month dropdown anchor
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
+  const { enabled: groupsEnabled } = useGroupsEnabled();
   const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
-  const { data: qData, isLoading, isError, error } = useQuery({
-    queryKey: ['analysis', user, year, overallYear ? null : month, scope],
+
+  // 1. Fetch data for the specific selected month
+  const { data: monthData, isLoading: monthLoading, isError: monthIsError, error: monthError } = useQuery({
+    queryKey: ['analysis', user, year, month, scope],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      const opts: { year?: number; month?: number; scope?: AnalysisScope } = { year, scope };
-      if (!overallYear) opts.month = month;
-      return getAnalysis(opts);
+      return getAnalysis({ year, month, scope });
     },
     enabled: !!user,
   });
-  React.useEffect(() => {
-    if (qData) setData(qData);
-  }, [qData]);
 
-  if (isLoading) return <Typography sx={{ mt: 4 }}>Loading analysis...</Typography>;
-  if (isError) return <Typography color="error" sx={{ mt: 4 }}>{(error as Error)?.message || 'Failed to load analysis.'}</Typography>;
-  if (!data) return null;
+  // 2. Fetch data for the entire year to power the TrendNavigator
+  const { data: yearData, isLoading: yearLoading } = useQuery({
+    queryKey: ['analysis', user, year, null, scope],
+    queryFn: async () => {
+      if (!user) throw new Error('Please login to view analysis.');
+      return getAnalysis({ year, scope });
+    },
+    enabled: !!user,
+  });
 
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const title = overallYear ? `Analysis — ${year} (Year Overview)` : `Analysis — ${monthNames[month-1]} ${year}`;
+  if (monthLoading || yearLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
-  const glass = {
-    ...glassCardSx(theme),
-    animation: 'fadeIn 0.5s ease',
-  } as const;
+  if (monthIsError) {
+    return (
+      <Alert severity="error" sx={{ mt: 4 }}>
+        {(monthError as Error)?.message || 'Failed to load analysis.'}
+      </Alert>
+    );
+  }
+
+  if (!monthData || !yearData) return null;
+
+  const handleYearMonthClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+  
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
 
   return (
-    <Box sx={{ mt: 4 }}>
-      <Grid container columns={12} spacing={2}>
-        {/* Sidebar */}
-        <Grid size={{ xs: 12, md: 3 }}>
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-            <Paper elevation={3} sx={{ p: 2, position: { md: 'sticky' }, top: { md: 80 }, mb: { xs: 2, md: 0 }, ...glass }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>Filters</Typography>
-              <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel id="year-label">Year</InputLabel>
-                <Select labelId="year-label" label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-                  {[0,1,2,3,4].map((i) => {
-                    const y = now.getFullYear() - i;
-                    return <MenuItem key={y} value={y}>{y}</MenuItem>;
-                  })}
-                </Select>
-              </FormControl>
-              <FormControlLabel
-                control={<Switch checked={overallYear} onChange={(e) => setOverallYear(e.target.checked)} />}
-                label="Overall Year"
-                sx={{ mb: 1 }}
-              />
-              {!overallYear && (
-                <FormControl fullWidth size="small" sx={{ mt: 1 }}>
-                  <InputLabel id="month-label">Month</InputLabel>
-                  <Select labelId="month-label" label="Month" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-                    {monthNames.map((m, idx) => (
-                      <MenuItem key={m} value={idx + 1}>{m}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-              {groupsEnabled && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>Scope</Typography>
-                  <GroupScopeFilter value={scope} onChange={setScope} />
-                </>
-              )}
-              <Divider sx={{ my: 2 }} />
-              <Typography variant="body2" color="text.secondary">
-                Tip: Toggle Overall Year to see trends and category distribution for the entire year.
+    <Box sx={{ maxWidth: 600, mx: 'auto', pb: 10 }}>
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
+        
+        {/* Header Area */}
+        <Box sx={{ px: 2, pt: 3, pb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Box>
+            <Typography sx={{ ...typeScale.display, fontSize: 28, color: 'text.primary' }}>
+              Analysis
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+              <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary' }}>
+                {monthNames[month - 1]} {year}
               </Typography>
-            </Paper>
-          </motion.div>
-        </Grid>
-
-        {/* Content */}
-        <Grid size={{ xs: 12, md: 9 }}>
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.08 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>{title}</Typography>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Chip
-                  component={RouterLink as any}
-                  to="/item-insights"
-                  clickable
-                  icon={<ShoppingBasketIcon />}
-                  label="Item Insights"
-                  variant="outlined"
-                />
-                <Chip
-                  component={RouterLink as any}
-                  to="/merchant-insights"
-                  clickable
-                  icon={<StorefrontIcon />}
-                  label="Merchant Insights"
-                  variant="outlined"
-                />
-              </Box>
+              <IconButton size="small" onClick={handleYearMonthClick} sx={{ p: 0.25, color: 'text.secondary' }}>
+                <CalendarMonthIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+              
+              <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+                {[0,1,2].map(i => {
+                   const y = now.getFullYear() - i;
+                   return (
+                     <MenuItem 
+                       key={y} 
+                       onClick={() => { setYear(y); setMonth(now.getMonth() + 1); handleMenuClose(); }}
+                       selected={year === y}
+                     >
+                       {y}
+                     </MenuItem>
+                   );
+                })}
+              </Menu>
             </Box>
+          </Box>
+          
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Chip component={RouterLink as any} to="/item-insights" clickable icon={<ShoppingBasketIcon />} label="Items" variant="outlined" size="small" />
+            <Chip component={RouterLink as any} to="/merchant-insights" clickable icon={<StorefrontIcon />} label="Merchants" variant="outlined" size="small" />
+          </Box>
+        </Box>
 
-            {data.filter_info && (
-              <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: '#fafafa', ...glass }}>
-                <Typography variant="caption" color="text.secondary">
-                  Filters applied — user_col: {data.filter_info.applied_user_col || 'none'}, year: {String(data.filter_info.year || '')}, month: {String(data.filter_info.month || '')}, rows: {String(data.filter_info.row_count || 0)}
-                </Typography>
-              </Paper>
-            )}
+        {groupsEnabled && (
+          <Box sx={{ px: 2, pb: 3 }}>
+            <AnalysisLensSwitch value={scope} onChange={setScope} />
+          </Box>
+        )}
 
-            {data.total_expenses === 0 && data.category_totals.length === 0 ? (
-              <Paper sx={{ ...glass, p: 6, mb: 2, borderRadius: 3, textAlign: 'center' }}>
-                <QueryStatsIcon sx={{ fontSize: 64, color: 'primary.light', mb: 2 }} />
-                <Typography variant="h6" fontWeight={700} gutterBottom>
-                  No expenses for {overallYear ? year : `${monthNames[month - 1]} ${year}`} yet
-                </Typography>
-                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                  Add an expense to see category breakdowns, trends, and what changed.
-                </Typography>
-                <Button variant="contained" onClick={() => navigate('/expenses')} startIcon={<ShoppingBasketIcon />}>
-                  Add an Expense
-                </Button>
-              </Paper>
-            ) : (
-              <>
-                <Grid container columns={12} spacing={2} sx={{ mb: 2 }}>
-                   <Grid size={{ xs: 12, md: 7 }}>
-                      <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
-                        <Typography variant="h6" sx={{ mb: 1 }}>Summary</Typography>
-                        <ExpenseSummaryCards totalExpenses={data.total_expenses} income={income} />
-                      </Paper>
-                   </Grid>
-                   <Grid size={{ xs: 12, md: 5 }}>
-                       <Paper elevation={2} sx={{ p: 2, height: '100%', ...glass }}>
-                         <Typography variant="h6" sx={{ mb: 1 }}>What Changed</Typography>
-                         <SmartChangeInsightsCard userId={user} year={year} month={overallYear ? undefined : month} />
-                       </Paper>
-                   </Grid>
-                </Grid>
+        {/* 6-Month Trend Navigator */}
+        <TrendNavigator
+          monthlyTrend={yearData.monthly_trend}
+          selectedMonth={month}
+          year={year}
+          onSelect={(m) => setMonth(m)}
+        />
 
-                <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
-                  <Typography variant="h6" sx={{ mb: 1 }}>Top Categories</Typography>
-                  <Grid container columns={12}>
-                    <Grid size={{ xs: 12 }}>
-                      <CategoryBarChart categoryTotals={data.category_totals} details={data.category_expense_details || {}} />
-                    </Grid>
-                  </Grid>
-                </Paper>
+        {/* What Changed Rail */}
+        <Box sx={{ pt: 1, pb: 2 }}>
+          <Typography sx={{ px: 2, mb: 1.5, fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
+            WHAT CHANGED
+          </Typography>
+          <WhatChangedRail
+            userId={user}
+            year={year}
+            month={month}
+            onAsk={setAskInsight}
+          />
+        </Box>
 
-                <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
-                  <Typography variant="h6" sx={{ mb: 1 }}>Category Breakdown</Typography>
-                  <CategorySummaryTable categoryTotals={data.category_totals} income={income} details={data.category_expense_details || {}} />
-                </Paper>
+        {/* Empty State vs Content */}
+        {monthData.total_expenses === 0 && monthData.category_totals.length === 0 ? (
+          <Paper sx={{ ...glassCardSx(theme), mx: 2, p: 6, mb: 2, borderRadius: 3, textAlign: 'center' }}>
+            <QueryStatsIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
+            <Typography variant="h6" fontWeight={600} gutterBottom>
+              No expenses yet
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Add an expense in {monthNames[month - 1]} to see breakdowns.
+            </Typography>
+            <Button variant="contained" onClick={() => navigate('/expenses')} startIcon={<ShoppingBasketIcon />}>
+              Add Expense
+            </Button>
+          </Paper>
+        ) : (
+          <>
+            <CategorySpectrum
+              total={monthData.total_expenses}
+              categoryTotals={monthData.category_totals}
+              details={monthData.category_expense_details || {}}
+            />
 
-                <MoneyFlowSankey
-                  totalExpenses={data.total_expenses}
-                  categoryTotals={data.category_totals}
-                  details={data.category_expense_details || {}}
-                />
+            <Box sx={{ px: 2, mt: 4, mb: 4 }}>
+              <MoneyFlowSankey
+                totalExpenses={monthData.total_expenses}
+                categoryTotals={monthData.category_totals}
+                details={monthData.category_expense_details || {}}
+              />
+            </Box>
+          </>
+        )}
+      </motion.div>
 
-                {overallYear ? (
-                  <Paper elevation={2} sx={{ p: 2, mb: 2, ...glass }}>
-                    <Typography variant="h6" sx={{ mb: 1 }}>Monthly Trend</Typography>
-                    <Grid container columns={12}>
-                      <Grid size={{ xs: 12 }}>
-                        <MonthlyTrendLineChart monthlyTrend={data.monthly_trend} />
-                      </Grid>
-                    </Grid>
-                  </Paper>
-                ) : null}
-              </>
-            )}
-          </motion.div>
-        </Grid>
-      </Grid>
+      <AskSheet
+        insight={askInsight}
+        onClose={() => setAskInsight(null)}
+        year={year}
+        month={month}
+      />
     </Box>
   );
 };

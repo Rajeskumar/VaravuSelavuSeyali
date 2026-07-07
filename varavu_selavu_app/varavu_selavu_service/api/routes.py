@@ -39,7 +39,13 @@ from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.auth.routers import router as auth_router
 from varavu_selavu_service.auth.security import auth_required
-from varavu_selavu_service.api.groups_routes import router as groups_router
+from varavu_selavu_service.api.groups_routes import (
+    router as groups_router,
+    get_group_service,
+    get_balance_service,
+)
+from varavu_selavu_service.services.group_service import GroupService
+from varavu_selavu_service.services.balance_service import BalanceService
 from varavu_selavu_service.api.devices_routes import router as devices_router
 from varavu_selavu_service.models.api_models import (
     RecurringTemplateDTO,
@@ -456,6 +462,8 @@ def analysis_chat(
     analysis_service: AnalysisService = Depends(get_analysis_service),
     analytics_service: AnalyticsService = Depends(get_analytics_service),
     insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
+    group_service: GroupService = Depends(get_group_service),
+    balance_service: BalanceService = Depends(get_balance_service),
     user_id: str = Depends(auth_required),
 ):
     """
@@ -463,12 +471,15 @@ def analysis_chat(
     The user is derived from the JWT token for security.
     """
     try:
-        chat_response = call_chat_model(
+        result = call_chat_model(
             messages=body.messages,
             user_id=user_id,
             analysis_service=analysis_service,
             analytics_service=analytics_service,
             insight_service=insight_service,
+            group_service=group_service,
+            balance_service=balance_service,
+            groups_enabled=settings.GROUPS_ENABLED,
             model=body.model,
             provider=body.provider,
             year=body.year,
@@ -476,7 +487,11 @@ def analysis_chat(
             start_date=body.start_date,
             end_date=body.end_date,
         )
-        return {"response": chat_response}
+        return {
+            "response": result.response,
+            "resolved_period": result.resolved_period,
+            "resolved_scope": result.resolved_scope,
+        }
     except HTTPException:
         raise
     except Exception as exc:

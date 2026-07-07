@@ -1,11 +1,11 @@
-import { Box, Button, Card, CardContent, FormControl, InputLabel, MenuItem, Select, TextField, Typography, Chip, Tooltip, IconButton, Paper } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import { Link as RouterLink } from 'react-router-dom';
 import React, { useState, useRef, useEffect } from "react";
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import { Box, Typography, TextField, IconButton } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import SendIcon from '@mui/icons-material/SendRounded';
 import { fetchWithAuth } from '../../api/api';
 import { getModels, ModelsResponse, ModelOption } from '../../api/models';
-import { glassCardSx } from '../../theme';
+import SegmentedTabs from '../common/SegmentedTabs';
+import { typeScale } from '../../theme';
 
 interface AIAnalystChatProps {
   userId: string | null;
@@ -15,34 +15,15 @@ interface AIAnalystChatProps {
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  scope?: string;
 }
 
 const SUGGESTED_PROMPTS = [
-    "What were my top spending categories?",
-    "How much did I spend at Amazon?",
-    "Has the price of milk gone up?",
-    "Where did I buy eggs cheapest?"
+  "What were my top spending categories?",
+  "How much did I spend at Amazon?",
+  "Has the price of milk gone up?",
+  "Where did I buy eggs cheapest?"
 ];
-
-type PeriodMode = 'default' | 'this_month' | 'this_year' | 'all_time' | 'custom';
-
-const PERIOD_LABELS: Record<PeriodMode, string> = {
-  default: 'Last 3 months',
-  this_month: 'This month',
-  this_year: 'This year',
-  all_time: 'All time',
-  custom: 'Custom range',
-};
-
-/** Resolves the UI period mode into the year/month/start_date/end_date fields the chat API expects. */
-function resolvePeriodPayload(mode: PeriodMode, customStart: string, customEnd: string) {
-  const now = new Date();
-  if (mode === 'this_month') return { year: now.getFullYear(), month: now.getMonth() + 1 };
-  if (mode === 'this_year') return { year: now.getFullYear() };
-  if (mode === 'custom' && customStart && customEnd) return { start_date: customStart, end_date: customEnd };
-  if (mode === 'all_time') return { start_date: '1970-01-01', end_date: now.toISOString().slice(0, 10) };
-  return {}; // 'default' — let the backend apply its rolling last-3-months default
-}
 
 export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatProps) {
   const theme = useTheme();
@@ -50,24 +31,16 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
   const [models, setModels] = useState<ModelOption[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<string>("");
-  const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
-  const [periodMode, setPeriodMode] = useState<PeriodMode>('default');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [selectedSpeed, setSelectedSpeed] = useState<'fast' | 'deep'>('fast');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const ac = new AbortController();
     getModels(ac.signal)
       .then((res: ModelsResponse) => {
         setModels(res.models);
-        if (res.models.length > 0) {
-          const firstProv = res.models[0].provider;
-          setSelectedProvider(firstProv);
-          setSelectedModel(res.models[0]);
-        }
       })
       .catch((e) => {
         console.error('Failed to load models', e);
@@ -77,7 +50,7 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  }, [messages, loading, error]);
 
   const autoSubmittedRef = useRef(false);
   useEffect(() => {
@@ -99,14 +72,25 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
     setLoading(true);
     setError(null);
 
+    // Resolve Fast/Deep
+    let targetModel: ModelOption | null = null;
+    if (models.length > 0) {
+      if (selectedSpeed === 'fast') {
+        targetModel = models.find(m => /mini|flash|fast/i.test(m.id)) || models[0];
+      } else {
+        targetModel = models.find(m => /pro|gpt-4o$|deep/i.test(m.id)) || models[models.length - 1];
+      }
+    }
+
     try {
       const res = await fetchWithAuth(`/api/v1/analysis/chat`, {
         method: "POST",
         body: JSON.stringify({
-          messages: newMessages,
-          model: selectedModel ? selectedModel.id : undefined,
-          provider: selectedModel ? selectedModel.provider : undefined,
-          ...resolvePeriodPayload(periodMode, customStart, customEnd),
+          // The API expects {role, content}
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          model: targetModel ? targetModel.id : undefined,
+          provider: targetModel ? targetModel.provider : undefined,
+          // We no longer send manual period/scope. The backend will use its default (e.g. last 3 months).
         }),
       });
 
@@ -116,10 +100,18 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
       }
 
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      setMessages(prev => [
+        ...prev, 
+        { 
+          role: 'assistant', 
+          content: data.response || data.reply,
+          // TODO: Replace this hardcoded placeholder with real scope intent from the backend once implemented.
+          // TS-DES-109: The backend does not currently resolve free-text -> {period, scope}.
+          scope: 'This month · My Expenses'
+        }
+      ]);
     } catch (err: any) {
       const msg = err.message ?? "An error occurred";
-      // Don't surface raw upstream API errors to the user
       const isTechnical = /quota|429|500|502|503|api.key|insufficient/i.test(msg);
       setError(isTechnical ? "The AI analyst is temporarily unavailable. Please try again later." : msg);
     } finally {
@@ -138,20 +130,21 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
 
     const formatInline = (line: string) =>
       line
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>');
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code style="background: rgba(0,0,0,0.05); padding: 2px 4px; border-radius: 4px;">$1</code>');
 
     const flushTable = () => {
       if (table.length === 0) return;
-      const [header, separator, ...rows] = table;
-      const headers = header.split('|').filter(Boolean).map(h => h.trim());
-      let tableHtml = '<table style="border-collapse: collapse; width: 100%; margin-bottom: 10px;"><thead><tr>' + headers.map(h => `<th style="border: 1px solid #ddd; padding: 8px;">${formatInline(h)}</th>`).join('') + '</tr></thead><tbody>';
-      rows.forEach(r => {
+      let tableHtml = '<table style="border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 0.9em;">';
+      const rows = table.filter(r => !/^\s*\|?[-:]+[-|:]+\s*$/.test(r)); // strip separator
+      rows.forEach((r, i) => {
         const cells = r.split('|').filter(Boolean).map(c => c.trim());
-        tableHtml += '<tr>' + cells.map(c => `<td style="border: 1px solid #ddd; padding: 8px;">${formatInline(c)}</td>`).join('') + '</tr>';
+        const tag = i === 0 ? 'th' : 'td';
+        const bg = i === 0 ? 'rgba(0,0,0,0.04)' : 'transparent';
+        tableHtml += '<tr>' + cells.map(c => `<${tag} style="border: 1px solid ${theme.palette.divider}; padding: 8px; background: ${bg}; text-align: left;">${formatInline(c)}</${tag}>`).join('') + '</tr>';
       });
-      tableHtml += '</tbody></table>';
+      tableHtml += '</table>';
       html.push(tableHtml);
       table = [];
     };
@@ -165,7 +158,7 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
       const heading = line.match(/^\s*(#{1,6})\s*(.*)$/);
       if (heading) {
         const level = heading[1].length;
-        html.push(`<h${level} style="margin: 8px 0;">${formatInline(heading[2])}</h${level}>`);
+        html.push(`<h${level} style="margin: 8px 0; font-family: Inter; font-weight: 600;">${formatInline(heading[2])}</h${level}>`);
       } else if (/^\s*[-\*]\s+/.test(line)) {
         const item = line.replace(/^\s*[-\*]\s+/, '');
         html.push(`<p style="margin: 4px 0;">• ${formatInline(item)}</p>`);
@@ -178,195 +171,165 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
   };
 
   return (
-    <Box className="ai-analyst-chat" sx={{ maxWidth: 720, mx: 'auto', p: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Card
-        sx={{
-          ...glassCardSx(theme),
-          animation: 'fadeIn 0.5s ease',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '75vh'
-        }}
-      >
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, p: 2, pb: 1, overflow: 'hidden' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="h6">Ask the AI Analyst</Typography>
-              <Tooltip title="Choose the period this conversation is scoped to — the AI always receives the real expense data for it, not just a guess." arrow>
-                <IconButton size="small">
-                  <InfoOutlinedIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Box>
-            {models.length > 0 && (
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <FormControl size="small" sx={{ minWidth: 120 }}>
-                  <InputLabel id="provider-label">Provider</InputLabel>
-                  <Select
-                    labelId="provider-label"
-                    value={selectedProvider}
-                    label="Provider"
-                    onChange={(e) => {
-                      const prov = e.target.value;
-                      setSelectedProvider(prov);
-                      const firstModel = models.find(m => m.provider === prov);
-                      if (firstModel) setSelectedModel(firstModel);
-                    }}
-                  >
-                    {Array.from(new Set(models.map(m => m.provider))).map(p => (
-                      <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl size="small" sx={{ minWidth: 200 }}>
-                  <InputLabel id="model-label">Model</InputLabel>
-                  <Select
-                    labelId="model-label"
-                    value={selectedModel ? selectedModel.id : ""}
-                    label="Model"
-                    onChange={(e) => {
-                      const found = models.find(m => m.id === e.target.value && m.provider === selectedProvider);
-                      if (found) setSelectedModel(found);
-                    }}
-                  >
-                    {models.filter(m => m.provider === selectedProvider).map((m) => (
-                      <MenuItem key={`${m.provider}-${m.id}`} value={m.id}>{m.id}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            )}
-          </Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header */}
+      <Box sx={{ px: 3, pt: 3, pb: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
+          AI Analyst
+        </Typography>
+        <Box sx={{ width: 140 }}>
+          <SegmentedTabs
+            options={[
+              { value: 'fast', label: 'Fast' },
+              { value: 'deep', label: 'Deep' }
+            ]}
+            value={selectedSpeed}
+            onChange={(v) => setSelectedSpeed(v as 'fast' | 'deep')}
+            size="small"
+            fullWidth
+          />
+        </Box>
+      </Box>
 
-          {/* Period selector — controls what expense data the AI receives by default */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <InputLabel id="period-label">Period</InputLabel>
-              <Select
-                labelId="period-label"
-                value={periodMode}
-                label="Period"
-                onChange={(e) => setPeriodMode(e.target.value as PeriodMode)}
-              >
-                {(Object.keys(PERIOD_LABELS) as PeriodMode[]).map((mode) => (
-                  <MenuItem key={mode} value={mode}>{PERIOD_LABELS[mode]}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {periodMode === 'custom' && (
-              <>
-                <TextField
-                  size="small"
-                  type="date"
-                  label="From"
-                  InputLabelProps={{ shrink: true }}
-                  value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                />
-                <TextField
-                  size="small"
-                  type="date"
-                  label="To"
-                  InputLabelProps={{ shrink: true }}
-                  value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                />
-              </>
-            )}
-          </Box>
-
-          {/* Chat History Area */}
-          <Box sx={{ flexGrow: 1, overflowY: 'auto', mb: 2, display: 'flex', flexDirection: 'column', gap: 2, pr: 1 }}>
-            {messages.length === 0 ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.6 }}>
-                <Typography variant="body1">Start a conversation by asking a question below.</Typography>
-              </Box>
-            ) : (
-              messages.map((msg, idx) => (
-                <Box key={idx} sx={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 1.5,
-                      px: 2,
-                      maxWidth: '85%',
-                      borderRadius: 1.3,
-                      bgcolor: msg.role === 'user' ? 'primary.main' : 'background.paper',
-                      color: msg.role === 'user' ? 'primary.contrastText' : 'text.primary',
-                      border: msg.role === 'assistant' ? '1px solid rgba(0,0,0,0.1)' : 'none'
-                    }}
-                  >
-                    {msg.role === 'user' ? (
-                      <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{msg.content}</Typography>
-                    ) : (
-                      <div
-                        style={{ fontSize: 16 }}
-                        dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
-                      />
-                    )}
-                  </Paper>
+      {/* Messages */}
+      <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {messages.length === 0 && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <Typography sx={{ fontFamily: 'Inter', fontSize: 14, color: 'text.secondary', lineHeight: 1.5 }}>
+              Ask anything about your spending — I'll figure out the right period, and whether to
+              include group expenses, from what you ask.
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {SUGGESTED_PROMPTS.map((p, idx) => (
+                <Box
+                  key={idx}
+                  component="button"
+                  onClick={() => handleChipClick(p)}
+                  sx={{
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    color: 'text.primary',
+                    backgroundColor: 'background.paper',
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: 2.5,
+                    padding: '12px 16px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    transition: 'background-color 0.2s',
+                    '&:hover': {
+                      backgroundColor: 'action.hover',
+                    }
+                  }}
+                >
+                  {p}
                 </Box>
-              ))
-            )}
-            {loading && (
-              <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <Paper elevation={0} sx={{ p: 1.5, px: 2, borderRadius: 1.3, bgcolor: 'background.paper', border: '1px solid rgba(0,0,0,0.1)' }}>
-                  <Typography variant="body2" color="text.secondary">Thinking...</Typography>
-                </Paper>
-              </Box>
-            )}
-            <div ref={messagesEndRef} />
-          </Box>
-
-          {error && <Typography color="error" sx={{ mb: 1, fontSize: '0.85rem' }}>{error}</Typography>}
-
-          {/* Input Area */}
-          <Box
-            component="form"
-            onSubmit={handleSubmit}
-            sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 'auto' }}
-          >
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
-              {SUGGESTED_PROMPTS.map((prompt, i) => (
-                <Chip
-                  key={i}
-                  label={prompt}
-                  onClick={() => handleChipClick(prompt)}
-                  disabled={loading}
-                  variant="outlined"
-                  size="small"
-                  sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' } }}
-                />
               ))}
             </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={"Ask about a merchant, item price, or where you got the best deal..."}
-                fullWidth
-                size="small"
-                autoComplete="off"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                }}
-              />
-              <Button type="submit" variant="contained" disabled={loading || !query.trim()}>
-                Send
-              </Button>
+          </Box>
+        )}
+
+        {messages.map((m, i) => (
+          <Box key={i} sx={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            <Box
+              sx={{
+                maxWidth: '85%',
+                backgroundColor: m.role === 'user' ? 'text.primary' : 'background.paper',
+                border: m.role === 'user' ? 'none' : `1px solid ${theme.palette.divider}`,
+                color: m.role === 'user' ? 'background.paper' : 'text.primary',
+                borderRadius: 3,
+                borderBottomRightRadius: m.role === 'user' ? 1 : 3,
+                borderBottomLeftRadius: m.role === 'assistant' ? 1 : 3,
+                px: 2,
+                py: 1.5,
+                fontFamily: 'Inter',
+                fontSize: 14,
+                lineHeight: 1.5,
+                whiteSpace: m.role === 'user' ? 'pre-wrap' : 'normal'
+              }}
+            >
+              {m.role === 'user' ? (
+                m.content
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: formatMarkdown(m.content) }} />
+              )}
             </Box>
-            <Typography variant="caption" color="text.secondary">
-              Prefer browsing instead of asking?{' '}
-              <RouterLink to="/item-insights" style={{ color: 'inherit' }}>Item Insights</RouterLink>
-              {' · '}
-              <RouterLink to="/merchant-insights" style={{ color: 'inherit' }}>Merchant Insights</RouterLink>
+            
+            {m.role === 'assistant' && m.scope && (
+              <Typography sx={{ fontFamily: 'Inter', fontSize: 11, color: 'text.secondary', mt: 1, ml: 0.5 }}>
+                Looked at: {m.scope}
+              </Typography>
+            )}
+          </Box>
+        ))}
+
+        {loading && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+            <Box
+              sx={{
+                backgroundColor: 'background.paper',
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: 3,
+                borderBottomLeftRadius: 1,
+                px: 2,
+                py: 1.5,
+                fontFamily: 'Inter',
+                fontSize: 14,
+                color: 'text.secondary'
+              }}
+            >
+              Thinking…
+            </Box>
+          </Box>
+        )}
+
+        {error && (
+          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Typography color="error" sx={{ fontFamily: 'Inter', fontSize: 13 }}>
+              {error}
             </Typography>
           </Box>
-        </CardContent>
-      </Card>
+        )}
+        <div ref={messagesEndRef} />
+      </Box>
+
+      {/* Input */}
+      <Box sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <TextField
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
+          placeholder="Ask about your spending…"
+          fullWidth
+          size="small"
+          disabled={loading}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              borderRadius: 999,
+              fontFamily: 'Inter',
+              fontSize: 14,
+              backgroundColor: 'background.paper',
+            }
+          }}
+        />
+        <IconButton 
+          onClick={handleSubmit} 
+          disabled={!query.trim() || loading}
+          sx={{ 
+            bgcolor: 'primary.main', 
+            color: 'primary.contrastText',
+            '&:hover': { bgcolor: 'primary.dark' },
+            '&.Mui-disabled': { bgcolor: 'action.disabledBackground', color: 'action.disabled' }
+          }}
+        >
+          <SendIcon fontSize="small" sx={{ ml: 0.5 }} />
+        </IconButton>
+      </Box>
     </Box>
   );
 }
