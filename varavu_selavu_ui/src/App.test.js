@@ -6,6 +6,8 @@ jest.mock('heic2any', () => ({
 
 test('renders app title', () => {
   render(<App />);
-  const title = screen.getByText(/TrackSpense/i);
-  expect(title).toBeInTheDocument();
+  // HomePage (unauthenticated landing) renders "TrackSpense" in both the header
+  // logo and the "Try TrackSpense free" CTA, so multiple matches are expected.
+  const titles = screen.getAllByText(/TrackSpense/i);
+  expect(titles.length).toBeGreaterThan(0);
 });

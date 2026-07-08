@@ -2,15 +2,18 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
+import { listGroups, getGroupDetail, moveExpenseToGroup, GroupSummary, ApiError } from '../api/groups';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import Card from '../components/Card';
 import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
+import SplitEditor, { SplitEditorValue } from '../components/SplitEditor';
 import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
@@ -47,6 +50,33 @@ export default function ExpensesScreen() {
     const [editSubcategory, setEditSubcategory] = useState(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
     const [editDate, setEditDate] = useState('');
     const [editMerchantName, setEditMerchantName] = useState('');
+
+    // TS-GRP-121: Move-to-group modal state
+    const [moveModalVisible, setMoveModalVisible] = useState(false);
+    const [movingExpense, setMovingExpense] = useState<ExpenseRecord | null>(null);
+    const [moveGroupId, setMoveGroupId] = useState<string | null>(null);
+    const [moveSplit, setMoveSplit] = useState<SplitEditorValue>({ type: 'equal', entries: [] });
+    const [moving, setMoving] = useState(false);
+
+    const { data: groupsData } = useQuery({
+        queryKey: ['groups'],
+        queryFn: () => listGroups(),
+        retry: (count, err) => (err instanceof ApiError && err.status === 404 ? false : count < 1),
+        staleTime: 60_000,
+    });
+    const groupsEnabled = Array.isArray(groupsData);
+    const myGroups: GroupSummary[] = groupsData ?? [];
+
+    const { data: moveGroupDetail } = useQuery({
+        queryKey: ['group-detail-for-move', moveGroupId],
+        queryFn: () => getGroupDetail(moveGroupId as string),
+        enabled: !!moveGroupId,
+    });
+
+    useEffect(() => {
+        if (!moveGroupDetail) return;
+        setMoveSplit({ type: 'equal', entries: moveGroupDetail.members.map((m) => ({ member_id: m.member_id })) });
+    }, [moveGroupDetail]);
 
     const fetchExpenses = async (reset = false) => {
         if (!accessToken || !userEmail) return;
@@ -121,6 +151,34 @@ export default function ExpensesScreen() {
         setEditModalVisible(true);
     };
 
+    const openMoveModal = (expense: ExpenseRecord) => {
+        setMovingExpense(expense);
+        setMoveGroupId(null);
+        setMoveSplit({ type: 'equal', entries: [] });
+        setMoveModalVisible(true);
+    };
+
+    const handleMove = async () => {
+        if (!movingExpense || !moveGroupId) return;
+        setMoving(true);
+        try {
+            await moveExpenseToGroup(movingExpense.row_id, {
+                group_id: moveGroupId,
+                split: { type: moveSplit.type, entries: moveSplit.entries },
+            });
+            setMoveModalVisible(false);
+            showToast({ message: 'Expense moved to group', type: 'success' });
+            fetchExpenses(true);
+        } catch (error) {
+            showToast({
+                message: error instanceof ApiError ? error.message : 'Failed to move expense to group',
+                type: 'error',
+            });
+        } finally {
+            setMoving(false);
+        }
+    };
+
     const saveEdit = async () => {
         if (!editingExpense || !accessToken || !userEmail) return;
         try {
@@ -176,6 +234,11 @@ export default function ExpensesScreen() {
                         <TouchableOpacity onPress={() => handleEdit(item)} style={styles.actionBtn} activeOpacity={0.7}>
                             <Text style={styles.editText}>✏️</Text>
                         </TouchableOpacity>
+                        {groupsEnabled && (
+                            <TouchableOpacity onPress={() => openMoveModal(item)} style={styles.actionBtn} activeOpacity={0.7}>
+                                <Text style={styles.editText}>🔀</Text>
+                            </TouchableOpacity>
+                        )}
                         <TouchableOpacity
                             onPress={() => handleDelete(item.row_id)}
                             style={[styles.actionBtn, styles.deleteBtn]}
@@ -305,6 +368,55 @@ export default function ExpensesScreen() {
                             <CustomButton
                                 title="Save Changes"
                                 onPress={saveEdit}
+                                fullWidth={false}
+                                style={{ flex: 1 }}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Move to Group Modal (TS-GRP-121) */}
+            <Modal visible={moveModalVisible} animationType="fade" transparent>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Move to Group</Text>
+
+                        <Text style={styles.pickerLabel}>👥  Group</Text>
+                        <ScrollView style={{ maxHeight: 160 }} showsVerticalScrollIndicator={false}>
+                            {myGroups.map((g) => (
+                                <TouchableOpacity
+                                    key={g.group_id}
+                                    style={[styles.pickerChip, moveGroupId === g.group_id && styles.pickerChipActive, { marginBottom: 8 }]}
+                                    onPress={() => setMoveGroupId(g.group_id)}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={[styles.pickerChipText, moveGroupId === g.group_id && styles.pickerChipTextActive]}>{g.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+
+                        {moveGroupDetail && movingExpense && (
+                            <SplitEditor
+                                members={moveGroupDetail.members}
+                                totalAmount={movingExpense.cost}
+                                value={moveSplit}
+                                onChange={setMoveSplit}
+                            />
+                        )}
+
+                        <View style={styles.modalButtons}>
+                            <CustomButton
+                                title="Cancel"
+                                variant="ghost"
+                                onPress={() => setMoveModalVisible(false)}
+                                fullWidth={false}
+                                style={{ flex: 1, marginRight: 10 }}
+                            />
+                            <CustomButton
+                                title={moving ? 'Moving…' : 'Move'}
+                                onPress={handleMove}
+                                disabled={!moveGroupId || moving}
                                 fullWidth={false}
                                 style={{ flex: 1 }}
                             />

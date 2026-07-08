@@ -6,7 +6,7 @@
  * splits without changing GroupDetailScreen or AddExpenseScreen.
  */
 import React from 'react';
-import { View, Text, StyleSheet, Switch } from 'react-native';
+import { View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { MemberDTO } from '../api/groups';

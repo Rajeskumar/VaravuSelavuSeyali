@@ -6,7 +6,7 @@ from sqlalchemy import func, extract, Integer
 import time
 from threading import RLock
 
-from varavu_selavu_service.db.models import Expense, ExpenseItem, RecurringTemplate
+from varavu_selavu_service.db.models import Expense, ExpenseItem, GroupMember, RecurringTemplate
 from varavu_selavu_service.models.api_models import InsightMetrics, MerchantInsightSummary, ItemInsightSummary, ChangeInsight
 
 
@@ -148,9 +148,12 @@ class InsightAnalyticsService:
         self, user_id: str, start_date: str | None, end_date: str | None
     ) -> Dict[str, float]:
         """Canonicalized merchant -> total_spent lookup for a raw date range (no year/month precedence)."""
+        # group_id.is_(None): personal-only, same guard AnalysisService established
+        # (TS-GRP-106) — without it a user's own group expenses would be counted
+        # here at their *full* amount on top of actual personal spend.
         canon_key = func.lower(func.trim(Expense.merchant_name))
         query = self.db.query(canon_key, func.sum(Expense.amount)).filter(
-            Expense.user_email == user_id, Expense.merchant_name != None
+            Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name != None
         )
         if start_date:
             query = query.filter(Expense.purchased_at >= start_date)
@@ -165,7 +168,7 @@ class InsightAnalyticsService:
         query = (
             self.db.query(ExpenseItem.normalized_name, func.avg(ExpenseItem.unit_price))
             .join(Expense, ExpenseItem.expense_id == Expense.id)
-            .filter(Expense.user_email == user_id, ExpenseItem.normalized_name != None)
+            .filter(Expense.user_email == user_id, Expense.group_id.is_(None), ExpenseItem.normalized_name != None)
         )
         if start_date:
             query = query.filter(Expense.purchased_at >= start_date)
@@ -201,6 +204,7 @@ class InsightAnalyticsService:
                 func.max(Expense.purchased_at).label("last_seen"),
             )
             .filter(Expense.user_email == user_id)
+            .filter(Expense.group_id.is_(None))
             .filter(Expense.merchant_name != None)
             .filter(*date_filters)
             .group_by(canon_key)
@@ -276,6 +280,7 @@ class InsightAnalyticsService:
                 func.count(Expense.id)
             )
             .filter(Expense.user_email == user_id)
+            .filter(Expense.group_id.is_(None))
             .filter(Expense.merchant_name == merchant_name)
             .filter(*date_filters)
             .group_by(yr_col, mo_col)
@@ -312,10 +317,11 @@ class InsightAnalyticsService:
             )
             .join(Expense, ExpenseItem.expense_id == Expense.id)
             .filter(Expense.user_email == user_id)
+            .filter(Expense.group_id.is_(None))
             .filter(Expense.merchant_name == merchant_name)
             .filter(*date_filters)
         )
-        
+
         items_map: Dict[str, Dict[str, Any]] = {}
         for row in items_query.all():
             name = row[0] or row[1] or "Unknown"
@@ -342,7 +348,7 @@ class InsightAnalyticsService:
         # Recent transactions + biggest single transaction, within the same scope
         recent_expenses = (
             self.db.query(Expense)
-            .filter(Expense.user_email == user_id, Expense.merchant_name == merchant_name)
+            .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name == merchant_name)
             .filter(*date_filters)
             .order_by(Expense.purchased_at.desc())
             .limit(10)
@@ -359,7 +365,7 @@ class InsightAnalyticsService:
 
         highest_expense = (
             self.db.query(Expense)
-            .filter(Expense.user_email == user_id, Expense.merchant_name == merchant_name)
+            .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name == merchant_name)
             .filter(*date_filters)
             .order_by(Expense.amount.desc())
             .first()
@@ -376,7 +382,7 @@ class InsightAnalyticsService:
         # Spend share vs. all merchants in the same scope
         total_all_merchants = float(
             self.db.query(func.sum(Expense.amount))
-            .filter(Expense.user_email == user_id, Expense.merchant_name != None)
+            .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name != None)
             .filter(*date_filters)
             .scalar()
             or 0
@@ -441,6 +447,7 @@ class InsightAnalyticsService:
             )
             .join(Expense, ExpenseItem.expense_id == Expense.id)
             .filter(Expense.user_email == user_id)
+            .filter(Expense.group_id.is_(None))
             .filter(ExpenseItem.normalized_name != None)
             .filter(*date_filters)
             .group_by(ExpenseItem.normalized_name)
@@ -528,8 +535,9 @@ class InsightAnalyticsService:
             )
             .join(Expense, ExpenseItem.expense_id == Expense.id)
             .filter(Expense.user_email == user_id)
+            .filter(Expense.group_id.is_(None))
             .filter(
-                (ExpenseItem.normalized_name == item_name) | 
+                (ExpenseItem.normalized_name == item_name) |
                 (ExpenseItem.item_name == item_name)
             )
             .filter(*date_filters)
@@ -670,6 +678,23 @@ class InsightAnalyticsService:
 
         return None
         
+    def _group_scope_suffix(self, user_id: str) -> str:
+        """TS-GRP-134: merchant/item change insights are built from
+        MerchantInsight/ItemInsight aggregates, which (per TS-GRP-123) blend
+        personal spend with the user's group-expense shares. There's no cheap
+        way to say *how much* of a given merchant/item's total came from a
+        group without new bookkeeping, so — matching spec §9.2's "card copy
+        must state scope" requirement — this appends an honest, general
+        disclosure whenever the user belongs to any active group, rather than
+        silently presenting a blended number as purely personal."""
+        has_group = (
+            self.db.query(GroupMember.id)
+            .filter(GroupMember.user_email == user_id, GroupMember.status == "active")
+            .first()
+            is not None
+        )
+        return " (includes your share of group expenses)" if has_group else ""
+
     def calculate_change_insights(
         self,
         user_id: str,
@@ -716,13 +741,14 @@ class InsightAnalyticsService:
                 break # Only show one new merchant to avoid noise
                 
         merchant_diffs.sort(key=lambda x: x[3], reverse=True)
+        group_suffix = self._group_scope_suffix(user_id)
         if merchant_diffs:
             # Biggest Increase
             biggest_inc = merchant_diffs[0]
             if biggest_inc[3] > 0 and biggest_inc[2] > 0: # make sure it's an increase and not a new merchant which is handled above
                 pct = (biggest_inc[3] / biggest_inc[2]) * 100
                 insights.append(ChangeInsight(
-                    metric_name=f"Spend Increased at {biggest_inc[0]}",
+                    metric_name=f"Spend Increased at {biggest_inc[0]}{group_suffix}",
                     previous_value=biggest_inc[2],
                     current_value=biggest_inc[1],
                     change_amount=biggest_inc[3],
@@ -730,13 +756,13 @@ class InsightAnalyticsService:
                     time_scope="merchant",
                     entity_name=biggest_inc[0],
                 ))
-                
+
             # Biggest Decrease
             biggest_dec = merchant_diffs[-1]
             if biggest_dec[3] < 0 and biggest_dec[2] > 0:
                 pct = (biggest_dec[3] / biggest_dec[2]) * 100
                 insights.append(ChangeInsight(
-                    metric_name=f"Spend Decreased at {biggest_dec[0]}",
+                    metric_name=f"Spend Decreased at {biggest_dec[0]}{group_suffix}",
                     previous_value=biggest_dec[2],
                     current_value=biggest_dec[1],
                     change_amount=biggest_dec[3],
@@ -746,11 +772,14 @@ class InsightAnalyticsService:
                 ))
 
         # 2. Biggest Category Increase
-        curr_cat_query = self.db.query(Expense.category_id, func.sum(Expense.amount)).filter(Expense.user_email == user_id, Expense.purchased_at >= cs_str)
+        # group_id.is_(None) guard: without it, a user's own group expenses would be
+        # double-counted here at their *full* amount on top of whatever their actual
+        # personal spend is (same class of bug TS-GRP-106 fixed in AnalysisService).
+        curr_cat_query = self.db.query(Expense.category_id, func.sum(Expense.amount)).filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.purchased_at >= cs_str)
         if ce_str: curr_cat_query = curr_cat_query.filter(Expense.purchased_at <= ce_str)
         curr_cats = {r[0]: float(r[1] or 0) for r in curr_cat_query.group_by(Expense.category_id).all()}
-        
-        prev_cat_query = self.db.query(Expense.category_id, func.sum(Expense.amount)).filter(Expense.user_email == user_id, Expense.purchased_at >= ps_str)
+
+        prev_cat_query = self.db.query(Expense.category_id, func.sum(Expense.amount)).filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.purchased_at >= ps_str)
         if pe_str: prev_cat_query = prev_cat_query.filter(Expense.purchased_at <= pe_str)
         prev_cats = {r[0]: float(r[1] or 0) for r in prev_cat_query.group_by(Expense.category_id).all()}
         
@@ -805,7 +834,7 @@ class InsightAnalyticsService:
         # transaction if it's a real outlier against the user's own history, not
         # just "the biggest one so far" (which would fire every period).
         baseline_query = self.db.query(func.avg(Expense.amount), func.count(Expense.id)).filter(
-            Expense.user_email == user_id, Expense.purchased_at < cs_str
+            Expense.user_email == user_id, Expense.group_id.is_(None), Expense.purchased_at < cs_str
         )
         baseline_avg, baseline_count = baseline_query.one()
         baseline_avg = float(baseline_avg or 0)
@@ -814,7 +843,7 @@ class InsightAnalyticsService:
         if baseline_count >= 5 and baseline_avg > 0:
             curr_largest_query = (
                 self.db.query(Expense.amount, Expense.merchant_name, Expense.description)
-                .filter(Expense.user_email == user_id, Expense.purchased_at >= cs_str)
+                .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.purchased_at >= cs_str)
             )
             if ce_str:
                 curr_largest_query = curr_largest_query.filter(Expense.purchased_at <= ce_str)
@@ -838,9 +867,15 @@ class InsightAnalyticsService:
         # 5. Recurring Bill Increase — compare each active recurring template's
         # actual spend this period against last period, keyed by description
         # (the field recurring_service.py stamps onto the created Expense row).
+        # Personal-only: a group recurring template's bill lives on a group expense
+        # (group_id set) and belongs in that group's own change insights, not here.
         active_templates = (
             self.db.query(RecurringTemplate)
-            .filter(RecurringTemplate.user_email == user_id, RecurringTemplate.status == "Active")
+            .filter(
+                RecurringTemplate.user_email == user_id,
+                RecurringTemplate.status == "Active",
+                RecurringTemplate.group_id.is_(None),
+            )
             .all()
         )
 
@@ -848,6 +883,7 @@ class InsightAnalyticsService:
         for tpl in active_templates:
             curr_tpl_query = self.db.query(func.sum(Expense.amount)).filter(
                 Expense.user_email == user_id,
+                Expense.group_id.is_(None),
                 Expense.description == tpl.description,
                 Expense.purchased_at >= cs_str,
             )
@@ -857,6 +893,7 @@ class InsightAnalyticsService:
 
             prev_tpl_query = self.db.query(func.sum(Expense.amount)).filter(
                 Expense.user_email == user_id,
+                Expense.group_id.is_(None),
                 Expense.description == tpl.description,
                 Expense.purchased_at >= ps_str,
             )

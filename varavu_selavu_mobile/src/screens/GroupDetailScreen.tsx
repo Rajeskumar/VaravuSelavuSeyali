@@ -43,6 +43,7 @@ import BalanceRow from '../components/BalanceRow';
 import SettleUpSheet from '../components/SettleUpSheet';
 import GroupSettingsSheet from '../components/GroupSettingsSheet';
 import ActivityList from '../components/ActivityList';
+import ExpenseDetailSheet from '../components/ExpenseDetailSheet';
 import { showToast } from '../components/Toast';
 
 type Tab = 'expenses' | 'balances' | 'activity';
@@ -72,6 +73,7 @@ export default function GroupDetailScreen() {
   const [settleSuggested, setSettleSuggested] = useState(0);
 
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<GroupExpenseRow | null>(null);
 
   // Invite dialog state
   const [inviteVisible, setInviteVisible] = useState(false);
@@ -164,7 +166,7 @@ export default function GroupDetailScreen() {
       .join(', ');
 
     return (
-      <View style={styles.expenseCard}>
+      <TouchableOpacity style={styles.expenseCard} onPress={() => setSelectedExpense(item)} activeOpacity={0.7}>
         <View style={styles.expenseIcon}>
           <Ionicons name="receipt-outline" size={18} color={theme.colors.textSecondary} />
         </View>
@@ -174,13 +176,14 @@ export default function GroupDetailScreen() {
           </Text>
           <Text style={styles.expenseMeta}>
             {item.date} · paid by {payerNames}
+            {item.currency && item.currency !== detail?.currency ? ` · ${item.currency}` : ''}
           </Text>
         </View>
         <View style={styles.expenseRight}>
           <Text style={styles.expenseTotal}>${item.cost.toFixed(2)}</Text>
           <Text style={styles.expenseShare}>your share ${item.my_share.toFixed(2)}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -345,6 +348,20 @@ export default function GroupDetailScreen() {
       />
 
       <GroupSettingsSheet visible={settingsVisible} onClose={() => setSettingsVisible(false)} group={detail} />
+
+      <ExpenseDetailSheet
+        visible={!!selectedExpense}
+        onClose={() => setSelectedExpense(null)}
+        groupId={groupId}
+        expense={selectedExpense}
+        members={members}
+        myMemberId={myMember?.member_id}
+        onSettled={() => {
+          qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
+          qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+          setSelectedExpense(null);
+        }}
+      />
 
       <Modal visible={inviteVisible} transparent animationType="slide" onRequestClose={() => setInviteVisible(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setInviteVisible(false)} />

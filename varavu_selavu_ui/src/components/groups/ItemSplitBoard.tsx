@@ -8,7 +8,7 @@ import Checkbox from '@mui/material/Checkbox';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
 import { useTheme } from '@mui/material/styles';
-import { MemberDTO, GroupExpenseItemEntry } from '../../api/groups';
+import { MemberDTO, GroupExpenseItemEntry, SplitSuggestionDTO, suggestItemAssignment } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 
 interface ItemSplitBoardProps {
@@ -16,6 +16,10 @@ interface ItemSplitBoardProps {
   members: MemberDTO[];
   onChange: (items: GroupExpenseItemEntry[]) => void;
   onValidityChange?: (valid: boolean) => void;
+  /** TS-GRP-133: when provided, unassigned items are checked against group
+   * history ("Alice usually buys the oat milk") and a suggestion chip is
+   * offered — clicking it only pre-fills the assignment, never auto-submits. */
+  groupId?: string;
 }
 
 const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
@@ -23,8 +27,23 @@ const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
   members,
   onChange,
   onValidityChange,
+  groupId,
 }) => {
   const theme = useTheme();
+  const [suggestions, setSuggestions] = React.useState<Record<string, SplitSuggestionDTO[]>>({});
+
+  React.useEffect(() => {
+    if (!groupId) return;
+    items.forEach((item) => {
+      const key = item.normalized_name || item.item_name;
+      if (Object.keys(item.member_ratios).length > 0) return; // already assigned
+      if (suggestions[key] !== undefined) return; // already fetched (or empty)
+      suggestItemAssignment(groupId, key)
+        .then((s) => setSuggestions((prev) => ({ ...prev, [key]: s })))
+        .catch(() => setSuggestions((prev) => ({ ...prev, [key]: [] })));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId, items]);
 
   // Validate: every item must have at least one assigned member with a ratio > 0
   const isValid = items.every((item) => {
@@ -112,6 +131,22 @@ const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
                 );
               })}
             </Box>
+
+            {!hasAssignment && (() => {
+              const key = item.normalized_name || item.item_name;
+              const top = suggestions[key]?.[0];
+              if (!top) return null;
+              return (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color="secondary"
+                  label={`Suggested: ${top.display_name}`}
+                  onClick={() => toggleMemberForItem(item.line_no, top.member_id, true)}
+                  sx={{ mb: 1 }}
+                />
+              );
+            })()}
 
             {/* Custom Ratio Tuning */}
             {assignedIds.length > 1 && (

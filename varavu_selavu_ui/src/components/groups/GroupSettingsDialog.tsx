@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -11,8 +11,18 @@ import {
   Box,
   Divider,
 } from '@mui/material';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import { GroupDetailResponse, ApiError } from '../../api/groups';
-import { updateGroup, archiveGroup, unarchiveGroup, restoreGroup, deleteGroup } from '../../api/groups';
+import {
+  updateGroup,
+  archiveGroup,
+  unarchiveGroup,
+  restoreGroup,
+  deleteGroup,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  exportGroupCsv,
+} from '../../api/groups';
 import SplitEditor, { SplitEditorValue } from './SplitEditor';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -31,7 +41,41 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const [simplifyDebts, setSimplifyDebts] = useState(group.simplify_debts);
-  
+
+  // TS-GRP-125: notification preferences — self-scoped, saved immediately on
+  // toggle (independent of the "Save" button below, which only covers
+  // group-level settings the admin controls).
+  const [muted, setMuted] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    getNotificationPreferences(group.group_id)
+      .then((p) => {
+        setMuted(p.muted);
+        setPrefsLoaded(true);
+      })
+      .catch(() => setPrefsLoaded(true));
+  }, [open, group.group_id]);
+
+  const handleToggleMuted = async (checked: boolean) => {
+    setMuted(checked);
+    try {
+      await updateNotificationPreferences(group.group_id, { muted: checked });
+    } catch (e) {
+      setMuted(!checked);
+      setToast({ open: true, message: 'Failed to update notification preference', severity: 'error' });
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      await exportGroupCsv(group.group_id, group.name);
+    } catch (e) {
+      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to export group', severity: 'error' });
+    }
+  };
+
+
   const defaultSplitVal: SplitEditorValue = group.default_split 
     ? { type: group.default_split.split_type, entries: group.default_split.entries }
     : { type: 'equal', entries: [] };
@@ -86,7 +130,39 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
         </Box>
         
         <Divider sx={{ my: 3 }} />
-        
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom>Notifications</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Mute push notifications for this group. This only affects you — other members are unaffected.
+          </Typography>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={muted}
+                disabled={!prefsLoaded}
+                onChange={(e) => handleToggleMuted(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Mute this group"
+          />
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom>Export</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Download every expense and settlement in this group as a CSV file.
+          </Typography>
+          <Button variant="outlined" startIcon={<FileDownloadRoundedIcon />} onClick={handleExport}>
+            Export CSV
+          </Button>
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
         <Box>
           <Typography variant="h6" gutterBottom>Default Split</Typography>
           <Typography variant="body2" color="text.secondary" gutterBottom>

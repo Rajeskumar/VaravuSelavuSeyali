@@ -5,6 +5,7 @@ import {
     ActivityIndicator,
     ViewStyle,
     TextStyle,
+    StyleProp,
 } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
@@ -18,8 +19,8 @@ interface CustomButtonProps {
     variant?: ButtonVariant;
     loading?: boolean;
     disabled?: boolean;
-    style?: ViewStyle;
-    textStyle?: TextStyle;
+    style?: StyleProp<ViewStyle>;
+    textStyle?: StyleProp<TextStyle>;
     icon?: string;
     fullWidth?: boolean;
 }

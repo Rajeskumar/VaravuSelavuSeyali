@@ -440,6 +440,16 @@ class GroupExpenseRequest(BaseModel):
     merchant_name: Optional[str] = None
     payers: List[GroupExpensePayerEntry]
     split: GroupSplitConfig
+    # TS-GRP-131: currency this expense was actually paid in. None/omitted means
+    # "same as the group's currency" (the common case — no FX lookup needed).
+    currency: Optional[str] = None
+
+
+class MoveToGroupRequest(BaseModel):
+    """TS-GRP-121: converts an existing personal expense into a group expense
+    in place. The converter becomes sole payer by default (E11)."""
+    group_id: str
+    split: GroupSplitConfig
 
 
 class GroupExpenseItemEntry(BaseModel):
@@ -465,6 +475,7 @@ class GroupExpenseWithItemsRequest(BaseModel):
     merchant_name: Optional[str] = None
     payers: List[GroupExpensePayerEntry]
     items: List[GroupExpenseItemEntry]
+    currency: Optional[str] = None
 
 
 class GroupExpenseWithItemsResponse(BaseModel):
@@ -487,6 +498,8 @@ class GroupExpenseRow(BaseModel):
     merchant_name: Optional[str] = None
     my_share: float
     payer_summary: List[PayerSummaryItem]
+    currency: Optional[str] = None
+    fx_rate_to_group_currency: Optional[float] = None
 
 
 class GroupExpenseCreatedResponse(BaseModel):
@@ -503,6 +516,11 @@ class MemberBalance(BaseModel):
     member_id: str
     display_name: str
     net: float
+    # TS-GRP-130: only populated for registered members, so the web/mobile
+    # SettleUpDialog can offer a payment deep-link button.
+    venmo_handle: Optional[str] = None
+    paypal_handle: Optional[str] = None
+    upi_id: Optional[str] = None
 
 
 class BalanceTransfer(BaseModel):
@@ -542,4 +560,105 @@ class SendEmailRequest(BaseModel):
 class SendEmailResponse(BaseModel):
     success: bool
     message: str = "Email sent"
+
+
+# ---------------------- Notification preferences (TS-GRP-125) ---------------------- #
+
+class GroupNotificationPreferenceDTO(BaseModel):
+    group_id: str
+    muted: bool
+    muted_events: List[str]
+
+
+class UpdateNotificationPreferenceRequest(BaseModel):
+    muted: Optional[bool] = None
+    muted_events: Optional[List[str]] = None
+
+
+# ---------------------- Expense comments (TS-GRP-126) ---------------------- #
+
+class AddCommentRequest(BaseModel):
+    body: str
+
+
+class ExpenseCommentDTO(BaseModel):
+    id: str
+    expense_id: str
+    member_id: str
+    author_display_name: str
+    body: str
+    created_at: str
+    edited_at: Optional[str] = None
+
+
+class ExpenseCommentListResponse(BaseModel):
+    items: List[ExpenseCommentDTO]
+
+
+# ---------------------- Expense edit history (TS-GRP-127) ---------------------- #
+
+class ExpenseHistoryEntryDTO(BaseModel):
+    action: str
+    actor_display_name: str
+    changed_fields: Dict[str, Any]
+    created_at: str
+
+
+class ExpenseHistoryResponse(BaseModel):
+    items: List[ExpenseHistoryEntryDTO]
+
+
+# ---------------------- Cross-group friend balances (TS-GRP-128) ---------------------- #
+
+class FriendBalanceGroupBreakdown(BaseModel):
+    group_id: str
+    name: str
+    net: float
+
+
+class FriendBalanceDTO(BaseModel):
+    counterparty_email: Optional[str] = None
+    counterparty_display_name: str
+    net: float
+    groups: List[FriendBalanceGroupBreakdown]
+
+
+class FriendBalancesResponse(BaseModel):
+    balances: List[FriendBalanceDTO]
+
+
+# ---------------------- Settle-by-expense (TS-GRP-129) ---------------------- #
+
+class SettleExpenseShareRequest(BaseModel):
+    member_id: str
+    payer_member_id: Optional[str] = None
+    method: Optional[str] = None
+    notes: Optional[str] = None
+
+
+# ---------------------- Payment deep links (TS-GRP-130) ---------------------- #
+
+class PaymentHandlesDTO(BaseModel):
+    venmo_handle: Optional[str] = None
+    paypal_handle: Optional[str] = None
+    upi_id: Optional[str] = None
+
+
+class UpdatePaymentHandlesRequest(BaseModel):
+    venmo_handle: Optional[str] = None
+    paypal_handle: Optional[str] = None
+    upi_id: Optional[str] = None
+
+
+# ---------------------- AI split suggestions (TS-GRP-133) ---------------------- #
+
+class SplitSuggestionDTO(BaseModel):
+    member_id: str
+    display_name: str
+    confidence: str  # high|medium|low
+    times_assigned: int
+
+
+class SplitSuggestionResponse(BaseModel):
+    suggestions: List[SplitSuggestionDTO]
 

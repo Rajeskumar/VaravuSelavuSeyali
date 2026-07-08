@@ -72,3 +72,44 @@ class ActivityService:
             .all()
         )
         return rows
+
+    def get_expense_history(self, group_id: str, expense_id: str) -> list:
+        """TS-GRP-127: per-expense edit history, read from group_activity —
+        no separate table. Diffs are computed from the old/new snapshots
+        GroupExpenseService.update_expense stores in payload_json."""
+        gid = self._coerce_uuid(group_id)
+        eid = self._coerce_uuid(expense_id)
+        if not gid or not eid:
+            return []
+
+        rows = (
+            self.db.query(GroupActivity, GroupMember)
+            .outerjoin(GroupMember, GroupActivity.actor_member_id == GroupMember.id)
+            .filter(
+                GroupActivity.group_id == gid,
+                GroupActivity.entity_id == eid,
+                GroupActivity.action.in_(["expense_created", "expense_updated", "expense_deleted"]),
+            )
+            .order_by(GroupActivity.created_at.asc())
+            .all()
+        )
+
+        entries = []
+        for activity, member in rows:
+            payload = activity.payload_json or {}
+            changed_fields: Dict[str, Any] = {}
+            if activity.action == "expense_updated" and "old" in payload and "new" in payload:
+                old, new = payload["old"] or {}, payload["new"] or {}
+                for key in set(old.keys()) | set(new.keys()):
+                    if old.get(key) != new.get(key):
+                        changed_fields[key] = {"from": old.get(key), "to": new.get(key)}
+            else:
+                changed_fields = payload
+
+            entries.append({
+                "action": activity.action,
+                "actor_display_name": member.display_name if member else "Anonymous User",
+                "changed_fields": changed_fields,
+                "created_at": activity.created_at.isoformat(),
+            })
+        return entries

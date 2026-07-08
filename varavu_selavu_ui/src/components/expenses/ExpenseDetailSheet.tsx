@@ -29,6 +29,7 @@ interface ExpenseDetailSheetProps {
   onClose: () => void;
   onSave: (expense: FeedExpense, patch: ExpenseDetailForm) => Promise<void> | void;
   onDelete: (expense: FeedExpense) => Promise<void> | void;
+  onMoveToGroup?: (expense: FeedExpense) => void;
   saving?: boolean;
   deleting?: boolean;
 }
@@ -46,6 +47,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
   onClose,
   onSave,
   onDelete,
+  onMoveToGroup,
   saving,
   deleting,
 }) => {
@@ -167,6 +169,11 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
         <Button variant="contained" size="large" onClick={handleSave} disabled={saving || deleting}>
           {saving ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : 'Save changes'}
         </Button>
+        {expense.kind === 'personal' && onMoveToGroup && (
+          <Button variant="outlined" size="large" onClick={() => onMoveToGroup(expense)} disabled={saving || deleting}>
+            Move to group…
+          </Button>
+        )}
         {!confirmingDelete ? (
           <Button variant="text" color="error" size="large" onClick={() => setConfirmingDelete(true)} disabled={saving || deleting}>
             Delete expense

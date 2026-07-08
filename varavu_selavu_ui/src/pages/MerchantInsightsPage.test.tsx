@@ -38,7 +38,7 @@ describe('MerchantInsightsPage', () => {
     expect(within(list).getByText('Target')).toBeInTheDocument();
     // Top Merchant summary card + list row both show Costco's total
     expect(screen.getAllByText(/\$450.00/i).length).toBeGreaterThan(0);
-    expect(screen.getByText('5 transactions')).toBeInTheDocument();
+    expect(screen.getByText('5 visits')).toBeInTheDocument();
   });
 
   it('loads and displays details when a merchant is clicked', async () => {
@@ -66,14 +66,14 @@ describe('MerchantInsightsPage', () => {
     userEvent.click(merchantButton);
 
     // Wait for detail view to load
-    expect(await screen.findByText(/Monthly Spending/i)).toBeInTheDocument();
-    
+    expect(await screen.findByText(/Monthly Spend/i)).toBeInTheDocument();
+
     // Check specific details
-    expect(screen.getByText(/Items Bought Here/i)).toBeInTheDocument();
+    expect(screen.getByText(/What You Buy Here/i)).toBeInTheDocument();
     expect(screen.getByText('Paper Towels')).toBeInTheDocument();
-    
+
     // Back button
     userEvent.click(screen.getByTestId('ArrowBackRoundedIcon'));
-    expect(screen.queryByText(/Monthly Spending/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Monthly Spend/i)).not.toBeInTheDocument();
   });
 });

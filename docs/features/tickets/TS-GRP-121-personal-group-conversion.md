@@ -1,6 +1,6 @@
 # TS-GRP-121 — Convert personal expense ↔ group expense
 
-**Phase:** 2 · **Spec:** §5.2, §8.2, §14 (E11) · **Status:** 📋 Planned
+**Phase:** 2 · **Spec:** §5.2, §8.2, §14 (E11) · **Status:** ✅ Implemented
 
 ## Scope
 

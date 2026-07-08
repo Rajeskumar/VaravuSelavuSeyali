@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, GroupMember, Settlement
+from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, GroupMember, Settlement, User
 from varavu_selavu_service.services.group_service import GroupService
 
 
@@ -31,9 +31,20 @@ class BalanceService:
     def _coerce_member_id(self, member_id) -> Optional[uuid.UUID]:
         return member_id if isinstance(member_id, uuid.UUID) else _to_uuid(member_id)
 
+    @staticmethod
+    def _fx_rate(expense: Expense) -> Decimal:
+        """TS-GRP-131: expense_payers/expense_splits are stored in the expense's
+        own currency; balances are always expressed in the group's home currency.
+        NULL rate means same-currency (1:1)."""
+        return Decimal(str(expense.fx_rate_to_group_currency)) if expense.fx_rate_to_group_currency is not None else Decimal("1.0")
+
     def _compute_nets(self, group_id: uuid.UUID) -> Dict[uuid.UUID, Decimal]:
         members = self.db.query(GroupMember).filter(GroupMember.group_id == group_id).all()
         net_by_member: Dict[uuid.UUID, Decimal] = {m.id: Decimal("0.00") for m in members}
+
+        expense_rates = {
+            e.id: self._fx_rate(e) for e in self.db.query(Expense).filter(Expense.group_id == group_id).all()
+        }
 
         payers = (
             self.db.query(ExpensePayer)
@@ -43,7 +54,7 @@ class BalanceService:
         )
         for p in payers:
             if p.member_id in net_by_member:
-                net_by_member[p.member_id] += p.amount_paid
+                net_by_member[p.member_id] += p.amount_paid * expense_rates.get(p.expense_id, Decimal("1.0"))
 
         splits = (
             self.db.query(ExpenseSplit)
@@ -53,7 +64,7 @@ class BalanceService:
         )
         for s in splits:
             if s.member_id in net_by_member:
-                net_by_member[s.member_id] -= s.amount_owed
+                net_by_member[s.member_id] -= s.amount_owed * expense_rates.get(s.expense_id, Decimal("1.0"))
 
         settlements = self.db.query(Settlement).filter(Settlement.group_id == group_id).all()
         for st in settlements:
@@ -90,14 +101,17 @@ class BalanceService:
             payer_rows = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == exp.id).all()
             if not payer_rows:
                 continue
-            
+
             total_paid = sum(p.amount_paid for p in payer_rows)
             if total_paid == Decimal('0.00'):
                 continue
-                
+
+            fx_rate = self._fx_rate(exp)
             splits = self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == exp.id).all()
             for s in splits:
-                debt_amount = s.amount_owed
+                # amount_owed is stored in the expense's own currency (§ TS-GRP-131);
+                # convert to the group's home currency before it becomes a transfer.
+                debt_amount = s.amount_owed * fx_rate
                 if debt_amount == Decimal('0.00'):
                     continue
                     
@@ -176,11 +190,21 @@ class BalanceService:
         members = self.db.query(GroupMember).filter(GroupMember.group_id == gid).all()
         net_by_member = self._compute_nets(gid)
 
+        # TS-GRP-130: payment handles, only for registered members (placeholders
+        # have no User row to look one up on).
+        member_emails = [m.user_email for m in members if m.user_email]
+        users_by_email = {
+            u.email: u for u in self.db.query(User).filter(User.email.in_(member_emails)).all()
+        } if member_emails else {}
+
         member_balances = [
             {
                 "member_id": str(m.id),
                 "display_name": m.display_name,
                 "net": float(net_by_member.get(m.id, Decimal("0.00"))),
+                "venmo_handle": users_by_email[m.user_email].venmo_handle if m.user_email in users_by_email else None,
+                "paypal_handle": users_by_email[m.user_email].paypal_handle if m.user_email in users_by_email else None,
+                "upi_id": users_by_email[m.user_email].upi_id if m.user_email in users_by_email else None,
             }
             for m in members
         ]

@@ -1,7 +1,18 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, Modal, Pressable, KeyboardAvoidingView, Platform, Animated } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Switch, Modal, Pressable, KeyboardAvoidingView, Platform, Animated, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GroupDetail, updateGroup, archiveGroup, unarchiveGroup, restoreGroup, deleteGroup, ApiError } from '../api/groups';
+import {
+  GroupDetail,
+  updateGroup,
+  archiveGroup,
+  unarchiveGroup,
+  restoreGroup,
+  deleteGroup,
+  getNotificationPreferences,
+  updateNotificationPreferences,
+  fetchGroupExportCsv,
+  ApiError,
+} from '../api/groups';
 import { useQueryClient } from '@tanstack/react-query';
 import CustomButton from './CustomButton';
 import SplitEditor from './SplitEditor';
@@ -25,6 +36,35 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
   const defaultSplitVal: SplitEditorValue = group.default_split || { type: 'equal', entries: [] };
   const [splitValue, setSplitValue] = useState<SplitEditorValue>(defaultSplitVal);
   const [saving, setSaving] = useState(false);
+
+  // TS-GRP-125: notification preferences — saved immediately on toggle,
+  // independent of the group-settings "Save" button below.
+  const [muted, setMuted] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    getNotificationPreferences(group.group_id)
+      .then((p) => setMuted(p.muted))
+      .catch(() => {});
+  }, [visible, group.group_id]);
+
+  const handleToggleMuted = async (value: boolean) => {
+    setMuted(value);
+    try {
+      await updateNotificationPreferences(group.group_id, { muted: value });
+    } catch (e) {
+      setMuted(!value);
+      showToast({ message: 'Failed to update notification preference', type: 'error' });
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const csv = await fetchGroupExportCsv(group.group_id);
+      await Share.share({ message: csv, title: `${group.name} export.csv` });
+    } catch (e) {
+      showToast({ message: e instanceof ApiError ? e.message : 'Failed to export group', type: 'error' });
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -75,6 +115,40 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
                 thumbColor="#fff"
               />
             </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+
+          <View style={styles.section}>
+            <View style={styles.row}>
+              <View style={styles.textCol}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Notifications</Text>
+                <Text style={[styles.sectionDesc, { color: theme.colors.textSecondary }]}>
+                  Mute push notifications for this group. Only affects you.
+                </Text>
+              </View>
+              <Switch
+                value={muted}
+                onValueChange={handleToggleMuted}
+                trackColor={{ false: '#d1d1d6', true: theme.colors.primary }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Export</Text>
+            <Text style={[styles.sectionDesc, { color: theme.colors.textSecondary }]}>
+              Share every expense and settlement in this group as a CSV file.
+            </Text>
+            <CustomButton
+              title="Export CSV"
+              onPress={handleExport}
+              style={[styles.saveBtn, { backgroundColor: theme.colors.surfaceSecondary, marginTop: 12 }]}
+              textStyle={{ color: theme.colors.text }}
+            />
           </View>
 
           <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />

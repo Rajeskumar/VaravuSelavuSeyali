@@ -41,6 +41,8 @@ from varavu_selavu_service.auth.routers import router as auth_router
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.api.groups_routes import (
     router as groups_router,
+    friends_router,
+    expenses_router as group_conversion_router,
     get_group_service,
     get_balance_service,
 )
@@ -68,6 +70,8 @@ settings = Settings()
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router, prefix="/auth")
 router.include_router(groups_router)
+router.include_router(friends_router)
+router.include_router(group_conversion_router)
 router.include_router(devices_router)
 
 # Dependency providers

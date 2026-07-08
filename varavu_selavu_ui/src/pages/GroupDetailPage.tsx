@@ -32,6 +32,7 @@ import SplitEditor, { SplitEditorValue } from '../components/groups/SplitEditor'
 import PayerPicker from '../components/groups/PayerPicker';
 import BalanceList from '../components/groups/BalanceList';
 import SettleUpDialog from '../components/groups/SettleUpDialog';
+import ExpenseDetailDialog from '../components/groups/ExpenseDetailDialog';
 import {
   getGroup,
   listGroupExpenses,
@@ -41,6 +42,7 @@ import {
   ApiError,
   MemberDTO,
   PayerSummaryItem,
+  GroupExpenseRow,
 } from '../api/groups';
 import { isoToMMDDYYYY } from '../utils/date';
 import { glassCardSx } from '../theme';
@@ -86,6 +88,7 @@ const GroupDetailPage: React.FC = () => {
   const [description, setDescription] = React.useState('');
   const [category, setCategory] = React.useState('');
   const [amount, setAmount] = React.useState<number>(0);
+  const [currency, setCurrency] = React.useState('');
   const [payers, setPayers] = React.useState<PayerSummaryItem[]>([]);
   const [payersValid, setPayersValid] = React.useState(false);
   const [splitValue, setSplitValue] = React.useState<SplitEditorValue>({ type: 'equal', entries: [] });
@@ -128,6 +131,7 @@ const GroupDetailPage: React.FC = () => {
     setCategory('');
     setUserPickedCategory(false);
     setAmount(0);
+    setCurrency(group?.currency || 'USD');
     setPayers(myMember ? [{ member_id: myMember.member_id, amount_paid: 0 }] : []);
     setPayersValid(false);
     setSplitValue({ type: 'equal', entries: members.map((m) => ({ member_id: m.member_id })) });
@@ -151,6 +155,7 @@ const GroupDetailPage: React.FC = () => {
         amount,
         payers,
         split: { type: splitValue.type, entries: splitValue.entries },
+        currency: currency && currency.toUpperCase() !== (group?.currency || 'USD').toUpperCase() ? currency.toUpperCase() : undefined,
       });
       queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
       queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
@@ -192,6 +197,9 @@ const GroupDetailPage: React.FC = () => {
       setMemberSaving(false);
     }
   };
+
+  // --- Expense detail dialog (comments / history / settle-share, TS-GRP-126/127/129) ---
+  const [selectedExpense, setSelectedExpense] = React.useState<GroupExpenseRow | null>(null);
 
   // --- Settle up dialog ---
   const [settleOpen, setSettleOpen] = React.useState(false);
@@ -322,12 +330,14 @@ const GroupDetailPage: React.FC = () => {
                 {expensesQuery.data?.items.map((row, idx) => (
                   <Box
                     key={row.row_id}
+                    onClick={() => setSelectedExpense(row)}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 2,
                       px: 2.5,
                       py: 1.75,
+                      cursor: 'pointer',
                       borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
                       transition: 'background-color 0.15s ease',
                       '&:hover': { backgroundColor: theme.palette.action.hover },
@@ -354,6 +364,7 @@ const GroupDetailPage: React.FC = () => {
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {row.category} · {row.date}
+                        {row.currency && row.currency !== group.currency ? ` · ${row.currency}` : ''}
                       </Typography>
                     </Box>
                     <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
@@ -423,6 +434,14 @@ const GroupDetailPage: React.FC = () => {
                 value={amount}
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
                 inputProps={{ min: 0, step: 0.01 }}
+              />
+              <TextField
+                label="Currency"
+                fullWidth
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+                helperText={`Group currency: ${group.currency}`}
+                sx={{ maxWidth: 140 }}
               />
             </Box>
             <TextField
@@ -542,6 +561,23 @@ const GroupDetailPage: React.FC = () => {
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
             setToast({ open: true, message: 'Settlement recorded', severity: 'success' });
+          }}
+        />
+      )}
+
+      {selectedExpense && (
+        <ExpenseDetailDialog
+          open={!!selectedExpense}
+          onClose={() => setSelectedExpense(null)}
+          groupId={groupId as string}
+          expense={selectedExpense}
+          members={members}
+          myMemberId={myMember?.member_id}
+          setToast={setToast}
+          onSettled={() => {
+            queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+            queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+            setSelectedExpense(null);
           }}
         />
       )}

@@ -619,6 +619,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                             members={groupDetail.members}
                             onChange={setGroupItems}
                             onValidityChange={setGroupItemsValid}
+                            groupId={groupDetail.group_id}
                           />
                         </>
                       ) : (

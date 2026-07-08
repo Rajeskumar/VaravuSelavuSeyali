@@ -22,7 +22,10 @@ class AuthService:
                 "phone": user.phone,
                 "address": user.address,
                 "password_hash": user.password_hash,
-                "created_at": user.created_at
+                "created_at": user.created_at,
+                "venmo_handle": user.venmo_handle,
+                "paypal_handle": user.paypal_handle,
+                "upi_id": user.upi_id,
             }
         return None
 
@@ -70,17 +73,32 @@ class AuthService:
         self.db.commit()
         return True
 
-    def update_profile(self, email: str, name: Optional[str] = None, phone: Optional[str] = None, address: Optional[str] = None) -> bool:
+    def update_profile(
+        self,
+        email: str,
+        name: Optional[str] = None,
+        phone: Optional[str] = None,
+        address: Optional[str] = None,
+        venmo_handle: Optional[str] = None,
+        paypal_handle: Optional[str] = None,
+        upi_id: Optional[str] = None,
+    ) -> bool:
         user = self.db.query(User).filter(User.email == email).first()
         if not user:
             return False
-            
+
         if name is not None:
             user.name = name
         if phone is not None:
             user.phone = phone
         if address is not None:
             user.address = address
+        if venmo_handle is not None:
+            user.venmo_handle = venmo_handle
+        if paypal_handle is not None:
+            user.paypal_handle = paypal_handle
+        if upi_id is not None:
+            user.upi_id = upi_id
         self.db.commit()
         return True
 

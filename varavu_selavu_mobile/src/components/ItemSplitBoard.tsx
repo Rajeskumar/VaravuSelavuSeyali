@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
-import { MemberDTO, GroupExpenseItemEntry } from '../api/groups';
+import { MemberDTO, GroupExpenseItemEntry, SplitSuggestionDTO, suggestItemAssignment } from '../api/groups';
 import { memberColor } from './BalanceRow';
 
 interface Props {
@@ -10,6 +10,10 @@ interface Props {
   members: MemberDTO[];
   onChange: (items: GroupExpenseItemEntry[]) => void;
   onValidityChange?: (valid: boolean) => void;
+  /** TS-GRP-133: when provided, unassigned items are checked against group
+   * history and a suggestion chip is offered — tapping it only pre-fills the
+   * assignment, never auto-submits. */
+  groupId?: string;
 }
 
 export default function ItemSplitBoard({
@@ -17,10 +21,25 @@ export default function ItemSplitBoard({
   members,
   onChange,
   onValidityChange,
+  groupId,
 }: Props) {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const activeMembers = members.filter((m) => m.status === 'active');
+  const [suggestions, setSuggestions] = React.useState<Record<string, SplitSuggestionDTO[]>>({});
+
+  React.useEffect(() => {
+    if (!groupId) return;
+    items.forEach((item) => {
+      const key = item.item_name;
+      if (Object.keys(item.member_ratios).length > 0) return;
+      if (suggestions[key] !== undefined) return;
+      suggestItemAssignment(groupId, key)
+        .then((s) => setSuggestions((prev) => ({ ...prev, [key]: s })))
+        .catch(() => setSuggestions((prev) => ({ ...prev, [key]: [] })));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId, items]);
 
   const isValid = items.every((item) => {
     const assignedIds = Object.keys(item.member_ratios);
@@ -107,6 +126,17 @@ export default function ItemSplitBoard({
                 );
               })}
             </ScrollView>
+
+            {!hasAssignment && suggestions[item.item_name]?.[0] && (
+              <TouchableOpacity
+                style={styles.suggestionChip}
+                onPress={() => toggleMemberForItem(item.line_no, suggestions[item.item_name][0].member_id, false)}
+              >
+                <Text style={styles.suggestionChipText}>
+                  Suggested: {suggestions[item.item_name][0].display_name}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Custom Ratio Tuning */}
             {assignedIds.length > 1 && (
@@ -272,6 +302,19 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 13,
       padding: 0,
       color: theme.colors.text,
+    },
+    suggestionChip: {
+      alignSelf: 'flex-start',
+      backgroundColor: `${theme.colors.primary}15`,
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      marginBottom: 8,
+    },
+    suggestionChipText: {
+      fontFamily: 'Inter-Medium',
+      fontSize: 12,
+      color: theme.colors.primary,
     },
     errorText: {
       fontFamily: 'Inter-Regular',

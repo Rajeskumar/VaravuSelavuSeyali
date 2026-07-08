@@ -17,6 +17,7 @@ import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import AddIcon from '@mui/icons-material/Add';
 import { motion } from 'framer-motion';
 import GroupCard from '../components/groups/GroupCard';
+import FriendBalancesWidget from '../components/groups/FriendBalancesWidget';
 import { listGroups, createGroup, ApiError } from '../api/groups';
 import { reconcile, withAlpha } from '../theme';
 
@@ -126,6 +127,8 @@ const GroupsPage: React.FC = () => {
             <CircularProgress />
           </Box>
         )}
+
+        {!isLoading && !notEnabled && tabIndex === 0 && <FriendBalancesWidget />}
 
         {!isLoading && !notEnabled && (
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>

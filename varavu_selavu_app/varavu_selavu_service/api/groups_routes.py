@@ -1,7 +1,8 @@
 import uuid
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from varavu_selavu_service.auth.security import auth_required
@@ -11,28 +12,42 @@ from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.models.api_models import (
     AcceptInviteRequest,
     AcceptInviteResponse,
+    AddCommentRequest,
     AddMemberRequest,
     BalanceResponse,
     CreateGroupRequest,
     CreateInviteRequest,
     CreateInviteResponse,
+    ExpenseCommentDTO,
+    ExpenseCommentListResponse,
+    ExpenseHistoryResponse,
+    FriendBalancesResponse,
     GroupActivityListResponse,
     GroupDetailResponse,
     GroupExpenseCreatedResponse,
     GroupExpenseListResponse,
     GroupExpenseRequest,
     GroupExpenseWithItemsRequest,
+    GroupNotificationPreferenceDTO,
     GroupSummary,
     MemberDTO,
+    MoveToGroupRequest,
     RecordSettlementRequest,
+    SettleExpenseShareRequest,
     SettlementDTO,
+    SplitSuggestionResponse,
     UpdateGroupRequest,
+    UpdateNotificationPreferenceRequest,
 )
 from varavu_selavu_service.services.balance_service import BalanceService
+from varavu_selavu_service.services.expense_comment_service import ExpenseCommentService
+from varavu_selavu_service.services.friend_balance_service import FriendBalanceService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
+from varavu_selavu_service.services.group_export_service import GroupExportService
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.notification_service import NotificationService
 from varavu_selavu_service.services.settlement_service import SettlementService
+from varavu_selavu_service.services.split_suggestion_service import SplitSuggestionService
 from varavu_selavu_service.services.analysis_service import AnalysisService
 from varavu_selavu_service.services.insights_aggregation_service import InsightsAggregationService
 
@@ -126,6 +141,22 @@ def get_notification_service(db: Session = Depends(get_db)) -> NotificationServi
     # Local provider (mirrors devices_routes.py's) — that module imports
     # require_groups_enabled from this one, so importing back would be circular.
     return NotificationService(db)
+
+
+def get_expense_comment_service(db: Session = Depends(get_db)) -> ExpenseCommentService:
+    return ExpenseCommentService(db)
+
+
+def get_friend_balance_service(db: Session = Depends(get_db)) -> FriendBalanceService:
+    return FriendBalanceService(db)
+
+
+def get_group_export_service(db: Session = Depends(get_db)) -> GroupExportService:
+    return GroupExportService(db)
+
+
+def get_split_suggestion_service(db: Session = Depends(get_db)) -> SplitSuggestionService:
+    return SplitSuggestionService(db)
 
 
 router = APIRouter(prefix="/groups", tags=["Groups"], dependencies=[Depends(require_groups_enabled)])
@@ -388,6 +419,7 @@ def create_group_expense(
         payers=[p.model_dump() for p in data.payers],
         split_type=data.split.type,
         split_entries=[e.model_dump() for e in data.split.entries],
+        currency=data.currency,
     )
     analysis_service.invalidate_cache()
     eid = _to_uuid(row["row_id"])
@@ -448,6 +480,7 @@ def create_itemized_group_expense(
         merchant_name=data.merchant_name,
         payers=[p.model_dump() for p in data.payers],
         items=[i.model_dump() for i in data.items],
+        currency=data.currency,
     )
     analysis_service.invalidate_cache()
     eid = _to_uuid(row["row_id"])
@@ -549,6 +582,7 @@ def update_group_expense(
         payers=[p.model_dump() for p in data.payers],
         split_type=data.split.type,
         split_entries=[e.model_dump() for e in data.split.entries],
+        currency=data.currency,
     )
     analysis_service.invalidate_cache()
     new_shares = {
@@ -669,3 +703,254 @@ def get_group_activity(
         "items": items,
         "next_offset": offset + limit if len(rows) == limit else None
     }
+
+
+# ------------------------------------------------------------------
+# Expense edit history (TS-GRP-127) — reads group_activity, no new table.
+# ------------------------------------------------------------------
+
+@router.get(
+    "/{group_id}/expenses/{expense_id}/history",
+    response_model=ExpenseHistoryResponse,
+    summary="Per-expense edit history",
+)
+def get_expense_history(
+    group_id: str,
+    expense_id: str,
+    group_svc: GroupService = Depends(get_group_service),
+    activity_svc=Depends(get_activity_service),
+    user_email: str = Depends(auth_required),
+):
+    group_svc.require_membership(group_id, user_email)
+    return {"items": activity_svc.get_expense_history(group_id, expense_id)}
+
+
+# ------------------------------------------------------------------
+# Expense comments (TS-GRP-126)
+# ------------------------------------------------------------------
+
+@router.get(
+    "/{group_id}/expenses/{expense_id}/comments",
+    response_model=ExpenseCommentListResponse,
+    summary="List comments on a group expense",
+)
+def list_expense_comments(
+    group_id: str,
+    expense_id: str,
+    svc: ExpenseCommentService = Depends(get_expense_comment_service),
+    user_email: str = Depends(auth_required),
+):
+    return {"items": svc.list_comments(group_id, expense_id, user_email)}
+
+
+@router.post(
+    "/{group_id}/expenses/{expense_id}/comments",
+    response_model=ExpenseCommentDTO,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a comment on a group expense",
+)
+def add_expense_comment(
+    group_id: str,
+    expense_id: str,
+    data: AddCommentRequest,
+    background_tasks: BackgroundTasks,
+    svc: ExpenseCommentService = Depends(get_expense_comment_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    user_email: str = Depends(auth_required),
+):
+    comment = svc.add_comment(group_id, expense_id, user_email, data.body)
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=group_id,
+        actor_email=user_email,
+        event_type="comment_added",
+        description=comment["body"][:80],
+    )
+    return comment
+
+
+@router.delete(
+    "/{group_id}/expenses/{expense_id}/comments/{comment_id}",
+    summary="Delete a comment (author only)",
+)
+def delete_expense_comment(
+    group_id: str,
+    expense_id: str,
+    comment_id: str,
+    svc: ExpenseCommentService = Depends(get_expense_comment_service),
+    user_email: str = Depends(auth_required),
+):
+    svc.delete_comment(group_id, expense_id, comment_id, user_email)
+    return {"success": True}
+
+
+# ------------------------------------------------------------------
+# Notification preferences (TS-GRP-125) — self-scoped, no admin override.
+# ------------------------------------------------------------------
+
+@router.get(
+    "/{group_id}/notification_preferences",
+    response_model=GroupNotificationPreferenceDTO,
+    summary="Get my notification preferences for this group",
+)
+def get_notification_preferences(
+    group_id: str,
+    group_svc: GroupService = Depends(get_group_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    user_email: str = Depends(auth_required),
+):
+    group_svc.require_membership(group_id, user_email)
+    return notification_service.get_preferences(user_email, group_id)
+
+
+@router.put(
+    "/{group_id}/notification_preferences",
+    response_model=GroupNotificationPreferenceDTO,
+    summary="Update my notification preferences for this group",
+)
+def update_notification_preferences(
+    group_id: str,
+    data: UpdateNotificationPreferenceRequest,
+    group_svc: GroupService = Depends(get_group_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    user_email: str = Depends(auth_required),
+):
+    group_svc.require_membership(group_id, user_email)
+    return notification_service.update_preferences(user_email, group_id, data.muted, data.muted_events)
+
+
+# ------------------------------------------------------------------
+# Settle-by-expense (TS-GRP-129)
+# ------------------------------------------------------------------
+
+@router.post(
+    "/{group_id}/expenses/{expense_id}/settle_share",
+    response_model=SettlementDTO,
+    status_code=status.HTTP_201_CREATED,
+    summary="Settle one member's share of a specific expense",
+)
+def settle_expense_share(
+    group_id: str,
+    expense_id: str,
+    data: SettleExpenseShareRequest,
+    svc: SettlementService = Depends(get_settlement_service),
+    user_email: str = Depends(auth_required),
+):
+    return svc.settle_expense_share(
+        group_id=group_id,
+        expense_id=expense_id,
+        actor_email=user_email,
+        member_id=data.member_id,
+        payer_member_id=data.payer_member_id,
+        method=data.method,
+        notes=data.notes,
+    )
+
+
+# ------------------------------------------------------------------
+# CSV export (TS-GRP-132)
+# ------------------------------------------------------------------
+
+@router.get("/{group_id}/export.csv", summary="Export group expenses + settlements as CSV")
+def export_group_csv(
+    group_id: str,
+    svc: GroupExportService = Depends(get_group_export_service),
+    group_svc: GroupService = Depends(get_group_service),
+    user_email: str = Depends(auth_required),
+):
+    group = group_svc.get_group_detail(group_id, user_email)
+    csv_text = svc.export_csv(group_id, user_email)
+    filename = f"{group['name'].replace(' ', '_')}_export.csv"
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# ------------------------------------------------------------------
+# AI split suggestions (TS-GRP-133) — heuristic, history-based.
+# ------------------------------------------------------------------
+
+@router.get(
+    "/{group_id}/items/suggest_assignment",
+    response_model=SplitSuggestionResponse,
+    summary="Suggest which member(s) usually get a given item",
+)
+def suggest_item_assignment(
+    group_id: str,
+    item_name: str = Query(...),
+    svc: SplitSuggestionService = Depends(get_split_suggestion_service),
+    user_email: str = Depends(auth_required),
+):
+    return {"suggestions": svc.suggest_assignment(group_id, item_name, user_email)}
+
+
+# ------------------------------------------------------------------
+# Cross-group friend balances (TS-GRP-128) — top-level, not group-scoped.
+# ------------------------------------------------------------------
+
+friends_router = APIRouter(prefix="/friends", tags=["Groups"], dependencies=[Depends(require_groups_enabled)])
+
+
+@friends_router.get(
+    "/balances",
+    response_model=FriendBalancesResponse,
+    summary="Net balance with each person across all shared groups",
+)
+def get_friend_balances(
+    svc: FriendBalanceService = Depends(get_friend_balance_service),
+    user_email: str = Depends(auth_required),
+):
+    return {"balances": svc.get_friend_balances(user_email)}
+
+
+# ------------------------------------------------------------------
+# Personal -> group expense conversion (TS-GRP-121) — top-level, not
+# group-scoped (the source expense isn't a group expense until this runs).
+# ------------------------------------------------------------------
+
+expenses_router = APIRouter(prefix="/expenses", tags=["Groups"], dependencies=[Depends(require_groups_enabled)])
+
+
+@expenses_router.post(
+    "/{expense_id}/move_to_group",
+    response_model=GroupExpenseCreatedResponse,
+    summary="Convert a personal expense into a group expense in place",
+)
+def move_expense_to_group(
+    expense_id: str,
+    data: MoveToGroupRequest,
+    background_tasks: BackgroundTasks,
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    db: Session = Depends(get_db),
+    user_email: str = Depends(auth_required),
+):
+    row = svc.convert_personal_expense(
+        expense_id=expense_id,
+        group_id=data.group_id,
+        actor_email=user_email,
+        split_type=data.split.type,
+        split_entries=[e.model_dump() for e in data.split.entries],
+    )
+    analysis_service.invalidate_cache()
+    eid = _to_uuid(row["row_id"])
+    shares = (
+        {
+            str(s.member_id): float(s.amount_owed)
+            for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+        }
+        if eid is not None
+        else {}
+    )
+    background_tasks.add_task(
+        notification_service.fan_out,
+        group_id=data.group_id,
+        actor_email=user_email,
+        event_type="expense_added",
+        description=row["description"],
+        shares=shares,
+    )
+    return {"success": True, "expense": row}

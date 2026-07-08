@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, GroupMember
+from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, Group, GroupMember
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.split_engine import SplitError, resolve_split, validate_payers
 
@@ -72,6 +72,19 @@ class GroupExpenseService:
 
         return split_results
 
+    def _resolve_currency(self, gid: uuid.UUID, currency: Optional[str]):
+        """TS-GRP-131: resolves the expense's own currency + (if it differs
+        from the group's) the FX rate to convert it into the group's home
+        currency, snapshotted once at creation/edit time."""
+        group = self.db.query(Group).filter(Group.id == gid).first()
+        group_currency = (group.currency if group else "USD").upper()
+        expense_currency = (currency or group_currency).upper()
+        if expense_currency == group_currency:
+            return expense_currency, None
+        from varavu_selavu_service.services.fx_rate_service import FxRateService
+        rate = FxRateService(self.db).get_rate(expense_currency, group_currency)
+        return expense_currency, rate
+
     def _expense_row(self, expense: Expense, actor_email: str) -> Dict:
         caller_member = self.group_service.get_member_by_email(expense.group_id, actor_email)
         my_share = 0.0
@@ -96,6 +109,8 @@ class GroupExpenseService:
             "merchant_name": expense.merchant_name,
             "my_share": my_share,
             "payer_summary": payer_summary,
+            "currency": expense.currency,
+            "fx_rate_to_group_currency": float(expense.fx_rate_to_group_currency) if expense.fx_rate_to_group_currency is not None else None,
         }
 
     # ------------------------------------------------------------------
@@ -114,11 +129,13 @@ class GroupExpenseService:
         payers: List[dict],
         split_type: str,
         split_entries: List[dict],
+        currency: Optional[str] = None,
     ) -> Dict:
         self.group_service.require_membership(group_id, actor_email)
         gid = _to_uuid(group_id)
 
         split_results = self._validate_and_resolve(gid, amount, payers, split_type, split_entries)
+        expense_currency, fx_rate = self._resolve_currency(gid, currency)
 
         expense = Expense(
             id=uuid.uuid4(),
@@ -128,6 +145,8 @@ class GroupExpenseService:
             purchased_at=self._parse_date(date),
             category_id=category,
             amount=amount,
+            currency=expense_currency,
+            fx_rate_to_group_currency=fx_rate,
             merchant_name=merchant_name,
             description=description,
         )
@@ -190,6 +209,7 @@ class GroupExpenseService:
         payers: List[dict],
         split_type: str,
         split_entries: List[dict],
+        currency: Optional[str] = None,
     ) -> Dict:
         # Any group member may edit any group expense (spec §5.2, decision §17.2).
         self.group_service.require_membership(group_id, actor_email)
@@ -202,11 +222,23 @@ class GroupExpenseService:
             raise HTTPException(status_code=404, detail="Group expense not found")
 
         split_results = self._validate_and_resolve(gid, amount, payers, split_type, split_entries)
+        expense_currency, fx_rate = self._resolve_currency(gid, currency)
+
+        # Snapshot pre-edit values so the activity log (and TS-GRP-127's edit
+        # history view built on top of it) can show a real old -> new diff.
+        old_snapshot = {
+            "description": expense.description,
+            "category": expense.category_id,
+            "amount": float(expense.amount) if expense.amount is not None else None,
+            "merchant_name": expense.merchant_name,
+        }
 
         expense.purchased_at = self._parse_date(date)
         expense.description = description
         expense.category_id = category
         expense.amount = amount
+        expense.currency = expense_currency
+        expense.fx_rate_to_group_currency = fx_rate
         expense.merchant_name = merchant_name
         expense.split_type = split_type
 
@@ -237,12 +269,18 @@ class GroupExpenseService:
             )
         self.db.commit()
         
+        new_snapshot = {
+            "description": expense.description,
+            "category": expense.category_id,
+            "amount": float(expense.amount) if expense.amount is not None else None,
+            "merchant_name": expense.merchant_name,
+        }
         self.activity_svc.log(
             group_id=group_id,
             actor_email=actor_email,
             action="expense_updated",
             entity_id=str(expense.id),
-            payload={"description": expense.description, "amount": float(expense.amount)}
+            payload={"old": old_snapshot, "new": new_snapshot}
         )
 
         return self._expense_row(expense, actor_email)
@@ -269,6 +307,74 @@ class GroupExpenseService:
         )
         # expense_payers/expense_splits cascade via the FK ondelete=CASCADE (TS-GRP-101).
 
+    def convert_personal_expense(
+        self,
+        expense_id: str,
+        group_id: str,
+        actor_email: str,
+        split_type: str,
+        split_entries: List[dict],
+    ) -> Dict:
+        """TS-GRP-121: converts an existing personal expense into a group
+        expense in place — same expense.id, gains group_id/split_type plus
+        new expense_payers/expense_splits rows. The converter is sole payer
+        by default (E11); only the expense's own owner may convert it."""
+        eid = _to_uuid(expense_id)
+        expense = self.db.query(Expense).filter(Expense.id == eid).first() if eid else None
+        if expense is None:
+            raise HTTPException(status_code=404, detail="Expense not found")
+        if expense.group_id is not None:
+            raise HTTPException(status_code=400, detail="Expense is already a group expense")
+        if expense.user_email != actor_email:
+            raise HTTPException(status_code=403, detail="Only the expense's owner may convert it")
+
+        # Membership check happens after ownership/already-converted checks so
+        # those return their own specific status codes first.
+        converter_member = self.group_service.require_membership(group_id, actor_email)
+        gid = _to_uuid(group_id)
+
+        amount = float(expense.amount)
+        payers = [{"member_id": str(converter_member.id), "amount_paid": amount}]
+        split_results = self._validate_and_resolve(gid, amount, payers, split_type, split_entries)
+        expense_currency, fx_rate = self._resolve_currency(gid, expense.currency)
+
+        expense.group_id = gid
+        expense.split_type = split_type
+        expense.currency = expense_currency
+        expense.fx_rate_to_group_currency = fx_rate
+        self.db.flush()
+
+        self.db.add(
+            ExpensePayer(
+                id=uuid.uuid4(),
+                expense_id=expense.id,
+                member_id=converter_member.id,
+                amount_paid=amount,
+            )
+        )
+        for r in split_results:
+            self.db.add(
+                ExpenseSplit(
+                    id=uuid.uuid4(),
+                    expense_id=expense.id,
+                    member_id=_to_uuid(r.member_id),
+                    amount_owed=r.amount_owed,
+                    basis_type=r.basis_type,
+                    basis_value=r.basis_value,
+                )
+            )
+        self.db.commit()
+
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="expense_converted",
+            entity_id=str(expense.id),
+            payload={"description": expense.description, "amount": amount},
+        )
+
+        return self._expense_row(expense, actor_email)
+
     def create_itemized_expense(
         self,
         group_id: str,
@@ -280,10 +386,12 @@ class GroupExpenseService:
         merchant_name: Optional[str],
         payers: List[dict],
         items: List[dict],
-        fingerprint: Optional[str] = None
+        fingerprint: Optional[str] = None,
+        currency: Optional[str] = None,
     ) -> Dict:
         self.group_service.require_membership(group_id, actor_email)
         gid = _to_uuid(group_id)
+        expense_currency, fx_rate = self._resolve_currency(gid, currency)
 
         payer_ids = [p["member_id"] for p in payers]
         if len(payer_ids) != len(set(payer_ids)):
@@ -324,6 +432,8 @@ class GroupExpenseService:
             purchased_at=self._parse_date(date),
             category_id=category,
             amount=amount,
+            currency=expense_currency,
+            fx_rate_to_group_currency=fx_rate,
             merchant_name=merchant_name,
             description=description,
             fingerprint=fingerprint

@@ -35,6 +35,7 @@ import {
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
+import FriendBalancesWidget from '../components/FriendBalancesWidget';
 import { showToast } from '../components/Toast';
 
 const GROUP_TYPE_OPTIONS = ['other', 'trip', 'home', 'couple'] as const;
@@ -183,6 +184,8 @@ export default function GroupsScreen() {
               </TouchableOpacity>
             </View>
             
+            {tabIndex === 0 && <FriendBalancesWidget />}
+
             <View style={styles.tabsContainer}>
               <TouchableOpacity
                 style={[styles.tab, tabIndex === 0 && styles.tabActive]}

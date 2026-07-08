@@ -30,8 +30,10 @@ test('renders the user\'s groups', async () => {
 test('shows an empty state when the user has no groups', async () => {
   jest.spyOn(api, 'listGroups').mockResolvedValue([]);
   renderPage();
-  await waitFor(() => screen.getByText(/No groups yet/));
-  expect(screen.getByText(/No groups yet/)).toBeInTheDocument();
+  // TS-GRP-122 split the list into Active/Archived tabs; the default (Active)
+  // tab's empty state reads "No active groups yet".
+  await waitFor(() => screen.getByText(/No active groups yet/));
+  expect(screen.getByText(/No active groups yet/)).toBeInTheDocument();
 });
 
 test('shows a graceful message when groups are not yet enabled (404)', async () => {

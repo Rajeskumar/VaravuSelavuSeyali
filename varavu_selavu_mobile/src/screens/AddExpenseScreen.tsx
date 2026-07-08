@@ -7,7 +7,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { addExpense, categorizeExpense } from '../api/expenses';
 import {
-  listGroups, addGroupExpense, addGroupExpenseWithItems, GroupSummary, ApiError,
+  listGroups, getGroupDetail, addGroupExpense, addGroupExpenseWithItems, GroupSummary, ApiError,
   PayerSummaryItem, GroupExpenseItemEntry
 } from '../api/groups';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES } from '../constants/categories';
@@ -15,7 +15,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
-import SplitEditor, { SplitEditorEntry, SplitType } from '../components/SplitEditor';
+import SplitEditor, { SplitEntry as SplitEditorEntry, SplitType } from '../components/SplitEditor';
 import PayerPicker from '../components/PayerPicker';
 import ItemSplitBoard from '../components/ItemSplitBoard';
 import { notifyExpenseChanged } from '../utils/expenseEvents';
@@ -63,7 +63,11 @@ export default function AddExpenseProvider({ children }: { children: React.React
   // Group-mode state (TS-GRP-109 / TS-GRP-117)
   const [scope, setScope] = useState<'personal' | 'group'>('personal');
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  
+  // TS-GRP-131: currency this expense was paid in, if different from the
+  // group's own currency. Empty/blank means "same as group".
+  const [groupCurrency, setGroupCurrency] = useState('');
+
+
   const [payers, setPayers] = useState<PayerSummaryItem[]>([]);
   const [payersValid, setPayersValid] = useState(false);
   
@@ -188,6 +192,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             merchant_name: merchantName || undefined,
             payers,
             items: groupItems,
+            currency: groupCurrency.trim() ? groupCurrency.trim().toUpperCase() : undefined,
           });
         } else {
           await addGroupExpense(selectedGroupId, {
@@ -201,6 +206,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
               type: splitType,
               entries: splitEntries,
             },
+            currency: groupCurrency.trim() ? groupCurrency.trim().toUpperCase() : undefined,
           });
         }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -240,10 +246,14 @@ export default function AddExpenseProvider({ children }: { children: React.React
     }
   };
 
-  // Fetch groups for the Personal/Group toggle (feature-flag aware)
+  // Fetch groups for the Personal/Group toggle (feature-flag aware).
+  // NOTE: queryFn must be wrapped, not passed as a bare `listGroups` reference —
+  // react-query calls queryFn(context), and since `context` is a truthy object,
+  // passing listGroups directly would make `includeArchived` always truthy,
+  // silently pulling in archived groups here.
   const { data: groupsData } = useQuery({
     queryKey: ['groups'],
-    queryFn: listGroups,
+    queryFn: () => listGroups(),
     retry: (count, err) => {
       if (err instanceof ApiError && err.status === 404) return false;
       return count < 1;
@@ -253,6 +263,27 @@ export default function AddExpenseProvider({ children }: { children: React.React
   // GROUPS_ENABLED is effectively true if the query succeeded (even empty list)
   const groupsEnabled = Array.isArray(groupsData);
   const myGroups: GroupSummary[] = groupsData ?? [];
+
+  // `GroupSummary` (from listGroups) never carries `.members` — fetch the full
+  // detail for the selected group so PayerPicker/SplitEditor/ItemSplitBoard
+  // get real members instead of always rendering empty (a pre-existing bug:
+  // the old code read `.members` off GroupSummary and silently got undefined
+  // everywhere, so the payer/split member_id was always '').
+  const { data: selectedGroupDetail } = useQuery({
+    queryKey: ['group-detail-for-add-expense', selectedGroupId],
+    queryFn: () => getGroupDetail(selectedGroupId as string),
+    enabled: !!selectedGroupId,
+  });
+  const selectedGroupMembers = selectedGroupDetail?.members || [];
+
+  React.useEffect(() => {
+    if (!selectedGroupDetail) return;
+    const me = selectedGroupDetail.members.find((m) => m.user_email === userEmail);
+    setPayers([{ member_id: me?.member_id || selectedGroupDetail.members[0]?.member_id || '', amount_paid: numAmount }]);
+    setSplitEntries(selectedGroupDetail.members.map((m) => ({ member_id: m.member_id })));
+    setSplitType('equal');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedGroupDetail]);
 
   const currentSubs = CATEGORY_GROUPS[mainCategory] || [];
   // Sheet height: 88% of screen, minimum so content fits
@@ -391,15 +422,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
                       key={g.group_id}
                       style={[styles.groupRow, selectedGroupId === g.group_id && styles.groupRowActive]}
                       onPress={() => {
+                        // Default payer/split entries are set by the
+                        // selectedGroupDetail effect once its query resolves.
                         setSelectedGroupId(g.group_id);
-                        // Default to current user as payer if known, else first member
-                        const grp = myGroups.find(gg => gg.group_id === g.group_id);
-                        if (grp) {
-                          const me = grp.members?.find(m => m.user_email === userEmail);
-                          setPayers([{ member_id: me?.member_id || grp.members?.[0]?.member_id || '', amount_paid: numAmount }]);
-                          setSplitEntries(grp.members?.map((m) => ({ member_id: m.member_id })) || []);
-                          setSplitType('equal');
-                        }
                       }}
                     >
                       <Text style={styles.groupRowLabel}>{g.name}</Text>
@@ -411,12 +436,28 @@ export default function AddExpenseProvider({ children }: { children: React.React
                 </View>
               )}
               
+              {/* TS-GRP-131: currency this expense was paid in, if different from
+                  the group's own currency (e.g. paid in INR, group tracks USD). */}
+              {scope === 'group' && selectedGroupId && (
+                <View style={styles.fieldGroup}>
+                  <RNTextInput
+                    style={styles.fieldInput}
+                    placeholder="Currency (leave blank if same as group)"
+                    placeholderTextColor={theme.colors.textQuaternary}
+                    value={groupCurrency}
+                    onChangeText={(t) => setGroupCurrency(t.toUpperCase())}
+                    autoCapitalize="characters"
+                    maxLength={10}
+                  />
+                </View>
+              )}
+
               {/* Split Editor / Item Split / Payer Picker for Group Mode */}
               {scope === 'group' && selectedGroupId && (
                 <>
                   <PayerPicker
                     amount={numAmount}
-                    members={myGroups.find((g) => g.group_id === selectedGroupId)?.members || []}
+                    members={selectedGroupMembers}
                     payers={payers}
                     onChange={setPayers}
                     onValidityChange={setPayersValid}
@@ -425,14 +466,15 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   {groupItems.length > 0 ? (
                     <ItemSplitBoard
                       items={groupItems}
-                      members={myGroups.find((g) => g.group_id === selectedGroupId)?.members || []}
+                      members={selectedGroupMembers}
                       onChange={setGroupItems}
                       onValidityChange={setGroupItemsValid}
+                      groupId={selectedGroupId}
                     />
                   ) : (
                     <SplitEditor
                       totalAmount={numAmount}
-                      members={myGroups.find((g) => g.group_id === selectedGroupId)?.members || []}
+                      members={selectedGroupMembers}
                       value={{ type: splitType, entries: splitEntries }}
                       onChange={(val) => {
                         setSplitType(val.type);
