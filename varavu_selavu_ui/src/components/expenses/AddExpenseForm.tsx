@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import Menu from '@mui/material/Menu';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -13,6 +14,7 @@ import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import { keyframes } from '@mui/system';
 import { useTheme } from '@mui/material/styles';
@@ -68,11 +70,72 @@ export const findMainCategory = (sub: string): string => {
   );
 };
 
+/** Short "Jul 8" (year only when it differs from the current one) — fits the compact date row's
+ * half-width column, unlike "07/08/2026". */
+function formatShortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const includeYear = d.getFullYear() !== new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: includeYear ? 'numeric' : undefined });
+}
+
 interface AddExpenseFormProps {
   existing?: ExpenseRecord | null;
   onSuccess?: () => void;
   onCancel?: () => void;
   onError?: (message: string) => void;
+}
+
+/**
+ * Compact "tap to edit" row (feedback: forms with every field always fully expanded require too
+ * much scrolling on mobile). Shows a single-line label + current value; the field itself renders
+ * only while `active`, so auto-populated values (merchant, category, date) stay out of the way
+ * until the user actually wants to change them.
+ */
+function CompactRow({
+  label,
+  value,
+  active,
+  onActivate,
+  children,
+}: {
+  label: string;
+  value: React.ReactNode;
+  active: boolean;
+  onActivate: (target: HTMLElement) => void;
+  children: React.ReactNode;
+}) {
+  if (active) return <>{children}</>;
+  return (
+    <Box
+      onClick={(e) => onActivate(e.currentTarget)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onActivate(e.currentTarget); }}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        px: 1.5,
+        py: 1,
+        borderRadius: 1,
+        cursor: 'pointer',
+        border: '1px solid',
+        borderColor: 'divider',
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
+          {label}
+        </Typography>
+        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+          {value}
+        </Typography>
+      </Box>
+      <ChevronRightRoundedIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+    </Box>
+  );
 }
 
 const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSuccess, onCancel, onError }) => {
@@ -97,6 +160,13 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [repeatDay, setRepeatDay] = useState<number>(new Date().getDate());
   const typingRef = useRef<NodeJS.Timeout | null>(null);
   const theme = useTheme();
+
+  // Compact "tap to edit" state (feedback: auto-populated fields shouldn't sit fully expanded
+  // by default) — merchant/date collapse to a label until tapped; category opens a picker menu.
+  const [editingMerchant, setEditingMerchant] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
+  const [categoryMenuAnchor, setCategoryMenuAnchor] = useState<HTMLElement | null>(null);
+  const [pickerMain, setPickerMain] = useState(initialMain);
 
   // Personal/Group toggle (spec §10.1/§11.2) — only offered on fresh creates;
   // editing an existing (always-personal) expense never shows this.
@@ -293,23 +363,6 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
         await handleParse(processed);
       }
     }
-  };
-
-  const handleMainCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newMain = e.target.value;
-    setMainCategory(newMain);
-    setSubcategory(CATEGORY_GROUPS[newMain][0]);
-    setUserPickedCategory(true);
-    if (draft) {
-      setDraft({ ...draft, header: { ...draft.header, main_category_name: newMain, category_name: CATEGORY_GROUPS[newMain][0] } });
-    }
-  };
-
-  const handleSubcategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const sub = e.target.value;
-    setSubcategory(sub);
-    setUserPickedCategory(true);
-    if (draft) setDraft({ ...draft, header: { ...draft.header, category_name: sub } });
   };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -549,13 +602,14 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             </IconButton>
           )}
         </Box>
-        <Divider sx={{ mb: 2 }} />
-        <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 2 }}>
-          <Grid container spacing={2}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
+          <Grid container spacing={1.5}>
             {/* Primary details */}
             <Grid size={12}>
               <TextField
                 fullWidth
+                size="small"
                 label="Description"
                 value={description}
                 sx={glassFieldSx}
@@ -644,48 +698,69 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               </>
             )}
             <Grid size={12}>
-              <TextField
-                fullWidth
-                label="Merchant / Store Name"
-                value={merchantName}
-                sx={glassFieldSx}
-                onChange={(e) => {
-                  setMerchantName(e.target.value);
-                  setUserPickedMerchant(true);
-                }}
-                placeholder="e.g., Starbucks, Amazon, PG&E"
-                helperText="Auto-suggested from description — you can edit anytime"
-                InputProps={{
-                  endAdornment: !userPickedMerchant && merchantName ? (
-                    <InputAdornment position="end">
-                      <span title="Auto-suggested" style={{ fontSize: 16 }}>✨</span>
-                    </InputAdornment>
-                  ) : undefined,
-                }}
-              />
+              <CompactRow
+                label="Merchant"
+                value={merchantName || 'Add merchant'}
+                active={editingMerchant}
+                onActivate={() => setEditingMerchant(true)}
+              >
+                <TextField
+                  fullWidth
+                  autoFocus
+                  size="small"
+                  label="Merchant / Store Name"
+                  value={merchantName}
+                  sx={glassFieldSx}
+                  onChange={(e) => {
+                    setMerchantName(e.target.value);
+                    setUserPickedMerchant(true);
+                  }}
+                  onBlur={() => setEditingMerchant(false)}
+                  placeholder="e.g., Starbucks, Amazon, PG&E"
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{
+                    endAdornment: !userPickedMerchant && merchantName ? (
+                      <InputAdornment position="end">
+                        <span title="Auto-suggested" style={{ fontSize: 16 }}>✨</span>
+                      </InputAdornment>
+                    ) : undefined,
+                  }}
+                />
+              </CompactRow>
             </Grid>
             <Grid size={6}>
-              <TextField
-                fullWidth
+              <CompactRow
                 label="Date"
-                type="date"
-                value={expenseDate}
-                sx={glassFieldSx}
-                onChange={e => {
-                  const iso = e.target.value;
-                  setExpenseDate(iso);
-                  if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: isoToMMDDYYYY(iso) } });
-                  const d = new Date(iso);
-                  if (!isNaN(d.getTime())) setRepeatDay(d.getDate());
-                }}
-                InputLabelProps={{ shrink: true }}
-                required
-              />
+                value={formatShortDate(expenseDate)}
+                active={editingDate}
+                onActivate={() => setEditingDate(true)}
+              >
+                <TextField
+                  fullWidth
+                  autoFocus
+                  size="small"
+                  label="Date"
+                  type="date"
+                  value={expenseDate}
+                  sx={glassFieldSx}
+                  onChange={e => {
+                    const iso = e.target.value;
+                    setExpenseDate(iso);
+                    if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: isoToMMDDYYYY(iso) } });
+                    const d = new Date(iso);
+                    if (!isNaN(d.getTime())) setRepeatDay(d.getDate());
+                  }}
+                  onBlur={() => setEditingDate(false)}
+                  InputLabelProps={{ shrink: true }}
+                  required
+                />
+              </CompactRow>
             </Grid>
             <Grid size={6}>
               <TextField
                 fullWidth
-                label="Cost (USD)"
+                size="small"
+                label="Cost"
                 type="number"
                 value={cost}
                 sx={glassFieldSx}
@@ -723,41 +798,62 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               )}
             </Grid>
             )}
-            <Divider sx={{ width: '100%', my: 1 }} />
-            {/* Category selection */}
-            <Grid size={6}>
-              <TextField
-                select
-                fullWidth
-                label="Main Category"
-                value={mainCategory}
-                sx={glassFieldSx}
-                onChange={handleMainCategoryChange}
+            {/* Category — a single compact row opening a two-level picker menu, rather than two
+                always-expanded Main/Subcategory dropdowns (feedback: keep auto-populated fields
+                collapsed to a label until the user actually wants to change them). */}
+            <Grid size={12}>
+              <CompactRow
+                label="Category"
+                value={`${mainCategory} · ${subcategory}`}
+                active={false}
+                onActivate={(target) => { setPickerMain(mainCategory); setCategoryMenuAnchor(target); }}
               >
-                {Object.keys(CATEGORY_GROUPS).map(category => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={6}>
-              <TextField
-                select
-                fullWidth
-                label="Subcategory"
-                value={subcategory}
-                sx={glassFieldSx}
-                onChange={handleSubcategoryChange}
+                {null}
+              </CompactRow>
+              <Menu
+                anchorEl={categoryMenuAnchor}
+                open={!!categoryMenuAnchor}
+                onClose={() => setCategoryMenuAnchor(null)}
               >
-                {CATEGORY_GROUPS[mainCategory].map(sub => (
-                  <MenuItem key={sub} value={sub}>
+                <Box sx={{ px: 1.5, pt: 0.5, pb: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap', maxWidth: 320 }}>
+                  {Object.keys(CATEGORY_GROUPS).map((category) => (
+                    <Box
+                      key={category}
+                      onClick={() => setPickerMain(category)}
+                      sx={{
+                        px: 1.25,
+                        py: 0.5,
+                        borderRadius: 999,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        bgcolor: category === pickerMain ? 'primary.main' : 'action.hover',
+                        color: category === pickerMain ? 'primary.contrastText' : 'text.primary',
+                      }}
+                    >
+                      {category}
+                    </Box>
+                  ))}
+                </Box>
+                <Divider />
+                {CATEGORY_GROUPS[pickerMain].map((sub) => (
+                  <MenuItem
+                    key={sub}
+                    selected={pickerMain === mainCategory && sub === subcategory}
+                    onClick={() => {
+                      setMainCategory(pickerMain);
+                      setSubcategory(sub);
+                      setUserPickedCategory(true);
+                      if (draft) setDraft({ ...draft, header: { ...draft.header, main_category_name: pickerMain, category_name: sub } });
+                      setCategoryMenuAnchor(null);
+                    }}
+                  >
                     {sub}
                   </MenuItem>
                 ))}
-              </TextField>
+              </Menu>
             </Grid>
-            <Divider sx={{ width: '100%', my: 1.5 }} />
+            <Divider sx={{ width: '100%', my: 0.5 }} />
             <Grid size={12}>
               <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
                 Upload Receipt

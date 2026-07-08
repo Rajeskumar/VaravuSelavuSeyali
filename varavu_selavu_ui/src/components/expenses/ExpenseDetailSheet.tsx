@@ -7,6 +7,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
+import Toolbar from '@mui/material/Toolbar';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -107,6 +108,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
           }}
         />
       )}
+      {isDesktop && <Toolbar />}
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
         <Box>
           <Typography variant="caption" color="text.secondary">
