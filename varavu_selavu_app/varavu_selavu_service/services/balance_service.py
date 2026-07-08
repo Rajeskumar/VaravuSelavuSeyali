@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, GroupMember, Settlement
+from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, GroupMember, Settlement, User
 from varavu_selavu_service.services.group_service import GroupService
 
 
@@ -31,9 +31,20 @@ class BalanceService:
     def _coerce_member_id(self, member_id) -> Optional[uuid.UUID]:
         return member_id if isinstance(member_id, uuid.UUID) else _to_uuid(member_id)
 
+    @staticmethod
+    def _fx_rate(expense: Expense) -> Decimal:
+        """TS-GRP-131: expense_payers/expense_splits are stored in the expense's
+        own currency; balances are always expressed in the group's home currency.
+        NULL rate means same-currency (1:1)."""
+        return Decimal(str(expense.fx_rate_to_group_currency)) if expense.fx_rate_to_group_currency is not None else Decimal("1.0")
+
     def _compute_nets(self, group_id: uuid.UUID) -> Dict[uuid.UUID, Decimal]:
         members = self.db.query(GroupMember).filter(GroupMember.group_id == group_id).all()
         net_by_member: Dict[uuid.UUID, Decimal] = {m.id: Decimal("0.00") for m in members}
+
+        expense_rates = {
+            e.id: self._fx_rate(e) for e in self.db.query(Expense).filter(Expense.group_id == group_id).all()
+        }
 
         payers = (
             self.db.query(ExpensePayer)
@@ -43,7 +54,7 @@ class BalanceService:
         )
         for p in payers:
             if p.member_id in net_by_member:
-                net_by_member[p.member_id] += p.amount_paid
+                net_by_member[p.member_id] += p.amount_paid * expense_rates.get(p.expense_id, Decimal("1.0"))
 
         splits = (
             self.db.query(ExpenseSplit)
@@ -53,7 +64,7 @@ class BalanceService:
         )
         for s in splits:
             if s.member_id in net_by_member:
-                net_by_member[s.member_id] -= s.amount_owed
+                net_by_member[s.member_id] -= s.amount_owed * expense_rates.get(s.expense_id, Decimal("1.0"))
 
         settlements = self.db.query(Settlement).filter(Settlement.group_id == group_id).all()
         for st in settlements:
@@ -84,15 +95,35 @@ class BalanceService:
             sign = 1 if str(debtor_id) == a else -1
             pair_net[key] = pair_net.get(key, Decimal("0.00")) + sign * amount
 
+        import decimal
         expenses = self.db.query(Expense).filter(Expense.group_id == group_id).all()
         for exp in expenses:
-            payer_row = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == exp.id).first()
-            if payer_row is None:
+            payer_rows = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == exp.id).all()
+            if not payer_rows:
                 continue
+
+            total_paid = sum(p.amount_paid for p in payer_rows)
+            if total_paid == Decimal('0.00'):
+                continue
+
+            fx_rate = self._fx_rate(exp)
             splits = self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == exp.id).all()
             for s in splits:
-                if s.member_id != payer_row.member_id:
-                    _add(debtor_id=s.member_id, creditor_id=payer_row.member_id, amount=s.amount_owed)
+                # amount_owed is stored in the expense's own currency (§ TS-GRP-131);
+                # convert to the group's home currency before it becomes a transfer.
+                debt_amount = s.amount_owed * fx_rate
+                if debt_amount == Decimal('0.00'):
+                    continue
+                    
+                allocated_sum = Decimal('0.00')
+                for i, p in enumerate(payer_rows):
+                    if i == len(payer_rows) - 1:
+                        portion = debt_amount - allocated_sum
+                    else:
+                        portion = (debt_amount * (p.amount_paid / total_paid)).quantize(Decimal('0.01'), rounding=decimal.ROUND_HALF_UP)
+                        allocated_sum += portion
+                        
+                    _add(debtor_id=s.member_id, creditor_id=p.member_id, amount=portion)
 
         settlements = self.db.query(Settlement).filter(Settlement.group_id == group_id).all()
         for st in settlements:
@@ -106,27 +137,85 @@ class BalanceService:
                 transfers.append({"from_member_id": str(b), "to_member_id": str(a), "amount": float(-net)})
         return transfers
 
+    def _simplified_transfers(self, group_id: uuid.UUID) -> List[Dict]:
+        """Greedy-netting simplified transfers (Phase 2)."""
+        net_by_member = self._compute_nets(group_id)
+        
+        # Debtors have net < 0 (they owe money to the group).
+        # Creditors have net > 0 (they are owed money by the group).
+        debtors = sorted(
+            [{"id": str(m), "net": -n} for m, n in net_by_member.items() if n < Decimal("0.00")],
+            key=lambda x: x["net"],
+            reverse=True
+        )
+        creditors = sorted(
+            [{"id": str(m), "net": n} for m, n in net_by_member.items() if n > Decimal("0.00")],
+            key=lambda x: x["net"],
+            reverse=True
+        )
+        
+        transfers = []
+        i, j = 0, 0
+        
+        while i < len(debtors) and j < len(creditors):
+            debtor = debtors[i]
+            creditor = creditors[j]
+            
+            amount = min(debtor["net"], creditor["net"])
+            if amount > Decimal("0.00"):
+                transfers.append({
+                    "from_member_id": debtor["id"],
+                    "to_member_id": creditor["id"],
+                    "amount": float(amount)
+                })
+                
+            debtor["net"] -= amount
+            creditor["net"] -= amount
+            
+            if debtor["net"] <= Decimal("0.00"):
+                i += 1
+            if creditor["net"] <= Decimal("0.00"):
+                j += 1
+                
+        return transfers
+
     def get_balances(self, group_id: str, actor_email: str) -> Dict:
         self.group_service.require_membership(group_id, actor_email)
         gid = self._coerce_group_id(group_id)
+        
+        from varavu_selavu_service.db.models import Group
+        group = self.db.query(Group).filter(Group.id == gid).first()
+        simplify = bool(group.simplify_debts) if group else False
 
         members = self.db.query(GroupMember).filter(GroupMember.group_id == gid).all()
         net_by_member = self._compute_nets(gid)
+
+        # TS-GRP-130: payment handles, only for registered members (placeholders
+        # have no User row to look one up on).
+        member_emails = [m.user_email for m in members if m.user_email]
+        users_by_email = {
+            u.email: u for u in self.db.query(User).filter(User.email.in_(member_emails)).all()
+        } if member_emails else {}
 
         member_balances = [
             {
                 "member_id": str(m.id),
                 "display_name": m.display_name,
                 "net": float(net_by_member.get(m.id, Decimal("0.00"))),
+                "venmo_handle": users_by_email[m.user_email].venmo_handle if m.user_email in users_by_email else None,
+                "paypal_handle": users_by_email[m.user_email].paypal_handle if m.user_email in users_by_email else None,
+                "upi_id": users_by_email[m.user_email].upi_id if m.user_email in users_by_email else None,
             }
             for m in members
         ]
+        
+        transfers = self._simplified_transfers(gid) if simplify else self._pairwise_transfers(gid)
 
         return {
             "group_id": str(gid),
             "members": member_balances,
-            "transfers": self._pairwise_transfers(gid),
-            "simplified": False,
+            "transfers": transfers,
+            "simplified": simplify,
         }
 
     def member_net(self, group_id, member_id) -> Decimal:

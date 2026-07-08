@@ -95,3 +95,43 @@ test('unchecking a member removes them from the split', () => {
   fireEvent.click(screen.getByLabelText('Include Carol'));
   expect(screen.getAllByText('$45.00')).toHaveLength(2);
 });
+
+test('shares split distributes amount proportionally', () => {
+  render(
+    <Wrapper
+      amount={100}
+      initial={{
+        type: 'shares',
+        entries: [
+          { member_id: 'a', value: 1 },
+          { member_id: 'b', value: 3 },
+        ],
+      }}
+    />
+  );
+  expect(screen.getByText('$25.00')).toBeInTheDocument();
+  expect(screen.getByText('$75.00')).toBeInTheDocument();
+  expect(screen.getByTestId('valid').textContent).toBe('true');
+});
+
+test('adjustment split adjusts around equal base', () => {
+  render(
+    <Wrapper
+      amount={100}
+      initial={{
+        type: 'adjustment',
+        entries: [
+          { member_id: 'a', value: -10 },
+          { member_id: 'b', value: 10 },
+        ],
+      }}
+    />
+  );
+  // Base = 100 - 0 (total adjustments) = 100
+  // Equal base = 50
+  // Alice = 50 - 10 = 40
+  // Bob = 50 + 10 = 60
+  expect(screen.getByText('$40.00')).toBeInTheDocument();
+  expect(screen.getByText('$60.00')).toBeInTheDocument();
+  expect(screen.getByTestId('valid').textContent).toBe('true');
+});

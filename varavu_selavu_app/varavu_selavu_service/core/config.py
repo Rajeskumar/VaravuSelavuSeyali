@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     EXPO_PUSH_URL: str = "https://exp.host/--/api/v2/push/send"
     EXPO_ACCESS_TOKEN: str = ""
 
+    # Multi-currency groups (TS-GRP-131) — free, no-API-key exchange rate provider.
+    # A lookup failure never blocks expense creation; FxRateService falls back to 1:1.
+    FX_RATE_API_URL: str = "https://open.er-api.com/v6/latest"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

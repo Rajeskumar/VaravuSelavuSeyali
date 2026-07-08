@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
+import Menu from '@mui/material/Menu';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -13,6 +14,7 @@ import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import { keyframes } from '@mui/system';
 import { useTheme } from '@mui/material/styles';
@@ -30,8 +32,20 @@ import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
 import { glassCardSx } from '../../theme';
-import { listGroups, getGroup, createGroupExpense, GroupSummary, GroupDetailResponse, ApiError } from '../../api/groups';
+import {
+  GroupSummary,
+  GroupDetailResponse,
+  PayerSummaryItem,
+  GroupExpenseItemEntry,
+  listGroups,
+  getGroup,
+  createGroupExpense,
+  createGroupExpenseWithItems,
+  ApiError,
+} from '../../api/groups';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
+import PayerPicker from '../groups/PayerPicker';
+import ItemSplitBoard from '../groups/ItemSplitBoard';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
 
@@ -56,11 +70,72 @@ export const findMainCategory = (sub: string): string => {
   );
 };
 
+/** Short "Jul 8" (year only when it differs from the current one) — fits the compact date row's
+ * half-width column, unlike "07/08/2026". */
+function formatShortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const includeYear = d.getFullYear() !== new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: includeYear ? 'numeric' : undefined });
+}
+
 interface AddExpenseFormProps {
   existing?: ExpenseRecord | null;
   onSuccess?: () => void;
   onCancel?: () => void;
   onError?: (message: string) => void;
+}
+
+/**
+ * Compact "tap to edit" row (feedback: forms with every field always fully expanded require too
+ * much scrolling on mobile). Shows a single-line label + current value; the field itself renders
+ * only while `active`, so auto-populated values (merchant, category, date) stay out of the way
+ * until the user actually wants to change them.
+ */
+function CompactRow({
+  label,
+  value,
+  active,
+  onActivate,
+  children,
+}: {
+  label: string;
+  value: React.ReactNode;
+  active: boolean;
+  onActivate: (target: HTMLElement) => void;
+  children: React.ReactNode;
+}) {
+  if (active) return <>{children}</>;
+  return (
+    <Box
+      onClick={(e) => onActivate(e.currentTarget)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onActivate(e.currentTarget); }}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        px: 1.5,
+        py: 1,
+        borderRadius: 1,
+        cursor: 'pointer',
+        border: '1px solid',
+        borderColor: 'divider',
+        '&:hover': { bgcolor: 'action.hover' },
+      }}
+    >
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
+          {label}
+        </Typography>
+        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+          {value}
+        </Typography>
+      </Box>
+      <ChevronRightRoundedIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+    </Box>
+  );
 }
 
 const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSuccess, onCancel, onError }) => {
@@ -86,6 +161,13 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const typingRef = useRef<NodeJS.Timeout | null>(null);
   const theme = useTheme();
 
+  // Compact "tap to edit" state (feedback: auto-populated fields shouldn't sit fully expanded
+  // by default) — merchant/date collapse to a label until tapped; category opens a picker menu.
+  const [editingMerchant, setEditingMerchant] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
+  const [categoryMenuAnchor, setCategoryMenuAnchor] = useState<HTMLElement | null>(null);
+  const [pickerMain, setPickerMain] = useState(initialMain);
+
   // Personal/Group toggle (spec §10.1/§11.2) — only offered on fresh creates;
   // editing an existing (always-personal) expense never shows this.
   const { enabled: groupsEnabled } = useGroupsEnabled();
@@ -93,9 +175,12 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [groupDetail, setGroupDetail] = useState<GroupDetailResponse | null>(null);
-  const [payerId, setPayerId] = useState('');
+  const [payers, setPayers] = useState<PayerSummaryItem[]>([]);
+  const [payersValid, setPayersValid] = useState(false);
   const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
   const [splitValid, setSplitValid] = useState(false);
+  const [groupItems, setGroupItems] = useState<GroupExpenseItemEntry[]>([]);
+  const [groupItemsValid, setGroupItemsValid] = useState(false);
   const [groupSubmitError, setGroupSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,30 +200,34 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   useEffect(() => {
     if (!selectedGroupId) {
       setGroupDetail(null);
-      setPayerId('');
+      setPayers([]);
       setSplitEntries([]);
       return;
     }
     let mounted = true;
     (async () => {
       try {
-        const detail = await getGroup(selectedGroupId);
+        const grp = await getGroup(selectedGroupId);
         if (!mounted) return;
-        setGroupDetail(detail);
-        const me = localStorage.getItem('vs_user');
-        const myMember = detail.members.find(m => m.user_email === me);
-        setPayerId(myMember?.member_id || detail.members[0]?.member_id || '');
-        setSplitEntries(detail.members.map(m => ({ member_id: m.member_id })));
+        setGroupDetail(grp);
+        if (selectedGroupId && grp) {
+          const myEmail = localStorage.getItem('vs_user');
+          const myMember = grp.members.find(m => m.user_email === myEmail);
+          if (myMember) {
+            setPayers([{ member_id: myMember.member_id, amount_paid: cost }]);
+          }
+          setSplitEntries(grp.members.map((m) => ({ member_id: m.member_id })));
+        }
       } catch {
         if (mounted) {
           setGroupDetail(null);
-          setPayerId('');
+          setPayers([]);
           setSplitEntries([]);
         }
       }
     })();
     return () => { mounted = false; };
-  }, [selectedGroupId]);
+  }, [selectedGroupId, cost]);
 
   const spin = keyframes`
     from { transform: rotate(0deg); }
@@ -276,23 +365,6 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     }
   };
 
-  const handleMainCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newMain = e.target.value;
-    setMainCategory(newMain);
-    setSubcategory(CATEGORY_GROUPS[newMain][0]);
-    setUserPickedCategory(true);
-    if (draft) {
-      setDraft({ ...draft, header: { ...draft.header, main_category_name: newMain, category_name: CATEGORY_GROUPS[newMain][0] } });
-    }
-  };
-
-  const handleSubcategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const sub = e.target.value;
-    setSubcategory(sub);
-    setUserPickedCategory(true);
-    if (draft) setDraft({ ...draft, header: { ...draft.header, category_name: sub } });
-  };
-
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setDescription(val);
@@ -338,7 +410,16 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
         header: { ...res.header, description: desc, main_category_name: main, category_name: sub || CATEGORY_GROUPS[main][0] },
       };
       setDraft(processed);
-      setCost(hdr.amount || 0);
+      setCost(Number(res.header.amount) || 0);
+      setGroupItems((res.items || []).map((i: any, idx: number) => ({
+        line_no: idx + 1,
+        item_name: i.item_name,
+        line_total: Number(i.line_total) || 0,
+        quantity: Number(i.quantity) || null,
+        unit_price: Number(i.unit_price) || null,
+        member_ratios: {},
+      })));
+      setMessage('Receipt parsed successfully. Review details below.');
       setDescription(desc);
       // Populate merchant from receipt header if user hasn't manually typed one
       if (!userPickedMerchant && (hdr.merchant_name || hdr.merchant)) {
@@ -367,7 +448,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     const requiredFilled =
       description.trim() !== '' && cost > 0 && expenseDate && subcategory && mainCategory;
     if (mode === 'group' && !existing) {
-      return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payerId || !splitValid;
+      if (draft && draft.items.length > 0) {
+        return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payersValid || !groupItemsValid;
+      }
+      return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payersValid || !splitValid;
     }
     return (
       saving || parsing || converting || !requiredFilled
@@ -386,19 +470,29 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       setSaving(true);
       const formattedDate = isoToMMDDYYYY(expenseDate);
       if (mode === 'group' && !existing) {
-        // Phase 1 (spec §10.1/TS-GRP-104): equal split on the total only — no
-        // itemized group expenses yet, even if the receipt parsed line items.
         setGroupSubmitError(null);
         try {
-          await createGroupExpense(selectedGroupId, {
-            date: formattedDate,
-            description,
-            category: subcategory,
-            amount: cost,
-            merchant_name: merchantName || undefined,
-            payers: [{ member_id: payerId, amount_paid: cost }],
-            split: { type: 'equal', entries: splitEntries },
-          });
+          if (draft && draft.items.length > 0) {
+            await createGroupExpenseWithItems(selectedGroupId, {
+              date: formattedDate,
+              description,
+              category: subcategory,
+              amount: cost,
+              merchant_name: merchantName || undefined,
+              payers,
+              items: groupItems,
+            });
+          } else {
+            await createGroupExpense(selectedGroupId, {
+              date: formattedDate,
+              description,
+              category: subcategory,
+              amount: cost,
+              merchant_name: merchantName || undefined,
+              payers,
+              split: { type: 'equal', entries: splitEntries },
+            });
+          }
           setMessage('Group expense added successfully.');
           setDescription('');
           setCost(0);
@@ -407,7 +501,12 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           onSuccess?.();
         } catch (err) {
           const msg = err instanceof ApiError ? err.message : 'Failed to add group expense.';
-          setGroupSubmitError(msg);
+          // Surface 409 duplicate receipt inline just like personal expenses
+          if (err instanceof ApiError && err.status === 409) {
+            setGroupSubmitError(msg);
+          } else {
+            setGroupSubmitError(msg);
+          }
           onError?.(msg);
         }
         return;
@@ -503,13 +602,14 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             </IconButton>
           )}
         </Box>
-        <Divider sx={{ mb: 2 }} />
-        <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 2 }}>
-          <Grid container spacing={2}>
+        <Divider sx={{ mb: 1.5 }} />
+        <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 1 }}>
+          <Grid container spacing={1.5}>
             {/* Primary details */}
             <Grid size={12}>
               <TextField
                 fullWidth
+                size="small"
                 label="Description"
                 value={description}
                 sx={glassFieldSx}
@@ -552,80 +652,115 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 {groupDetail && (
                   <>
                     <Grid size={12}>
-                      <TextField
-                        select
-                        fullWidth
-                        label="Paid by"
-                        value={payerId}
-                        sx={glassFieldSx}
-                        onChange={(e) => setPayerId(e.target.value)}
-                      >
-                        {groupDetail.members.map((m) => (
-                          <MenuItem key={m.member_id} value={m.member_id}>{m.display_name}</MenuItem>
-                        ))}
-                      </TextField>
-                    </Grid>
-                    <Grid size={12}>
-                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                        Split equally among
-                      </Typography>
-                      <SplitEditor
+                      <Divider sx={{ my: 1 }} />
+                      <PayerPicker
                         amount={cost}
                         members={groupDetail.members}
-                        value={{ type: 'equal', entries: splitEntries }}
-                        onChange={(v) => setSplitEntries(v.entries)}
-                        onValidityChange={setSplitValid}
-                        allowedTypes={['equal']}
-                        serverError={groupSubmitError}
+                        payers={payers}
+                        onChange={setPayers}
+                        onValidityChange={setPayersValid}
                       />
+                    </Grid>
+                    <Grid size={12}>
+                      <Divider sx={{ my: 1 }} />
+                      {draft && draft.items.length > 0 ? (
+                        <>
+                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            Split Items
+                          </Typography>
+                          <ItemSplitBoard
+                            items={groupItems}
+                            members={groupDetail.members}
+                            onChange={setGroupItems}
+                            onValidityChange={setGroupItemsValid}
+                            groupId={groupDetail.group_id}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                            Split equally among
+                          </Typography>
+                          <SplitEditor
+                            amount={cost}
+                            members={groupDetail.members}
+                            value={{ type: 'equal', entries: splitEntries }}
+                            onChange={(v) => setSplitEntries(v.entries)}
+                            onValidityChange={setSplitValid}
+                            allowedTypes={['equal']}
+                            serverError={groupSubmitError}
+                          />
+                        </>
+                      )}
                     </Grid>
                   </>
                 )}
               </>
             )}
             <Grid size={12}>
-              <TextField
-                fullWidth
-                label="Merchant / Store Name"
-                value={merchantName}
-                sx={glassFieldSx}
-                onChange={(e) => {
-                  setMerchantName(e.target.value);
-                  setUserPickedMerchant(true);
-                }}
-                placeholder="e.g., Starbucks, Amazon, PG&E"
-                helperText="Auto-suggested from description — you can edit anytime"
-                InputProps={{
-                  endAdornment: !userPickedMerchant && merchantName ? (
-                    <InputAdornment position="end">
-                      <span title="Auto-suggested" style={{ fontSize: 16 }}>✨</span>
-                    </InputAdornment>
-                  ) : undefined,
-                }}
-              />
+              <CompactRow
+                label="Merchant"
+                value={merchantName || 'Add merchant'}
+                active={editingMerchant}
+                onActivate={() => setEditingMerchant(true)}
+              >
+                <TextField
+                  fullWidth
+                  autoFocus
+                  size="small"
+                  label="Merchant / Store Name"
+                  value={merchantName}
+                  sx={glassFieldSx}
+                  onChange={(e) => {
+                    setMerchantName(e.target.value);
+                    setUserPickedMerchant(true);
+                  }}
+                  onBlur={() => setEditingMerchant(false)}
+                  placeholder="e.g., Starbucks, Amazon, PG&E"
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{
+                    endAdornment: !userPickedMerchant && merchantName ? (
+                      <InputAdornment position="end">
+                        <span title="Auto-suggested" style={{ fontSize: 16 }}>✨</span>
+                      </InputAdornment>
+                    ) : undefined,
+                  }}
+                />
+              </CompactRow>
             </Grid>
             <Grid size={6}>
-              <TextField
-                fullWidth
+              <CompactRow
                 label="Date"
-                type="date"
-                value={expenseDate}
-                sx={glassFieldSx}
-                onChange={e => {
-                  const iso = e.target.value;
-                  setExpenseDate(iso);
-                  if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: isoToMMDDYYYY(iso) } });
-                  const d = new Date(iso);
-                  if (!isNaN(d.getTime())) setRepeatDay(d.getDate());
-                }}
-                InputLabelProps={{ shrink: true }}
-                required
-              />
+                value={formatShortDate(expenseDate)}
+                active={editingDate}
+                onActivate={() => setEditingDate(true)}
+              >
+                <TextField
+                  fullWidth
+                  autoFocus
+                  size="small"
+                  label="Date"
+                  type="date"
+                  value={expenseDate}
+                  sx={glassFieldSx}
+                  onChange={e => {
+                    const iso = e.target.value;
+                    setExpenseDate(iso);
+                    if (draft) setDraft({ ...draft, header: { ...draft.header, purchased_at: isoToMMDDYYYY(iso) } });
+                    const d = new Date(iso);
+                    if (!isNaN(d.getTime())) setRepeatDay(d.getDate());
+                  }}
+                  onBlur={() => setEditingDate(false)}
+                  InputLabelProps={{ shrink: true }}
+                  required
+                />
+              </CompactRow>
             </Grid>
             <Grid size={6}>
               <TextField
                 fullWidth
-                label="Cost (USD)"
+                size="small"
+                label="Cost"
                 type="number"
                 value={cost}
                 sx={glassFieldSx}
@@ -663,41 +798,62 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               )}
             </Grid>
             )}
-            <Divider sx={{ width: '100%', my: 1 }} />
-            {/* Category selection */}
-            <Grid size={6}>
-              <TextField
-                select
-                fullWidth
-                label="Main Category"
-                value={mainCategory}
-                sx={glassFieldSx}
-                onChange={handleMainCategoryChange}
+            {/* Category — a single compact row opening a two-level picker menu, rather than two
+                always-expanded Main/Subcategory dropdowns (feedback: keep auto-populated fields
+                collapsed to a label until the user actually wants to change them). */}
+            <Grid size={12}>
+              <CompactRow
+                label="Category"
+                value={`${mainCategory} · ${subcategory}`}
+                active={false}
+                onActivate={(target) => { setPickerMain(mainCategory); setCategoryMenuAnchor(target); }}
               >
-                {Object.keys(CATEGORY_GROUPS).map(category => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={6}>
-              <TextField
-                select
-                fullWidth
-                label="Subcategory"
-                value={subcategory}
-                sx={glassFieldSx}
-                onChange={handleSubcategoryChange}
+                {null}
+              </CompactRow>
+              <Menu
+                anchorEl={categoryMenuAnchor}
+                open={!!categoryMenuAnchor}
+                onClose={() => setCategoryMenuAnchor(null)}
               >
-                {CATEGORY_GROUPS[mainCategory].map(sub => (
-                  <MenuItem key={sub} value={sub}>
+                <Box sx={{ px: 1.5, pt: 0.5, pb: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap', maxWidth: 320 }}>
+                  {Object.keys(CATEGORY_GROUPS).map((category) => (
+                    <Box
+                      key={category}
+                      onClick={() => setPickerMain(category)}
+                      sx={{
+                        px: 1.25,
+                        py: 0.5,
+                        borderRadius: 999,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        bgcolor: category === pickerMain ? 'primary.main' : 'action.hover',
+                        color: category === pickerMain ? 'primary.contrastText' : 'text.primary',
+                      }}
+                    >
+                      {category}
+                    </Box>
+                  ))}
+                </Box>
+                <Divider />
+                {CATEGORY_GROUPS[pickerMain].map((sub) => (
+                  <MenuItem
+                    key={sub}
+                    selected={pickerMain === mainCategory && sub === subcategory}
+                    onClick={() => {
+                      setMainCategory(pickerMain);
+                      setSubcategory(sub);
+                      setUserPickedCategory(true);
+                      if (draft) setDraft({ ...draft, header: { ...draft.header, main_category_name: pickerMain, category_name: sub } });
+                      setCategoryMenuAnchor(null);
+                    }}
+                  >
                     {sub}
                   </MenuItem>
                 ))}
-              </TextField>
+              </Menu>
             </Grid>
-            <Divider sx={{ width: '100%', my: 1.5 }} />
+            <Divider sx={{ width: '100%', my: 0.5 }} />
             <Grid size={12}>
               <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
                 Upload Receipt

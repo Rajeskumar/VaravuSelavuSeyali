@@ -5,6 +5,10 @@ export interface Profile {
   name?: string | null;
   phone?: string | null;
   address?: string | null;
+  // TS-GRP-130: payment deep-link handles.
+  venmo_handle?: string | null;
+  paypal_handle?: string | null;
+  upi_id?: string | null;
 }
 
 export async function getProfile(): Promise<Profile> {
@@ -13,7 +17,14 @@ export async function getProfile(): Promise<Profile> {
   return res.json();
 }
 
-export async function updateProfile(payload: { name?: string | null; phone?: string | null; address?: string | null }): Promise<Profile> {
+export async function updateProfile(payload: {
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  venmo_handle?: string | null;
+  paypal_handle?: string | null;
+  upi_id?: string | null;
+}): Promise<Profile> {
   const res = await fetchWithAuth('/api/v1/auth/profile', {
     method: 'PUT',
     body: JSON.stringify(payload),

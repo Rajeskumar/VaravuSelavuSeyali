@@ -16,6 +16,11 @@ class User(Base):
     phone = Column(String(50))
     address = Column(String(500))
     password_hash = Column(String(255), nullable=False)
+    # TS-GRP-130: payment deep-link handles (client-constructed URLs only —
+    # TrackSpense never touches money or these providers' APIs).
+    venmo_handle = Column(String(100))
+    paypal_handle = Column(String(100))
+    upi_id = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -27,6 +32,9 @@ class Expense(Base):
     user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="SET NULL"), index=True)
     group_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.groups.id", ondelete="SET NULL"), index=True)
     split_type = Column(String(20))
+    # TS-GRP-131: FX rate at creation time (expense.currency -> group.currency),
+    # snapshotted once and never recomputed retroactively. NULL = same currency.
+    fx_rate_to_group_currency = Column(Numeric(12, 6), nullable=True)
     purchased_at = Column(DateTime(timezone=True), index=True)
     merchant_name = Column(String(255))
     merchant_id = Column(String(255))
@@ -78,6 +86,8 @@ class RecurringTemplate(Base):
     start_date = Column(Date, nullable=False)
     last_processed_date = Column(Date)
     status = Column(String(50), default="Active")
+    group_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.groups.id", ondelete="CASCADE"), nullable=True)
+    split_config = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -150,6 +160,8 @@ class Group(Base):
     default_split_json = Column(JSON)
     created_by = Column(String(255), ForeignKey("trackspense.users.email", ondelete="SET NULL"))
     status = Column(String(20), nullable=False, default='active')
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class GroupMember(Base):
@@ -206,6 +218,23 @@ class ExpenseSplit(Base):
     amount_owed = Column(Numeric(12, 2), nullable=False)
     basis_type = Column(String(20), nullable=False)
     basis_value = Column(Numeric(12, 4))
+    # TS-GRP-129: set when this specific share has been settled via
+    # POST /.../settle_share. ON DELETE SET NULL so undoing the settlement
+    # (DELETE /settlements/{id}) reverts the split to unsettled.
+    settled_via_settlement_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.settlements.id", ondelete="SET NULL"), nullable=True)
+
+class ExpenseItemSplit(Base):
+    __tablename__ = "expense_item_splits"
+    __table_args__ = (
+        UniqueConstraint("expense_item_id", "member_id", name="uq_expense_item_splits_item_member"),
+        {"schema": "trackspense"}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    expense_item_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.expense_items.id", ondelete="CASCADE"), nullable=False)
+    member_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.group_members.id", ondelete="CASCADE"), nullable=False, index=True)
+    ratio = Column(Numeric(7, 4), CheckConstraint("ratio > 0 AND ratio <= 1", name="chk_expense_item_splits_ratio"), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
 
 class Settlement(Base):
     __tablename__ = "settlements"
@@ -253,5 +282,51 @@ class DeviceToken(Base):
     expo_push_token = Column(String(255), nullable=False, index=True)
     platform = Column(String(10), nullable=False)
     last_seen_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class GroupNotificationPreference(Base):
+    """TS-GRP-125: per-(user, group) mute + per-event-type suppression list."""
+    __tablename__ = "group_notification_preferences"
+    __table_args__ = (
+        UniqueConstraint("user_email", "group_id", name="uq_group_notif_prefs_user_group"),
+        {"schema": "trackspense"}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    group_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.groups.id", ondelete="CASCADE"), nullable=False, index=True)
+    muted = Column(Boolean, nullable=False, default=False)
+    muted_events = Column(JSON, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ExpenseComment(Base):
+    """TS-GRP-126: flat, chronological comments per group expense (Splitwise-style, not threaded)."""
+    __tablename__ = "expense_comments"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    expense_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.expenses.id", ondelete="CASCADE"), nullable=False, index=True)
+    member_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.group_members.id", ondelete="CASCADE"), nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    edited_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class FxRate(Base):
+    """TS-GRP-131: daily-granularity FX rate cache, keyed by (date, from, to)."""
+    __tablename__ = "fx_rates"
+    __table_args__ = (
+        UniqueConstraint("rate_date", "from_currency", "to_currency", name="uq_fx_rates_date_pair"),
+        {"schema": "trackspense"}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rate_date = Column(Date, nullable=False, index=True)
+    from_currency = Column(String(10), nullable=False)
+    to_currency = Column(String(10), nullable=False)
+    rate = Column(Numeric(18, 8), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

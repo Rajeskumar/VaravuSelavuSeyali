@@ -9,6 +9,9 @@ const ProfilePage: React.FC = () => {
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
   const [address, setAddress] = React.useState('');
+  const [venmoHandle, setVenmoHandle] = React.useState('');
+  const [paypalHandle, setPaypalHandle] = React.useState('');
+  const [upiId, setUpiId] = React.useState('');
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -27,6 +30,9 @@ const ProfilePage: React.FC = () => {
         setName(p.name || '');
         setPhone(p.phone || '');
         setAddress(p.address || '');
+        setVenmoHandle(p.venmo_handle || '');
+        setPaypalHandle(p.paypal_handle || '');
+        setUpiId(p.upi_id || '');
       } catch (e) {
         setError('Failed to load profile');
       } finally {
@@ -54,10 +60,16 @@ const ProfilePage: React.FC = () => {
     setError(null);
     setSuccess(null);
     try {
-      const updated = await updateProfile({ name, phone, address });
+      const updated = await updateProfile({
+        name, phone, address,
+        venmo_handle: venmoHandle, paypal_handle: paypalHandle, upi_id: upiId,
+      });
       setName(updated.name || '');
       setPhone(updated.phone || '');
       setAddress(updated.address || '');
+      setVenmoHandle(updated.venmo_handle || '');
+      setPaypalHandle(updated.paypal_handle || '');
+      setUpiId(updated.upi_id || '');
       setSuccess('Profile updated');
     } catch (e) {
       setError('Failed to update profile');
@@ -103,6 +115,20 @@ const ProfilePage: React.FC = () => {
               </Grid>
               <Grid size={12}>
                 <TextField label="Address" fullWidth multiline rows={2} value={address} onChange={e => setAddress(e.target.value)} />
+              </Grid>
+              <Grid size={12}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
+                  Payment handles (for Settle Up deep links)
+                </Typography>
+              </Grid>
+              <Grid size={12}>
+                <TextField label="Venmo username" placeholder="@yourname" fullWidth value={venmoHandle} onChange={e => setVenmoHandle(e.target.value)} />
+              </Grid>
+              <Grid size={12}>
+                <TextField label="PayPal.me username" fullWidth value={paypalHandle} onChange={e => setPaypalHandle(e.target.value)} />
+              </Grid>
+              <Grid size={12}>
+                <TextField label="UPI ID" placeholder="yourname@bank" fullWidth value={upiId} onChange={e => setUpiId(e.target.value)} />
               </Grid>
               <Grid size={12}>
                 <Button type="submit" variant="contained" fullWidth disabled={saving || loading}>

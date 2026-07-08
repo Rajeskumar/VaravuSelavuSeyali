@@ -51,7 +51,9 @@ describe('ItemInsightsPage', () => {
       max_price: 3.0,
       total_quantity_bought: 10,
       total_spent: 25.0,
+      // 2+ points required for the price history chart to render
       price_history: [
+        { date: '2025-09-01T12:00:00Z', store_name: 'Walmart', unit_price: 2.25, quantity: 4 },
         { date: '2025-10-01T12:00:00Z', store_name: 'Walmart', unit_price: 2.5, quantity: 4 }
       ],
       // 2+ stores required to clear the store-comparison quality gate
@@ -69,14 +71,14 @@ describe('ItemInsightsPage', () => {
     userEvent.click(itemButton);
 
     // Wait for detail view to load
-    expect(await screen.findByText(/Price Summary/i)).toBeInTheDocument();
-    
+    expect(await screen.findByText(/Where You've Bought This/i)).toBeInTheDocument();
+
     // Check specific details
-    expect(screen.getByText(/Store Comparison/i)).toBeInTheDocument();
     expect(screen.getByText(/Price History/i)).toBeInTheDocument();
-    
+    expect(screen.getByText(/Purchase History/i)).toBeInTheDocument();
+
     // Back button works
     userEvent.click(screen.getByTestId('ArrowBackRoundedIcon'));
-    expect(screen.queryByText(/Price Summary/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Where You've Bought This/i)).not.toBeInTheDocument();
   });
 });

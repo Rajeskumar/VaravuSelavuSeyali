@@ -11,6 +11,7 @@ import AddExpenseForm, { findMainCategory } from '../components/expenses/AddExpe
 import GroupScopeFilter from '../components/common/GroupScopeFilter';
 import ExpenseFeed, { FeedExpense } from '../components/expenses/ExpenseFeed';
 import ExpenseDetailSheet, { ExpenseDetailForm } from '../components/expenses/ExpenseDetailSheet';
+import MoveToGroupDialog from '../components/expenses/MoveToGroupDialog';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
 import {
   listAllMyGroupExpenses,
@@ -132,6 +133,7 @@ const ExpensesPage: React.FC = () => {
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [detailSaving, setDetailSaving] = React.useState(false);
   const [detailDeleting, setDetailDeleting] = React.useState(false);
+  const [moveExpense, setMoveExpense] = React.useState<FeedExpense | null>(null);
 
   const invalidateForScope = () => {
     queryClient.invalidateQueries({ queryKey: ['expenses', user] });
@@ -328,8 +330,28 @@ const ExpensesPage: React.FC = () => {
         onClose={() => setDetailOpen(false)}
         onSave={handleDetailSave}
         onDelete={handleDetailDelete}
+        onMoveToGroup={
+          groupsEnabled
+            ? (expense) => {
+                setDetailOpen(false);
+                setMoveExpense(expense);
+              }
+            : undefined
+        }
         saving={detailSaving}
         deleting={detailDeleting}
+      />
+
+      <MoveToGroupDialog
+        open={!!moveExpense}
+        expenseId={moveExpense ? (moveExpense.id as number) : null}
+        amount={moveExpense ? Math.abs(moveExpense.amount) : 0}
+        onClose={() => setMoveExpense(null)}
+        onSuccess={() => {
+          invalidateForScope();
+          setMoveExpense(null);
+          setToast({ open: true, message: 'Expense moved to group', severity: 'success' });
+        }}
       />
 
       <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>

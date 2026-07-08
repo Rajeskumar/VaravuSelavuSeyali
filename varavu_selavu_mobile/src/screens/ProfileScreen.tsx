@@ -18,7 +18,10 @@ export default function ProfileScreen({ navigation }: any) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
-  
+  const [venmoHandle, setVenmoHandle] = useState('');
+  const [paypalHandle, setPaypalHandle] = useState('');
+  const [upiId, setUpiId] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -33,6 +36,9 @@ export default function ProfileScreen({ navigation }: any) {
       setName(p.name || '');
       setPhone(p.phone || '');
       setAddress(p.address || '');
+      setVenmoHandle(p.venmo_handle || '');
+      setPaypalHandle(p.paypal_handle || '');
+      setUpiId(p.upi_id || '');
     } catch (e) {
       console.error('Failed to load profile', e);
       Alert.alert('Error', 'Could not load profile data.');
@@ -45,10 +51,16 @@ export default function ProfileScreen({ navigation }: any) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSaving(true);
     try {
-      const p = await updateProfile({ name, phone, address });
+      const p = await updateProfile({
+        name, phone, address,
+        venmo_handle: venmoHandle, paypal_handle: paypalHandle, upi_id: upiId,
+      });
       setName(p.name || '');
       setPhone(p.phone || '');
       setAddress(p.address || '');
+      setVenmoHandle(p.venmo_handle || '');
+      setPaypalHandle(p.paypal_handle || '');
+      setUpiId(p.upi_id || '');
       Alert.alert('Success', 'Profile updated successfully.');
     } catch (e) {
       console.error('Failed to update profile', e);
@@ -136,9 +148,39 @@ export default function ProfileScreen({ navigation }: any) {
               placeholderTextColor={theme.colors.textTertiary}
             />
 
-            <TouchableOpacity 
-              style={[styles.saveButton, saving && { opacity: 0.7 }]} 
-              onPress={handleSave} 
+            <Text style={styles.label}>Venmo username</Text>
+            <TextInput
+              style={styles.input}
+              value={venmoHandle}
+              onChangeText={setVenmoHandle}
+              placeholder="@yourname"
+              autoCapitalize="none"
+              placeholderTextColor={theme.colors.textTertiary}
+            />
+
+            <Text style={styles.label}>PayPal.me username</Text>
+            <TextInput
+              style={styles.input}
+              value={paypalHandle}
+              onChangeText={setPaypalHandle}
+              placeholder="yourname"
+              autoCapitalize="none"
+              placeholderTextColor={theme.colors.textTertiary}
+            />
+
+            <Text style={styles.label}>UPI ID</Text>
+            <TextInput
+              style={styles.input}
+              value={upiId}
+              onChangeText={setUpiId}
+              placeholder="yourname@bank"
+              autoCapitalize="none"
+              placeholderTextColor={theme.colors.textTertiary}
+            />
+
+            <TouchableOpacity
+              style={[styles.saveButton, saving && { opacity: 0.7 }]}
+              onPress={handleSave}
               disabled={saving}
             >
               <Text style={styles.saveButtonText}>

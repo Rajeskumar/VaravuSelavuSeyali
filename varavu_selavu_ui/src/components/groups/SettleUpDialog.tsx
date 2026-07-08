@@ -13,6 +13,7 @@ import { useTheme } from '@mui/material/styles';
 import { createSettlement, ApiError, MemberBalance } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import { withAlpha, reconcile, typeScale, tabularNums } from '../../theme';
+import { venmoLink, paypalMeLink, upiLink } from '../../utils/paymentDeepLinks';
 
 interface SettleUpDialogProps {
   open: boolean;
@@ -97,6 +98,16 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
 
   const isValid = fromMemberId && toMemberId && fromMemberId !== toMemberId && amount > 0;
   const saving = stage === 'settling';
+
+  // TS-GRP-130: payment deep links — the recipient ("to") is who the buttons pay.
+  // Clicking one only opens the user's own payment app; it never auto-records
+  // the settlement, which the user still confirms separately below.
+  const recipient = members.find((m) => m.member_id === toMemberId);
+  const note = `TrackSpense settlement`;
+  const paymentButtons: { label: string; href: string }[] = [];
+  if (recipient?.venmo_handle) paymentButtons.push({ label: 'Pay with Venmo', href: venmoLink(recipient.venmo_handle, amount || 0, note) });
+  if (recipient?.paypal_handle) paymentButtons.push({ label: 'Pay with PayPal', href: paypalMeLink(recipient.paypal_handle, amount || 0) });
+  if (recipient?.upi_id) paymentButtons.push({ label: 'Pay with UPI', href: upiLink(recipient.upi_id, amount || 0, note) });
 
   const handleSubmit = async () => {
     setError(null);
@@ -210,6 +221,29 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                   <Typography variant="caption" sx={{ fontWeight: 600 }}>
                     {nameFor(toMemberId)}
                   </Typography>
+                </Box>
+              </Box>
+            )}
+
+            {paymentButtons.length > 0 && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Open {nameFor(toMemberId)}'s payment app, then confirm below once you've paid.
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {paymentButtons.map((b) => (
+                    <Button
+                      key={b.label}
+                      size="small"
+                      variant="outlined"
+                      component="a"
+                      href={b.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {b.label}
+                    </Button>
+                  ))}
                 </Box>
               </Box>
             )}

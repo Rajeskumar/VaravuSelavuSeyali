@@ -14,11 +14,13 @@ def mock_db_session():
 
 def test_calculate_merchant_metrics_no_data(mock_db_session):
     """Test that an empty list is returned when there are no expenses."""
-    mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
-    
+    # 4 chained .filter() calls: user_email, group_id.is_(None) (TS-GRP-106/134
+    # personal-only guard), merchant_name != None, *date_filters.
+    mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = []
+
     service = InsightAnalyticsService(db=mock_db_session)
     result = service.calculate_merchant_metrics(user_id="test@example.com")
-    
+
     assert result == []
 
 def test_calculate_merchant_metrics_with_data(mock_db_session):
@@ -28,7 +30,7 @@ def test_calculate_merchant_metrics_with_data(mock_db_session):
         ("costco", "Costco", 500.0, 2, datetime(2023, 1, 10), datetime(2023, 1, 20)),
         ("amazon", "Amazon", 300.0, 3, datetime(2023, 1, 5), datetime(2023, 1, 25)),
     ]
-    mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = mock_expenses
+    mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = mock_expenses
     
     service = InsightAnalyticsService(db=mock_db_session)
     results = service.calculate_merchant_metrics(user_id="test@example.com")

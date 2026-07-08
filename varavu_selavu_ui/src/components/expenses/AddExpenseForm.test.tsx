@@ -59,7 +59,7 @@ test('add and delete items, save enabled on mismatch', async () => {
   fireEvent.click(screen.getAllByText('Delete')[0]);
   expect(screen.getAllByLabelText('Name').length).toBe(1);
 
-  fireEvent.change(screen.getByLabelText(/Cost \(USD\)/i), { target: { value: '2' } });
+  fireEvent.change(screen.getByLabelText(/^Cost\b/i), { target: { value: '2' } });
   expect(
     screen.getByText((content) => content.startsWith('Totals mismatch by $'))
   ).toBeTruthy();

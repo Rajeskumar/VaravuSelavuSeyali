@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Paper, Chip, IconButton, LinearProgress, Button, Skeleton, Grid, useTheme,
+  Box, Typography, Paper, Chip, IconButton, LinearProgress, Button, Skeleton, useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded';
 import StorefrontIcon from '@mui/icons-material/StorefrontRounded';
@@ -11,7 +11,7 @@ import {
   getTopMerchants, getMerchantDetail,
   MerchantInsightSummary, MerchantInsightDetail,
 } from '../api/analytics';
-import InsightScopeFilter, { ScopeBadge, defaultInsightScopeState, resolveScopeFilters } from '../components/common/InsightScopeFilter';
+import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../components/common/InsightScopeFilter';
 import { motion } from 'framer-motion';
 
 // Reconcile components
@@ -33,7 +33,7 @@ const MerchantInsightsPage: React.FC = () => {
   const [scope, setScope] = useState(defaultInsightScopeState());
   const location = useLocation();
 
-  const activeFilters = resolveScopeFilters(scope);
+  const activeFilters = useMemo(() => resolveScopeFilters(scope), [scope]);
 
   useEffect(() => {
     if (!userId) return;
@@ -42,7 +42,7 @@ const MerchantInsightsPage: React.FC = () => {
       .then(setMerchants)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [userId, scope.mode, scope.year, scope.month, scope.startDate, scope.endDate]);
+  }, [userId, activeFilters]);
 
   useEffect(() => {
     if (!userId) return;
@@ -61,7 +61,7 @@ const MerchantInsightsPage: React.FC = () => {
         }
       })();
     }
-  }, [location.search, userId]);
+  }, [location.search, userId, activeFilters]);
 
   const handleSelect = async (m: MerchantInsightSummary) => {
     setDetailLoading(true);
@@ -291,10 +291,11 @@ const MerchantInsightsPage: React.FC = () => {
         ) : (
           <Box sx={{ position: 'relative' }}>
             {detailLoading && <LinearProgress sx={{ position: 'absolute', top: -4, left: 0, right: 0, borderRadius: 2 }} />}
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Box role="list" sx={{ display: 'flex', flexDirection: 'column' }}>
               {listRows.map((row) => (
                 <Box
                   key={row.merchant_name}
+                  role="listitem"
                   component="button"
                   onClick={() => handleSelect(row)}
                   sx={{

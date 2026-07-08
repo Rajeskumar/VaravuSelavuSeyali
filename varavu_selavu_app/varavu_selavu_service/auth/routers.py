@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -138,33 +139,59 @@ class ProfileResponse(BaseModel):
     name: str | None = None
     phone: str | None = None
     address: str | None = None
+    # TS-GRP-130: payment deep-link handles — client-constructed URLs only,
+    # TrackSpense never touches money or these providers' APIs.
+    venmo_handle: str | None = None
+    paypal_handle: str | None = None
+    upi_id: str | None = None
 
 
 class UpdateProfileRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
     address: str | None = None
+    venmo_handle: str | None = None
+    paypal_handle: str | None = None
+    upi_id: str | None = None
+
+
+def _profile_dto(user: str, payload: Optional[UpdateProfileRequest], data: dict) -> dict:
+    def field(name: str):
+        override = getattr(payload, name, None) if payload is not None else None
+        return override if override is not None else (data.get(name) or data.get(name.capitalize()) or None)
+
+    return {
+        "email": user,
+        "name": field("name"),
+        "phone": field("phone"),
+        "address": field("address"),
+        "venmo_handle": field("venmo_handle"),
+        "paypal_handle": field("paypal_handle"),
+        "upi_id": field("upi_id"),
+    }
 
 
 @router.get("/profile", response_model=ProfileResponse)
 def get_profile(user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
     data = auth.get_user(user) or {}
-    name = data.get("name") or data.get("Name") or None
-    phone = data.get("phone") or data.get("Phone") or None
-    address = data.get("address") or data.get("Address") or None
-    return {"email": user, "name": name, "phone": phone, "address": address}
+    return _profile_dto(user, None, data)
 
 
 @router.put("/profile", response_model=ProfileResponse)
 def update_profile(payload: UpdateProfileRequest, user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
-    ok = auth.update_profile(email=user, name=payload.name, phone=payload.phone, address=payload.address)
+    ok = auth.update_profile(
+        email=user,
+        name=payload.name,
+        phone=payload.phone,
+        address=payload.address,
+        venmo_handle=payload.venmo_handle,
+        paypal_handle=payload.paypal_handle,
+        upi_id=payload.upi_id,
+    )
     if not ok:
         raise HTTPException(status_code=400, detail="Unable to update profile")
     data = auth.get_user(user) or {}
-    name = payload.name if payload.name is not None else (data.get("name") or data.get("Name") or None)
-    phone = payload.phone if payload.phone is not None else (data.get("phone") or data.get("Phone") or None)
-    address = payload.address if payload.address is not None else (data.get("address") or data.get("Address") or None)
-    return {"email": user, "name": name, "phone": phone, "address": address}
+    return _profile_dto(user, payload, data)
 
 @router.delete("/profile")
 def delete_profile(user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):

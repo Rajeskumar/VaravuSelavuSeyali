@@ -237,10 +237,11 @@ const ItemInsightsPage: React.FC = () => {
         ) : (
           <Box sx={{ position: 'relative' }}>
             {detailLoading && <LinearProgress sx={{ position: 'absolute', top: -4, left: 0, right: 0, borderRadius: 2 }} />}
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Box role="list" sx={{ display: 'flex', flexDirection: 'column' }}>
               {listRows.map((row) => (
                 <Box
                   key={row.id || row.item_name || row.normalized_name}
+                  role="listitem"
                   component="button"
                   onClick={() => handleSelect(row)}
                   sx={{

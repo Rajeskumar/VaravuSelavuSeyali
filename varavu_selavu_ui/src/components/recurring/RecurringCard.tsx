@@ -1,8 +1,10 @@
 import React from 'react';
-import { Box, Typography, Switch, useTheme, IconButton, Menu, MenuItem } from '@mui/material';
+import { Box, Typography, Switch, useTheme, IconButton, Menu, MenuItem, ButtonBase } from '@mui/material';
 import MoreVertIcon from '@mui/icons-material/MoreVertRounded';
 import EditIcon from '@mui/icons-material/EditRounded';
 import DeleteIcon from '@mui/icons-material/DeleteRounded';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { RecurringTemplateDTO } from '../../api/recurring';
 import { typeScale } from '../../theme';
 
@@ -11,6 +13,7 @@ interface RecurringCardProps {
   onToggle: (item: RecurringTemplateDTO, newStatus: string) => void;
   onEdit: (item: RecurringTemplateDTO) => void;
   onDelete: (item: RecurringTemplateDTO) => void;
+  onRunNow?: (item: RecurringTemplateDTO) => void;
 }
 
 function getNextDue(dayOfMonth: number): string {
@@ -28,10 +31,12 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, onEdit, onDelete }) => {
+export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, onEdit, onDelete, onRunNow }) => {
   const theme = useTheme();
   const isActive = item.status === 'Active';
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const [justRun, setJustRun] = React.useState(false);
+
   
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
@@ -90,37 +95,60 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
         <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary' }}>
           {item.category}
         </Typography>
-        {isActive ? (
-          <Typography
-            component="span"
-            sx={{
-              fontFamily: 'Inter',
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'success.main',
-              backgroundColor: `${theme.palette.success.main}14`,
-              padding: '3px 8px',
-              borderRadius: 999,
-            }}
-          >
-            Due {getNextDue(item.day_of_month)}
-          </Typography>
-        ) : (
-          <Typography
-            component="span"
-            sx={{
-              fontFamily: 'Inter',
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'text.secondary',
-              backgroundColor: theme.palette.divider,
-              padding: '3px 8px',
-              borderRadius: 999,
-            }}
-          >
-            Paused
-          </Typography>
-        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {isActive && onRunNow && (
+            <ButtonBase
+              onClick={() => {
+                if (justRun) return;
+                setJustRun(true);
+                onRunNow(item);
+                setTimeout(() => setJustRun(false), 2000);
+              }}
+              sx={{
+                fontFamily: 'Inter', fontSize: 11, fontWeight: 600,
+                color: justRun ? 'success.main' : 'text.primary',
+                border: `1px solid ${justRun ? theme.palette.success.main : theme.palette.divider}`,
+                backgroundColor: justRun ? `${theme.palette.success.main}14` : 'background.paper',
+                padding: '2px 8px', borderRadius: 999,
+                display: 'flex', alignItems: 'center', gap: 0.5,
+              }}
+            >
+              {justRun ? <CheckRoundedIcon sx={{ fontSize: 12 }} /> : <PlayArrowRoundedIcon sx={{ fontSize: 12 }} />}
+              {justRun ? 'Logged' : 'Run now'}
+            </ButtonBase>
+          )}
+          {isActive ? (
+            <Typography
+              component="span"
+              sx={{
+                fontFamily: 'Inter',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'success.main',
+                backgroundColor: `${theme.palette.success.main}14`,
+                padding: '3px 8px',
+                borderRadius: 999,
+              }}
+            >
+              Due {getNextDue(item.day_of_month)}
+            </Typography>
+          ) : (
+            <Typography
+              component="span"
+              sx={{
+                fontFamily: 'Inter',
+                fontSize: 11,
+                fontWeight: 600,
+                color: 'text.secondary',
+                backgroundColor: theme.palette.divider,
+                padding: '3px 8px',
+                borderRadius: 999,
+              }}
+            >
+              Paused
+            </Typography>
+          )}
+        </Box>
       </Box>
       
       <Box

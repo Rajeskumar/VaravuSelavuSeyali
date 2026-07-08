@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,7 @@ import { MemberDTO, MemberBalance, recordSettlement } from '../api/groups';
 import CustomButton from './CustomButton';
 import { showToast } from './Toast';
 import { memberColor, initialsFromName } from './BalanceRow';
+import { venmoLink, paypalMeLink, upiLink } from '../utils/paymentDeepLinks';
 
 type Stage = 'review' | 'settling' | 'done';
 
@@ -92,6 +94,18 @@ export default function SettleUpSheet({
 
   const fromMember = members.find((m) => m.member_id === fromMemberId);
   const toMember = members.find((m) => m.member_id === toMemberId);
+  const toBalance = balances.find((b) => b.member_id === toMemberId);
+
+  // TS-GRP-130: payment deep links — opens the user's own payment app with
+  // the amount pre-filled; never auto-records the settlement.
+  const paymentButtons: { label: string; url: string }[] = [];
+  const parsedAmountForLinks = parseFloat(amount) || 0;
+  if (parsedAmountForLinks > 0 && toBalance) {
+    const note = 'TrackSpense settlement';
+    if (toBalance.venmo_handle) paymentButtons.push({ label: 'Venmo', url: venmoLink(toBalance.venmo_handle, parsedAmountForLinks, note) });
+    if (toBalance.paypal_handle) paymentButtons.push({ label: 'PayPal', url: paypalMeLink(toBalance.paypal_handle, parsedAmountForLinks) });
+    if (toBalance.upi_id) paymentButtons.push({ label: 'UPI', url: upiLink(toBalance.upi_id, parsedAmountForLinks, note) });
+  }
 
   React.useEffect(() => {
     if (visible) {
@@ -209,6 +223,20 @@ export default function SettleUpSheet({
                   autoFocus
                 />
               </View>
+
+              {paymentButtons.length > 0 && (
+                <View style={styles.paymentButtonsRow}>
+                  {paymentButtons.map((b) => (
+                    <Pressable
+                      key={b.label}
+                      style={styles.paymentButton}
+                      onPress={() => Linking.openURL(b.url).catch(() => showToast({ message: `Couldn't open ${b.label}`, type: 'error' }))}
+                    >
+                      <Text style={styles.paymentButtonText}>Pay with {b.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
 
               <CustomButton
                 title={stage === 'settling' ? 'Settling…' : 'Record Payment'}
@@ -340,5 +368,24 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.text,
       minWidth: 120,
       textAlign: 'center',
+    },
+    paymentButtonsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      justifyContent: 'center',
+      marginBottom: 4,
+    },
+    paymentButton: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.border,
+    },
+    paymentButtonText: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 13,
+      color: theme.colors.primary,
     },
   });

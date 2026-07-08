@@ -11,10 +11,13 @@ import Dialog from '@mui/material/Dialog';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import CircularProgress from '@mui/material/CircularProgress';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import AddIcon from '@mui/icons-material/Add';
 import { motion } from 'framer-motion';
 import GroupCard from '../components/groups/GroupCard';
+import FriendBalancesWidget from '../components/groups/FriendBalancesWidget';
 import { listGroups, createGroup, ApiError } from '../api/groups';
 import { reconcile, withAlpha } from '../theme';
 
@@ -31,7 +34,13 @@ const GroupsPage: React.FC = () => {
   const jade = isDark ? reconcile.jadeDark : reconcile.jade;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data, isLoading, error } = useQuery({ queryKey: ['groups'], queryFn: listGroups });
+  const [tabIndex, setTabIndex] = React.useState(0);
+  
+  const includeArchived = tabIndex === 1;
+  const { data, isLoading, error } = useQuery({ 
+    queryKey: ['groups', includeArchived], 
+    queryFn: () => listGroups(includeArchived) 
+  });
 
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState('');
@@ -39,7 +48,12 @@ const GroupsPage: React.FC = () => {
   const [saving, setSaving] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
 
-  const groups = data || [];
+  const allGroups = data || [];
+  const groups = allGroups.filter((g) => {
+    if (tabIndex === 0) return g.status === 'active';
+    if (tabIndex === 1) return g.status === 'archived';
+    return false;
+  });
   const notEnabled = error instanceof ApiError && error.status === 404;
 
   const handleCreate = async () => {
@@ -114,6 +128,17 @@ const GroupsPage: React.FC = () => {
           </Box>
         )}
 
+        {!isLoading && !notEnabled && tabIndex === 0 && <FriendBalancesWidget />}
+
+        {!isLoading && !notEnabled && (
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+            <Tabs value={tabIndex} onChange={(_, val) => setTabIndex(val)}>
+              <Tab label="Active" />
+              <Tab label="Archived" />
+            </Tabs>
+          </Box>
+        )}
+
         {!isLoading && groups.length === 0 && (
           <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
             <Box
@@ -133,14 +158,18 @@ const GroupsPage: React.FC = () => {
               👥
             </Box>
             <Typography variant="h6" fontWeight={700} gutterBottom>
-              No groups yet
+              {tabIndex === 0 ? 'No active groups yet' : 'No archived groups'}
             </Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 380, mx: 'auto' }}>
-              Create a group to split rent, trips, or shared bills with roommates and friends.
+              {tabIndex === 0 
+                ? 'Create a group to split rent, trips, or shared bills with roommates and friends.' 
+                : 'Groups you archive will appear here.'}
             </Typography>
-            <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
-              Create your first group
-            </Button>
+            {tabIndex === 0 && (
+              <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+                Create your first group
+              </Button>
+            )}
           </Paper>
         )}
 

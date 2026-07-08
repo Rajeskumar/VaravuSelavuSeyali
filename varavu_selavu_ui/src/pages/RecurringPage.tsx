@@ -1,8 +1,8 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, RecurringTemplateDTO } from '../api/recurring';
+import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../api/recurring';
 import { suggestCategory } from '../api/expenses';
-import { Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControlLabel, Switch, Drawer, useTheme, IconButton, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControlLabel, Switch, Drawer, IconButton, CircularProgress } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddRounded';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import { motion } from 'framer-motion';
@@ -11,7 +11,6 @@ import { RecurringCard } from '../components/recurring/RecurringCard';
 import { typeScale } from '../theme';
 
 const RecurringPage: React.FC = () => {
-  const theme = useTheme();
   const qc = useQueryClient();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['recurring-templates'],
@@ -148,6 +147,17 @@ const RecurringPage: React.FC = () => {
     });
   };
 
+  const handleRunNow = async (item: RecurringTemplateDTO) => {
+    try {
+      await executeRecurringNow(item.id, item.default_cost);
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['all-group-expenses'] });
+      setToast({ open: true, message: 'Recurring expense logged', severity: 'success' });
+    } catch {
+      setToast({ open: true, message: 'Failed to run expense', severity: 'error' });
+    }
+  };
+
   return (
     <Box sx={{ maxWidth: 600, mx: 'auto', pb: 8, pt: 2 }}>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
@@ -189,6 +199,7 @@ const RecurringPage: React.FC = () => {
               onToggle={handleToggle}
               onEdit={handleEditClick}
               onDelete={(t) => { setPendingDelete(t); setConfirmDeleteOpen(true); }}
+              onRunNow={handleRunNow}
             />
           ))}
           {templates.length === 0 && !isLoading && !isError && (

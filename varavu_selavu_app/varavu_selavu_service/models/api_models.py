@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, EmailStr, Field, conint
@@ -273,6 +274,8 @@ class RecurringTemplateDTO(BaseModel):
     start_date_iso: str
     last_processed_iso: str | None = None
     status: str = "Active"
+    group_id: str | None = None
+    split_config: Optional["GroupSplitConfig"] = None
 
 
 class UpsertRecurringTemplateRequest(BaseModel):
@@ -283,6 +286,8 @@ class UpsertRecurringTemplateRequest(BaseModel):
     default_cost: float
     start_date_iso: str | None = None
     status: str = "Active"
+    group_id: str | None = None
+    split_config: Optional["GroupSplitConfig"] = None
 
 
 class DueOccurrenceDTO(BaseModel):
@@ -312,6 +317,8 @@ class UpdateGroupRequest(BaseModel):
     name: Optional[str] = None
     group_type: Optional[str] = None
     cover: Optional[str] = None
+    simplify_debts: Optional[bool] = None
+    default_split: Optional["GroupSplitConfig"] = None
 
 
 class MemberDTO(BaseModel):
@@ -328,6 +335,9 @@ class GroupSummary(BaseModel):
     group_type: str
     member_count: int
     my_balance: float = 0.0  # real balance computation lands with TS-GRP-104
+    status: str
+    archived_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
 
 
 class GroupDetailResponse(BaseModel):
@@ -337,9 +347,23 @@ class GroupDetailResponse(BaseModel):
     cover: Optional[str] = None
     currency: str
     simplify_debts: bool
+    default_split: Optional["GroupSplitConfig"] = None
+    archived_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
     status: str
     members: List[MemberDTO]
 
+class GroupActivityDTO(BaseModel):
+    id: str
+    action: str
+    actor_member_id: Optional[str] = None
+    entity_id: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
+    created_at: str
+
+class GroupActivityListResponse(BaseModel):
+    items: List[GroupActivityDTO]
+    next_offset: Optional[int] = None
 
 class AddMemberRequest(BaseModel):
     email: Optional[EmailStr] = None
@@ -393,7 +417,13 @@ class GroupSplitEntry(BaseModel):
 
 
 class GroupSplitConfig(BaseModel):
-    type: str  # equal|exact|percentage (Phase 1)
+    """
+    Configuration for how an expense is divided among members.
+    type: 'equal', 'exact', 'percentage', 'shares', 'adjustment' (Phase 1 & 2)
+    entries: List of member-specific values (amounts or percentages or shares/adjustments).
+             Required for all types except 'equal'.
+    """
+    type: str = Field(..., description="The split mechanism: equal, exact, percentage, shares, or adjustment")
     entries: List[GroupSplitEntry] = []
 
 
@@ -410,6 +440,48 @@ class GroupExpenseRequest(BaseModel):
     merchant_name: Optional[str] = None
     payers: List[GroupExpensePayerEntry]
     split: GroupSplitConfig
+    # TS-GRP-131: currency this expense was actually paid in. None/omitted means
+    # "same as the group's currency" (the common case — no FX lookup needed).
+    currency: Optional[str] = None
+
+
+class MoveToGroupRequest(BaseModel):
+    """TS-GRP-121: converts an existing personal expense into a group expense
+    in place. The converter becomes sole payer by default (E11)."""
+    group_id: str
+    split: GroupSplitConfig
+
+
+class GroupExpenseItemEntry(BaseModel):
+    line_no: int
+    item_name: str
+    normalized_name: str | None = None
+    category_id: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
+    line_total: float
+    tax: float | None = 0
+    discount: float | None = 0
+    attributes_json: str | None = None
+    member_ratios: Dict[str, float]
+
+
+class GroupExpenseWithItemsRequest(BaseModel):
+    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    description: str
+    category: str
+    amount: float
+    merchant_name: Optional[str] = None
+    payers: List[GroupExpensePayerEntry]
+    items: List[GroupExpenseItemEntry]
+    currency: Optional[str] = None
+
+
+class GroupExpenseWithItemsResponse(BaseModel):
+    expense_id: str
+    item_ids: List[str]
+    my_share: float
 
 
 class PayerSummaryItem(BaseModel):
@@ -426,6 +498,8 @@ class GroupExpenseRow(BaseModel):
     merchant_name: Optional[str] = None
     my_share: float
     payer_summary: List[PayerSummaryItem]
+    currency: Optional[str] = None
+    fx_rate_to_group_currency: Optional[float] = None
 
 
 class GroupExpenseCreatedResponse(BaseModel):
@@ -442,6 +516,11 @@ class MemberBalance(BaseModel):
     member_id: str
     display_name: str
     net: float
+    # TS-GRP-130: only populated for registered members, so the web/mobile
+    # SettleUpDialog can offer a payment deep-link button.
+    venmo_handle: Optional[str] = None
+    paypal_handle: Optional[str] = None
+    upi_id: Optional[str] = None
 
 
 class BalanceTransfer(BaseModel):
@@ -481,4 +560,105 @@ class SendEmailRequest(BaseModel):
 class SendEmailResponse(BaseModel):
     success: bool
     message: str = "Email sent"
+
+
+# ---------------------- Notification preferences (TS-GRP-125) ---------------------- #
+
+class GroupNotificationPreferenceDTO(BaseModel):
+    group_id: str
+    muted: bool
+    muted_events: List[str]
+
+
+class UpdateNotificationPreferenceRequest(BaseModel):
+    muted: Optional[bool] = None
+    muted_events: Optional[List[str]] = None
+
+
+# ---------------------- Expense comments (TS-GRP-126) ---------------------- #
+
+class AddCommentRequest(BaseModel):
+    body: str
+
+
+class ExpenseCommentDTO(BaseModel):
+    id: str
+    expense_id: str
+    member_id: str
+    author_display_name: str
+    body: str
+    created_at: str
+    edited_at: Optional[str] = None
+
+
+class ExpenseCommentListResponse(BaseModel):
+    items: List[ExpenseCommentDTO]
+
+
+# ---------------------- Expense edit history (TS-GRP-127) ---------------------- #
+
+class ExpenseHistoryEntryDTO(BaseModel):
+    action: str
+    actor_display_name: str
+    changed_fields: Dict[str, Any]
+    created_at: str
+
+
+class ExpenseHistoryResponse(BaseModel):
+    items: List[ExpenseHistoryEntryDTO]
+
+
+# ---------------------- Cross-group friend balances (TS-GRP-128) ---------------------- #
+
+class FriendBalanceGroupBreakdown(BaseModel):
+    group_id: str
+    name: str
+    net: float
+
+
+class FriendBalanceDTO(BaseModel):
+    counterparty_email: Optional[str] = None
+    counterparty_display_name: str
+    net: float
+    groups: List[FriendBalanceGroupBreakdown]
+
+
+class FriendBalancesResponse(BaseModel):
+    balances: List[FriendBalanceDTO]
+
+
+# ---------------------- Settle-by-expense (TS-GRP-129) ---------------------- #
+
+class SettleExpenseShareRequest(BaseModel):
+    member_id: str
+    payer_member_id: Optional[str] = None
+    method: Optional[str] = None
+    notes: Optional[str] = None
+
+
+# ---------------------- Payment deep links (TS-GRP-130) ---------------------- #
+
+class PaymentHandlesDTO(BaseModel):
+    venmo_handle: Optional[str] = None
+    paypal_handle: Optional[str] = None
+    upi_id: Optional[str] = None
+
+
+class UpdatePaymentHandlesRequest(BaseModel):
+    venmo_handle: Optional[str] = None
+    paypal_handle: Optional[str] = None
+    upi_id: Optional[str] = None
+
+
+# ---------------------- AI split suggestions (TS-GRP-133) ---------------------- #
+
+class SplitSuggestionDTO(BaseModel):
+    member_id: str
+    display_name: str
+    confidence: str  # high|medium|low
+    times_assigned: int
+
+
+class SplitSuggestionResponse(BaseModel):
+    suggestions: List[SplitSuggestionDTO]
 

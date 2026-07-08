@@ -31,12 +31,20 @@ async function throwApiError(res: Response, fallbackMessage: string): Promise<ne
 // Groups & membership (TS-GRP-102)
 // ---------------------------------------------------------------------------
 
+export interface GroupSplitConfig {
+  split_type: 'equal' | 'percentage' | 'shares' | 'adjustment';
+  entries: { member_id: string; value?: number }[];
+}
+
 export interface GroupSummary {
   group_id: string;
   name: string;
   group_type: string;
   member_count: number;
   my_balance: number;
+  status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface MemberDTO {
@@ -54,7 +62,10 @@ export interface GroupDetailResponse {
   cover?: string | null;
   currency: string;
   simplify_debts: boolean;
+  default_split: GroupSplitConfig | null;
   status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
   members: MemberDTO[];
 }
 
@@ -71,9 +82,34 @@ export async function createGroup(payload: CreateGroupPayload): Promise<GroupSum
   return res.json();
 }
 
-export async function listGroups(): Promise<GroupSummary[]> {
-  const res = await fetchWithAuth('/api/v1/groups');
-  if (!res.ok) await throwApiError(res, 'Failed to load groups');
+export async function listGroups(includeArchived = false, includeDeleted = false): Promise<GroupSummary[]> {
+  const params = new URLSearchParams();
+  if (includeArchived) params.set('include_archived', 'true');
+  if (includeDeleted) params.set('include_deleted', 'true');
+  
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetchWithAuth(`/api/v1/groups${qs}`);
+  if (!res.ok) await throwApiError(res, 'Failed to list groups');
+  return res.json();
+}
+
+export interface GroupActivityDTO {
+  id: string;
+  action: string;
+  actor_member_id: string | null;
+  entity_id: string | null;
+  payload: any | null;
+  created_at: string;
+}
+
+export interface GroupActivityListResponse {
+  items: GroupActivityDTO[];
+  next_offset: number | null;
+}
+
+export async function getGroupActivity(groupId: string, limit = 50, offset = 0): Promise<GroupActivityListResponse> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/activity?limit=${limit}&offset=${offset}`);
+  if (!res.ok) await throwApiError(res, 'Failed to load group activity');
   return res.json();
 }
 
@@ -85,7 +121,7 @@ export async function getGroup(groupId: string): Promise<GroupDetailResponse> {
 
 export async function updateGroup(
   groupId: string,
-  payload: { name?: string; group_type?: string; cover?: string }
+  payload: { name?: string; group_type?: string; cover?: string; simplify_debts?: boolean; default_split?: any }
 ): Promise<GroupDetailResponse> {
   const res = await fetchWithAuth(`/api/v1/groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) });
   if (!res.ok) await throwApiError(res, 'Failed to update group');
@@ -93,9 +129,31 @@ export async function updateGroup(
 }
 
 export async function deleteGroup(groupId: string, force = false): Promise<void> {
-  const qs = force ? '?force=true' : '';
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}${qs}`, { method: 'DELETE' });
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}?force=${force}`, {
+    method: 'DELETE',
+  });
   if (!res.ok) await throwApiError(res, 'Failed to delete group');
+}
+
+export async function archiveGroup(groupId: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/archive`, {
+    method: 'POST',
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to archive group');
+}
+
+export async function unarchiveGroup(groupId: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/unarchive`, {
+    method: 'POST',
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to unarchive group');
+}
+
+export async function restoreGroup(groupId: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/restore`, {
+    method: 'POST',
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to restore group');
 }
 
 export async function addMember(
@@ -160,6 +218,38 @@ export interface SplitEntryPayload {
   value?: number;
 }
 
+export interface GroupExpenseItemEntry {
+  line_no: number;
+  item_name: string;
+  normalized_name?: string | null;
+  category_id?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  line_total: number;
+  tax?: number | null;
+  discount?: number | null;
+  attributes_json?: string | null;
+  member_ratios: Record<string, number>;
+}
+
+export interface GroupExpenseWithItemsPayload {
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  merchant_name?: string;
+  payers: { member_id: string; amount_paid: number }[];
+  items: GroupExpenseItemEntry[];
+  currency?: string;
+}
+
+export interface GroupExpenseWithItemsResponse {
+  expense_id: string;
+  item_ids: string[];
+  my_share: number;
+}
+
 export interface GroupExpensePayload {
   date: string; // MM/DD/YYYY
   description: string;
@@ -167,7 +257,8 @@ export interface GroupExpensePayload {
   amount: number;
   merchant_name?: string;
   payers: { member_id: string; amount_paid: number }[];
-  split: { type: 'equal' | 'exact' | 'percentage'; entries: SplitEntryPayload[] };
+  split: { type: 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment'; entries: SplitEntryPayload[] };
+  currency?: string;
 }
 
 export interface PayerSummaryItem {
@@ -184,6 +275,8 @@ export interface GroupExpenseRow {
   merchant_name?: string | null;
   my_share: number;
   payer_summary: PayerSummaryItem[];
+  currency?: string | null;
+  fx_rate_to_group_currency?: number | null;
 }
 
 export interface GroupExpenseListResponse {
@@ -202,6 +295,18 @@ export async function createGroupExpense(
   if (!res.ok) await throwApiError(res, 'Failed to add group expense');
   const body = await res.json();
   return body.expense;
+}
+
+export async function createGroupExpenseWithItems(
+  groupId: string,
+  payload: GroupExpenseWithItemsPayload
+): Promise<GroupExpenseWithItemsResponse> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/itemized`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to add itemized group expense');
+  return res.json();
 }
 
 export async function listGroupExpenses(
@@ -255,10 +360,34 @@ export async function deleteGroupExpense(groupId: string, expenseId: string): Pr
   if (!res.ok) await throwApiError(res, 'Failed to delete group expense');
 }
 
+export interface MoveToGroupPayload {
+  group_id: string;
+  split: { type: 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment'; entries: SplitEntryPayload[] };
+}
+
+/** TS-GRP-121: converts an existing personal expense into a group expense in
+ * place (same expense id). The converter becomes sole payer server-side. */
+export async function moveExpenseToGroup(
+  expenseId: number | string,
+  payload: MoveToGroupPayload
+): Promise<GroupExpenseRow> {
+  const res = await fetchWithAuth(`/api/v1/expenses/${expenseId}/move_to_group`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to move expense to group');
+  const body = await res.json();
+  return body.expense;
+}
+
 export interface MemberBalance {
   member_id: string;
   display_name: string;
   net: number;
+  // TS-GRP-130: only populated for registered members with a handle on file.
+  venmo_handle?: string | null;
+  paypal_handle?: string | null;
+  upi_id?: string | null;
 }
 
 export interface BalanceTransfer {
@@ -326,4 +455,156 @@ export async function listSettlements(groupId: string): Promise<SettlementDTO[]>
 export async function deleteSettlement(groupId: string, settlementId: string): Promise<void> {
   const res = await fetchWithAuth(`/api/v1/groups/${groupId}/settlements/${settlementId}`, { method: 'DELETE' });
   if (!res.ok) await throwApiError(res, 'Failed to undo settlement');
+}
+
+export async function settleExpenseShare(
+  groupId: string,
+  expenseId: string,
+  payload: { member_id: string; payer_member_id?: string; method?: string; notes?: string }
+): Promise<SettlementDTO> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}/settle_share`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to settle share');
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Expense comments (TS-GRP-126)
+// ---------------------------------------------------------------------------
+
+export interface ExpenseCommentDTO {
+  id: string;
+  expense_id: string;
+  member_id: string;
+  author_display_name: string;
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+}
+
+export async function listExpenseComments(groupId: string, expenseId: string): Promise<ExpenseCommentDTO[]> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}/comments`);
+  if (!res.ok) await throwApiError(res, 'Failed to load comments');
+  return (await res.json()).items;
+}
+
+export async function addExpenseComment(groupId: string, expenseId: string, body: string): Promise<ExpenseCommentDTO> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to add comment');
+  return res.json();
+}
+
+export async function deleteExpenseComment(groupId: string, expenseId: string, commentId: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}/comments/${commentId}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to delete comment');
+}
+
+// ---------------------------------------------------------------------------
+// Expense edit history (TS-GRP-127)
+// ---------------------------------------------------------------------------
+
+export interface ExpenseHistoryEntry {
+  action: string;
+  actor_display_name: string;
+  changed_fields: Record<string, { from: any; to: any }> | Record<string, any>;
+  created_at: string;
+}
+
+export async function getExpenseHistory(groupId: string, expenseId: string): Promise<ExpenseHistoryEntry[]> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}/history`);
+  if (!res.ok) await throwApiError(res, 'Failed to load expense history');
+  return (await res.json()).items;
+}
+
+// ---------------------------------------------------------------------------
+// Notification preferences (TS-GRP-125)
+// ---------------------------------------------------------------------------
+
+export interface GroupNotificationPreference {
+  group_id: string;
+  muted: boolean;
+  muted_events: string[];
+}
+
+export async function getNotificationPreferences(groupId: string): Promise<GroupNotificationPreference> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/notification_preferences`);
+  if (!res.ok) await throwApiError(res, 'Failed to load notification preferences');
+  return res.json();
+}
+
+export async function updateNotificationPreferences(
+  groupId: string,
+  payload: { muted?: boolean; muted_events?: string[] }
+): Promise<GroupNotificationPreference> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/notification_preferences`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to update notification preferences');
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Cross-group friend balances (TS-GRP-128)
+// ---------------------------------------------------------------------------
+
+export interface FriendBalanceGroupBreakdown {
+  group_id: string;
+  name: string;
+  net: number;
+}
+
+export interface FriendBalanceDTO {
+  counterparty_email: string | null;
+  counterparty_display_name: string;
+  net: number;
+  groups: FriendBalanceGroupBreakdown[];
+}
+
+export async function getFriendBalances(): Promise<FriendBalanceDTO[]> {
+  const res = await fetchWithAuth('/api/v1/friends/balances');
+  if (!res.ok) await throwApiError(res, 'Failed to load friend balances');
+  return (await res.json()).balances;
+}
+
+// ---------------------------------------------------------------------------
+// AI split suggestions (TS-GRP-133)
+// ---------------------------------------------------------------------------
+
+export interface SplitSuggestionDTO {
+  member_id: string;
+  display_name: string;
+  confidence: 'high' | 'medium' | 'low';
+  times_assigned: number;
+}
+
+export async function suggestItemAssignment(groupId: string, itemName: string): Promise<SplitSuggestionDTO[]> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/items/suggest_assignment?item_name=${encodeURIComponent(itemName)}`);
+  if (!res.ok) await throwApiError(res, 'Failed to load split suggestions');
+  return (await res.json()).suggestions;
+}
+
+// ---------------------------------------------------------------------------
+// CSV export (TS-GRP-132)
+// ---------------------------------------------------------------------------
+
+export async function exportGroupCsv(groupId: string, groupName: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/export.csv`);
+  if (!res.ok) await throwApiError(res, 'Failed to export group');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${groupName.replace(/\s+/g, '_')}_export.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }

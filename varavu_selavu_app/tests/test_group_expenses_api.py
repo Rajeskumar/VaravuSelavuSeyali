@@ -163,7 +163,7 @@ def test_percentage_not_summing_to_100_returns_400_with_details(test_client, db_
     assert "total_percentage" in res.json()["detail"]
 
 
-def test_multiple_payers_rejected_in_phase_1(test_client, db_session):
+def test_multiple_payers_accepted(test_client, db_session):
     group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
 
     res = test_client.post(
@@ -180,8 +180,27 @@ def test_multiple_payers_rejected_in_phase_1(test_client, db_session):
             "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
         },
     )
-    assert res.status_code == 400
+    assert res.status_code == 201
 
+def test_multiple_payers_duplicate_payer_rejected(test_client, db_session):
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
+
+    res = test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Dinner",
+            "category": "Food & Drink",
+            "amount": 100.00,
+            "payers": [
+                {"member_id": m["test@user.com"], "amount_paid": 50.00},
+                {"member_id": m["test@user.com"], "amount_paid": 50.00},
+            ],
+            "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
+        },
+    )
+    assert res.status_code == 400
+    assert "Duplicate member_id in payers" in res.json()["detail"]
 
 def test_member_not_in_group_returns_400(test_client, db_session):
     group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
@@ -387,3 +406,57 @@ def test_random_amounts_sum_to_the_cent_after_persistence_and_readback(test_clie
         payers = db_session.query(ExpensePayer).filter(ExpensePayer.expense_id == expense_id).all()
         assert round(sum(float(s.amount_owed) for s in splits), 2) == amount
         assert round(sum(float(p.amount_paid) for p in payers), 2) == amount
+
+def test_create_itemized_group_expense(test_client, db_session):
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
+
+    res = test_client.post(
+        f"/api/v1/groups/{group_id}/expenses/itemized",
+        json={
+            "date": "01/15/2026",
+            "description": "Dinner",
+            "category": "Food",
+            "amount": 100.00,
+            "payers": [
+                {"member_id": m["test@user.com"], "amount_paid": 60.00},
+                {"member_id": m["b@test.com"], "amount_paid": 40.00}
+            ],
+            "items": [
+                {
+                    "line_no": 1,
+                    "item_name": "Steak",
+                    "line_total": 50.00,
+                    "member_ratios": {m["test@user.com"]: 1.0}
+                },
+                {
+                    "line_no": 2,
+                    "item_name": "Wine",
+                    "line_total": 40.00,
+                    "tax": 10.00, # Subtotal 90, tax 10 => 100 total
+                    "member_ratios": {m["b@test.com"]: 0.5, m["c@test.com"]: 0.5}
+                }
+            ]
+        },
+    )
+    
+    assert res.status_code == 201
+    body = res.json()["expense"]
+    
+    expense_id = uuid.UUID(body["row_id"])
+    splits = db_session.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).all()
+    
+    # A's subtotal: 50. Tax proportion: 50/90 * 10 = 5.555 -> 5.55 -> A total = 55.55
+    # B's subtotal: 20. Tax proportion: 20/90 * 10 = 2.222 -> 2.22 -> B total = 22.22
+    # C's subtotal: 20. Tax proportion: 20/90 * 10 = 2.222 -> 2.22 -> C total = 22.22
+    # Residual: 100 - (55.55 + 22.22 + 22.22) = 0.01.
+    # Remainders: A = 0.555 - 0.55 = 0.005. B = C = 0.222 - 0.22 = 0.002.
+    # So A gets the extra cent: 55.56
+    
+    a_owed = next(s.amount_owed for s in splits if str(s.member_id) == m["test@user.com"])
+    b_owed = next(s.amount_owed for s in splits if str(s.member_id) == m["b@test.com"])
+    c_owed = next(s.amount_owed for s in splits if str(s.member_id) == m["c@test.com"])
+    
+    assert float(a_owed) == 55.56
+    assert float(b_owed) == 22.22
+    assert float(c_owed) == 22.22
+

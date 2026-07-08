@@ -186,6 +186,66 @@ def _fetch_group_balance_summary(
     except Exception as e:
         return f"Error fetching group balances: {str(e)}"
 
+def _build_group_context_block(user_groups, analysis_service, balance_service, user_id, start_date=None, end_date=None, year=None, month=None) -> dict:
+    from varavu_selavu_service.db.models import Expense, GroupMember
+    from sqlalchemy import func
+    
+    if not user_groups or not analysis_service or not balance_service:
+        return {}
+        
+    is_sqlite = analysis_service.db.bind.dialect.name == "sqlite"
+    summaries = analysis_service._compute_group_summaries(
+        user_id=user_id,
+        year=year,
+        month=month,
+        start_date=start_date,
+        end_date=end_date,
+        is_sqlite=is_sqlite
+    )
+    
+    groups_data = []
+    date_filters = analysis_service._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
+    
+    for g in summaries:
+        gid = g["group_id"]
+        cats = (
+            analysis_service.db.query(Expense.category_id, func.sum(Expense.amount))
+            .filter(Expense.group_id == gid)
+            .filter(*date_filters)
+            .group_by(Expense.category_id)
+            .order_by(func.sum(Expense.amount).desc())
+            .limit(3)
+            .all()
+        )
+        top_cats = [c[0] or "Uncategorized" for c in cats]
+        
+        bal_res = balance_service.get_balances(gid, user_id)
+        
+        my_member = analysis_service.db.query(GroupMember).filter(
+            GroupMember.group_id == gid,
+            GroupMember.user_email == user_id
+        ).first()
+        my_mid = str(my_member.id) if my_member else None
+        
+        balances_with = []
+        for m in bal_res.get("members", []):
+            if str(m.get("member_id")) != my_mid:
+                balances_with.append({
+                    "name": m.get("display_name"),
+                    "net": m.get("net")
+                })
+                
+        groups_data.append({
+            "name": g["name"],
+            "my_share": g["my_share"],
+            "i_paid": g["i_paid"],
+            "group_total": g["group_total"],
+            "top_categories": top_cats,
+            "balances_with": balances_with
+        })
+        
+    return {"groups": groups_data}
+
 
 # --------------------------------------------------------------------------- #
 # Public API: Agentic Chat Model
@@ -262,8 +322,47 @@ def call_chat_model(
         def get_group_balance_summary(group_name: str) -> str:
             """Get who-owes-whom balances for a specific group the user belongs to, by group name."""
             return _fetch_group_balance_summary(group_name, user_groups, balance_service, user_id)
+            
+        @tool
+        def get_group_spend_summary(group_name: str) -> str:
+            """Get summary of spending for a specific group, including your share, amount you paid, group total, and top categories."""
+            match = next((g for g in user_groups if group_name.lower() in g["name"].lower()), None)
+            if not match:
+                return f"No group found matching: {group_name}"
+            
+            try:
+                # We can just use the context builder for a single group if we want, or just re-run it
+                ctx = _build_group_context_block(
+                    [match], analysis_service, balance_service, user_id,
+                    start_date=resolved_period.start_date, end_date=resolved_period.end_date,
+                    year=year, month=month
+                )
+                if ctx and ctx.get("groups"):
+                    import json
+                    return json.dumps(ctx["groups"][0], indent=2)
+                return "No spending data found for this group."
+            except Exception as e:
+                return f"Error fetching group spend summary: {str(e)}"
+                
+        @tool
+        def get_top_group_by_spend() -> str:
+            """Find out which group you are spending the most in."""
+            try:
+                ctx = _build_group_context_block(
+                    user_groups, analysis_service, balance_service, user_id,
+                    start_date=resolved_period.start_date, end_date=resolved_period.end_date,
+                    year=year, month=month
+                )
+                if ctx and ctx.get("groups"):
+                    # Rank by my_share
+                    sorted_groups = sorted(ctx["groups"], key=lambda g: g.get("my_share", 0), reverse=True)
+                    top_group = sorted_groups[0]
+                    return f"You are spending the most in '{top_group['name']}' with your share being ${top_group['my_share']}."
+                return "No group spending data available."
+            except Exception as e:
+                return f"Error fetching top group: {str(e)}"
 
-        tools.append(get_group_balance_summary)
+        tools.extend([get_group_balance_summary, get_group_spend_summary, get_top_group_by_spend])
 
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
@@ -334,11 +433,40 @@ def call_chat_model(
         else ResolvedScope(kind="personal")
     )
     scope_text = ""
+    intent_is_spend = "vs total" in query_text.lower() or "cost me" in query_text.lower()
+    
     if resolved_scope.kind == "group":
-        scope_text = (
-            f"\n\nThis question is about the group \"{resolved_scope.group_name}\" — prefer "
-            f"get_group_balance_summary for balance/who-owes-whom questions about it.\n"
-        )
+        if intent_is_spend:
+            scope_text = (
+                f"\n\nThis question is about the group \"{resolved_scope.group_name}\" — prefer "
+                f"get_group_spend_summary for questions comparing your share vs the group total.\n"
+            )
+        else:
+            scope_text = (
+                f"\n\nThis question is about the group \"{resolved_scope.group_name}\" — prefer "
+                f"get_group_balance_summary for balance/who-owes-whom questions and "
+                f"get_group_spend_summary for spend summary questions about it.\n"
+            )
+        
+    group_context_text = ""
+    if groups_enabled and user_groups and group_service is not None and balance_service is not None:
+        import json
+        try:
+            group_ctx = _build_group_context_block(
+                user_groups, analysis_service, balance_service, user_id, 
+                start_date=resolved_period.start_date, 
+                end_date=resolved_period.end_date, 
+                year=year, month=month
+            )
+            if group_ctx.get("groups"):
+                group_context_text = (
+                    f"\n\nGroup data (automatically fetched):\n"
+                    f"{json.dumps(group_ctx, indent=2)}\n"
+                    f"Use this data for questions about group spending, your share, or balances instead of guessing.\n"
+                    f"If the user asks 'Am I usually the one paying?' or similar, compare i_paid against group_total and member count to provide an interpretative answer.\n"
+                )
+        except Exception:
+            logger.exception("Failed to build group context block")
 
     # Pre-fetch targeted item/merchant context so the agent starts with the
     # right numbers already in hand instead of having to guess a tool call
@@ -388,7 +516,7 @@ def call_chat_model(
         "Use your tools to query the database for anything not already provided, and answer the "
         "user's questions clearly and concisely. "
         "Format your answer using markdown. "
-    ) + default_summary_text + rag_context_text + scope_text + history_text
+    ) + default_summary_text + rag_context_text + group_context_text + scope_text + history_text
 
     agent = create_react_agent(llm, tools, prompt=system_prompt)
 

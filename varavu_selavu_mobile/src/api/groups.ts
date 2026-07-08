@@ -39,6 +39,9 @@ export interface GroupSummary {
   group_type: string;
   member_count: number;
   my_balance: number;
+  status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface MemberDTO {
@@ -49,6 +52,28 @@ export interface MemberDTO {
   user_email?: string | null;
 }
 
+export async function updateGroup(
+  groupId: string,
+  payload: { name?: string; group_type?: string; cover?: string; simplify_debts?: boolean; default_split?: any }
+): Promise<GroupDetail> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) });
+  return handleResponse<GroupDetail>(res);
+}
+
+export interface GroupActivityDTO {
+  id: string;
+  action: string;
+  actor_member_id: string | null;
+  entity_id: string | null;
+  payload: any | null;
+  created_at: string;
+}
+
+export interface GroupActivityListResponse {
+  items: GroupActivityDTO[];
+  next_offset: number | null;
+}
+
 export interface GroupDetail {
   group_id: string;
   name: string;
@@ -56,7 +81,10 @@ export interface GroupDetail {
   cover?: string | null;
   currency: string;
   simplify_debts: boolean;
+  default_split?: any;
   status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
   members: MemberDTO[];
 }
 
@@ -74,6 +102,8 @@ export interface GroupExpenseRow {
   merchant_name?: string | null;
   my_share: number;
   payer_summary: PayerSummaryItem[];
+  currency?: string | null;
+  fx_rate_to_group_currency?: number | null;
 }
 
 export interface GroupExpenseListResponse {
@@ -85,6 +115,9 @@ export interface MemberBalance {
   member_id: string;
   display_name: string;
   net: number;
+  venmo_handle?: string | null;
+  paypal_handle?: string | null;
+  upi_id?: string | null;
 }
 
 export interface BalanceTransfer {
@@ -109,17 +142,44 @@ export interface CreateGroupPayload {
   currency?: string;
 }
 
+export interface PayerSummaryItem {
+  member_id: string;
+  amount_paid: number;
+}
+
+export interface GroupExpenseItemEntry {
+  line_no: number;
+  item_name: string;
+  line_total: number;
+  quantity?: number | null;
+  unit_price?: number | null;
+  category_name?: string | null;
+  member_ratios: Record<string, number>;
+}
+
 export interface AddGroupExpensePayload {
   date: string; // MM/DD/YYYY
   description: string;
   category: string;
   amount: number;
   merchant_name?: string;
-  payers: { member_id: string; amount_paid: number }[];
+  payers: PayerSummaryItem[];
   split: {
-    type: 'equal' | 'exact' | 'percentage';
+    type: 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
     entries?: { member_id: string; value?: number }[];
   };
+  currency?: string;
+}
+
+export interface GroupExpenseWithItemsPayload {
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  merchant_name?: string;
+  payers: PayerSummaryItem[];
+  items: GroupExpenseItemEntry[];
+  currency?: string;
 }
 
 export interface RecordSettlementPayload {
@@ -161,8 +221,13 @@ export async function checkGroupsEnabled(): Promise<boolean> {
   }
 }
 
-export async function listGroups(): Promise<GroupSummary[]> {
-  const res = await apiFetch('/api/v1/groups');
+export async function listGroups(includeArchived = false, includeDeleted = false): Promise<GroupSummary[]> {
+  const params = new URLSearchParams();
+  if (includeArchived) params.append('include_archived', 'true');
+  if (includeDeleted) params.append('include_deleted', 'true');
+  
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/api/v1/groups${qs}`);
   return handleResponse<GroupSummary[]>(res);
 }
 
@@ -173,6 +238,26 @@ export async function createGroup(payload: CreateGroupPayload): Promise<GroupSum
     body: JSON.stringify(payload),
   });
   return handleResponse<GroupSummary>(res);
+}
+
+export async function deleteGroup(groupId: string, force = false): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}?force=${force}`, { method: 'DELETE' });
+  return handleResponse<void>(res);
+}
+
+export async function archiveGroup(groupId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/archive`, { method: 'POST' });
+  return handleResponse<void>(res);
+}
+
+export async function unarchiveGroup(groupId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/unarchive`, { method: 'POST' });
+  return handleResponse<void>(res);
+}
+
+export async function restoreGroup(groupId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/restore`, { method: 'POST' });
+  return handleResponse<void>(res);
 }
 
 export async function getGroupDetail(groupId: string): Promise<GroupDetail> {
@@ -191,6 +276,11 @@ export async function addMember(
     body: JSON.stringify({ email, display_name: displayName }),
   });
   return handleResponse<MemberDTO>(res);
+}
+
+export async function getGroupActivity(groupId: string, limit = 50, offset = 0): Promise<GroupActivityListResponse> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/activity?limit=${limit}&offset=${offset}`);
+  return handleResponse<GroupActivityListResponse>(res);
 }
 
 export async function createInvite(groupId: string, memberId: string): Promise<CreateInviteResponse> {
@@ -234,6 +324,44 @@ export async function addGroupExpense(
   return data.expense;
 }
 
+export async function addGroupExpenseWithItems(
+  groupId: string,
+  payload: GroupExpenseWithItemsPayload,
+): Promise<GroupExpenseRow> {
+  // Backend route is /expenses/itemized (see groups_routes.py) — not /with_items,
+  // which only exists for the personal (non-group) receipt-scan endpoint.
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/itemized`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
+  return data.expense;
+}
+
+export interface MoveToGroupPayload {
+  group_id: string;
+  split: {
+    type: 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
+    entries: { member_id: string; value?: number }[];
+  };
+}
+
+/** TS-GRP-121: converts an existing personal expense into a group expense in
+ * place (same expense id). The converter becomes sole payer server-side. */
+export async function moveExpenseToGroup(
+  expenseId: number | string,
+  payload: MoveToGroupPayload,
+): Promise<GroupExpenseRow> {
+  const res = await apiFetch(`/api/v1/expenses/${expenseId}/move_to_group`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
+  return data.expense;
+}
+
 export async function getGroupBalances(groupId: string): Promise<BalanceResponse> {
   const res = await apiFetch(`/api/v1/groups/${groupId}/balances`);
   return handleResponse<BalanceResponse>(res);
@@ -249,4 +377,149 @@ export async function recordSettlement(
     body: JSON.stringify(payload),
   });
   await handleResponse<unknown>(res);
+}
+
+export async function settleExpenseShare(
+  groupId: string,
+  expenseId: string,
+  payload: { member_id: string; payer_member_id?: string; method?: string; notes?: string },
+): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/settle_share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  await handleResponse<unknown>(res);
+}
+
+// ---------------------------------------------------------------------------
+// Expense comments (TS-GRP-126)
+// ---------------------------------------------------------------------------
+
+export interface ExpenseCommentDTO {
+  id: string;
+  expense_id: string;
+  member_id: string;
+  author_display_name: string;
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+}
+
+export async function listExpenseComments(groupId: string, expenseId: string): Promise<ExpenseCommentDTO[]> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/comments`);
+  const data = await handleResponse<{ items: ExpenseCommentDTO[] }>(res);
+  return data.items;
+}
+
+export async function addExpenseComment(groupId: string, expenseId: string, body: string): Promise<ExpenseCommentDTO> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  });
+  return handleResponse<ExpenseCommentDTO>(res);
+}
+
+export async function deleteExpenseComment(groupId: string, expenseId: string, commentId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/comments/${commentId}`, {
+    method: 'DELETE',
+  });
+  await handleResponse<unknown>(res);
+}
+
+// ---------------------------------------------------------------------------
+// Expense edit history (TS-GRP-127)
+// ---------------------------------------------------------------------------
+
+export interface ExpenseHistoryEntry {
+  action: string;
+  actor_display_name: string;
+  changed_fields: Record<string, { from: any; to: any } | any>;
+  created_at: string;
+}
+
+export async function getExpenseHistory(groupId: string, expenseId: string): Promise<ExpenseHistoryEntry[]> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/history`);
+  const data = await handleResponse<{ items: ExpenseHistoryEntry[] }>(res);
+  return data.items;
+}
+
+// ---------------------------------------------------------------------------
+// Notification preferences (TS-GRP-125)
+// ---------------------------------------------------------------------------
+
+export interface GroupNotificationPreference {
+  group_id: string;
+  muted: boolean;
+  muted_events: string[];
+}
+
+export async function getNotificationPreferences(groupId: string): Promise<GroupNotificationPreference> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/notification_preferences`);
+  return handleResponse<GroupNotificationPreference>(res);
+}
+
+export async function updateNotificationPreferences(
+  groupId: string,
+  payload: { muted?: boolean; muted_events?: string[] },
+): Promise<GroupNotificationPreference> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/notification_preferences`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<GroupNotificationPreference>(res);
+}
+
+// ---------------------------------------------------------------------------
+// Cross-group friend balances (TS-GRP-128)
+// ---------------------------------------------------------------------------
+
+export interface FriendBalanceGroupBreakdown {
+  group_id: string;
+  name: string;
+  net: number;
+}
+
+export interface FriendBalanceDTO {
+  counterparty_email: string | null;
+  counterparty_display_name: string;
+  net: number;
+  groups: FriendBalanceGroupBreakdown[];
+}
+
+export async function getFriendBalances(): Promise<FriendBalanceDTO[]> {
+  const res = await apiFetch('/api/v1/friends/balances');
+  const data = await handleResponse<{ balances: FriendBalanceDTO[] }>(res);
+  return data.balances;
+}
+
+// ---------------------------------------------------------------------------
+// AI split suggestions (TS-GRP-133)
+// ---------------------------------------------------------------------------
+
+export interface SplitSuggestionDTO {
+  member_id: string;
+  display_name: string;
+  confidence: 'high' | 'medium' | 'low';
+  times_assigned: number;
+}
+
+export async function suggestItemAssignment(groupId: string, itemName: string): Promise<SplitSuggestionDTO[]> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/items/suggest_assignment?item_name=${encodeURIComponent(itemName)}`);
+  const data = await handleResponse<{ suggestions: SplitSuggestionDTO[] }>(res);
+  return data.suggestions;
+}
+
+// ---------------------------------------------------------------------------
+// CSV export (TS-GRP-132)
+// ---------------------------------------------------------------------------
+
+export async function fetchGroupExportCsv(groupId: string): Promise<string> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/export.csv`);
+  if (!res.ok) {
+    throw new ApiError('Failed to export group', res.status, null);
+  }
+  return res.text();
 }

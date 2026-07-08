@@ -51,7 +51,7 @@ def resolve_split(amount: Decimal, split_type: str, entries: List[Dict[str, Any]
     if amount < Decimal('0.00'):
         raise SplitError("Amount cannot be negative")
         
-    if split_type not in ["equal", "exact", "percentage"]:
+    if split_type not in ["equal", "exact", "percentage", "shares", "adjustment"]:
         raise SplitError(f"Unsupported split_type: {split_type}")
 
     raw_shares = []
@@ -134,6 +134,69 @@ def resolve_split(amount: Decimal, split_type: str, entries: List[Dict[str, Any]
                 "Percentages do not sum to 100",
                 {"total_percentage": str(total_pct)}
             )
+
+    elif split_type == "shares":
+        if not entries:
+            raise SplitError("No entries provided for shares split")
+        
+        total_shares = Decimal('0.00')
+        valid_entries = []
+        for e in entries:
+            member_id = e.get('member_id')
+            if not member_id:
+                raise SplitError("Entry missing member_id")
+            val_raw = e.get('value', 0)
+            val = Decimal(str(val_raw))
+            if val <= Decimal('0.00'):
+                raise SplitError("Share values must be strictly positive")
+            if val % Decimal('1.00') != Decimal('0.00'):
+                raise SplitError("Share values must be integers")
+            total_shares += val
+            valid_entries.append((member_id, val))
+            
+        if total_shares == Decimal('0.00'):
+            raise SplitError("Total shares must be greater than 0")
+            
+        for member_id, val in valid_entries:
+            raw_amt = amount * (val / total_shares)
+            raw_shares.append({
+                "member_id": member_id,
+                "raw_amount": raw_amt,
+                "basis_type": "shares",
+                "basis_value": val
+            })
+
+    elif split_type == "adjustment":
+        if not entries:
+            raise SplitError("No entries provided for adjustment split")
+            
+        total_adj = Decimal('0.00')
+        valid_entries = []
+        for e in entries:
+            member_id = e.get('member_id')
+            if not member_id:
+                raise SplitError("Entry missing member_id")
+            val_raw = e.get('value', 0)
+            val = Decimal(str(val_raw))
+            total_adj += val
+            valid_entries.append((member_id, val))
+            
+        if total_adj > amount:
+            raise SplitError(
+                "Adjustments exceed total amount",
+                {"amount": str(amount), "total_adjustment": str(total_adj)}
+            )
+            
+        n = len(valid_entries)
+        base = (amount - total_adj) / Decimal(n)
+        for member_id, val in valid_entries:
+            raw_amt = base + val
+            raw_shares.append({
+                "member_id": member_id,
+                "raw_amount": raw_amt,
+                "basis_type": "adjustment",
+                "basis_value": val
+            })
 
     # 3.5 Rounding Rule
     # Round down to cents, distribute residual by largest fractional remainder.

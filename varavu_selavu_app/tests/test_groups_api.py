@@ -221,6 +221,50 @@ def test_admin_soft_delete_sets_status_deleted(test_client, db_session):
     assert group.status == "deleted"
 
 
+def test_update_group_settings(test_client, db_session):
+    res = test_client.post("/api/v1/groups", json={"name": "Settings Test"})
+    group_id = res.json()["group_id"]
+    
+    # Successful update by admin
+    res = test_client.put(f"/api/v1/groups/{group_id}", json={
+        "simplify_debts": True,
+        "default_split": {
+            "type": "exact",
+            "entries": [{"member_id": "00000000-0000-0000-0000-000000000000", "value": 10.0}]
+        }
+    })
+    assert res.status_code == 200
+    body = res.json()
+    assert body["simplify_debts"] is True
+    assert body["default_split"]["type"] == "exact"
+    
+    # Invalid split type
+    res = test_client.put(f"/api/v1/groups/{group_id}", json={
+        "default_split": {
+            "type": "invalid_type",
+            "entries": []
+        }
+    })
+    assert res.status_code == 400
+    
+    # Non-admin cannot update (member 'b')
+    res_m = test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "b"})
+    b_id = res_m.json()["member_id"]
+    db_session.add(User(id=uuid.uuid4(), email="b@test.com", password_hash="hash", name="b"))
+    db_session.commit()
+    
+    res_inv = test_client.post(f"/api/v1/groups/{group_id}/invites", json={"member_id": b_id})
+    token = res_inv.json()["token"]
+    
+    old = _as_user("b@test.com")
+    try:
+        test_client.post("/api/v1/groups/invites/accept", json={"token": token})
+        res = test_client.put(f"/api/v1/groups/{group_id}", json={"simplify_debts": False})
+        assert res.status_code == 403
+    finally:
+        _restore(old)
+
+
 def test_leave_blocked_with_activity_and_allowed_when_clear(test_client, db_session):
     db_session.add(User(id=uuid.uuid4(), email="member3@test.com", password_hash="hash", name="Member Three"))
     db_session.commit()
@@ -300,3 +344,45 @@ def test_remove_member_requires_force_with_activity(test_client, db_session):
     assert member.status == "left"
     # Balance rows are untouched by removal (E1: "their splits/settlements remain").
     assert db_session.query(ExpensePayer).filter(ExpensePayer.member_id == uuid.UUID(member_id)).first() is not None
+
+def test_archive_unarchive_group(test_client, db_session):
+    # Create group
+    res = test_client.post("/api/v1/groups", json={"name": "Archive Test Group", "currency": "USD"})
+    group_id = res.json()["group_id"]
+
+    # Archive group
+    res = test_client.post(f"/api/v1/groups/{group_id}/archive")
+    assert res.status_code == 200
+
+    # Ensure it doesn't show up in default list
+    res = test_client.get("/api/v1/groups")
+    assert not any(g["group_id"] == group_id for g in res.json())
+
+    # Ensure it shows up with include_archived=true
+    res = test_client.get("/api/v1/groups?include_archived=true")
+    assert any(g["group_id"] == group_id for g in res.json())
+
+    # Unarchive
+    res = test_client.post(f"/api/v1/groups/{group_id}/unarchive")
+    assert res.status_code == 200
+    
+    # Ensure it shows up in default list again
+    res = test_client.get("/api/v1/groups")
+    assert any(g["group_id"] == group_id for g in res.json())
+
+def test_delete_restore_group(test_client, db_session):
+    # Create group
+    res = test_client.post("/api/v1/groups", json={"name": "Restore Test Group", "currency": "USD"})
+    group_id = res.json()["group_id"]
+
+    # Soft delete group
+    res = test_client.delete(f"/api/v1/groups/{group_id}")
+    assert res.status_code == 200
+
+    # Restore group
+    res = test_client.post(f"/api/v1/groups/{group_id}/restore")
+    assert res.status_code == 200
+
+    # Check it shows up in default list
+    res = test_client.get("/api/v1/groups")
+    assert any(g["group_id"] == group_id for g in res.json())
