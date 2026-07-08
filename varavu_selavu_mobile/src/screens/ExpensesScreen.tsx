@@ -214,7 +214,7 @@ export default function ExpensesScreen() {
                             if (hasMore && !loading) fetchExpenses(false);
                         }}
                         onEndReachedThreshold={0.5}
-                        estimatedItemSize={100}
+
                         ListEmptyComponent={
                             <Card style={styles.emptyCard}>
                                 <Text style={styles.emptyIcon}>📭</Text>

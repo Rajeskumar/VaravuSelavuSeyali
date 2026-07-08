@@ -123,9 +123,55 @@ class BalanceService:
                 transfers.append({"from_member_id": str(b), "to_member_id": str(a), "amount": float(-net)})
         return transfers
 
+    def _simplified_transfers(self, group_id: uuid.UUID) -> List[Dict]:
+        """Greedy-netting simplified transfers (Phase 2)."""
+        net_by_member = self._compute_nets(group_id)
+        
+        # Debtors have net < 0 (they owe money to the group).
+        # Creditors have net > 0 (they are owed money by the group).
+        debtors = sorted(
+            [{"id": str(m), "net": -n} for m, n in net_by_member.items() if n < Decimal("0.00")],
+            key=lambda x: x["net"],
+            reverse=True
+        )
+        creditors = sorted(
+            [{"id": str(m), "net": n} for m, n in net_by_member.items() if n > Decimal("0.00")],
+            key=lambda x: x["net"],
+            reverse=True
+        )
+        
+        transfers = []
+        i, j = 0, 0
+        
+        while i < len(debtors) and j < len(creditors):
+            debtor = debtors[i]
+            creditor = creditors[j]
+            
+            amount = min(debtor["net"], creditor["net"])
+            if amount > Decimal("0.00"):
+                transfers.append({
+                    "from_member_id": debtor["id"],
+                    "to_member_id": creditor["id"],
+                    "amount": float(amount)
+                })
+                
+            debtor["net"] -= amount
+            creditor["net"] -= amount
+            
+            if debtor["net"] <= Decimal("0.00"):
+                i += 1
+            if creditor["net"] <= Decimal("0.00"):
+                j += 1
+                
+        return transfers
+
     def get_balances(self, group_id: str, actor_email: str) -> Dict:
         self.group_service.require_membership(group_id, actor_email)
         gid = self._coerce_group_id(group_id)
+        
+        from varavu_selavu_service.db.models import Group
+        group = self.db.query(Group).filter(Group.id == gid).first()
+        simplify = bool(group.simplify_debts) if group else False
 
         members = self.db.query(GroupMember).filter(GroupMember.group_id == gid).all()
         net_by_member = self._compute_nets(gid)
@@ -138,12 +184,14 @@ class BalanceService:
             }
             for m in members
         ]
+        
+        transfers = self._simplified_transfers(gid) if simplify else self._pairwise_transfers(gid)
 
         return {
             "group_id": str(gid),
             "members": member_balances,
-            "transfers": self._pairwise_transfers(gid),
-            "simplified": False,
+            "transfers": transfers,
+            "simplified": simplify,
         }
 
     def member_net(self, group_id, member_id) -> Decimal:

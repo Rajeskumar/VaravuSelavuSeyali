@@ -5,6 +5,8 @@ import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
 import { motion } from 'framer-motion';
+import { useTheme } from '@mui/material/styles';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import TrueTotalHero, { TrueTotalLens } from '../components/dashboard/TrueTotalHero';
 import SpendSpectrum from '../components/dashboard/SpendSpectrum';
 import MyGroupsStrip from '../components/dashboard/MyGroupsStrip';
@@ -37,6 +39,9 @@ const DashboardPage: React.FC = () => {
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const navigate = useNavigate();
+  const theme = useTheme();
+  const queryClient = useQueryClient();
+  const user = localStorage.getItem('vs_user') || '';
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [groupExpenses, setGroupExpenses] = React.useState<UnifiedGroupExpenseRow[]>([]);
@@ -126,18 +131,19 @@ const DashboardPage: React.FC = () => {
   }, []);
 
   // Unified recent-transactions feed: personal + (if enabled) my group shares, merged.
+  const expensesQuery = useQuery({
+    queryKey: ['dashboard-expenses', user],
+    queryFn: () => listExpenses(0, 50),
+    enabled: !!user,
+  });
+
   React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const resp = await listExpenses(0, 50);
-        if (mounted) setPersonalRecent(resp.items.map(e => ({ date: e.date, description: e.description, category: e.category, cost: e.cost })));
-      } catch {
-        if (mounted) setPersonalRecent([]);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [refreshKey]);
+    if (expensesQuery.data) {
+      setPersonalRecent(
+        expensesQuery.data.items.map(e => ({ date: e.date, description: e.description, category: e.category, cost: e.cost }))
+      );
+    }
+  }, [expensesQuery.data]);
 
   React.useEffect(() => {
     if (!groupsEnabled) {

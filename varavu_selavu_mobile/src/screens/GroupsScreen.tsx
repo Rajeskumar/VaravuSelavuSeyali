@@ -18,6 +18,9 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -55,9 +58,12 @@ export default function GroupsScreen() {
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<GroupTypeOption>('other');
 
+  const [tabIndex, setTabIndex] = useState(0);
+
+  const includeArchived = tabIndex === 1;
   const { data, isLoading, isRefetching, error, refetch } = useQuery({
-    queryKey: ['groups'],
-    queryFn: listGroups,
+    queryKey: ['groups', includeArchived],
+    queryFn: () => listGroups(includeArchived),
     retry: (count, err) => {
       // Don't retry on 404 — it means the feature flag is off
       if (err instanceof ApiError && err.status === 404) return false;
@@ -96,7 +102,12 @@ export default function GroupsScreen() {
     );
   }
 
-  const groups: GroupSummary[] = data ?? [];
+  const allGroups: GroupSummary[] = data ?? [];
+  const groups = allGroups.filter((g) => {
+    if (tabIndex === 0) return g.status === 'active';
+    if (tabIndex === 1) return g.status === 'archived';
+    return false;
+  });
 
   const renderItem = ({ item }: { item: GroupSummary }) => {
     const emoji = GROUP_TYPE_EMOJI[item.group_type as GroupTypeOption] ?? '👥';
@@ -151,59 +162,69 @@ export default function GroupsScreen() {
 
   return (
     <ScreenWrapper>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="chevron-back" size={26} color={theme.colors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.heading}>👥 Groups</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setShowCreate(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="add" size={22} color="#fff" />
-        </TouchableOpacity>
-      </View>
-
-      {isLoading ? (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      ) : groups.length === 0 ? (
-        <View style={styles.emptyCenter}>
-          <Text style={styles.emptyIcon}>👥</Text>
-          <Text style={styles.emptyTitle}>No groups yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Create a group to split rent, trips, or shared bills.
-          </Text>
-          <TouchableOpacity
-            style={styles.createBtn}
-            onPress={() => setShowCreate(true)}
-          >
-            <Text style={styles.createBtnText}>Create Group</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={groups}
-          keyExtractor={(item) => item.group_id}
-          renderItem={renderItem}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={theme.colors.primary}
-            />
-          }
-        />
-      )}
+      <FlatList
+        data={groups}
+        keyExtractor={(item) => item.group_id}
+        renderItem={renderItem}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100, paddingTop: insets.top }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            tintColor={theme.colors.primary}
+          />
+        }
+        ListHeaderComponent={
+          <>
+            <View style={styles.headerRow}>
+              <Text style={styles.heading}>Groups</Text>
+              <TouchableOpacity style={styles.addBtn} onPress={() => setShowCreate(true)}>
+                <Ionicons name="add" size={20} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.tabsContainer}>
+              <TouchableOpacity
+                style={[styles.tab, tabIndex === 0 && styles.tabActive]}
+                onPress={() => setTabIndex(0)}
+              >
+                <Text style={[styles.tabText, tabIndex === 0 && styles.tabTextActive]}>Active</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tab, tabIndex === 1 && styles.tabActive]}
+                onPress={() => setTabIndex(1)}
+              >
+                <Text style={[styles.tabText, tabIndex === 1 && styles.tabTextActive]}>Archived</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
+          ) : (
+            <View style={styles.emptyCenter}>
+              <Text style={styles.emptyIcon}>👥</Text>
+              <Text style={styles.emptyTitle}>
+                {tabIndex === 0 ? 'No active groups' : 'No archived groups'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {tabIndex === 0 
+                  ? 'Create a group to split expenses with friends'
+                  : 'Archived groups will appear here'}
+              </Text>
+              {tabIndex === 0 && (
+                <TouchableOpacity
+                  style={styles.createBtn}
+                  onPress={() => setShowCreate(true)}
+                >
+                  <Text style={styles.createBtnText}>Create Group</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )
+        }
+      />
 
       {/* Create Group Modal */}
       <Modal
@@ -212,52 +233,64 @@ export default function GroupsScreen() {
         animationType="slide"
         onRequestClose={() => setShowCreate(false)}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setShowCreate(false)}
-        />
-        <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
-          <View style={styles.modalPill} />
-          <Text style={styles.modalTitle}>New Group</Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Group name (e.g., Apartment 4B)"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={newName}
-            onChangeText={setNewName}
-            autoFocus
-            maxLength={80}
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setShowCreate(false)}
           />
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+            <ScrollView 
+              keyboardShouldPersistTaps="handled" 
+              bounces={false} 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: 12 }}
+            >
+              <View style={styles.modalPill} />
+              <Text style={styles.modalTitle}>New Group</Text>
 
-          <Text style={styles.typeLabel}>Type</Text>
-          <View style={styles.typeRow}>
-            {GROUP_TYPE_OPTIONS.map((t) => (
+              <TextInput
+                style={styles.input}
+                placeholder="Group name (e.g., Apartment 4B)"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={newName}
+                onChangeText={setNewName}
+                autoFocus
+                maxLength={80}
+              />
+
+              <Text style={styles.typeLabel}>Type</Text>
+              <View style={styles.typeRow}>
+                {GROUP_TYPE_OPTIONS.map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.typeBtn, newType === t && styles.typeBtnActive]}
+                    onPress={() => setNewType(t)}
+                  >
+                    <Text style={styles.typeEmoji}>{GROUP_TYPE_EMOJI[t]}</Text>
+                    <Text style={[styles.typeBtnLabel, newType === t && styles.typeBtnLabelActive]}>
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TouchableOpacity
-                key={t}
-                style={[styles.typeBtn, newType === t && styles.typeBtnActive]}
-                onPress={() => setNewType(t)}
+                style={[styles.createBtn, (!newName.trim() || createMut.isPending) && styles.createBtnDisabled]}
+                onPress={() => createMut.mutate()}
+                disabled={!newName.trim() || createMut.isPending}
               >
-                <Text style={styles.typeEmoji}>{GROUP_TYPE_EMOJI[t]}</Text>
-                <Text style={[styles.typeBtnLabel, newType === t && styles.typeBtnLabelActive]}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </Text>
+                {createMut.isPending ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.createBtnText}>Create</Text>
+                )}
               </TouchableOpacity>
-            ))}
+            </ScrollView>
           </View>
-
-          <TouchableOpacity
-            style={[styles.createBtn, (!newName.trim() || createMut.isPending) && styles.createBtnDisabled]}
-            onPress={() => createMut.mutate()}
-            disabled={!newName.trim() || createMut.isPending}
-          >
-            {createMut.isPending ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.createBtnText}>Create</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenWrapper>
   );
@@ -265,18 +298,46 @@ export default function GroupsScreen() {
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    header: {
+    headerRow: {
       flexDirection: 'row',
+      justifyContent: 'space-between',
       alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingBottom: 12,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 16,
     },
-    backBtn: {
+    tabsContainer: {
+      flexDirection: 'row',
+      marginHorizontal: 20,
+      marginBottom: 16,
+      backgroundColor: theme.colors.surfaceSecondary,
+      borderRadius: 12,
       padding: 4,
-      marginRight: 4,
     },
-    heading: {
+    tab: {
       flex: 1,
+      paddingVertical: 8,
+      alignItems: 'center',
+      borderRadius: 8,
+    },
+    tabActive: {
+      backgroundColor: theme.colors.surface,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.1,
+      shadowRadius: 1,
+      elevation: 2,
+    },
+    tabText: {
+      fontSize: 14,
+      fontFamily: 'Inter-SemiBold',
+      color: theme.colors.textSecondary,
+    },
+    tabTextActive: {
+      color: theme.colors.text,
+    },
+    listContent: { flexGrow: 1 },
+    heading: {
       fontFamily: 'Inter-Bold',
       fontSize: 28,
       color: theme.colors.text,

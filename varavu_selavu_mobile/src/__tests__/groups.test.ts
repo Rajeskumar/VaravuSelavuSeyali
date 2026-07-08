@@ -9,7 +9,7 @@
  * 5. GroupsScreen renders empty state
  */
 
-import { computeEqualShares } from '../components/SplitEditor';
+import { computeEqualShares, previewSharesSplit, previewAdjustmentSplit, previewExactSplit, previewPercentageSplit } from '../components/SplitEditor';
 import { MemberDTO } from '../api/groups';
 
 // ─── SplitEditor §3.3 invariant tests ────────────────────────────────────────
@@ -63,6 +63,58 @@ describe('computeEqualShares — §3.3 invariant', () => {
     expect(total).toBe(amount);
   });
 });
+
+describe('SplitEditor preview helpers — §3.3 invariant', () => {
+  test('previewPercentageSplit correctly distributes amount', () => {
+    const entries = [
+      { member_id: 'a', value: 33.33 },
+      { member_id: 'b', value: 33.33 },
+      { member_id: 'c', value: 33.34 }
+    ];
+    const amount = 100;
+    const shares = previewPercentageSplit(entries, amount);
+    const total = Math.round(shares.reduce((a, b) => a + b, 0) * 100) / 100;
+    expect(total).toBe(amount);
+    expect(shares).toEqual([33.33, 33.33, 33.34]); // Largest remainder handling
+  });
+
+  test('previewSharesSplit correctly distributes amount', () => {
+    const entries = [
+      { member_id: 'a', value: 1 },
+      { member_id: 'b', value: 2 }
+    ];
+    const amount = 10;
+    const shares = previewSharesSplit(entries, amount);
+    const total = Math.round(shares.reduce((a, b) => a + b, 0) * 100) / 100;
+    expect(total).toBe(amount);
+    expect(shares).toEqual([3.33, 6.67]); // largest remainder handling
+  });
+
+  test('previewAdjustmentSplit adjusts correctly', () => {
+    const entries = [
+      { member_id: 'a', value: -10 },
+      { member_id: 'b', value: 10 }
+    ];
+    const amount = 100;
+    const shares = previewAdjustmentSplit(entries, amount);
+    const total = Math.round(shares.reduce((a, b) => a + b, 0) * 100) / 100;
+    expect(total).toBe(amount);
+    expect(shares).toEqual([40, 60]);
+  });
+
+  test('previewExactSplit exact amounts', () => {
+    const entries = [
+      { member_id: 'a', value: 40.50 },
+      { member_id: 'b', value: 59.50 }
+    ];
+    const amount = 100;
+    const shares = previewExactSplit(entries, amount);
+    const total = Math.round(shares.reduce((a, b) => a + b, 0) * 100) / 100;
+    expect(total).toBe(amount);
+    expect(shares).toEqual([40.50, 59.50]);
+  });
+});
+
 
 // ─── Deep-link parsing test ──────────────────────────────────────────────────
 

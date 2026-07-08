@@ -21,14 +21,17 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
+import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import { GroupSettingsDialog } from '../components/groups/GroupSettingsDialog';
+import { ActivityFeed } from '../components/groups/ActivityFeed';
 import { motion } from 'framer-motion';
 import MemberAvatarStack from '../components/groups/MemberAvatarStack';
 import GroupAvatar from '../components/groups/GroupAvatar';
 import SegmentedTabs from '../components/common/SegmentedTabs';
 import SplitEditor, { SplitEditorValue } from '../components/groups/SplitEditor';
+import PayerPicker from '../components/groups/PayerPicker';
 import BalanceList from '../components/groups/BalanceList';
 import SettleUpDialog from '../components/groups/SettleUpDialog';
-import InviteDialog from '../components/groups/InviteDialog';
 import {
   getGroup,
   listGroupExpenses,
@@ -37,11 +40,12 @@ import {
   addMember,
   ApiError,
   MemberDTO,
+  PayerSummaryItem,
 } from '../api/groups';
 import { isoToMMDDYYYY } from '../utils/date';
 import { glassCardSx } from '../theme';
 
-type TabKey = 'expenses' | 'balances';
+type TabKey = 'expenses' | 'balances' | 'activity';
 
 const GroupDetailPage: React.FC = () => {
   const { id: groupId } = useParams<{ id: string }>();
@@ -82,18 +86,50 @@ const GroupDetailPage: React.FC = () => {
   const [description, setDescription] = React.useState('');
   const [category, setCategory] = React.useState('');
   const [amount, setAmount] = React.useState<number>(0);
-  const [payerId, setPayerId] = React.useState('');
+  const [payers, setPayers] = React.useState<PayerSummaryItem[]>([]);
+  const [payersValid, setPayersValid] = React.useState(false);
   const [splitValue, setSplitValue] = React.useState<SplitEditorValue>({ type: 'equal', entries: [] });
   const [splitValid, setSplitValid] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
+  const typingRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [userPickedCategory, setUserPickedCategory] = React.useState(false);
+
+  const fetchCategory = async (desc: string) => {
+    if (!desc.trim() || userPickedCategory) return;
+    try {
+      const { suggestCategory } = await import('../api/expenses');
+      const res = await suggestCategory(desc.trim());
+      if (res.subcategory) {
+        setCategory(res.subcategory);
+      }
+    } catch {
+      // ignore errors
+    }
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if (typingRef.current) clearTimeout(typingRef.current);
+    };
+  }, []);
+
+  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setDescription(val);
+    setUserPickedCategory(false);
+    if (typingRef.current) clearTimeout(typingRef.current);
+    typingRef.current = setTimeout(() => fetchCategory(val), 1500);
+  };
 
   const resetAddForm = () => {
     setDate(new Date().toISOString().split('T')[0]);
     setDescription('');
     setCategory('');
+    setUserPickedCategory(false);
     setAmount(0);
-    setPayerId(members[0]?.member_id || '');
+    setPayers(myMember ? [{ member_id: myMember.member_id, amount_paid: 0 }] : []);
+    setPayersValid(false);
     setSplitValue({ type: 'equal', entries: members.map((m) => ({ member_id: m.member_id })) });
     setFormError(null);
   };
@@ -113,7 +149,7 @@ const GroupDetailPage: React.FC = () => {
         description,
         category,
         amount,
-        payers: [{ member_id: payerId, amount_paid: amount }],
+        payers,
         split: { type: splitValue.type, entries: splitValue.entries },
       });
       queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
@@ -127,6 +163,7 @@ const GroupDetailPage: React.FC = () => {
     }
   };
 
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
   // --- Add member dialog ---
   const [memberDialogOpen, setMemberDialogOpen] = React.useState(false);
   const [memberEmail, setMemberEmail] = React.useState('');
@@ -156,9 +193,8 @@ const GroupDetailPage: React.FC = () => {
     }
   };
 
-  // --- Settle up + invite dialogs ---
+  // --- Settle up dialog ---
   const [settleOpen, setSettleOpen] = React.useState(false);
-  const [inviteMember, setInviteMember] = React.useState<MemberDTO | null>(null);
 
   if (groupQuery.isLoading) {
     return (
@@ -210,7 +246,22 @@ const GroupDetailPage: React.FC = () => {
           >
             Add Member
           </Button>
+          <IconButton onClick={() => setSettingsOpen(true)} size="small">
+            <SettingsRoundedIcon />
+          </IconButton>
         </Box>
+
+        {group.status === 'archived' && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            This group is archived. You cannot add new expenses or members.
+          </Alert>
+        )}
+        
+        {group.status === 'deleted' && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            This group has been deleted. It will be permanently removed after 30 days.
+          </Alert>
+        )}
 
         <Card sx={{ ...glassCardSx(theme), p: 2.5, mb: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
           <Box>
@@ -226,8 +277,7 @@ const GroupDetailPage: React.FC = () => {
                   key={m.member_id}
                   label={`${m.display_name} · pending`}
                   size="small"
-                  onDelete={() => setInviteMember(m)}
-                  deleteIcon={<MailOutlineIcon fontSize="small" />}
+                  variant="outlined"
                 />
               ))}
             </Box>
@@ -241,6 +291,7 @@ const GroupDetailPage: React.FC = () => {
             options={[
               { value: 'expenses', label: 'Expenses' },
               { value: 'balances', label: 'Balances' },
+              { value: 'activity', label: 'Activity' },
             ]}
           />
           {tab === 'expenses' ? (
@@ -327,7 +378,13 @@ const GroupDetailPage: React.FC = () => {
                 <CircularProgress />
               </Box>
             )}
-            {balancesQuery.data && <BalanceList balances={balancesQuery.data} />}
+            {balancesQuery.data && <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} />}
+          </Box>
+        )}
+
+        {tab === 'activity' && (
+          <Box sx={{ mt: 3 }}>
+            <ActivityFeed groupId={group.group_id} group={group} />
           </Box>
         )}
       </motion.div>
@@ -343,7 +400,11 @@ const GroupDetailPage: React.FC = () => {
               label="Description"
               fullWidth
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={handleDescriptionChange}
+              onBlur={() => {
+                if (typingRef.current) clearTimeout(typingRef.current);
+                fetchCategory(description);
+              }}
               required
             />
             <Box sx={{ display: 'flex', gap: 2 }}>
@@ -364,14 +425,25 @@ const GroupDetailPage: React.FC = () => {
                 inputProps={{ min: 0, step: 0.01 }}
               />
             </Box>
-            <TextField label="Category" fullWidth value={category} onChange={(e) => setCategory(e.target.value)} required />
-            <TextField select label="Paid by" fullWidth value={payerId} onChange={(e) => setPayerId(e.target.value)}>
-              {members.map((m) => (
-                <MenuItem key={m.member_id} value={m.member_id}>
-                  {m.display_name}
-                </MenuItem>
-              ))}
-            </TextField>
+            <TextField
+              label="Category"
+              fullWidth
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                setUserPickedCategory(true);
+              }}
+              required
+            />
+
+            <Divider />
+            <PayerPicker
+              amount={amount}
+              members={members}
+              payers={payers}
+              onChange={setPayers}
+              onValidityChange={setPayersValid}
+            />
             <Divider />
             <Typography variant="subtitle2">Split</Typography>
             <SplitEditor
@@ -391,7 +463,7 @@ const GroupDetailPage: React.FC = () => {
             <Button onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button
               variant="contained"
-              disabled={saving || !description.trim() || !category.trim() || amount <= 0 || !payerId || !splitValid}
+              disabled={saving || !description.trim() || !category.trim() || amount <= 0 || !payersValid || !splitValid}
               onClick={handleAddExpense}
             >
               {saving ? 'Saving...' : 'Add Expense'}
@@ -452,6 +524,15 @@ const GroupDetailPage: React.FC = () => {
         </Box>
       </Dialog>
 
+      {group && (
+        <GroupSettingsDialog
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          group={group}
+          setToast={setToast}
+        />
+      )}
+
       {settleOpen && balancesQuery.data && (
         <SettleUpDialog
           open={settleOpen}
@@ -462,16 +543,6 @@ const GroupDetailPage: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
             setToast({ open: true, message: 'Settlement recorded', severity: 'success' });
           }}
-        />
-      )}
-
-      {inviteMember && (
-        <InviteDialog
-          open={!!inviteMember}
-          groupId={groupId as string}
-          memberId={inviteMember.member_id}
-          displayName={inviteMember.display_name}
-          onClose={() => setInviteMember(null)}
         />
       )}
 

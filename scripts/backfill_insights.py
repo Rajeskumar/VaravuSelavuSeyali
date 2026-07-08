@@ -1,21 +1,19 @@
 import sys
 import os
+import uuid
+from collections import defaultdict
+from datetime import datetime
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'varavu_selavu_app'))
 
 from varavu_selavu_service.db.session import SessionLocal
-from varavu_selavu_service.db.models import Expense, ExpenseItem, ItemInsight, ItemPriceHistory, MerchantInsight, MerchantAggregate
-from varavu_selavu_service.services.insights_aggregation_service import InsightsAggregationService
-from collections import defaultdict
+from varavu_selavu_service.db.models import (
+    Expense, ExpenseItem, ItemInsight, ItemPriceHistory,
+    MerchantInsight, MerchantAggregate, ExpenseSplit, GroupMember, ExpenseItemSplit
+)
 
 def backfill_insights():
-    """
-    Idempotent script to backfill insights based on existing Expense and ExpenseItem data.
-    It first clears existing insights to avoid double counting, then replays
-    aggregation for each expense.
-    """
     db = SessionLocal()
-    agg_svc = InsightsAggregationService(db)
     
     print("Clearing existing insights data for idempotency...")
     db.query(ItemPriceHistory).delete()
@@ -25,104 +23,168 @@ def backfill_insights():
     db.commit()
     print("Cleared.")
     
-    # 1. Backfill Simple Expenses (Merchant Insights)
-    print("Fetching expenses...")
+    print("Fetching data...")
     expenses = db.query(Expense).all()
-    print(f"Found {len(expenses)} expenses to process.")
+    expense_items = db.query(ExpenseItem).all()
+    expense_splits = db.query(ExpenseSplit).all()
+    expense_item_splits = db.query(ExpenseItemSplit).all()
+    group_members = db.query(GroupMember).all()
     
-    # Pre-fetch items to avoid N+1 queries during mapping
-    print("Fetching items...")
-    items = db.query(ExpenseItem).all()
-    expense_to_items = defaultdict(list)
-    for item in items:
-        # We need it as a dict to match the Service's expected signature
-        expense_to_items[item.expense_id].append({
-            "normalized_name": item.normalized_name or item.item_name,
-            "unit_price": float(item.unit_price or 0),
-            "quantity": float(item.quantity or 1),
-            "line_total": float(item.line_total or 0)
-        })
-    print(f"Found {len(items)} items mapped to expenses.")
-
-    processed_merchants = 0
-    processed_items_events = 0
-
-    print("Running aggregation pipeline...")
-    for exp in expenses:
-        exp_items = expense_to_items.get(exp.id, [])
+    member_email_map = {m.id: m.user_email for m in group_members}
+    
+    item_map = defaultdict(list)
+    for i in expense_items:
+        item_map[i.expense_id].append(i)
         
-        if len(exp_items) > 0:
-            # Replay with items
-            agg_svc.on_expense_with_items_created(
-                user_email=exp.user_email,
-                expense_id=str(exp.id),
-                merchant_name=exp.merchant_name,
-                purchased_at=exp.purchased_at,
-                items=exp_items,
-                total_amount=float(exp.amount)
-            )
-            processed_items_events += 1
+    split_map = defaultdict(list)
+    for s in expense_splits:
+        split_map[s.expense_id].append(s)
+        
+    item_split_map = defaultdict(list)
+    for s in expense_item_splits:
+        item_split_map[s.expense_item_id].append(s)
+
+    m_insights = {}
+    m_aggs = {}
+    i_insights = {}
+    i_histories = []
+
+    def add_merchant(email, name, amount, dt):
+        if not name or not email:
+            return
+        key = (email, name)
+        if key not in m_insights:
+            m_insights[key] = {"id": uuid.uuid4(), "total": 0.0, "count": 0}
+        m_insights[key]["total"] += amount
+        m_insights[key]["count"] += 1
+        
+        agg_key = (email, name, dt.year, dt.month)
+        if agg_key not in m_aggs:
+            m_aggs[agg_key] = {"id": uuid.uuid4(), "total": 0.0, "count": 0}
+        m_aggs[agg_key]["total"] += amount
+        m_aggs[agg_key]["count"] += 1
+        
+    def add_item(email, name, amount, qty, price, expense_id, store_name, dt):
+        if not name or not email:
+            return
+        key = (email, name)
+        if key not in i_insights:
+            i_insights[key] = {"id": uuid.uuid4(), "total": 0.0, "qty": 0.0, "min_p": None, "max_p": None, "prices": []}
+        i_insights[key]["total"] += amount
+        i_insights[key]["qty"] += qty
+        i_insights[key]["prices"].append(price)
+        
+        if i_insights[key]["min_p"] is None or price < i_insights[key]["min_p"]:
+            i_insights[key]["min_p"] = price
+        if i_insights[key]["max_p"] is None or price > i_insights[key]["max_p"]:
+            i_insights[key]["max_p"] = price
+        
+        i_histories.append({
+            "id": uuid.uuid4(),
+            "item_insight_id": i_insights[key]["id"],
+            "expense_id": expense_id,
+            "store_name": store_name,
+            "unit_price": price,
+            "quantity": qty,
+            "date": dt
+        })
+
+    for exp in expenses:
+        dt = exp.purchased_at or datetime.utcnow()
+        items = item_map[exp.id]
+        
+        if exp.group_id is not None:
+            if len(items) > 0:
+                for item in items:
+                    splits = item_split_map[item.id]
+                    for s in splits:
+                        email = member_email_map.get(s.member_id)
+                        if email:
+                            iname = item.normalized_name or item.item_name
+                            price = float(item.unit_price or item.line_total)
+                            qty = float(item.quantity or 1) * float(s.ratio)
+                            amt = float(s.amount)
+                            add_item(email, iname, amt, qty, price, exp.id, exp.merchant_name, dt)
+                            if exp.merchant_name:
+                                add_merchant(email, exp.merchant_name, amt, dt)
+            else:
+                splits = split_map[exp.id]
+                for s in splits:
+                    email = member_email_map.get(s.member_id)
+                    if email and exp.merchant_name:
+                        add_merchant(email, exp.merchant_name, float(s.amount_owed), dt)
         else:
-            # Replay without items (simple expense)
-            if exp.merchant_name:
-                agg_svc.on_simple_expense_created(
-                    user_email=exp.user_email,
-                    merchant_name=exp.merchant_name,
-                    purchased_at=exp.purchased_at,
-                    amount=float(exp.amount)
-                )
-                processed_merchants += 1
+            if len(items) > 0:
+                for item in items:
+                    iname = item.normalized_name or item.item_name
+                    price = float(item.unit_price or item.line_total)
+                    qty = float(item.quantity or 1)
+                    amt = float(item.line_total)
+                    add_item(exp.user_email, iname, amt, qty, price, exp.id, exp.merchant_name, dt)
+                if exp.merchant_name:
+                    add_merchant(exp.user_email, exp.merchant_name, float(exp.amount), dt)
+            else:
+                if exp.merchant_name:
+                    add_merchant(exp.user_email, exp.merchant_name, float(exp.amount), dt)
+
+    print("Inserting data...")
+    for (email, name), data in m_insights.items():
+        db.add(MerchantInsight(id=data["id"], user_email=email, merchant_name=name, total_spent=data["total"], transaction_count=data["count"]))
+    db.flush()
+        
+    for (email, name, y, m), data in m_aggs.items():
+        mid = m_insights[(email, name)]["id"]
+        db.add(MerchantAggregate(id=data["id"], merchant_insight_id=mid, year=y, month=m, total_spent=data["total"], transaction_count=data["count"]))
+    db.flush()
+
+    for (email, name), data in i_insights.items():
+        avg = sum(data["prices"]) / len(data["prices"]) if data["prices"] else 0
+        db.add(ItemInsight(
+            id=data["id"], 
+            user_email=email, 
+            normalized_name=name, 
+            total_spent=data["total"], 
+            total_quantity_bought=data["qty"],
+            min_price=data["min_p"],
+            max_price=data["max_p"],
+            avg_unit_price=avg
+        ))
+    db.flush()
+        
+    for h in i_histories:
+        db.add(ItemPriceHistory(**h))
+    db.flush()
 
     db.commit()
-    print("-" * 50)
     print("Backfill Complete!")
-    print(f"Processed {processed_merchants} simple expenses (merchants).")
-    print(f"Processed {processed_items_events} itemized expenses (merchants + items).")
-    
-    print("-" * 50)
-    print("Running Analytics Validation...")
-    run_validation(db)
-    
     db.close()
 
+if __name__ == "__main__":
+    backfill_insights()
 
 def run_validation(db):
-    """
-    Validates that the aggregated insight totals match the raw source totals.
-    """
     from sqlalchemy import func
-    
-    # 1. Validate Merchant Insights
     print("Validating Merchant Insights...")
-    # Raw source: sum of non-null merchant expenses
     raw_merchant_sum = db.query(func.sum(Expense.amount)).filter(Expense.merchant_name != None).scalar() or 0
-    # Aggregated: sum of merchant insights
     agg_merchant_sum = db.query(func.sum(MerchantInsight.total_spent)).scalar() or 0
-    
     raw_m_val = float(raw_merchant_sum)
     agg_m_val = float(agg_merchant_sum)
     diff_m = abs(raw_m_val - agg_m_val)
-    
     print(f"  Source Total: ${raw_m_val:,.2f}")
     print(f"  Agg    Total: ${agg_m_val:,.2f}")
     if diff_m < 0.05:
         print("  ✅ Merchant totals match perfectly.")
     else:
         print(f"  ❌ Merchant mismatch detected. Diff: ${diff_m:,.2f}")
-        
-    # 2. Validate Item Insights
+
     print("\nValidating Item Insights...")
-    # Raw source: sum of line_total for items with normalized/item names
     raw_item_sum = db.query(func.sum(ExpenseItem.line_total)).filter(
         (ExpenseItem.normalized_name != None) | (ExpenseItem.item_name != None)
     ).scalar() or 0
-    # Aggregated: sum of item insights
     agg_item_sum = db.query(func.sum(ItemInsight.total_spent)).scalar() or 0
-    
     raw_i_val = float(raw_item_sum)
     agg_i_val = float(agg_item_sum)
     diff_i = abs(raw_i_val - agg_i_val)
-    
     print(f"  Source Total: ${raw_i_val:,.2f}")
     print(f"  Agg    Total: ${agg_i_val:,.2f}")
     if diff_i < 0.05:
@@ -130,5 +192,3 @@ def run_validation(db):
     else:
         print(f"  ❌ Item mismatch detected. Diff: ${diff_i:,.2f}")
 
-if __name__ == "__main__":
-    backfill_insights()

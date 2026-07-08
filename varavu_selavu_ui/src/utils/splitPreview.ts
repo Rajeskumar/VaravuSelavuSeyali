@@ -46,3 +46,28 @@ export function previewPercentageSplit(
   const raw = entries.map((e) => ({ id: e.member_id, raw: amount * ((e.value || 0) / 100) }));
   return distributeLargestRemainder(amount, raw);
 }
+
+/** Shares split — entries' `value` is the number of shares (e.g. 1, 2, 0.5). */
+export function previewSharesSplit(
+  amount: number,
+  entries: { member_id: string; value: number }[]
+): Record<string, number> {
+  if (entries.length === 0 || !Number.isFinite(amount)) return {};
+  const totalShares = entries.reduce((sum, e) => sum + (e.value || 0), 0);
+  if (totalShares <= 0) return {};
+  const raw = entries.map((e) => ({ id: e.member_id, raw: amount * ((e.value || 0) / totalShares) }));
+  return distributeLargestRemainder(amount, raw);
+}
+
+/** Adjustment split — entries' `value` is a fixed ± adjustment to their equal share. */
+export function previewAdjustmentSplit(
+  amount: number,
+  entries: { member_id: string; value: number }[]
+): Record<string, number> {
+  if (entries.length === 0 || !Number.isFinite(amount)) return {};
+  const totalAdjustments = entries.reduce((sum, e) => sum + (e.value || 0), 0);
+  const baseAmount = amount - totalAdjustments;
+  const baseShare = baseAmount / entries.length;
+  const raw = entries.map((e) => ({ id: e.member_id, raw: baseShare + (e.value || 0) }));
+  return distributeLargestRemainder(amount, raw);
+}

@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, EmailStr, Field, conint
@@ -273,6 +274,8 @@ class RecurringTemplateDTO(BaseModel):
     start_date_iso: str
     last_processed_iso: str | None = None
     status: str = "Active"
+    group_id: str | None = None
+    split_config: Optional["GroupSplitConfig"] = None
 
 
 class UpsertRecurringTemplateRequest(BaseModel):
@@ -283,6 +286,8 @@ class UpsertRecurringTemplateRequest(BaseModel):
     default_cost: float
     start_date_iso: str | None = None
     status: str = "Active"
+    group_id: str | None = None
+    split_config: Optional["GroupSplitConfig"] = None
 
 
 class DueOccurrenceDTO(BaseModel):
@@ -312,6 +317,8 @@ class UpdateGroupRequest(BaseModel):
     name: Optional[str] = None
     group_type: Optional[str] = None
     cover: Optional[str] = None
+    simplify_debts: Optional[bool] = None
+    default_split: Optional["GroupSplitConfig"] = None
 
 
 class MemberDTO(BaseModel):
@@ -328,6 +335,9 @@ class GroupSummary(BaseModel):
     group_type: str
     member_count: int
     my_balance: float = 0.0  # real balance computation lands with TS-GRP-104
+    status: str
+    archived_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
 
 
 class GroupDetailResponse(BaseModel):
@@ -337,9 +347,23 @@ class GroupDetailResponse(BaseModel):
     cover: Optional[str] = None
     currency: str
     simplify_debts: bool
+    default_split: Optional["GroupSplitConfig"] = None
+    archived_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
     status: str
     members: List[MemberDTO]
 
+class GroupActivityDTO(BaseModel):
+    id: str
+    action: str
+    actor_member_id: Optional[str] = None
+    entity_id: Optional[str] = None
+    payload: Optional[Dict[str, Any]] = None
+    created_at: str
+
+class GroupActivityListResponse(BaseModel):
+    items: List[GroupActivityDTO]
+    next_offset: Optional[int] = None
 
 class AddMemberRequest(BaseModel):
     email: Optional[EmailStr] = None

@@ -20,6 +20,8 @@ class SettlementService:
     def __init__(self, db: Session):
         self.db = db
         self.group_service = GroupService(db)
+        from varavu_selavu_service.services.activity_service import ActivityService
+        self.activity_svc = ActivityService(db)
 
     def _dto(self, s: Settlement) -> Dict:
         return {
@@ -92,6 +94,14 @@ class SettlementService:
         )
         self.db.add(settlement)
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="settlement_created",
+            entity_id=str(settlement.id),
+            payload={"amount": float(settlement.amount)}
+        )
         # Deliberately no AnalysisService.invalidate_cache() call and no Expense row
         # created — settlements never count as spend (spec rule TS-GRP-R2).
         return self._dto(settlement)
@@ -120,3 +130,10 @@ class SettlementService:
             raise HTTPException(status_code=404, detail="Settlement not found")
         self.db.delete(row)
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="settlement_deleted",
+            entity_id=settlement_id
+        )

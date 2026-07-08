@@ -57,6 +57,10 @@ from varavu_selavu_service.models.api_models import (
     ChangeInsight,
 )
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
+from varavu_selavu_service.services.group_expense_service import GroupExpenseService
+from varavu_selavu_service.services.notification_service import NotificationService
+from varavu_selavu_service.api.groups_routes import get_group_expense_service, get_notification_service
+from varavu_selavu_service.db.models import ExpenseSplit
 from varavu_selavu_service.core.limiter import limiter
 
 settings = Settings()
@@ -652,8 +656,9 @@ def upsert_recurring_template(
         default_cost=float(data.default_cost),
         start_date_iso=data.start_date_iso,
         status=data.status,
+        group_id=data.group_id,
+        split_config=data.split_config.model_dump() if data.split_config else None,
     )
-
 
 @router.get(
     "/recurring/due",
@@ -701,20 +706,26 @@ def get_recurring_due(
 )
 def confirm_recurring(
     payload: ConfirmRecurringRequest,
+    background_tasks: BackgroundTasks,
     svc: RecurringService = Depends(get_recurring_service),
     expense_service: ExpenseService = Depends(get_expense_service),
+    group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    db: Session = Depends(get_db),
     user_id: str = Depends(auth_required),
 ):
     # Reload due occurrences to map template data
     due_list = svc.compute_due(user_id)
     due_map = {f"{d['template_id']}__{d['date_iso']}": d for d in due_list}
     # Build idempotency set from existing expenses for this user
-    existing = expense_service.get_expenses_for_user(user_id)
+    from varavu_selavu_service.db.models import Expense
+    existing_rows = db.query(Expense).filter(Expense.user_email == user_id).all()
     existing_keys = set()
     from datetime import datetime as _dt
-    for e in existing:
-        # e['date'] is MM/DD/YYYY
-        key = f"{e['date']}__{e['description']}__{e['category']}"
+    for e in existing_rows:
+        date_str = e.purchased_at.strftime("%m/%d/%Y") if e.purchased_at else "01/01/1970"
+        key = f"{date_str}__{e.description or ''}__{e.category_id or ''}"
         existing_keys.add(key)
 
     def iso_to_mmddyyyy(iso: str) -> str:
@@ -741,14 +752,72 @@ def confirm_recurring(
             cost = d.get('suggested_cost', 0)  # type: ignore
         if cost <= 0:
             continue
-        expense_service.add_expense(
-            user_id=user_id,
-            date=str(it.get('date_iso')),
-            description=d['description'],
-            category=d['category'],
-            cost=cost,
-            merchant_name=d.get('merchant_name'),
-        )
+            
+        group_id = d.get('group_id')
+        if group_id:
+            split_config = d.get('split_config') or {"type": "equal", "entries": []}
+            try:
+                import uuid
+                from varavu_selavu_service.db.models import GroupMember
+                members = db.query(GroupMember).filter(GroupMember.group_id == uuid.UUID(str(group_id)), GroupMember.status == "active").all()
+                member = next((m for m in members if m.user_email == user_id), None)
+                if not member:
+                    raise Exception("User is not a member of the group")
+                    
+                payers = [{"member_id": str(member.id), "amount_paid": cost}]
+                
+                split_entries = split_config.get("entries", [])
+                if not split_entries and split_config.get("type") == "equal":
+                    split_entries = [{"member_id": str(m.id), "amount": 0.0} for m in members]
+                
+                # group_expense_service._parse_date expects MM/DD/YYYY
+                date_iso_str = str(it.get('date_iso'))
+                formatted_date = datetime.strptime(date_iso_str, "%Y-%m-%d").strftime("%m/%d/%Y")
+                
+                row = group_expense_service.create_expense(
+                    group_id=group_id,
+                    actor_email=user_id,
+                    date=formatted_date,
+                    description=d['description'],
+                    category=d['category'],
+                    amount=cost,
+                    merchant_name=d.get('merchant_name'),
+                    payers=payers,
+                    split_type=split_config.get("type", "equal"),
+                    split_entries=split_entries,
+                )
+                analysis_service.invalidate_cache()
+                
+                eid = row.get("row_id")
+                if eid:
+                    shares = {
+                        str(s.member_id): float(s.amount_owed)
+                        for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+                    }
+                    background_tasks.add_task(
+                        notification_service.fan_out,
+                        event_type="expense_added",
+                        group_id=group_id,
+                        actor_email=user_id,
+                        expense_description=d['description'],
+                        expense_amount=cost,
+                        shares=shares,
+                    )
+            except Exception as e:
+                # If group is archived/deleted or other validation fails, skip.
+                import logging
+                logging.warning(f"Failed to confirm group recurring expense for template {d['template_id']}: {e}")
+                continue
+        else:
+            expense_service.add_expense(
+                user_id=user_id,
+                date=str(it.get('date_iso')),
+                description=d['description'],
+                category=d['category'],
+                cost=cost,
+                merchant_name=d.get('merchant_name'),
+            )
+            
         existing_keys.add(dup_key)
         processed.append({"template_id": d['template_id'], "date_iso": d['date_iso']})
     if processed:
@@ -763,8 +832,13 @@ def confirm_recurring(
 )
 def execute_recurring_now(
     payload: dict,
+    background_tasks: BackgroundTasks,
     svc: RecurringService = Depends(get_recurring_service),
     expense_service: ExpenseService = Depends(get_expense_service),
+    group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
+    notification_service: NotificationService = Depends(get_notification_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    db: Session = Depends(get_db),
     user_id: str = Depends(auth_required),
 ):
     from datetime import datetime as _dt
@@ -824,15 +898,69 @@ def execute_recurring_now(
 
     created = False
     if not already:
-        expense_service.add_expense(
-            user_id=user_id,
-            date=expense_date_iso,
-            description=tpl["description"],
-            category=tpl["category"],
-            cost=use_cost,
-            merchant_name=tpl.get("merchant_name"),
-        )
-        created = True
+        group_id = tpl.get("group_id")
+        if group_id:
+            split_config = tpl.get("split_config") or {"type": "equal", "entries": []}
+            try:
+                import uuid
+                from varavu_selavu_service.db.models import GroupMember
+                members = db.query(GroupMember).filter(GroupMember.group_id == uuid.UUID(str(group_id)), GroupMember.status == "active").all()
+                member = next((m for m in members if m.user_email == user_id), None)
+                if not member:
+                    raise Exception("User is not a member of the group")
+                    
+                payers = [{"member_id": str(member.id), "amount_paid": use_cost}]
+                
+                split_entries = split_config.get("entries", [])
+                if not split_entries and split_config.get("type") == "equal":
+                    split_entries = [{"member_id": str(m.id), "amount": 0.0} for m in members]
+                    
+                # group_expense_service._parse_date expects MM/DD/YYYY
+                formatted_date = _dt.strptime(expense_date_iso, "%Y-%m-%d").strftime("%m/%d/%Y")
+                    
+                row = group_expense_service.create_expense(
+                    group_id=group_id,
+                    actor_email=user_id,
+                    date=formatted_date,
+                    description=tpl.get("description"),
+                    category=tpl.get("category"),
+                    amount=use_cost,
+                    merchant_name=tpl.get("merchant_name"),
+                    payers=payers,
+                    split_type=split_config.get("type", "equal"),
+                    split_entries=split_entries,
+                )
+                analysis_service.invalidate_cache()
+                
+                eid = row.get("row_id")
+                if eid:
+                    shares = {
+                        str(s.member_id): float(s.amount_owed)
+                        for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+                    }
+                    background_tasks.add_task(
+                        notification_service.fan_out,
+                        event_type="expense_added",
+                        group_id=group_id,
+                        actor_email=user_id,
+                        expense_description=tpl['description'],
+                        expense_amount=use_cost,
+                        shares=shares,
+                    )
+                created = True
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to execute group recurring expense for template {template_id}: {e}")
+        else:
+            expense_service.add_expense(
+                user_id=user_id,
+                date=expense_date_iso,
+                description=tpl["description"],
+                category=tpl["category"],
+                cost=use_cost,
+                merchant_name=tpl.get("merchant_name"),
+            )
+            created = True
 
     # Mark current month as processed so auto prompt won't add later
     svc.mark_processed(user_id, [{"template_id": tpl["id"], "date_iso": scheduled_iso}])

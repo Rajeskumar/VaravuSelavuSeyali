@@ -39,6 +39,9 @@ export interface GroupSummary {
   group_type: string;
   member_count: number;
   my_balance: number;
+  status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface MemberDTO {
@@ -49,6 +52,28 @@ export interface MemberDTO {
   user_email?: string | null;
 }
 
+export async function updateGroup(
+  groupId: string,
+  payload: { name?: string; group_type?: string; cover?: string; simplify_debts?: boolean; default_split?: any }
+): Promise<GroupDetail> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) });
+  return handleResponse<GroupDetail>(res);
+}
+
+export interface GroupActivityDTO {
+  id: string;
+  action: string;
+  actor_member_id: string | null;
+  entity_id: string | null;
+  payload: any | null;
+  created_at: string;
+}
+
+export interface GroupActivityListResponse {
+  items: GroupActivityDTO[];
+  next_offset: number | null;
+}
+
 export interface GroupDetail {
   group_id: string;
   name: string;
@@ -56,7 +81,10 @@ export interface GroupDetail {
   cover?: string | null;
   currency: string;
   simplify_debts: boolean;
+  default_split?: any;
   status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
   members: MemberDTO[];
 }
 
@@ -109,17 +137,42 @@ export interface CreateGroupPayload {
   currency?: string;
 }
 
+export interface PayerSummaryItem {
+  member_id: string;
+  amount_paid: number;
+}
+
+export interface GroupExpenseItemEntry {
+  line_no: number;
+  item_name: string;
+  line_total: number;
+  quantity?: number | null;
+  unit_price?: number | null;
+  category_name?: string | null;
+  member_ratios: Record<string, number>;
+}
+
 export interface AddGroupExpensePayload {
   date: string; // MM/DD/YYYY
   description: string;
   category: string;
   amount: number;
   merchant_name?: string;
-  payers: { member_id: string; amount_paid: number }[];
+  payers: PayerSummaryItem[];
   split: {
-    type: 'equal' | 'exact' | 'percentage';
+    type: 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
     entries?: { member_id: string; value?: number }[];
   };
+}
+
+export interface GroupExpenseWithItemsPayload {
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  merchant_name?: string;
+  payers: PayerSummaryItem[];
+  items: GroupExpenseItemEntry[];
 }
 
 export interface RecordSettlementPayload {
@@ -161,8 +214,13 @@ export async function checkGroupsEnabled(): Promise<boolean> {
   }
 }
 
-export async function listGroups(): Promise<GroupSummary[]> {
-  const res = await apiFetch('/api/v1/groups');
+export async function listGroups(includeArchived = false, includeDeleted = false): Promise<GroupSummary[]> {
+  const params = new URLSearchParams();
+  if (includeArchived) params.append('include_archived', 'true');
+  if (includeDeleted) params.append('include_deleted', 'true');
+  
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`/api/v1/groups${qs}`);
   return handleResponse<GroupSummary[]>(res);
 }
 
@@ -173,6 +231,26 @@ export async function createGroup(payload: CreateGroupPayload): Promise<GroupSum
     body: JSON.stringify(payload),
   });
   return handleResponse<GroupSummary>(res);
+}
+
+export async function deleteGroup(groupId: string, force = false): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}?force=${force}`, { method: 'DELETE' });
+  return handleResponse<void>(res);
+}
+
+export async function archiveGroup(groupId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/archive`, { method: 'POST' });
+  return handleResponse<void>(res);
+}
+
+export async function unarchiveGroup(groupId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/unarchive`, { method: 'POST' });
+  return handleResponse<void>(res);
+}
+
+export async function restoreGroup(groupId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/restore`, { method: 'POST' });
+  return handleResponse<void>(res);
 }
 
 export async function getGroupDetail(groupId: string): Promise<GroupDetail> {
@@ -191,6 +269,11 @@ export async function addMember(
     body: JSON.stringify({ email, display_name: displayName }),
   });
   return handleResponse<MemberDTO>(res);
+}
+
+export async function getGroupActivity(groupId: string, limit = 50, offset = 0): Promise<GroupActivityListResponse> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/activity?limit=${limit}&offset=${offset}`);
+  return handleResponse<GroupActivityListResponse>(res);
 }
 
 export async function createInvite(groupId: string, memberId: string): Promise<CreateInviteResponse> {
@@ -226,6 +309,19 @@ export async function addGroupExpense(
   payload: AddGroupExpensePayload,
 ): Promise<GroupExpenseRow> {
   const res = await apiFetch(`/api/v1/groups/${groupId}/expenses`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
+  return data.expense;
+}
+
+export async function addGroupExpenseWithItems(
+  groupId: string,
+  payload: GroupExpenseWithItemsPayload,
+): Promise<GroupExpenseRow> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/with_items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

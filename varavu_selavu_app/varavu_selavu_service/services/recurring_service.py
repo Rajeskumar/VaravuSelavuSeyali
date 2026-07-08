@@ -34,6 +34,8 @@ class RecurringService:
                 "start_date_iso": st_iso or datetime.utcnow().strftime("%Y-%m-%d"),
                 "last_processed_iso": lp_iso,
                 "status": r.status if r.status else "Active",
+                "group_id": str(r.group_id) if r.group_id else None,
+                "split_config": r.split_config,
             })
         return out
 
@@ -47,6 +49,8 @@ class RecurringService:
         start_date_iso: Optional[str] = None,
         status: str = "Active",
         merchant_name: Optional[str] = None,
+        group_id: Optional[str] = None,
+        split_config: Optional[Dict] = None,
     ) -> Dict:
         start_val = start_date_iso or datetime.utcnow().strftime("%Y-%m-%d")
         start_date_parsed = datetime.strptime(start_val, "%Y-%m-%d").date()
@@ -63,6 +67,8 @@ class RecurringService:
             tpl.default_cost = default_cost
             tpl.start_date = start_date_parsed
             tpl.status = status
+            tpl.group_id = uuid.UUID(group_id) if group_id else None
+            tpl.split_config = split_config
             tpl_id = str(tpl.id)
         else:
             tpl_id_uuid = uuid.uuid4()
@@ -75,7 +81,9 @@ class RecurringService:
                 day_of_month=day_of_month,
                 default_cost=default_cost,
                 start_date=start_date_parsed,
-                status=status
+                status=status,
+                group_id=uuid.UUID(group_id) if group_id else None,
+                split_config=split_config
             )
             self.db.add(tpl)
             tpl_id = str(tpl_id_uuid)
@@ -91,6 +99,8 @@ class RecurringService:
             "default_cost": default_cost,
             "start_date_iso": start_val,
             "status": status,
+            "group_id": group_id,
+            "split_config": split_config,
         }
 
     def compute_due(self, user_id: str, as_of_iso: Optional[str] = None) -> List[Dict]:
@@ -119,6 +129,8 @@ class RecurringService:
                         "category": tpl["category"],
                         "merchant_name": tpl.get("merchant_name"),
                         "suggested_cost": tpl["default_cost"],
+                        "group_id": tpl.get("group_id"),
+                        "split_config": tpl.get("split_config"),
                     })
                 m0 += 1
                 if m0 > 11:
@@ -126,23 +138,31 @@ class RecurringService:
                     y += 1
         return sorted(due, key=lambda x: x["date_iso"])
 
-    def mark_processed(self, user_id: str, items: List[Dict[str, str]]) -> None:
-        latest: Dict[str, str] = {}
-        for it in items:
-            tid = it["template_id"]
-            dt = it["date_iso"]
-            if (tid not in latest) or latest[tid] < dt:
-                latest[tid] = dt
-        
-        for tid, update_dt in latest.items():
-            parsed_dt = datetime.strptime(update_dt, "%Y-%m-%d").date()
-            tpl = self.db.query(RecurringTemplate).filter(RecurringTemplate.id == tid, RecurringTemplate.user_email == user_id).first()
+    def mark_processed(self, user_id: str, occurrences: List[Dict]):
+        for occ in occurrences:
+            tpl_id = occ.get("template_id")
+            if not tpl_id:
+                continue
+            try:
+                tpl_uuid = uuid.UUID(str(tpl_id))
+            except ValueError:
+                continue
+            tpl = self.db.query(RecurringTemplate).filter(
+                RecurringTemplate.id == tpl_uuid, 
+                RecurringTemplate.user_email == user_id
+            ).first()
             if tpl:
-                tpl.last_processed_date = parsed_dt
+                processed_dt = datetime.strptime(str(occ.get("date_iso")), "%Y-%m-%d").date()
+                if not tpl.last_processed_date or tpl.last_processed_date < processed_dt:
+                    tpl.last_processed_date = processed_dt
         self.db.commit()
 
     def delete_template(self, user_id: str, template_id: str) -> bool:
-        tpl = self.db.query(RecurringTemplate).filter(RecurringTemplate.id == template_id, RecurringTemplate.user_email == user_id).first()
+        try:
+            tid = uuid.UUID(str(template_id))
+        except ValueError:
+            return False
+        tpl = self.db.query(RecurringTemplate).filter(RecurringTemplate.id == tid, RecurringTemplate.user_email == user_id).first()
         if tpl:
             self.db.delete(tpl)
             self.db.commit()

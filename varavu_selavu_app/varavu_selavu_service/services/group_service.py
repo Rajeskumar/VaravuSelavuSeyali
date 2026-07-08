@@ -2,6 +2,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+from sqlalchemy import func
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -28,6 +29,8 @@ def _to_uuid(value) -> Optional[uuid.UUID]:
 class GroupService:
     def __init__(self, db: Session):
         self.db = db
+        from varavu_selavu_service.services.activity_service import ActivityService
+        self.activity_svc = ActivityService(db)
         self.settings = Settings()
 
     # ------------------------------------------------------------------
@@ -60,10 +63,10 @@ class GroupService:
             .first()
         )
 
-    def _get_group_or_404(self, group_id) -> Group:
+    def _get_group_or_404(self, group_id, allow_deleted=False) -> Group:
         gid = _to_uuid(group_id)
         group = self.db.query(Group).filter(Group.id == gid).first() if gid else None
-        if group is None or group.status == "deleted":
+        if group is None or (group.status == "deleted" and not allow_deleted):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
         return group
 
@@ -111,6 +114,9 @@ class GroupService:
             "group_type": group.group_type,
             "member_count": member_count,
             "my_balance": 0.0,
+            "status": group.status,
+            "archived_at": group.archived_at,
+            "deleted_at": group.deleted_at,
         }
 
     def _group_detail(self, group: Group, members: List[GroupMember]) -> Dict:
@@ -121,6 +127,9 @@ class GroupService:
             "cover": group.cover,
             "currency": group.currency,
             "simplify_debts": group.simplify_debts,
+            "default_split": group.default_split_json,
+            "archived_at": group.archived_at,
+            "deleted_at": group.deleted_at,
             "status": group.status,
             "members": [self._member_dto(m) for m in members],
         }
@@ -152,25 +161,38 @@ class GroupService:
         self.db.flush()
 
         creator = self.db.query(User).filter(User.email == creator_email).first()
-        admin_member = GroupMember(
+        new_member = GroupMember(
             id=uuid.uuid4(),
             group_id=group.id,
             user_email=creator_email,
-            display_name=(creator.name if creator else None) or creator_email,
+            display_name=creator.name or creator_email.split("@")[0],
             role="admin",
             status="active",
             joined_at=datetime.now(timezone.utc),
         )
-        self.db.add(admin_member)
+        self.db.add(new_member)
         self.db.commit()
+
+        self.activity_svc.log(
+            group_id=str(group.id),
+            actor_email=creator_email,
+            action="group_created",
+            payload={"name": name, "group_type": group_type}
+        )
 
         return self._group_summary(group, member_count=1)
 
-    def list_groups_for_user(self, email: str) -> List[Dict]:
+    def list_groups_for_user(self, email: str, include_archived: bool = False, include_deleted: bool = False) -> List[Dict]:
+        statuses = ["active"]
+        if include_archived:
+            statuses.append("archived")
+        if include_deleted:
+            statuses.append("deleted")
+            
         rows = (
             self.db.query(Group, GroupMember)
             .join(GroupMember, GroupMember.group_id == Group.id)
-            .filter(GroupMember.user_email == email, GroupMember.status == "active", Group.status == "active")
+            .filter(GroupMember.user_email == email, GroupMember.status == "active", Group.status.in_(statuses))
             .all()
         )
         summaries = []
@@ -196,6 +218,8 @@ class GroupService:
         name: Optional[str] = None,
         group_type: Optional[str] = None,
         cover: Optional[str] = None,
+        simplify_debts: Optional[bool] = None,
+        default_split: Optional[dict] = None,
     ) -> Dict:
         group = self._get_group_or_404(group_id)
         self._require_admin(group_id, email)
@@ -203,13 +227,30 @@ class GroupService:
         if group_type is not None and group_type not in _VALID_GROUP_TYPES:
             raise HTTPException(status_code=400, detail=f"Invalid group_type: {group_type}")
 
+        if default_split is not None:
+            # Validate split format without computing values
+            split_type = default_split.get("type")
+            if split_type not in ["equal", "exact", "percentage", "shares", "adjustment"]:
+                raise HTTPException(status_code=400, detail=f"Invalid default_split type: {split_type}")
+
         if name is not None:
             group.name = name
         if group_type is not None:
             group.group_type = group_type
         if cover is not None:
             group.cover = cover
+        if simplify_debts is not None:
+            group.simplify_debts = simplify_debts
+        if default_split is not None:
+            group.default_split_json = default_split
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=email,
+            action="group_updated",
+            payload={"name": group.name, "type": group.group_type, "simplify_debts": group.simplify_debts}
+        )
 
         members = self.db.query(GroupMember).filter(GroupMember.group_id == group.id).all()
         return self._group_detail(group, members)
@@ -225,8 +266,60 @@ class GroupService:
             )
 
         group.status = "deleted"
+        group.deleted_at = func.now()
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=email,
+            action="group_deleted"
+        )
 
+    def archive_group(self, group_id: str, email: str) -> None:
+        group = self._get_group_or_404(group_id)
+        self._require_admin(group_id, email)
+        group.status = "archived"
+        group.archived_at = func.now()
+        self.db.commit()
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=email,
+            action="group_archived"
+        )
+
+    def unarchive_group(self, group_id: str, email: str) -> None:
+        group = self._get_group_or_404(group_id)
+        self._require_admin(group_id, email)
+        group.status = "active"
+        group.archived_at = None
+        self.db.commit()
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=email,
+            action="group_unarchived"
+        )
+
+    def restore_group(self, group_id: str, email: str, as_of: datetime = None) -> None:
+        group = self._get_group_or_404(group_id, allow_deleted=True)
+        self._require_admin(group_id, email)
+        
+        if group.status != "deleted" or not group.deleted_at:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Group is not deleted")
+            
+        now = as_of or datetime.now(timezone.utc)
+        
+        if (now - group.deleted_at.replace(tzinfo=timezone.utc)).days > 30:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Restore window (30 days) has expired")
+            
+        group.status = "active"
+        group.deleted_at = None
+        self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=email,
+            action="group_restored"
+        )
     # ------------------------------------------------------------------
     # Membership
     # ------------------------------------------------------------------
@@ -264,7 +357,7 @@ class GroupService:
 
         resolved_display_name = display_name or (registered_user.name if registered_user else None) or member_email
 
-        member = GroupMember(
+        new_member = GroupMember(
             id=uuid.uuid4(),
             group_id=group.id,
             user_email=member_email,
@@ -273,9 +366,18 @@ class GroupService:
             status="active" if member_email else "invited",
             joined_at=datetime.now(timezone.utc) if member_email else None,
         )
-        self.db.add(member)
+        self.db.add(new_member)
         self.db.commit()
-        return self._member_dto(member)
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=email,
+            action="member_added",
+            entity_id=str(new_member.id),
+            payload={"display_name": new_member.display_name, "user_email": new_member.user_email}
+        )
+
+        return self._member_dto(new_member)
 
     def remove_member(self, group_id: str, email: str, member_id: str, force: bool = False) -> None:
         group = self._get_group_or_404(group_id)
@@ -298,6 +400,14 @@ class GroupService:
 
         member.status = "left"
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=email,
+            action="member_removed",
+            entity_id=str(member.id),
+            payload={"display_name": member.display_name}
+        )
 
     def leave_group(self, group_id: str, email: str) -> None:
         member = self.require_membership(group_id, email)
@@ -379,8 +489,16 @@ class GroupService:
         member.user_email = acceptor_email
         member.status = "active"
         member.joined_at = now
-        invite.accepted_at = now
+        self.db.delete(invite)
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=str(member.group_id),
+            actor_email=acceptor_email,
+            action="member_joined",
+            entity_id=str(member.id),
+            payload={"display_name": member.display_name}
+        )
 
         return {
             "group_id": str(member.group_id),

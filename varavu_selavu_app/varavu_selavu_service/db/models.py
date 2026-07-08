@@ -78,6 +78,8 @@ class RecurringTemplate(Base):
     start_date = Column(Date, nullable=False)
     last_processed_date = Column(Date)
     status = Column(String(50), default="Active")
+    group_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.groups.id", ondelete="CASCADE"), nullable=True)
+    split_config = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -150,6 +152,8 @@ class Group(Base):
     default_split_json = Column(JSON)
     created_by = Column(String(255), ForeignKey("trackspense.users.email", ondelete="SET NULL"))
     status = Column(String(20), nullable=False, default='active')
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class GroupMember(Base):

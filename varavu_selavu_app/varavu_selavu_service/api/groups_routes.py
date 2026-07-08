@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.core.config import Settings
-from varavu_selavu_service.db.models import Expense, ExpenseSplit
+from varavu_selavu_service.db.models import Expense, ExpenseSplit, GroupMember, ExpenseItem, ExpenseItemSplit
 from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.models.api_models import (
     AcceptInviteRequest,
@@ -16,6 +16,7 @@ from varavu_selavu_service.models.api_models import (
     CreateGroupRequest,
     CreateInviteRequest,
     CreateInviteResponse,
+    GroupActivityListResponse,
     GroupDetailResponse,
     GroupExpenseCreatedResponse,
     GroupExpenseListResponse,
@@ -33,6 +34,7 @@ from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.notification_service import NotificationService
 from varavu_selavu_service.services.settlement_service import SettlementService
 from varavu_selavu_service.services.analysis_service import AnalysisService
+from varavu_selavu_service.services.insights_aggregation_service import InsightsAggregationService
 
 
 def _to_uuid(value):
@@ -40,6 +42,51 @@ def _to_uuid(value):
         return uuid.UUID(str(value))
     except (ValueError, AttributeError, TypeError):
         return None
+
+
+def _get_email_shares(db: Session, eid: uuid.UUID) -> dict:
+    if not eid:
+        return {}
+    results = (
+        db.query(ExpenseSplit, GroupMember)
+        .join(GroupMember, ExpenseSplit.member_id == GroupMember.id)
+        .filter(ExpenseSplit.expense_id == eid)
+        .all()
+    )
+    return {
+        m.user_email: float(s.amount_owed)
+        for s, m in results if m.user_email
+    }
+
+
+def _get_itemized_email_shares(db: Session, eid: uuid.UUID) -> dict:
+    if not eid:
+        return {}
+    results = (
+        db.query(ExpenseItemSplit, ExpenseItem, GroupMember)
+        .join(ExpenseItem, ExpenseItemSplit.expense_item_id == ExpenseItem.id)
+        .join(GroupMember, ExpenseItemSplit.member_id == GroupMember.id)
+        .filter(ExpenseItem.expense_id == eid)
+        .all()
+    )
+    shares = {}
+    for split, item, member in results:
+        if not member.user_email:
+            continue
+        if member.user_email not in shares:
+            shares[member.user_email] = []
+        
+        # Calculate proportional quantity based on the share ratio
+        share_quantity = float(item.quantity) * float(split.ratio) if item.quantity else 1.0
+        
+        shares[member.user_email].append({
+            "normalized_name": item.normalized_name,
+            "item_name": item.item_name,
+            "unit_price": float(item.unit_price) if item.unit_price else float(item.line_total),
+            "share_quantity": share_quantity,
+            "share_amount": float(split.amount),
+        })
+    return shares
 
 
 def require_groups_enabled() -> None:
@@ -71,6 +118,10 @@ def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
     return AnalysisService(db=db, ttl_sec=Settings().ANALYSIS_CACHE_TTL_SEC)
 
 
+def get_insights_aggregation_service(db: Session = Depends(get_db)) -> InsightsAggregationService:
+    return InsightsAggregationService(db)
+
+
 def get_notification_service(db: Session = Depends(get_db)) -> NotificationService:
     # Local provider (mirrors devices_routes.py's) — that module imports
     # require_groups_enabled from this one, so importing back would be circular.
@@ -97,10 +148,12 @@ def create_group(
 
 @router.get("", response_model=List[GroupSummary], summary="List my groups")
 def list_groups(
+    include_archived: bool = Query(False),
+    include_deleted: bool = Query(False),
     svc: GroupService = Depends(get_group_service),
     user_email: str = Depends(auth_required),
 ):
-    return svc.list_groups_for_user(user_email)
+    return svc.list_groups_for_user(user_email, include_archived=include_archived, include_deleted=include_deleted)
 
 
 @router.post("/invites/accept", response_model=AcceptInviteResponse, summary="Accept a group invite")
@@ -139,7 +192,15 @@ def update_group(
     svc: GroupService = Depends(get_group_service),
     user_email: str = Depends(auth_required),
 ):
-    return svc.update_group(group_id, user_email, name=data.name, group_type=data.group_type, cover=data.cover)
+    return svc.update_group(
+        group_id, 
+        user_email, 
+        name=data.name, 
+        group_type=data.group_type, 
+        cover=data.cover,
+        simplify_debts=data.simplify_debts,
+        default_split=data.default_split.model_dump() if data.default_split else None
+    )
 
 
 @router.delete("/{group_id}", summary="Soft-delete a group (admin)")
@@ -150,6 +211,36 @@ def delete_group(
     user_email: str = Depends(auth_required),
 ):
     svc.delete_group(group_id, user_email, force=force)
+    return {"success": True}
+
+
+@router.post("/{group_id}/archive", summary="Archive a group (admin)")
+def archive_group(
+    group_id: str,
+    svc: GroupService = Depends(get_group_service),
+    user_email: str = Depends(auth_required),
+):
+    svc.archive_group(group_id, user_email)
+    return {"success": True}
+
+
+@router.post("/{group_id}/unarchive", summary="Unarchive a group (admin)")
+def unarchive_group(
+    group_id: str,
+    svc: GroupService = Depends(get_group_service),
+    user_email: str = Depends(auth_required),
+):
+    svc.unarchive_group(group_id, user_email)
+    return {"success": True}
+
+
+@router.post("/{group_id}/restore", summary="Restore a deleted group (admin)")
+def restore_group(
+    group_id: str,
+    svc: GroupService = Depends(get_group_service),
+    user_email: str = Depends(auth_required),
+):
+    svc.restore_group(group_id, user_email)
     return {"success": True}
 
 
@@ -281,6 +372,7 @@ def create_group_expense(
     background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     notification_service: NotificationService = Depends(get_notification_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
@@ -315,6 +407,17 @@ def create_group_expense(
         description=row["description"],
         shares=shares,
     )
+    
+    from datetime import datetime
+    email_shares = _get_email_shares(db, eid)
+    if email_shares:
+        background_tasks.add_task(
+            aggregation_svc.on_group_expense_created,
+            member_shares=email_shares,
+            merchant_name=data.merchant_name,
+            purchased_at=datetime.strptime(row["date"], "%m/%d/%Y"),
+        )
+        
     return {"success": True, "expense": row}
 
 
@@ -330,6 +433,7 @@ def create_itemized_group_expense(
     background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     notification_service: NotificationService = Depends(get_notification_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
@@ -363,6 +467,20 @@ def create_itemized_group_expense(
         description=row["description"],
         shares=shares,
     )
+    
+    from datetime import datetime
+    email_shares = _get_email_shares(db, eid)
+    email_item_shares = _get_itemized_email_shares(db, eid)
+    if email_shares:
+        background_tasks.add_task(
+            aggregation_svc.on_group_expense_with_items_created,
+            expense_id=row["row_id"],
+            member_shares=email_shares,
+            member_item_shares=email_item_shares,
+            merchant_name=data.merchant_name,
+            purchased_at=datetime.strptime(row["date"], "%m/%d/%Y"),
+        )
+        
     return {"success": True, "expense": row}
 
 
@@ -389,6 +507,7 @@ def update_group_expense(
     background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     notification_service: NotificationService = Depends(get_notification_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
@@ -399,6 +518,16 @@ def update_group_expense(
     # expense_id just yields an empty snapshot here; svc.update_expense below is the
     # one responsible for raising the proper 404 in that case.
     eid = _to_uuid(expense_id)
+    gid = _to_uuid(group_id)
+    existing = (
+        db.query(Expense).filter(Expense.id == eid, Expense.group_id == gid).first()
+        if eid is not None and gid is not None
+        else None
+    )
+    old_email_shares = _get_email_shares(db, eid) if existing else {}
+    old_merchant = existing.merchant_name if existing else None
+    old_purchased_at = existing.purchased_at if existing else None
+    
     old_shares = (
         {
             str(s.member_id): float(s.amount_owed)
@@ -435,6 +564,19 @@ def update_group_expense(
         old_shares=old_shares,
         new_shares=new_shares,
     )
+    
+    from datetime import datetime
+    new_email_shares = _get_email_shares(db, eid)
+    background_tasks.add_task(
+        aggregation_svc.on_group_expense_updated,
+        old_member_shares=old_email_shares,
+        new_member_shares=new_email_shares,
+        old_merchant_name=old_merchant,
+        old_purchased_at=old_purchased_at,
+        new_merchant_name=data.merchant_name,
+        new_purchased_at=datetime.strptime(row["date"], "%m/%d/%Y"),
+    )
+    
     return {"success": True, "expense": row}
 
 
@@ -445,6 +587,7 @@ def delete_group_expense(
     background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     notification_service: NotificationService = Depends(get_notification_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
@@ -459,6 +602,11 @@ def delete_group_expense(
         else None
     )
     description = existing.description if existing is not None else None
+    
+    old_email_shares = _get_email_shares(db, eid) if existing else {}
+    old_email_item_shares = _get_itemized_email_shares(db, eid) if existing else {}
+    old_merchant = existing.merchant_name if existing else None
+    old_purchased_at = existing.purchased_at if existing else None
 
     svc.delete_expense(group_id, expense_id, user_email)
     analysis_service.invalidate_cache()
@@ -469,13 +617,55 @@ def delete_group_expense(
         event_type="expense_deleted",
         description=description,
     )
+    
+    if old_email_shares:
+        background_tasks.add_task(
+            aggregation_svc.on_group_expense_deleted,
+            member_shares=old_email_shares,
+            merchant_name=old_merchant,
+            purchased_at=old_purchased_at,
+            member_item_shares=old_email_item_shares,
+        )
+        
     return {"success": True}
 
 
-@router.get("/{group_id}/balances", response_model=BalanceResponse, summary="Net balances (non-simplified)")
-def get_balances(
+@router.get("/{group_id}/balances", summary="Get member balances and transfers (Phase 1+2)")
+def get_group_balances(
     group_id: str,
     svc: BalanceService = Depends(get_balance_service),
     user_email: str = Depends(auth_required),
 ):
     return svc.get_balances(group_id, user_email)
+
+def get_activity_service(db: Session = Depends(get_db)):
+    from varavu_selavu_service.services.activity_service import ActivityService
+    return ActivityService(db)
+
+@router.get("/{group_id}/activity", summary="Get group activity feed", response_model=GroupActivityListResponse)
+def get_group_activity(
+    group_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    svc: "ActivityService" = Depends(get_activity_service),
+    group_svc: GroupService = Depends(get_group_service),
+    user_email: str = Depends(auth_required),
+):
+    group_svc.require_membership(group_id, user_email)
+    rows = svc.get_group_activity(group_id, limit, offset)
+    
+    items = []
+    for r in rows:
+        items.append({
+            "id": str(r.id),
+            "action": r.action,
+            "actor_member_id": str(r.actor_member_id) if r.actor_member_id else None,
+            "entity_id": str(r.entity_id) if r.entity_id else None,
+            "payload": r.payload_json,
+            "created_at": r.created_at.isoformat(),
+        })
+        
+    return {
+        "items": items,
+        "next_offset": offset + limit if len(rows) == limit else None
+    }

@@ -242,3 +242,95 @@ def test_group_scope_resolution_never_leaks_another_users_group(test_client, db_
     # against a query naming the other user's group must not match it.
     scope = _resolve_scope_from_text("How much do I owe in Secret Trip?", other_users_groups)
     assert scope.kind == "personal"
+
+def test_resolve_scope_from_text_with_spend_intent():
+    # TS-GRP-124: intent phrasing should still resolve the group correctly
+    scope = _resolve_scope_from_text("how much did the Weekend Trip cost me vs total?", _GROUPS)
+    assert scope.kind == "group"
+    assert scope.group_name == "Weekend Trip"
+
+def test_chat_model_groups_enabled_false_regression():
+    # TS-GRP-124: if groups_enabled=False, context and tools are absent
+    from unittest.mock import Mock, patch
+    from langchain_core.messages import AIMessage
+    from varavu_selavu_service.services.chat_service import call_chat_model
+    
+    with patch("varavu_selavu_service.services.chat_service.create_react_agent") as llm_mock:
+        llm_mock.return_value.stream.return_value = [{"end": {"messages": [AIMessage(content="Done")]}}]
+        
+        insight_mock = Mock()
+        insight_mock.build_rag_context.return_value = None
+        
+        call_chat_model(
+            messages=[{"role": "user", "content": "What did Weekend Trip cost me?"}],
+            user_id="test@user.com",
+            analysis_service=Mock(),
+            analytics_service=Mock(),
+            insight_service=insight_mock,
+            group_service=Mock(),
+            balance_service=Mock(),
+            groups_enabled=False
+        )
+        
+        # check that the prompt does not contain 'Group data'
+        prompt_used = llm_mock.call_args[1]["prompt"]
+        assert "Group data (automatically fetched)" not in prompt_used
+        tools_used = llm_mock.call_args[0][1]
+        tool_names = [t.name for t in tools_used]
+        assert "get_group_spend_summary" not in tool_names
+        assert "get_top_group_by_spend" not in tool_names
+
+
+def test_build_group_context_block():
+    from unittest.mock import Mock
+    from varavu_selavu_service.services.chat_service import _build_group_context_block
+    
+    # Mock AnalysisService
+    analysis_mock = Mock()
+    analysis_mock.db.bind.dialect.name = "sqlite"
+    
+    # Predefined summaries
+    analysis_mock._compute_group_summaries.return_value = [
+        {"group_id": "g1", "name": "Weekend Trip", "my_share": 100, "i_paid": 50, "group_total": 300},
+        {"group_id": "g2", "name": "Roommates", "my_share": 500, "i_paid": 600, "group_total": 1000}
+    ]
+    analysis_mock._date_filters.return_value = []
+    
+    # Mock top categories query
+    mock_query = Mock()
+    analysis_mock.db.query.return_value = mock_query
+    mock_query.filter.return_value = mock_query
+    mock_query.group_by.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    
+    # Return ("Food",) and ("Transport",) for categories
+    mock_query.all.return_value = [("Food",)]
+    mock_query.first.return_value.id = "m1"
+    
+    # Mock BalanceService
+    balance_mock = Mock()
+    balance_mock.get_balances.return_value = {
+        "members": [
+            {"member_id": "m1", "display_name": "Me", "net": 50},
+            {"member_id": "m2", "display_name": "Priya", "net": -50}
+        ]
+    }
+    
+    # Execute
+    res = _build_group_context_block(
+        user_groups=[{"group_id": "g1", "name": "Weekend Trip"}],
+        analysis_service=analysis_mock,
+        balance_service=balance_mock,
+        user_id="test@user.com"
+    )
+    
+    # Assert
+    assert "groups" in res
+    groups = res["groups"]
+    assert len(groups) == 2
+    assert groups[0]["name"] == "Weekend Trip"
+    assert groups[0]["top_categories"] == ["Food"]
+    assert groups[0]["balances_with"][0]["name"] == "Priya"
+    assert groups[1]["name"] == "Roommates"
+    

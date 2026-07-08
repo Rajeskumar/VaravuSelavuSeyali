@@ -265,3 +265,43 @@ def test_multi_payer_transfers_attribution(test_client, db_session):
     assert tx_map.get((m["c@test.com"], m["b@test.com"])) == 16.00
     assert tx_map.get((m["b@test.com"], m["test@user.com"])) == 6.00
 
+def test_simplified_debts_greedy_netting(test_client, db_session):
+    from varavu_selavu_service.db.models import Group
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com", "d@test.com"])
+    
+    test_client.post(f"/api/v1/groups/{group_id}/expenses", json={
+        "date": "01/01/2026", "description": "1", "category": "Food", "amount": 100.0,
+        "payers": [{"member_id": m["test@user.com"], "amount_paid": 100.0}],
+        "split": {"type": "exact", "entries": [{"member_id": m["b@test.com"], "value": 100.0}]}
+    })
+    test_client.post(f"/api/v1/groups/{group_id}/expenses", json={
+        "date": "01/02/2026", "description": "2", "category": "Food", "amount": 100.0,
+        "payers": [{"member_id": m["b@test.com"], "amount_paid": 100.0}],
+        "split": {"type": "exact", "entries": [{"member_id": m["c@test.com"], "value": 100.0}]}
+    })
+    test_client.post(f"/api/v1/groups/{group_id}/expenses", json={
+        "date": "01/03/2026", "description": "3", "category": "Food", "amount": 100.0,
+        "payers": [{"member_id": m["c@test.com"], "amount_paid": 100.0}],
+        "split": {"type": "exact", "entries": [{"member_id": m["d@test.com"], "value": 100.0}]}
+    })
+
+    # Default: simplify_debts = False
+    res = test_client.get(f"/api/v1/groups/{group_id}/balances")
+    assert res.json()["simplified"] == False
+    transfers = res.json()["transfers"]
+    assert len(transfers) == 3
+    
+    # Enable simplify_debts
+    import uuid
+    group = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
+    group.simplify_debts = True
+    db_session.commit()
+    
+    res = test_client.get(f"/api/v1/groups/{group_id}/balances")
+    assert res.json()["simplified"] == True
+    transfers = res.json()["transfers"]
+    assert len(transfers) == 1
+    assert transfers[0]["from_member_id"] == m["d@test.com"]
+    assert transfers[0]["to_member_id"] == m["test@user.com"]
+    assert transfers[0]["amount"] == 100.0
+

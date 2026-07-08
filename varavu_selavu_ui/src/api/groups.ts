@@ -31,12 +31,20 @@ async function throwApiError(res: Response, fallbackMessage: string): Promise<ne
 // Groups & membership (TS-GRP-102)
 // ---------------------------------------------------------------------------
 
+export interface GroupSplitConfig {
+  split_type: 'equal' | 'percentage' | 'shares' | 'adjustment';
+  entries: { member_id: string; value?: number }[];
+}
+
 export interface GroupSummary {
   group_id: string;
   name: string;
   group_type: string;
   member_count: number;
   my_balance: number;
+  status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface MemberDTO {
@@ -54,7 +62,10 @@ export interface GroupDetailResponse {
   cover?: string | null;
   currency: string;
   simplify_debts: boolean;
+  default_split: GroupSplitConfig | null;
   status: string;
+  archived_at: string | null;
+  deleted_at: string | null;
   members: MemberDTO[];
 }
 
@@ -71,9 +82,34 @@ export async function createGroup(payload: CreateGroupPayload): Promise<GroupSum
   return res.json();
 }
 
-export async function listGroups(): Promise<GroupSummary[]> {
-  const res = await fetchWithAuth('/api/v1/groups');
-  if (!res.ok) await throwApiError(res, 'Failed to load groups');
+export async function listGroups(includeArchived = false, includeDeleted = false): Promise<GroupSummary[]> {
+  const params = new URLSearchParams();
+  if (includeArchived) params.set('include_archived', 'true');
+  if (includeDeleted) params.set('include_deleted', 'true');
+  
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetchWithAuth(`/api/v1/groups${qs}`);
+  if (!res.ok) await throwApiError(res, 'Failed to list groups');
+  return res.json();
+}
+
+export interface GroupActivityDTO {
+  id: string;
+  action: string;
+  actor_member_id: string | null;
+  entity_id: string | null;
+  payload: any | null;
+  created_at: string;
+}
+
+export interface GroupActivityListResponse {
+  items: GroupActivityDTO[];
+  next_offset: number | null;
+}
+
+export async function getGroupActivity(groupId: string, limit = 50, offset = 0): Promise<GroupActivityListResponse> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/activity?limit=${limit}&offset=${offset}`);
+  if (!res.ok) await throwApiError(res, 'Failed to load group activity');
   return res.json();
 }
 
@@ -85,7 +121,7 @@ export async function getGroup(groupId: string): Promise<GroupDetailResponse> {
 
 export async function updateGroup(
   groupId: string,
-  payload: { name?: string; group_type?: string; cover?: string }
+  payload: { name?: string; group_type?: string; cover?: string; simplify_debts?: boolean; default_split?: any }
 ): Promise<GroupDetailResponse> {
   const res = await fetchWithAuth(`/api/v1/groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) });
   if (!res.ok) await throwApiError(res, 'Failed to update group');
@@ -93,9 +129,31 @@ export async function updateGroup(
 }
 
 export async function deleteGroup(groupId: string, force = false): Promise<void> {
-  const qs = force ? '?force=true' : '';
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}${qs}`, { method: 'DELETE' });
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}?force=${force}`, {
+    method: 'DELETE',
+  });
   if (!res.ok) await throwApiError(res, 'Failed to delete group');
+}
+
+export async function archiveGroup(groupId: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/archive`, {
+    method: 'POST',
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to archive group');
+}
+
+export async function unarchiveGroup(groupId: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/unarchive`, {
+    method: 'POST',
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to unarchive group');
+}
+
+export async function restoreGroup(groupId: string): Promise<void> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/restore`, {
+    method: 'POST',
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to restore group');
 }
 
 export async function addMember(
@@ -160,6 +218,37 @@ export interface SplitEntryPayload {
   value?: number;
 }
 
+export interface GroupExpenseItemEntry {
+  line_no: number;
+  item_name: string;
+  normalized_name?: string | null;
+  category_id?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  line_total: number;
+  tax?: number | null;
+  discount?: number | null;
+  attributes_json?: string | null;
+  member_ratios: Record<string, number>;
+}
+
+export interface GroupExpenseWithItemsPayload {
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
+  merchant_name?: string;
+  payers: { member_id: string; amount_paid: number }[];
+  items: GroupExpenseItemEntry[];
+}
+
+export interface GroupExpenseWithItemsResponse {
+  expense_id: string;
+  item_ids: string[];
+  my_share: number;
+}
+
 export interface GroupExpensePayload {
   date: string; // MM/DD/YYYY
   description: string;
@@ -167,7 +256,7 @@ export interface GroupExpensePayload {
   amount: number;
   merchant_name?: string;
   payers: { member_id: string; amount_paid: number }[];
-  split: { type: 'equal' | 'exact' | 'percentage'; entries: SplitEntryPayload[] };
+  split: { type: 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment'; entries: SplitEntryPayload[] };
 }
 
 export interface PayerSummaryItem {
@@ -202,6 +291,18 @@ export async function createGroupExpense(
   if (!res.ok) await throwApiError(res, 'Failed to add group expense');
   const body = await res.json();
   return body.expense;
+}
+
+export async function createGroupExpenseWithItems(
+  groupId: string,
+  payload: GroupExpenseWithItemsPayload
+): Promise<GroupExpenseWithItemsResponse> {
+  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/itemized`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) await throwApiError(res, 'Failed to add itemized group expense');
+  return res.json();
 }
 
 export async function listGroupExpenses(

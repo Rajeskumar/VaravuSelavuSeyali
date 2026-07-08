@@ -1,6 +1,6 @@
 # TS-GRP-124 — AI Analyst: full group context expansion
 
-**Phase:** 2 · **Spec:** §5.6, §10.2 · **Status:** 📋 Planned
+**Phase:** 2 · **Spec:** §5.6, §10.2 · **Status:** ✅ Implemented
 
 ## Scope
 

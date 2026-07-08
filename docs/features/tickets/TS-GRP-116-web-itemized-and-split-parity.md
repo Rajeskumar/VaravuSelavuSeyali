@@ -1,6 +1,6 @@
 # TS-GRP-116 — Web: shares/adjustment/multi-payer UI + `ItemSplitBoard`
 
-**Phase:** 2 · **Spec:** §3.4, §10.1, §11.3 · **Status:** 📋 Planned
+**Phase:** 2 · **Spec:** §3.4, §10.1, §11.3 · **Status:** ✅ Implemented
 
 ## Scope
 

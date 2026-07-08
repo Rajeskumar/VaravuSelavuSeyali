@@ -61,7 +61,7 @@ test('shows My Groups widget and the combined-totals explainer toast on first vi
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
   jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true });
   jest.spyOn(groupsApi, 'listGroups').mockResolvedValue([
-    { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 12.5 },
+    { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 12.5, status: 'active', archived_at: null, deleted_at: null },
   ]);
   jest.spyOn(groupsApi, 'listAllMyGroupExpenses').mockResolvedValue([]);
   renderPage();

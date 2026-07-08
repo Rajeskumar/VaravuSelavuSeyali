@@ -21,6 +21,8 @@ class GroupExpenseService:
     def __init__(self, db: Session):
         self.db = db
         self.group_service = GroupService(db)
+        from varavu_selavu_service.services.activity_service import ActivityService
+        self.activity_svc = ActivityService(db)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -153,6 +155,14 @@ class GroupExpenseService:
                 )
             )
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="expense_created",
+            entity_id=str(expense.id),
+            payload={"description": expense.description, "amount": float(expense.amount)}
+        )
 
         return self._expense_row(expense, actor_email)
 
@@ -226,6 +236,14 @@ class GroupExpenseService:
                 )
             )
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="expense_updated",
+            entity_id=str(expense.id),
+            payload={"description": expense.description, "amount": float(expense.amount)}
+        )
 
         return self._expense_row(expense, actor_email)
 
@@ -241,6 +259,14 @@ class GroupExpenseService:
 
         self.db.delete(expense)
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="expense_deleted",
+            entity_id=expense_id,
+            payload={"description": expense.description}
+        )
         # expense_payers/expense_splits cascade via the FK ondelete=CASCADE (TS-GRP-101).
 
     def create_itemized_expense(
@@ -362,5 +388,13 @@ class GroupExpenseService:
                 self.db.add(item_split)
 
         self.db.commit()
+        
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="expense_created",
+            entity_id=str(expense.id),
+            payload={"description": expense.description, "amount": float(expense.amount)}
+        )
 
         return self._expense_row(expense, actor_email)

@@ -30,8 +30,20 @@ import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
 import { glassCardSx } from '../../theme';
-import { listGroups, getGroup, createGroupExpense, GroupSummary, GroupDetailResponse, ApiError } from '../../api/groups';
+import {
+  GroupSummary,
+  GroupDetailResponse,
+  PayerSummaryItem,
+  GroupExpenseItemEntry,
+  listGroups,
+  getGroup,
+  createGroupExpense,
+  createGroupExpenseWithItems,
+  ApiError,
+} from '../../api/groups';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
+import PayerPicker from '../groups/PayerPicker';
+import ItemSplitBoard from '../groups/ItemSplitBoard';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
 
@@ -93,9 +105,12 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
   const [groupDetail, setGroupDetail] = useState<GroupDetailResponse | null>(null);
-  const [payerId, setPayerId] = useState('');
+  const [payers, setPayers] = useState<PayerSummaryItem[]>([]);
+  const [payersValid, setPayersValid] = useState(false);
   const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
   const [splitValid, setSplitValid] = useState(false);
+  const [groupItems, setGroupItems] = useState<GroupExpenseItemEntry[]>([]);
+  const [groupItemsValid, setGroupItemsValid] = useState(false);
   const [groupSubmitError, setGroupSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -115,30 +130,34 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   useEffect(() => {
     if (!selectedGroupId) {
       setGroupDetail(null);
-      setPayerId('');
+      setPayers([]);
       setSplitEntries([]);
       return;
     }
     let mounted = true;
     (async () => {
       try {
-        const detail = await getGroup(selectedGroupId);
+        const grp = await getGroup(selectedGroupId);
         if (!mounted) return;
-        setGroupDetail(detail);
-        const me = localStorage.getItem('vs_user');
-        const myMember = detail.members.find(m => m.user_email === me);
-        setPayerId(myMember?.member_id || detail.members[0]?.member_id || '');
-        setSplitEntries(detail.members.map(m => ({ member_id: m.member_id })));
+        setGroupDetail(grp);
+        if (selectedGroupId && grp) {
+          const myEmail = localStorage.getItem('vs_user');
+          const myMember = grp.members.find(m => m.user_email === myEmail);
+          if (myMember) {
+            setPayers([{ member_id: myMember.member_id, amount_paid: cost }]);
+          }
+          setSplitEntries(grp.members.map((m) => ({ member_id: m.member_id })));
+        }
       } catch {
         if (mounted) {
           setGroupDetail(null);
-          setPayerId('');
+          setPayers([]);
           setSplitEntries([]);
         }
       }
     })();
     return () => { mounted = false; };
-  }, [selectedGroupId]);
+  }, [selectedGroupId, cost]);
 
   const spin = keyframes`
     from { transform: rotate(0deg); }
@@ -338,7 +357,16 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
         header: { ...res.header, description: desc, main_category_name: main, category_name: sub || CATEGORY_GROUPS[main][0] },
       };
       setDraft(processed);
-      setCost(hdr.amount || 0);
+      setCost(Number(res.header.amount) || 0);
+      setGroupItems((res.items || []).map((i: any, idx: number) => ({
+        line_no: idx + 1,
+        item_name: i.item_name,
+        line_total: Number(i.line_total) || 0,
+        quantity: Number(i.quantity) || null,
+        unit_price: Number(i.unit_price) || null,
+        member_ratios: {},
+      })));
+      setMessage('Receipt parsed successfully. Review details below.');
       setDescription(desc);
       // Populate merchant from receipt header if user hasn't manually typed one
       if (!userPickedMerchant && (hdr.merchant_name || hdr.merchant)) {
@@ -367,7 +395,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     const requiredFilled =
       description.trim() !== '' && cost > 0 && expenseDate && subcategory && mainCategory;
     if (mode === 'group' && !existing) {
-      return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payerId || !splitValid;
+      if (draft && draft.items.length > 0) {
+        return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payersValid || !groupItemsValid;
+      }
+      return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payersValid || !splitValid;
     }
     return (
       saving || parsing || converting || !requiredFilled
@@ -386,19 +417,29 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       setSaving(true);
       const formattedDate = isoToMMDDYYYY(expenseDate);
       if (mode === 'group' && !existing) {
-        // Phase 1 (spec §10.1/TS-GRP-104): equal split on the total only — no
-        // itemized group expenses yet, even if the receipt parsed line items.
         setGroupSubmitError(null);
         try {
-          await createGroupExpense(selectedGroupId, {
-            date: formattedDate,
-            description,
-            category: subcategory,
-            amount: cost,
-            merchant_name: merchantName || undefined,
-            payers: [{ member_id: payerId, amount_paid: cost }],
-            split: { type: 'equal', entries: splitEntries },
-          });
+          if (draft && draft.items.length > 0) {
+            await createGroupExpenseWithItems(selectedGroupId, {
+              date: formattedDate,
+              description,
+              category: subcategory,
+              amount: cost,
+              merchant_name: merchantName || undefined,
+              payers,
+              items: groupItems,
+            });
+          } else {
+            await createGroupExpense(selectedGroupId, {
+              date: formattedDate,
+              description,
+              category: subcategory,
+              amount: cost,
+              merchant_name: merchantName || undefined,
+              payers,
+              split: { type: 'equal', entries: splitEntries },
+            });
+          }
           setMessage('Group expense added successfully.');
           setDescription('');
           setCost(0);
@@ -407,7 +448,12 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           onSuccess?.();
         } catch (err) {
           const msg = err instanceof ApiError ? err.message : 'Failed to add group expense.';
-          setGroupSubmitError(msg);
+          // Surface 409 duplicate receipt inline just like personal expenses
+          if (err instanceof ApiError && err.status === 409) {
+            setGroupSubmitError(msg);
+          } else {
+            setGroupSubmitError(msg);
+          }
           onError?.(msg);
         }
         return;
@@ -552,32 +598,45 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 {groupDetail && (
                   <>
                     <Grid size={12}>
-                      <TextField
-                        select
-                        fullWidth
-                        label="Paid by"
-                        value={payerId}
-                        sx={glassFieldSx}
-                        onChange={(e) => setPayerId(e.target.value)}
-                      >
-                        {groupDetail.members.map((m) => (
-                          <MenuItem key={m.member_id} value={m.member_id}>{m.display_name}</MenuItem>
-                        ))}
-                      </TextField>
-                    </Grid>
-                    <Grid size={12}>
-                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                        Split equally among
-                      </Typography>
-                      <SplitEditor
+                      <Divider sx={{ my: 1 }} />
+                      <PayerPicker
                         amount={cost}
                         members={groupDetail.members}
-                        value={{ type: 'equal', entries: splitEntries }}
-                        onChange={(v) => setSplitEntries(v.entries)}
-                        onValidityChange={setSplitValid}
-                        allowedTypes={['equal']}
-                        serverError={groupSubmitError}
+                        payers={payers}
+                        onChange={setPayers}
+                        onValidityChange={setPayersValid}
                       />
+                    </Grid>
+                    <Grid size={12}>
+                      <Divider sx={{ my: 1 }} />
+                      {draft && draft.items.length > 0 ? (
+                        <>
+                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            Split Items
+                          </Typography>
+                          <ItemSplitBoard
+                            items={groupItems}
+                            members={groupDetail.members}
+                            onChange={setGroupItems}
+                            onValidityChange={setGroupItemsValid}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                            Split equally among
+                          </Typography>
+                          <SplitEditor
+                            amount={cost}
+                            members={groupDetail.members}
+                            value={{ type: 'equal', entries: splitEntries }}
+                            onChange={(v) => setSplitEntries(v.entries)}
+                            onValidityChange={setSplitValid}
+                            allowedTypes={['equal']}
+                            serverError={groupSubmitError}
+                          />
+                        </>
+                      )}
                     </Grid>
                   </>
                 )}

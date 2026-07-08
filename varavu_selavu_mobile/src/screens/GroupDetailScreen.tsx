@@ -31,7 +31,6 @@ import {
   listGroupExpenses,
   getGroupBalances,
   addMember,
-  createInvite,
   GroupExpenseRow,
   MemberBalance,
   MemberDTO,
@@ -40,11 +39,13 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
-import BalanceRow, { memberColor } from '../components/BalanceRow';
+import BalanceRow from '../components/BalanceRow';
 import SettleUpSheet from '../components/SettleUpSheet';
+import GroupSettingsSheet from '../components/GroupSettingsSheet';
+import ActivityList from '../components/ActivityList';
 import { showToast } from '../components/Toast';
 
-type Tab = 'expenses' | 'balances';
+type Tab = 'expenses' | 'balances' | 'activity';
 
 const GROUP_TYPE_EMOJI: Record<string, string> = {
   other: '👥',
@@ -70,6 +71,8 @@ export default function GroupDetailScreen() {
   const [settleTo, setSettleTo] = useState<string | null>(null);
   const [settleSuggested, setSettleSuggested] = useState(0);
 
+  const [settingsVisible, setSettingsVisible] = useState(false);
+
   // Invite dialog state
   const [inviteVisible, setInviteVisible] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -79,7 +82,6 @@ export default function GroupDetailScreen() {
   const {
     data: detail,
     isLoading: detailLoading,
-    refetch: refetchDetail,
   } = useQuery({
     queryKey: ['group-detail', groupId],
     queryFn: () => getGroupDetail(groupId),
@@ -112,7 +114,8 @@ export default function GroupDetailScreen() {
   const expenses: GroupExpenseRow[] = expenseData?.items ?? [];
   const balances: MemberBalance[] = balanceData?.members ?? [];
 
-  // Find current user's member ID (may be null for placeholder members)
+  const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name ?? 'Unknown';
+
   const myMember = members.find((m) => m.user_email === userEmail);
   const myBalance = balances.find((b) => b.member_id === myMember?.member_id)?.net ?? 0;
   const balanceColor =
@@ -120,35 +123,10 @@ export default function GroupDetailScreen() {
   const balanceLabel =
     myBalance > 0 ? `You're owed $${myBalance.toFixed(2)}` : myBalance < 0 ? `You owe $${Math.abs(myBalance).toFixed(2)}` : "You're all settled up";
 
-  const handleSettleUp = (balance: MemberBalance) => {
-    if (!myMember) return;
-    // If the current user owes this person (net from their perspective is negative)
-    if (balance.net < 0 && balance.member_id !== myMember.member_id) {
-      // This member owes the current user → current user is "from"? No:
-      // net < 0 means this member owes money. We're settling for the current user.
-      // Simple approach: pre-fill with "my" debt to this member.
-      setSettleFrom(myMember.member_id);
-      setSettleTo(balance.member_id);
-      setSettleSuggested(Math.abs(balance.net));
-    } else {
-      setSettleFrom(balance.member_id);
-      setSettleTo(myMember.member_id);
-      setSettleSuggested(Math.abs(balance.net));
-    }
-    setSettleUpVisible(true);
-  };
-
   const handleAddMember = async () => {
     setInviteLoading(true);
     try {
       const newMember = await addMember(groupId, inviteEmail.trim() || undefined, inviteName.trim() || undefined);
-      // If they have an email, also create an invite link
-      if (inviteEmail.trim()) {
-        try {
-          const invite = await createInvite(groupId, newMember.member_id);
-          Alert.alert('Invite link', invite.url);
-        } catch { /* invite link creation is best-effort */ }
-      }
       showToast({ message: 'Member added', type: 'success' });
       qc.invalidateQueries({ queryKey: ['group-detail', groupId] });
       setInviteVisible(false);
@@ -206,10 +184,26 @@ export default function GroupDetailScreen() {
     );
   };
 
+  const handleSettleUp = (balance: MemberBalance) => {
+    if (!myMember) return;
+    if (balance.net < 0 && balance.member_id !== myMember.member_id) {
+      setSettleFrom(myMember.member_id);
+      setSettleTo(balance.member_id);
+      setSettleSuggested(Math.abs(balance.net));
+    } else {
+      setSettleFrom(balance.member_id);
+      setSettleTo(myMember.member_id);
+      setSettleSuggested(Math.abs(balance.net));
+    }
+    setSettleUpVisible(true);
+  };
+
   const renderBalance = ({ item }: { item: MemberBalance }) => (
     <TouchableOpacity
       onPress={() => {
-        if (item.net !== 0) handleSettleUp(item);
+        if (item.net !== 0) {
+          handleSettleUp(item);
+        }
       }}
       activeOpacity={item.net !== 0 ? 0.7 : 1}
     >
@@ -219,7 +213,6 @@ export default function GroupDetailScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
@@ -231,82 +224,93 @@ export default function GroupDetailScreen() {
           {detail.name}
         </Text>
         <TouchableOpacity
-          style={styles.inviteBtn}
-          onPress={() => setInviteVisible(true)}
+          style={styles.settingsBtn}
+          onPress={() => setSettingsVisible(true)}
         >
-          <Ionicons name="person-add" size={20} color={theme.colors.primary} />
+          <Ionicons name="settings-outline" size={22} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
-      {/* Balance summary */}
+      {detail.status === 'archived' && (
+        <View style={[styles.banner, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}>
+          <Text style={[styles.bannerText, { color: theme.colors.warning }]}>
+            This group is archived. You cannot add new expenses or members.
+          </Text>
+        </View>
+      )}
+
+      {detail.status === 'deleted' && (
+        <View style={[styles.banner, { backgroundColor: theme.colors.error + '20', borderColor: theme.colors.error }]}>
+          <Text style={[styles.bannerText, { color: theme.colors.error }]}>
+            This group has been deleted. It will be permanently removed after 30 days.
+          </Text>
+        </View>
+      )}
+
       <View style={styles.balanceBanner}>
         <Text style={styles.balanceBannerLabel}>Your balance in this group</Text>
         <Text style={[styles.balanceBannerAmount, { color: balanceColor }]}>{balanceLabel}</Text>
       </View>
 
-      {/* Tab bar */}
       <View style={styles.tabBar}>
-        {(['expenses', 'balances'] as Tab[]).map((tab) => (
+        {(['expenses', 'balances', 'activity'] as Tab[]).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text
-              style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}
-            >
+            <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Tab content */}
-      {activeTab === 'expenses' ? (
-        expensesLoading ? (
-          <View style={styles.loadingCenter}>
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
-        ) : expenses.length === 0 ? (
-          <View style={styles.emptyCenter}>
-            <Text style={styles.emptyText}>No expenses yet.</Text>
-            <Text style={styles.emptySubText}>
-              Use the + button in the main screen to add a group expense.
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={expenses}
-            keyExtractor={(item) => item.row_id}
-            renderItem={renderExpense}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-            refreshControl={
-              <RefreshControl
-                refreshing={expensesRefetching}
-                onRefresh={refetchExpenses}
-                tintColor={theme.colors.primary}
-              />
-            }
-          />
-        )
-      ) : balancesLoading ? (
-        <View style={styles.loadingCenter}>
-          <ActivityIndicator color={theme.colors.primary} />
-        </View>
-      ) : (
-        <>
+      {activeTab === 'expenses' && (
+        <FlatList
+          data={expenses}
+          keyExtractor={(item) => item.row_id}
+          renderItem={renderExpense}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          refreshControl={<RefreshControl refreshing={expensesRefetching} onRefresh={refetchExpenses} tintColor={theme.colors.primary} />}
+        />
+      )}
+
+      {activeTab === 'balances' && (
+        <View style={{ flex: 1 }}>
           <FlatList
             data={balances}
             keyExtractor={(item) => item.member_id}
             renderItem={renderBalance}
             contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
-            refreshControl={
-              <RefreshControl
-                refreshing={balancesRefetching}
-                onRefresh={refetchBalances}
-                tintColor={theme.colors.primary}
-              />
-            }
+            refreshControl={<RefreshControl refreshing={balancesRefetching} onRefresh={refetchBalances} tintColor={theme.colors.primary} />}
+            ListHeaderComponent={() => (
+              <View style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.sectionTitle}>Group Balances</Text>
+                  {detail.simplify_debts && (
+                    <View style={styles.simplifiedBadge}>
+                      <Text style={[styles.simplifiedText, { color: theme.colors.primary }]}>Simplified</Text>
+                    </View>
+                  )}
+                </View>
+                {balanceData?.transfers && balanceData.transfers.length > 0 && (
+                  <View style={[styles.transfersCard, { borderBottomColor: theme.colors.border }]}>
+                    <Text style={styles.transfersTitle}>Suggested Transfers</Text>
+                    {balanceData.transfers.map((t, idx) => (
+                      <View key={idx} style={styles.transferRow}>
+                        <Text style={styles.transferText}>
+                          <Text style={{ fontWeight: '600' }}>{nameFor(t.from_member_id)}</Text>
+                          {' owes '}
+                          <Text style={{ fontWeight: '600' }}>{nameFor(t.to_member_id)}</Text>
+                        </Text>
+                        <Text style={styles.transferAmount}>${t.amount.toFixed(2)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
           />
           {/* Settle Up FAB */}
           <TouchableOpacity
@@ -320,10 +324,11 @@ export default function GroupDetailScreen() {
           >
             <Text style={styles.settleBtnText}>Settle Up</Text>
           </TouchableOpacity>
-        </>
+        </View>
       )}
 
-      {/* Settle Up Sheet */}
+      {activeTab === 'activity' && <ActivityList groupId={groupId} group={detail} />}
+
       <SettleUpSheet
         visible={settleUpVisible}
         groupId={groupId}
@@ -339,13 +344,9 @@ export default function GroupDetailScreen() {
         }}
       />
 
-      {/* Add member modal */}
-      <Modal
-        visible={inviteVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setInviteVisible(false)}
-      >
+      <GroupSettingsSheet visible={settingsVisible} onClose={() => setSettingsVisible(false)} group={detail} />
+
+      <Modal visible={inviteVisible} transparent animationType="slide" onRequestClose={() => setInviteVisible(false)}>
         <Pressable style={styles.modalBackdrop} onPress={() => setInviteVisible(false)} />
         <View style={[styles.inviteSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.modalPill} />
@@ -371,11 +372,7 @@ export default function GroupDetailScreen() {
             onPress={handleAddMember}
             disabled={inviteLoading || (!inviteEmail.trim() && !inviteName.trim())}
           >
-            {inviteLoading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.createBtnText}>Add & Create Invite</Text>
-            )}
+            {inviteLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Add</Text>}
           </TouchableOpacity>
         </View>
       </Modal>
@@ -399,13 +396,13 @@ const createStyles = (theme: AppTheme) =>
     },
     backBtn: { marginRight: 8, padding: 4 },
     groupIcon: {
-      width: 32,
-      height: 32,
-      borderRadius: 10,
-      backgroundColor: theme.colors.primarySurface,
-      alignItems: 'center',
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: `${theme.colors.primary}15`,
       justifyContent: 'center',
-      marginRight: 10,
+      alignItems: 'center',
+      marginLeft: 12,
     },
     groupIconEmoji: { fontSize: 17 },
     groupName: {
@@ -413,8 +410,29 @@ const createStyles = (theme: AppTheme) =>
       fontFamily: 'Inter-Bold',
       fontSize: 18,
       color: theme.colors.text,
+      marginLeft: 12,
     },
-    inviteBtn: { padding: 4 },
+    settingsBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: `${theme.colors.primary}15`,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 8,
+    },
+    banner: {
+      marginHorizontal: 16,
+      marginBottom: 12,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    bannerText: {
+      fontSize: 14,
+      fontFamily: 'Inter-Medium',
+      textAlign: 'center',
+    },
     balanceBanner: {
       marginHorizontal: 16,
       marginTop: 12,
@@ -424,61 +442,20 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.borderLight,
     },
-    balanceBannerLabel: {
-      fontFamily: 'Inter-Regular',
-      fontSize: 12,
-      color: theme.colors.textSecondary,
-      marginBottom: 2,
-    },
-    balanceBannerAmount: {
-      fontFamily: 'Inter-Bold',
-      fontSize: 20,
-    },
-    tabBar: {
-      flexDirection: 'row',
-      backgroundColor: theme.colors.surfaceSecondary,
-      margin: 16,
-      borderRadius: 12,
-      padding: 4,
-    },
-    tabItem: {
-      flex: 1,
-      paddingVertical: 8,
-      alignItems: 'center',
-      borderRadius: 9,
-    },
-    tabItemActive: {
-      backgroundColor: theme.colors.background,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.borderLight,
-    },
-    tabLabel: {
-      fontFamily: 'Inter-SemiBold',
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-    },
+    balanceBannerLabel: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 },
+    balanceBannerAmount: { fontFamily: 'Inter-Bold', fontSize: 20 },
+    tabBar: { flexDirection: 'row', backgroundColor: theme.colors.surfaceSecondary, margin: 16, borderRadius: 12, padding: 4 },
+    tabItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 9 },
+    tabItemActive: { backgroundColor: theme.colors.background, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight },
+    tabLabel: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.textSecondary },
     tabLabelActive: { color: theme.colors.primary },
-    emptyCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-    emptyText: {
-      fontFamily: 'Inter-SemiBold',
-      fontSize: 18,
-      color: theme.colors.text,
-      textAlign: 'center',
-    },
-    emptySubText: {
-      fontFamily: 'Inter-Regular',
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-      marginTop: 8,
-    },
     expenseCard: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
       paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.borderLight,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
     },
     expenseIcon: {
       width: 36,
@@ -497,13 +474,61 @@ const createStyles = (theme: AppTheme) =>
       color: theme.colors.textSecondary,
       marginTop: 2,
     },
+    expenseShare: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 12,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+      textAlign: 'right',
+    },
+    sectionTitle: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 18,
+      color: theme.colors.text,
+    },
+    simplifiedBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: `${theme.colors.primary}20`,
+    },
+    simplifiedText: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 12,
+    },
+    transfersCard: {
+      marginTop: 16,
+      padding: 16,
+      backgroundColor: theme.colors.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+    },
+    transfersTitle: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 14,
+      color: theme.colors.text,
+      marginBottom: 12,
+    },
+    transferRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    transferText: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 14,
+      color: theme.colors.textSecondary,
+    },
+    transferAmount: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 14,
+      color: theme.colors.text,
+    },
     expenseRight: { alignItems: 'flex-end' },
     expenseTotal: { fontFamily: 'Inter-Bold', fontSize: 15, color: theme.colors.text },
-    expenseShare: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
     settleBtn: {
       position: 'absolute',
-      left: 24,
-      right: 24,
       backgroundColor: theme.colors.primary,
       paddingVertical: 14,
       borderRadius: 14,

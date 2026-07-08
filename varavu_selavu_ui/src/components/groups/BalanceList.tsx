@@ -12,9 +12,10 @@ import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 
 interface BalanceListProps {
   balances: BalanceResponse;
+  simplifyDebts?: boolean;
 }
 
-const BalanceList: React.FC<BalanceListProps> = ({ balances }) => {
+const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts }) => {
   const theme = useTheme();
   const nameFor = (memberId: string) =>
     balances.members.find((m) => m.member_id === memberId)?.display_name || 'Unknown';
@@ -54,9 +55,14 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances }) => {
 
       {balances.transfers.length > 0 && (
         <Box>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, px: 0.5 }}>
-            Who owes whom
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5, px: 0.5 }}>
+            <Typography variant="subtitle2" color="text.secondary">
+              Who owes whom
+            </Typography>
+            {simplifyDebts && (
+              <Chip size="small" label="Simplified" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
+            )}
+          </Box>
           <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
             {balances.transfers.map((t, idx) => (
               <Box

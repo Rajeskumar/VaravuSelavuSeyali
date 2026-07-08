@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Check } from 'lucide-react';
+import { X, Check, Play } from 'lucide-react';
 
 const colors = {
   ink: '#191A1E',
@@ -49,7 +49,7 @@ function ToggleSwitch({ active, onChange }) {
   );
 }
 
-function RecurringCard({ item, onToggle }) {
+function RecurringCard({ item, onToggle, onRunNow, justRun }) {
   const isActive = item.status === 'Active';
   return (
     <div style={{ backgroundColor: colors.surface, border: `1px solid ${colors.hairline}`, borderRadius: 10, padding: 14, marginBottom: 12 }}>
@@ -66,25 +66,44 @@ function RecurringCard({ item, onToggle }) {
       </div>
       <div className="flex items-center justify-between">
         <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: colors.inkMuted }}>{item.category}</span>
-        {isActive ? (
-          <span
-            style={{
-              fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 600, color: colors.jadeText,
-              backgroundColor: 'rgba(15,163,127,0.08)', padding: '3px 8px', borderRadius: 999,
-            }}
-          >
-            Due {item.nextDue}
-          </span>
-        ) : (
-          <span
-            style={{
-              fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 600, color: colors.inkMuted,
-              backgroundColor: colors.hairline, padding: '3px 8px', borderRadius: 999,
-            }}
-          >
-            Paused
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {isActive && (
+            <button
+              onClick={() => onRunNow(item.id)}
+              disabled={justRun}
+              className="flex items-center gap-1"
+              style={{
+                fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 600,
+                color: justRun ? colors.jadeText : colors.ink,
+                border: `1px solid ${justRun ? colors.jade : colors.hairline}`,
+                backgroundColor: justRun ? 'rgba(15,163,127,0.08)' : colors.surface,
+                padding: '3px 8px', borderRadius: 999,
+              }}
+            >
+              {justRun ? <Check size={11} /> : <Play size={11} />}
+              {justRun ? 'Logged' : 'Run now'}
+            </button>
+          )}
+          {isActive ? (
+            <span
+              style={{
+                fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 600, color: colors.jadeText,
+                backgroundColor: 'rgba(15,163,127,0.08)', padding: '3px 8px', borderRadius: 999,
+              }}
+            >
+              Due {item.nextDue}
+            </span>
+          ) : (
+            <span
+              style={{
+                fontFamily: "'Inter', sans-serif", fontSize: 11, fontWeight: 600, color: colors.inkMuted,
+                backgroundColor: colors.hairline, padding: '3px 8px', borderRadius: 999,
+              }}
+            >
+              Paused
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex items-center justify-between mt-3" style={{ borderTop: `1px solid ${colors.hairline}`, paddingTop: 10 }}>
         <span style={{ fontFamily: "'Inter', sans-serif", fontSize: 12, color: colors.inkMuted }}>
@@ -136,8 +155,15 @@ export default function Recurring() {
   const [promptOpen, setPromptOpen] = useState(false);
   const [confirmedIds, setConfirmedIds] = useState([]);
 
+  const [runNowIds, setRunNowIds] = useState([]);
+
   function toggleTemplate(id) {
     setTemplates((prev) => prev.map((t) => (t.id === id ? { ...t, status: t.status === 'Active' ? 'Paused' : 'Active' } : t)));
+  }
+
+  function runNow(id) {
+    setRunNowIds((prev) => [...prev, id]);
+    setTimeout(() => setRunNowIds((prev) => prev.filter((x) => x !== id)), 1500);
   }
 
   const dueNow = templates.filter((t) => t.status === 'Active' && (t.id === 'r1' || t.id === 'r4'));
@@ -167,7 +193,7 @@ export default function Recurring() {
 
           <div className="px-5">
             {templates.map((item) => (
-              <RecurringCard key={item.id} item={item} onToggle={toggleTemplate} />
+              <RecurringCard key={item.id} item={item} onToggle={toggleTemplate} onRunNow={runNow} justRun={runNowIds.includes(item.id)} />
             ))}
           </div>
         </div>

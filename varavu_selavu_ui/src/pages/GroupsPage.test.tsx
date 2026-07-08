@@ -19,7 +19,7 @@ function renderPage() {
 
 test('renders the user\'s groups', async () => {
   jest.spyOn(api, 'listGroups').mockResolvedValue([
-    { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 3, my_balance: 42.17 },
+    { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 3, my_balance: 42.17, status: 'active', archived_at: null, deleted_at: null },
   ]);
   renderPage();
   await waitFor(() => screen.getByText(/Apartment 4B/));

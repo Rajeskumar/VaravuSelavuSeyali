@@ -7,11 +7,11 @@ import Avatar from '@mui/material/Avatar';
 import InputAdornment from '@mui/material/InputAdornment';
 import { useTheme } from '@mui/material/styles';
 import { MemberDTO } from '../../api/groups';
-import { previewEqualSplit, previewPercentageSplit } from '../../utils/splitPreview';
+import { previewEqualSplit, previewPercentageSplit, previewSharesSplit, previewAdjustmentSplit } from '../../utils/splitPreview';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import SegmentedTabs from '../common/SegmentedTabs';
 
-export type SplitType = 'equal' | 'exact' | 'percentage';
+export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
 
 export interface SplitEditorEntry {
   member_id: string;
@@ -40,7 +40,7 @@ interface SplitEditorProps {
 }
 
 const TOLERANCE = 0.01;
-const ALL_TYPES: SplitType[] = ['equal', 'exact', 'percentage'];
+const ALL_TYPES: SplitType[] = ['equal', 'exact', 'percentage', 'shares', 'adjustment'];
 
 const SplitEditor: React.FC<SplitEditorProps> = ({
   amount,
@@ -56,7 +56,9 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
   const totalEntered = value.entries.reduce((sum, e) => sum + (e.value || 0), 0);
   const target = value.type === 'percentage' ? 100 : value.type === 'exact' ? amount : null;
   const isValid =
-    value.type === 'equal' ? value.entries.length > 0 : target !== null && Math.abs(totalEntered - target) < TOLERANCE;
+    value.type === 'equal' || value.type === 'shares' || value.type === 'adjustment'
+      ? value.entries.length > 0
+      : target !== null && Math.abs(totalEntered - target) < TOLERANCE;
 
   React.useEffect(() => {
     onValidityChange?.(isValid);
@@ -73,6 +75,18 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
         out[e.member_id] = e.value || 0;
       });
       return out;
+    }
+    if (value.type === 'shares') {
+      return previewSharesSplit(
+        amount,
+        value.entries.map((e) => ({ member_id: e.member_id, value: e.value || 0 }))
+      );
+    }
+    if (value.type === 'adjustment') {
+      return previewAdjustmentSplit(
+        amount,
+        value.entries.map((e) => ({ member_id: e.member_id, value: e.value || 0 }))
+      );
     }
     return previewPercentageSplit(
       amount,
@@ -91,6 +105,10 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
           ? Math.round((100 / participantIds.length) * 100) / 100
           : newType === 'exact'
           ? Math.round((amount / participantIds.length) * 100) / 100
+          : newType === 'shares'
+          ? 1
+          : newType === 'adjustment'
+          ? 0
           : undefined,
     }));
     onChange({ type: newType, entries });
@@ -98,7 +116,11 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
 
   const toggleMember = (memberId: string, checked: boolean) => {
     if (checked) {
-      const defaultValue = value.type === 'equal' ? undefined : 0;
+      let defaultValue: number | undefined;
+      if (value.type === 'shares') defaultValue = 1;
+      else if (value.type === 'adjustment' || value.type === 'exact' || value.type === 'percentage') defaultValue = 0;
+      else defaultValue = undefined;
+      
       onChange({ ...value, entries: [...value.entries, { member_id: memberId, value: defaultValue }] });
     } else {
       onChange({ ...value, entries: value.entries.filter((e) => e.member_id !== memberId) });
@@ -123,6 +145,8 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
               { value: 'equal', label: 'Equal' },
               { value: 'exact', label: 'Exact' },
               { value: 'percentage', label: 'Percentage' },
+              { value: 'shares', label: 'Shares' },
+              { value: 'adjustment', label: 'Adjustment' },
             ] as { value: SplitType; label: string }[]).filter((o) => allowedTypes.includes(o.value))}
           />
         </Box>
@@ -168,11 +192,13 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
                   value={entry?.value ?? 0}
                   onChange={(e) => updateEntryValue(m.member_id, parseFloat(e.target.value) || 0)}
                   sx={{ width: 120 }}
-                  inputProps={{ 'aria-label': `${value.type === 'exact' ? 'Amount' : 'Percentage'} for ${m.display_name}` }}
+                  inputProps={{ 'aria-label': `${value.type} for ${m.display_name}` }}
                   InputProps={
-                    value.type === 'exact'
-                      ? { startAdornment: <InputAdornment position="start">$</InputAdornment> }
-                      : { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+                    value.type === 'exact' || value.type === 'adjustment'
+                      ? { startAdornment: <InputAdornment position="start">{value.type === 'adjustment' ? '±$' : '$'}</InputAdornment> }
+                      : value.type === 'percentage'
+                      ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+                      : {}
                   }
                 />
               )}
@@ -186,12 +212,12 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
         })}
       </Box>
 
-      {value.type === 'equal' && value.entries.length === 0 && (
+      {['equal', 'shares', 'adjustment'].includes(value.type) && value.entries.length === 0 && (
         <Typography color="error" variant="body2" sx={{ mt: 1 }}>
           Select at least one participant
         </Typography>
       )}
-      {value.type !== 'equal' && !isValid && (
+      {['exact', 'percentage'].includes(value.type) && !isValid && (
         <Typography color="error" variant="body2" sx={{ mt: 1 }}>
           {value.type === 'percentage'
             ? `Percentages must total 100 (currently ${totalEntered.toFixed(2)})`

@@ -153,6 +153,138 @@ class InsightsAggregationService:
         self.db.commit()
 
     # ------------------------------------------------------------------
+    # Group expense entry points (TS-GRP-123)
+    # ------------------------------------------------------------------
+
+    def on_group_expense_created(
+        self,
+        member_shares: Dict[str, float],
+        merchant_name: Optional[str],
+        purchased_at: Optional[datetime],
+    ) -> None:
+        """Call after a group simple expense is persisted."""
+        for member_email, share_amount in member_shares.items():
+            if not member_email:
+                continue
+            self._update_merchant_insight(member_email, merchant_name, purchased_at, share_amount, count_delta=1)
+        self.db.commit()
+
+    def on_group_expense_updated(
+        self,
+        old_member_shares: Dict[str, float],
+        new_member_shares: Dict[str, float],
+        old_merchant_name: Optional[str],
+        old_purchased_at: Optional[datetime],
+        new_merchant_name: Optional[str],
+        new_purchased_at: Optional[datetime],
+    ) -> None:
+        """Call after a group simple expense is updated."""
+        # 1. Back out old values
+        if old_merchant_name:
+            for member_email, share_amount in old_member_shares.items():
+                if not member_email:
+                    continue
+                self._update_merchant_insight(
+                    member_email, old_merchant_name, old_purchased_at, -share_amount, count_delta=-1
+                )
+        
+        # 2. Add new values
+        if new_merchant_name:
+            for member_email, share_amount in new_member_shares.items():
+                if not member_email:
+                    continue
+                self._update_merchant_insight(
+                    member_email, new_merchant_name, new_purchased_at, share_amount, count_delta=1
+                )
+                
+        self.db.commit()
+
+    def on_group_expense_deleted(
+        self,
+        member_shares: Dict[str, float],
+        merchant_name: Optional[str],
+        purchased_at: Optional[datetime],
+        items: List[Dict[str, Any]] = None,
+        member_item_shares: Dict[str, List[Dict[str, Any]]] = None
+    ) -> None:
+        """Call after a group expense (simple or itemized) is deleted."""
+        # 1. Back out merchant totals
+        if merchant_name:
+            for member_email, share_amount in member_shares.items():
+                if not member_email:
+                    continue
+                self._update_merchant_insight(
+                    member_email, merchant_name, purchased_at, -share_amount, count_delta=-1
+                )
+        
+        # 2. Back out item aggregates
+        if member_item_shares:
+            for member_email, user_items in member_item_shares.items():
+                if not member_email:
+                    continue
+                for item in user_items:
+                    normalized_name = item.get("normalized_name") or item.get("item_name", "Unknown")
+                    quantity = float(item.get("share_quantity", 1))
+                    line_total = float(item.get("share_amount", 0))
+                    
+                    insight = (
+                        self.db.query(ItemInsight)
+                        .filter(
+                            ItemInsight.user_email == member_email,
+                            ItemInsight.normalized_name == normalized_name,
+                        )
+                        .first()
+                    )
+                    if insight:
+                        prev_total = float(insight.total_spent or 0)
+                        prev_qty = float(insight.total_quantity_bought or 0)
+                        new_total = max(0, prev_total - line_total)
+                        new_qty = max(0, prev_qty - quantity)
+                        
+                        insight.total_spent = Decimal(str(new_total))
+                        insight.total_quantity_bought = Decimal(str(new_qty))
+                        insight.avg_unit_price = Decimal(str(new_total / new_qty)) if new_qty > 0 else Decimal("0")
+                        
+                        if new_qty == 0:
+                            insight.min_price = Decimal("0")
+                            insight.max_price = Decimal("0")
+                            insight.avg_unit_price = Decimal("0")
+
+        self.db.commit()
+
+    def on_group_expense_with_items_created(
+        self,
+        expense_id: str,
+        member_shares: Dict[str, float],
+        member_item_shares: Dict[str, List[Dict[str, Any]]],
+        merchant_name: Optional[str],
+        purchased_at: Optional[datetime],
+    ) -> None:
+        """Call after a group receipt-based expense + items are persisted."""
+        # 1. Update merchant insights using full member share
+        for member_email, share_amount in member_shares.items():
+            if not member_email:
+                continue
+            self._update_merchant_insight(member_email, merchant_name, purchased_at, share_amount, count_delta=1)
+            
+        # 2. Update item insights using member's specific item shares
+        for member_email, user_items in member_item_shares.items():
+            if not member_email:
+                continue
+            for item in user_items:
+                self._update_item_insight(
+                    user_email=member_email,
+                    expense_id=expense_id,
+                    store_name=merchant_name,
+                    purchased_at=purchased_at,
+                    normalized_name=item.get("normalized_name") or item.get("item_name", "Unknown"),
+                    unit_price=float(item.get("unit_price") or item.get("line_total", 0)), # True unit price
+                    quantity=float(item.get("share_quantity", 1)),
+                    line_total=float(item.get("share_amount", 0)),
+                )
+        self.db.commit()
+
+    # ------------------------------------------------------------------
     # Internal: Item insight helpers
     # ------------------------------------------------------------------
 
