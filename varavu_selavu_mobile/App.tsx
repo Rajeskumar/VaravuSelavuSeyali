@@ -62,6 +62,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 5 * 60 * 1000, // 5 minutes
     },
   },
 });
@@ -81,220 +82,8 @@ interface DrawerContextType { openDrawer: () => void; closeDrawer: () => void; }
 const DrawerContext = createContext<DrawerContextType>({ openDrawer: () => {}, closeDrawer: () => {} });
 export const useDrawer = () => useContext(DrawerContext);
 
-// ─── Tab config ───────────────────────────────────────────────────────────────
-const TAB_ROUTES = [
-  { name: 'Dashboard',  icon: '🏠', label: 'Home'   },
-  { name: 'Expenses',   icon: '📋', label: 'Wallet' },
-  { name: 'Analysis',   icon: '📊', label: 'Stats'  },
-  { name: 'AI Analyst', icon: '🤖', label: 'AI'     },
-];
+// ─── Native Bottom Tab Bar with Blur & FAB ─────────────────────────────────
 
-// ─── Floating Glass Pill Navigation Bar ──────────────────────────────────────
-//
-//  Layout (from bottom of screen upward):
-//    [home indicator / safe area inset]
-//    [16px gap]
-//    [66px pill — 4 tabs + center gap]
-//    [10px gap]
-//    [52px FAB circle]  ← floats above pill center
-//
-function FloatingNavBar({ state, navigation }: BottomTabBarProps) {
-  const insets = useSafeAreaInsets();
-  const { openAddExpense } = useContext(AddExpenseContext);
-  const { theme, isDark } = useAppTheme();
-  const navStyles = React.useMemo(() => createNavStyles(theme), [theme]);
-
-  // Active route name
-  const activeRouteName = state.routes[state.index]?.name ?? '';
-
-  const handleTabPress = (routeName: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    navigation.navigate(routeName);
-  };
-
-  const handleFABPress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    openAddExpense();
-  };
-
-  return (
-    // Absolute container that covers the whole bottom — content padding is
-    // handled via tabBarStyle.height in the Tab.Navigator options below.
-    <View style={[navStyles.wrapper, { paddingBottom: insets.bottom + 16 }]}>
-
-      {/* ── Glass Pill ── */}
-      <View style={navStyles.pillShadowContainer}>
-        <BlurView tint={isDark ? 'dark' : 'light'} intensity={90} style={navStyles.pillBlur}>
-          {/* Tint overlay for frosted glass look */}
-          <LinearGradient
-            colors={[withAlpha(theme.colors.gradientStart, 0.15), withAlpha(theme.colors.gradientEnd, 0.15)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={navStyles.pillOverlay}
-          />
-
-          {/* Left 2 tabs */}
-          {TAB_ROUTES.slice(0, 2).map((tab) => {
-            const focused = activeRouteName === tab.name;
-            return (
-              <AnimatedPressable
-                key={tab.name}
-                style={navStyles.tabItem}
-                onPress={() => handleTabPress(tab.name)}
-              >
-                <Text style={[navStyles.tabIcon, focused && navStyles.tabIconActive]}>
-                  {tab.icon}
-                </Text>
-                <Text style={[navStyles.tabLabel, focused && navStyles.tabLabelActive]}>
-                  {tab.label}
-                </Text>
-                {focused && (
-                  <Animated.View entering={ZoomIn.springify().damping(14)} style={navStyles.activeDot} />
-                )}
-              </AnimatedPressable>
-            );
-          })}
-
-          {/* ── Inline FAB ── */}
-          <AnimatedPressable
-            style={navStyles.inlineFab}
-            onPress={handleFABPress}
-            scaleTo={0.88}
-          >
-            <Text style={navStyles.inlineFabPlus}>+</Text>
-          </AnimatedPressable>
-
-          {/* Right 2 tabs */}
-          {TAB_ROUTES.slice(2).map((tab) => {
-            const focused = activeRouteName === tab.name;
-            return (
-              <AnimatedPressable
-                key={tab.name}
-                style={navStyles.tabItem}
-                onPress={() => handleTabPress(tab.name)}
-              >
-                <Text style={[navStyles.tabIcon, focused && navStyles.tabIconActive]}>
-                  {tab.icon}
-                </Text>
-                <Text style={[navStyles.tabLabel, focused && navStyles.tabLabelActive]}>
-                  {tab.label}
-                </Text>
-                {focused && (
-                  <Animated.View entering={ZoomIn.springify().damping(14)} style={navStyles.activeDot} />
-                )}
-              </AnimatedPressable>
-            );
-          })}
-        </BlurView>
-      </View>
-    </View>
-  );
-}
-
-const PILL_WIDTH = Dimensions.get('window').width - 48; // 24px margin each side
-const PILL_HEIGHT = 66;
-const FAB_SIZE = 52;
-
-const createNavStyles = (theme: AppTheme) => StyleSheet.create({
-  // The overall bottom-anchored container
-  wrapper: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    // Do NOT clip — FAB sits above the pill and needs to overflow
-    zIndex: 999,
-    pointerEvents: 'box-none',
-  },
-
-  // ── Inline FAB ───────────────────────────────────────────────────────────
-  inlineFab: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 12,
-  },
-  inlineFabPlus: {
-    color: '#FFFFFF',
-    fontSize: 26,
-    lineHeight: 30,
-    fontFamily: 'Inter-Regular',
-    includeFontPadding: false,
-    textAlign: 'center',
-  },
-
-  // ── Pill shell — carries the shadow ──────────────────────────────────────
-  pillShadowContainer: {
-    width: PILL_WIDTH,
-    height: PILL_HEIGHT,
-    borderRadius: PILL_HEIGHT / 2,
-    // Diffused drop shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: theme.mode === 'dark' ? 0.35 : 0.14,
-    shadowRadius: 22,
-    elevation: 18,
-  },
-
-  // BlurView fills the pill shape completely
-  pillBlur: {
-    flex: 1,
-    borderRadius: PILL_HEIGHT / 2,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  // Frosted-glass tint on top of blur
-  pillOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    // Hairline inner border for glass edge highlight
-    borderRadius: PILL_HEIGHT / 2,
-    borderWidth: 0.8,
-    borderColor: withAlpha(theme.colors.primary, 0.15),
-  },
-
-  // ── Tab items ─────────────────────────────────────────────────────────────
-  tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    // Minimum touch target
-    minHeight: 44,
-  },
-  tabIcon: {
-    fontSize: 22,
-    opacity: 0.35,
-    marginBottom: 2,
-  },
-  tabIconActive: {
-    opacity: 1,
-  },
-  tabLabel: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 10,
-    color: theme.colors.textTertiary,
-    letterSpacing: 0.2,
-  },
-  tabLabelActive: {
-    color: theme.colors.primary,
-    fontFamily: 'Inter-SemiBold',
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.colors.primary,
-    marginTop: 3,
-  },
-
-
-});
 
 // ─── Auth Stack ───────────────────────────────────────────────────────────────
 function AuthStack() {
@@ -308,68 +97,96 @@ function AuthStack() {
 
 const DummyScreen = () => null;
 
-// ─── Main Tabs ────────────────────────────────────────────────────────────────
 function MainTabs() {
   const { openDrawer } = useDrawer();
-  const insets = useSafeAreaInsets();
-  const { theme } = useAppTheme();
+  const { theme, isDark } = useAppTheme();
   const tabStyles = React.useMemo(() => createTabStyles(theme), [theme]);
-
-  // Space reserved for the floating bar:
-  //   FAB (52) + gap between FAB and pill (10) + pill (66) + gap to safe area (16) + safe area inset
-  const floatingBarHeight = FAB_SIZE + 10 + PILL_HEIGHT + 16 + insets.bottom;
+  const { openAddExpense } = useContext(AddExpenseContext);
 
   return (
-    <Tab.Navigator
-      // THIS is the correct API — replaces the entire tab bar
-      tabBar={(props) => <FloatingNavBar {...props} />}
-      screenOptions={{
-        headerShown: true,
-        headerStyle: {
-          backgroundColor: theme.colors.background,
-          shadowColor: 'transparent',
-          elevation: 0,
-          borderBottomWidth: 0,
-        },
-        headerTitleStyle: {
-          fontFamily: 'Inter-Bold',
-          fontSize: 18,
-          color: theme.colors.text,
-        },
-        headerLeft: () => (
-          <TouchableOpacity
-            onPress={openDrawer}
-            style={tabStyles.menuBtn}
-            activeOpacity={0.6}
-          >
-            <Text style={tabStyles.menuBtnIcon}>☰</Text>
-          </TouchableOpacity>
-        ),
-        // Reserve the floating bar height so screens don't hide under it
-        tabBarStyle: { height: floatingBarHeight },
-      }}
-    >
-      <Tab.Screen
-        name="Dashboard"
-        component={HomeScreen}
-        options={{ headerTitle: '' }}
-      />
-      <Tab.Screen
-        name="Expenses"
-        component={ExpensesScreen}
-        options={{ headerTitle: 'Transactions' }}
-      />
-      <Tab.Screen
-        name="Analysis"
-        component={AnalysisScreen}
-        options={{ headerTitle: 'Insights' }}
-      />
-      <Tab.Screen
-        name="AI Analyst"
-        component={AIAnalystScreen}
-        options={{ headerTitle: 'AI Chat' }}
-      />
-    </Tab.Navigator>
+    <>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: true,
+          headerStyle: {
+            backgroundColor: theme.colors.background,
+            shadowColor: 'transparent',
+            elevation: 0,
+            borderBottomWidth: 0,
+          },
+          headerTitleStyle: {
+            fontFamily: 'Inter-Bold',
+            fontSize: 18,
+            color: theme.colors.text,
+          },
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={openDrawer}
+              style={tabStyles.menuBtn}
+              activeOpacity={0.6}
+            >
+              <Text style={tabStyles.menuBtnIcon}>☰</Text>
+            </TouchableOpacity>
+          ),
+          tabBarIcon: ({ focused, color, size }) => {
+            let iconName = '';
+            if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline';
+            else if (route.name === 'Expenses') iconName = focused ? 'wallet' : 'wallet-outline';
+            else if (route.name === 'GroupsTab') iconName = focused ? 'people' : 'people-outline';
+            else if (route.name === 'Analysis') iconName = focused ? 'pie-chart' : 'pie-chart-outline';
+            else if (route.name === 'AI Analyst') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+            return <Ionicons name={iconName as any} size={size} color={color} />;
+          },
+          tabBarActiveTintColor: theme.colors.primary,
+          tabBarInactiveTintColor: theme.colors.textTertiary,
+          tabBarStyle: {
+            position: 'absolute',
+            borderTopWidth: 0,
+            elevation: 0,
+            backgroundColor: 'transparent',
+          },
+          tabBarBackground: () => (
+            <BlurView tint={isDark ? 'dark' : 'light'} intensity={80} style={StyleSheet.absoluteFill} />
+          ),
+        })}
+      >
+        <Tab.Screen
+          name="Dashboard"
+          component={HomeScreen}
+          options={{ headerTitle: '' }}
+        />
+        <Tab.Screen
+          name="Expenses"
+          component={ExpensesScreen}
+          options={{ headerTitle: 'Transactions' }}
+        />
+        <Tab.Screen
+          name="GroupsTab"
+          component={GroupsScreen}
+          options={{ headerTitle: 'Groups', tabBarLabel: 'Groups' }}
+        />
+        <Tab.Screen
+          name="Analysis"
+          component={AnalysisScreen}
+          options={{ headerTitle: 'Insights' }}
+        />
+        <Tab.Screen
+          name="AI Analyst"
+          component={AIAnalystScreen}
+          options={{ headerTitle: 'AI Chat' }}
+        />
+      </Tab.Navigator>
+      <TouchableOpacity
+        style={tabStyles.fab}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          openAddExpense();
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="add" size={32} color="#fff" />
+      </TouchableOpacity>
+    </>
   );
 }
 
@@ -385,6 +202,24 @@ const createTabStyles = (theme: AppTheme) => StyleSheet.create({
     ...theme.shadows.xs,
   },
   menuBtnIcon: { fontSize: 15, color: theme.colors.text },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: Platform.OS === 'ios' ? 100 : 80, // Above the tab bar
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: theme.colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 999,
+  },
+
 });
 
 // ─── iOS-style Slide-in Drawer ────────────────────────────────────────────────
@@ -392,7 +227,6 @@ const DRAWER_W = Dimensions.get('window').width * 0.80;
 
 const DRAWER_ITEMS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
   { key: 'home',            label: 'Home',             icon: 'home',           screen: 'Dashboard'       },
-  { key: 'groups',          label: '👥 Groups',         icon: 'people',         screen: 'Groups'          },
   { key: 'profile',         label: 'Profile',          icon: 'person-circle',  screen: 'Profile'         },
   { key: 'itemInsights',    label: 'Item Insights',    icon: 'pricetag',       screen: 'ItemInsights'    },
   { key: 'merchantInsights',label: 'Merchant Insights',icon: 'storefront',     screen: 'MerchantInsights'},
@@ -574,7 +408,7 @@ function AppShell() {
         <Stack.Screen name="ContactUs"        component={ContactUsScreen}          options={{ headerShown: true, headerTitle: 'Contact',            headerBackTitle: '' }} />
         {/* ── Groups (TS-GRP-109) ── */}
         <Stack.Screen name="Groups"           component={GroupsScreen}             options={{ headerShown: false }} />
-        <Stack.Screen name="GroupDetail"      component={GroupDetailScreen}        options={{ headerShown: false }} />
+        <Stack.Screen name="GroupDetail"      component={GroupDetailScreen}        options={{ headerShown: true, headerBackTitle: '' }} />
         <Stack.Screen name="JoinGroup"        component={JoinGroupScreen}          options={{ headerShown: true, headerTitle: 'Join Group', headerBackTitle: '' }} />
       </Stack.Navigator>
       <CustomDrawer visible={drawerOpen} onClose={closeDrawer} onNavigate={handleNavigate} />

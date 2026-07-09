@@ -29,6 +29,7 @@ import {
   MemberDTO,
   addExpenseComment,
   deleteExpenseComment,
+  deleteGroupExpense,
   getExpenseHistory,
   listExpenseComments,
   settleExpenseShare,
@@ -42,6 +43,7 @@ interface Props {
   members: MemberDTO[];
   myMemberId?: string;
   onSettled?: () => void;
+  onDeleted?: () => void;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -57,7 +59,7 @@ function formatFieldValue(field: string, value: any): string {
   return String(value);
 }
 
-export default function ExpenseDetailSheet({ visible, onClose, groupId, expense, members, myMemberId, onSettled }: Props) {
+export default function ExpenseDetailSheet({ visible, onClose, groupId, expense, members, myMemberId, onSettled, onDeleted }: Props) {
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -71,6 +73,8 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
   const [historyLoading, setHistoryLoading] = useState(true);
 
   const [settling, setSettling] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (!visible || !expense) return;
@@ -130,6 +134,20 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
     }
   };
 
+  const handleDeleteExpense = async () => {
+    setDeleting(true);
+    try {
+      await deleteGroupExpense(groupId, expense.row_id);
+      showToast({ message: 'Expense deleted', type: 'success' });
+      onDeleted?.();
+    } catch (e) {
+      showToast({ message: e instanceof ApiError ? e.message : 'Failed to delete expense', type: 'error' });
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
   const canSettle = !!myMemberId && expense.my_share > 0 && !expense.payer_summary.some((p) => p.member_id === myMemberId);
 
   return (
@@ -157,7 +175,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>Your share</Text>
+              <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>My expense</Text>
               <Text style={[styles.amountText, { color: theme.colors.text }]}>${expense.my_share.toFixed(2)}</Text>
             </View>
           </View>
@@ -247,6 +265,33 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
                 ))}
               </View>
             )
+          )}
+
+          {!confirmDelete ? (
+            <CustomButton
+              title="Delete Expense"
+              onPress={() => setConfirmDelete(true)}
+              variant="danger"
+              style={{ marginTop: 24 }}
+              disabled={deleting || settling}
+            />
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+              <CustomButton
+                title={deleting ? "Deleting..." : "Confirm Delete"}
+                onPress={handleDeleteExpense}
+                variant="danger"
+                style={{ flex: 1 }}
+                disabled={deleting}
+              />
+              <CustomButton
+                title="Cancel"
+                onPress={() => setConfirmDelete(false)}
+                variant="outline"
+                style={{ flex: 1 }}
+                disabled={deleting}
+              />
+            </View>
           )}
         </View>
       </KeyboardAvoidingView>

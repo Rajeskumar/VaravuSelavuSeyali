@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     View, Text, StyleSheet, ScrollView, Dimensions, TouchableOpacity,
     ActivityIndicator,
@@ -20,6 +21,7 @@ import { InsightRail } from '../components/analysis/InsightRail';
 import { AskSheet } from '../components/analysis/AskSheet';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { AddExpenseContext } from './AddExpenseScreen';
+import { CategoryTransactionsSheet, CategoryTransaction } from '../components/analysis/CategoryTransactionsSheet';
 
 export default function AnalysisScreen() {
     const { accessToken, userEmail } = useAuth();
@@ -29,36 +31,33 @@ export default function AnalysisScreen() {
     
     const [year, setYear] = useState(new Date().getFullYear());
     const [month, setMonth] = useState(new Date().getMonth() + 1);
-    const [data, setData] = useState<AnalysisResponse | null>(null);
-    const [insights, setInsights] = useState<ChangeInsight[]>([]);
-    const [loading, setLoading] = useState(true);
     const [selectedInsight, setSelectedInsight] = useState<ChangeInsight | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const { openAddExpense } = useContext(AddExpenseContext);
+    
+    const queryClient = useQueryClient();
 
-    const fetchData = useCallback(async () => {
-        if (!accessToken || !userEmail) return;
-        setLoading(true);
-        try {
-            const [analysisRes, insightsRes] = await Promise.all([
-                getAnalysis(accessToken, userEmail, { year, month }),
-                getChangeInsights(userEmail, { year, month }).catch(() => [])
-            ]);
-            setData(analysisRes);
-            setInsights(insightsRes);
-        } catch (error) {
-            console.error('Analysis fetch error', error);
-        } finally {
-            setLoading(false);
-        }
-    }, [accessToken, userEmail, year, month]);
+    const { data, isLoading: loadingData } = useQuery({
+        queryKey: ['analysis', userEmail, year, month, 'combined'],
+        queryFn: () => getAnalysis(accessToken!, userEmail!, { year, month, scope: 'combined' }),
+        enabled: !!accessToken && !!userEmail,
+    });
+
+    const { data: insightsData, isLoading: loadingInsights } = useQuery({
+        queryKey: ['insights', userEmail, year, month],
+        queryFn: () => getChangeInsights(userEmail!, { year, month }).catch(() => []),
+        enabled: !!accessToken && !!userEmail,
+    });
+
+    const insights = insightsData || [];
+    const loading = loadingData || loadingInsights;
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    // TS-DES-112: the global "+" opens as a Modal overlay (not a navigator screen), so it never
-    // triggers a focus-change refetch here — listen for the expense-changed signal too.
-    useEffect(() => onExpenseChanged(() => fetchData()), [fetchData]);
+        return onExpenseChanged(() => {
+            queryClient.invalidateQueries({ queryKey: ['analysis'] });
+            queryClient.invalidateQueries({ queryKey: ['insights'] });
+        });
+    }, [queryClient]);
 
     const formatCurrency = (amount: number) => `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -126,7 +125,12 @@ export default function AnalysisScreen() {
                                 const color = chartColors[index % chartColors.length];
                                 const txCount = data.category_expense_details?.[ct.category]?.length ?? 0;
                                 return (
-                                    <View key={`category-${ct.category}-${index}`} style={styles.breakdownRow}>
+                                    <TouchableOpacity 
+                                        key={`category-${ct.category}-${index}`} 
+                                        style={styles.breakdownRow}
+                                        onPress={() => setSelectedCategory(ct.category)}
+                                        activeOpacity={0.7}
+                                    >
                                         <View style={[styles.breakdownDot, { backgroundColor: color }]} />
                                         <View style={styles.breakdownInfo}>
                                             <Text style={styles.breakdownCategory}>{ct.category}</Text>
@@ -138,20 +142,27 @@ export default function AnalysisScreen() {
                                             <Text style={styles.breakdownAmount}>{formatCurrency(ct.total)}</Text>
                                             <Text style={styles.breakdownPct}>{pct.toFixed(1)}%</Text>
                                         </View>
-                                    </View>
+                                    </TouchableOpacity>
                                 );
                             })}
                         </View>
                     </>
                 ) : null}
-            </ScrollView>
 
-            <AskSheet
-                insight={selectedInsight}
-                onClose={() => setSelectedInsight(null)}
-                year={year}
-                month={month}
-            />
+                <AskSheet 
+                    insight={selectedInsight} 
+                    onClose={() => setSelectedInsight(null)} 
+                    year={year}
+                    month={month}
+                />
+
+                <CategoryTransactionsSheet
+                    visible={!!selectedCategory}
+                    category={selectedCategory}
+                    transactions={(selectedCategory && data?.category_expense_details?.[selectedCategory]) || []}
+                    onClose={() => setSelectedCategory(null)}
+                />
+            </ScrollView>
         </ScreenWrapper>
     );
 }

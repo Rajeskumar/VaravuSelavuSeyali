@@ -32,8 +32,8 @@ async function throwApiError(res: Response, fallbackMessage: string): Promise<ne
 // ---------------------------------------------------------------------------
 
 export interface GroupSplitConfig {
-  split_type: 'equal' | 'percentage' | 'shares' | 'adjustment';
-  entries: { member_id: string; value?: number }[];
+  type: 'equal' | 'percentage' | 'shares' | 'adjustment';
+  entries: { member_id: string; value: number }[];
 }
 
 export interface GroupSummary {

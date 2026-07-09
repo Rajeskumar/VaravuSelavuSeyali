@@ -60,6 +60,23 @@ export async function updateGroup(
   return handleResponse<GroupDetail>(res);
 }
 
+export async function updateGroupExpense(
+  groupId: string,
+  expenseId: string,
+  payload: AddGroupExpensePayload
+): Promise<GroupDetail> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<GroupDetail>(res);
+}
+
+export async function deleteGroupExpense(groupId: string, expenseId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' });
+  return handleResponse<void>(res);
+}
+
 export interface GroupActivityDTO {
   id: string;
   action: string;
@@ -309,6 +326,22 @@ export async function listGroupExpenses(
   const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
   const res = await apiFetch(`/api/v1/groups/${groupId}/expenses?${params}`);
   return handleResponse<GroupExpenseListResponse>(res);
+}
+
+export interface UnifiedGroupExpenseRow extends GroupExpenseRow {
+  group_id: string;
+  group_name: string;
+}
+
+export async function listAllMyGroupExpenses(): Promise<UnifiedGroupExpenseRow[]> {
+  const groups = await listGroups();
+  const perGroup = await Promise.all(
+    groups.map(async (g) => {
+      const res = await listGroupExpenses(g.group_id, 0, 200);
+      return res.items.map((row) => ({ ...row, group_id: g.group_id, group_name: g.name }));
+    })
+  );
+  return perGroup.flat();
 }
 
 export async function addGroupExpense(

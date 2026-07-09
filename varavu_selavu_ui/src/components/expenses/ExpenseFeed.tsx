@@ -156,7 +156,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
             color="text.secondary"
             sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
           >
-            <span aria-hidden>◐</span> your share
+            <span aria-hidden>◐</span> my expense
             {typeof expense.groupAmount === 'number' && (
               <span style={tabularNums as React.CSSProperties}>· {formatMoney(expense.groupAmount)} total</span>
             )}

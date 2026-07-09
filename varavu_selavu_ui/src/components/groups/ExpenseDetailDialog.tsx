@@ -28,6 +28,7 @@ import {
   MemberDTO,
   addExpenseComment,
   deleteExpenseComment,
+  deleteGroupExpense,
   getExpenseHistory,
   listExpenseComments,
   settleExpenseShare,
@@ -41,7 +42,8 @@ interface Props {
   members: MemberDTO[];
   myMemberId?: string;
   onSettled?: () => void;
-  setToast: (toast: { open: boolean; message: string; severity: 'success' | 'error' }) => void;
+  onDeleted?: () => void;
+  setToast: (toast: { open: boolean; message: string; severity: 'success' | 'error' | 'info' }) => void;
 }
 
 const fieldLabels: Record<string, string> = {
@@ -57,14 +59,16 @@ function formatFieldValue(field: string, value: any): string {
   return String(value);
 }
 
-const ExpenseDetailDialog: React.FC<Props> = ({ open, onClose, groupId, expense, members, myMemberId, onSettled, setToast }) => {
+const ExpenseDetailDialog: React.FC<Props> = ({ open, onClose, groupId, expense, members, myMemberId, onSettled, onDeleted, setToast }) => {
   const [comments, setComments] = useState<ExpenseCommentDTO[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [posting, setPosting] = useState(false);
 
   const [history, setHistory] = useState<ExpenseHistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const [settling, setSettling] = useState(false);
 
@@ -126,6 +130,20 @@ const ExpenseDetailDialog: React.FC<Props> = ({ open, onClose, groupId, expense,
       setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to settle share', severity: 'error' });
     } finally {
       setSettling(false);
+    }
+  };
+
+  const handleDeleteExpense = async () => {
+    setDeleting(true);
+    try {
+      await deleteGroupExpense(groupId, expense.row_id);
+      setToast({ open: true, message: 'Expense deleted', severity: 'success' });
+      onDeleted?.();
+    } catch (e) {
+      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to delete expense', severity: 'error' });
+    } finally {
+      setDeleting(false);
+      setConfirmingDelete(false);
     }
   };
 
@@ -241,8 +259,24 @@ const ExpenseDetailDialog: React.FC<Props> = ({ open, onClose, groupId, expense,
           </AccordionDetails>
         </Accordion>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+        <Box>
+          {!confirmingDelete ? (
+            <Button variant="text" color="error" onClick={() => setConfirmingDelete(true)} disabled={deleting || settling}>
+              Delete expense
+            </Button>
+          ) : (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button variant="contained" color="error" onClick={handleDeleteExpense} disabled={deleting}>
+                {deleting ? <CircularProgress size={20} color="inherit" /> : 'Confirm delete'}
+              </Button>
+              <Button variant="outlined" onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+                Cancel
+              </Button>
+            </Box>
+          )}
+        </Box>
+        <Button onClick={onClose} disabled={deleting}>Close</Button>
       </DialogActions>
     </Dialog>
   );

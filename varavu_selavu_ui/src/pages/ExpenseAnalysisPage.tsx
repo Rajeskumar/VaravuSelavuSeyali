@@ -33,7 +33,7 @@ const ExpenseAnalysisPage: React.FC = () => {
   
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
-  const [scope, setScope] = useState<AnalysisScope>('personal');
+  const [scope, setScope] = useState<AnalysisScope>('combined');
   const [askInsight, setAskInsight] = useState<ChangeInsight | null>(null);
   
   // Year/Month dropdown anchor

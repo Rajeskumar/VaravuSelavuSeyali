@@ -55,7 +55,7 @@ const GroupDetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const theme = useTheme();
   const [tab, setTab] = React.useState<TabKey>('expenses');
-  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
     open: false,
     message: '',
     severity: 'success',
@@ -575,6 +575,11 @@ const GroupDetailPage: React.FC = () => {
           myMemberId={myMember?.member_id}
           setToast={setToast}
           onSettled={() => {
+            queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+            queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+            setSelectedExpense(null);
+          }}
+          onDeleted={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
             queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
             setSelectedExpense(null);

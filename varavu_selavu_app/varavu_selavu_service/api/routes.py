@@ -426,7 +426,7 @@ def analysis(
     month: int | None = Query(default=None, ge=1, le=12),
     start_date: str | None = None,
     end_date: str | None = None,
-    scope: str = Query(default="personal", pattern="^(personal|combined|groups)$"),
+    scope: str = Query(default="personal", pattern="^(personal|combined|groups|i_paid|group_total)$"),
     group_id: str | None = None,
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),

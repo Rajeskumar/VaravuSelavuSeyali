@@ -1,6 +1,6 @@
 import { fetchWithAuth } from './api';
 
-export type AnalysisScope = 'personal' | 'combined' | 'groups';
+export type AnalysisScope = 'personal' | 'combined' | 'groups' | 'i_paid' | 'group_total';
 
 export interface SpendBreakdown {
   personal: number;

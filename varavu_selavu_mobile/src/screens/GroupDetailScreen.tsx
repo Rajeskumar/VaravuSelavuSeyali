@@ -35,6 +35,7 @@ import {
   MemberBalance,
   MemberDTO,
   ApiError,
+  deleteGroupExpense,
 } from '../api/groups';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
@@ -44,6 +45,8 @@ import SettleUpSheet from '../components/SettleUpSheet';
 import GroupSettingsSheet from '../components/GroupSettingsSheet';
 import ActivityList from '../components/ActivityList';
 import ExpenseDetailSheet from '../components/ExpenseDetailSheet';
+import ExpenseCard from '../components/ExpenseCard';
+import EditGroupExpenseModal from '../components/EditGroupExpenseModal';
 import { showToast } from '../components/Toast';
 
 type Tab = 'expenses' | 'balances' | 'activity';
@@ -80,6 +83,9 @@ export default function GroupDetailScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
+
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<GroupExpenseRow | null>(null);
 
   const {
     data: detail,
@@ -141,7 +147,26 @@ export default function GroupDetailScreen() {
     }
   };
 
-  if (detailLoading) {
+  React.useEffect(() => {
+    if (detail?.name) {
+      const emoji = GROUP_TYPE_EMOJI[detail.group_type] ?? '👥';
+      navigation.setOptions({
+        headerTitle: `${emoji} ${detail.name}`,
+        headerLeft: () => (
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginLeft: 8 }}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+          </TouchableOpacity>
+        ),
+        headerRight: () => (
+          <TouchableOpacity onPress={() => setSettingsVisible(true)} style={{ padding: 4 }}>
+            <Ionicons name="settings-outline" size={22} color={theme.colors.primary} />
+          </TouchableOpacity>
+        )
+      });
+    }
+  }, [detail, navigation, theme]);
+
+  if (detailLoading || expensesLoading) {
     return (
       <View style={styles.loadingCenter}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -153,12 +178,36 @@ export default function GroupDetailScreen() {
     return (
       <View style={styles.loadingCenter}>
         <Text style={styles.errorText}>Group not found.</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backLink}>← Back</Text>
-        </TouchableOpacity>
       </View>
     );
   }
+
+
+  const handleEditExpense = (expense: GroupExpenseRow) => {
+    setEditingExpense(expense);
+    setEditModalVisible(true);
+  };
+
+  const handleDeleteExpense = (expenseId: string) => {
+    Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteGroupExpense(groupId, expenseId);
+            showToast({ message: 'Expense deleted', type: 'success' });
+            qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+            qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
+            qc.invalidateQueries({ queryKey: ['group-detail', groupId] });
+          } catch (error) {
+            showToast({ message: 'Failed to delete expense', type: 'error' });
+          }
+        },
+      },
+    ]);
+  };
 
   const renderExpense = ({ item }: { item: GroupExpenseRow }) => {
     const payerNames = item.payer_summary
@@ -166,24 +215,20 @@ export default function GroupDetailScreen() {
       .join(', ');
 
     return (
-      <TouchableOpacity style={styles.expenseCard} onPress={() => setSelectedExpense(item)} activeOpacity={0.7}>
-        <View style={styles.expenseIcon}>
-          <Ionicons name="receipt-outline" size={18} color={theme.colors.textSecondary} />
-        </View>
-        <View style={styles.expenseLeft}>
-          <Text style={styles.expenseDesc} numberOfLines={1}>
-            {item.description}
-          </Text>
-          <Text style={styles.expenseMeta}>
-            {item.date} · paid by {payerNames}
-            {item.currency && item.currency !== detail?.currency ? ` · ${item.currency}` : ''}
-          </Text>
-        </View>
-        <View style={styles.expenseRight}>
-          <Text style={styles.expenseTotal}>${item.cost.toFixed(2)}</Text>
-          <Text style={styles.expenseShare}>your share ${item.my_share.toFixed(2)}</Text>
-        </View>
-      </TouchableOpacity>
+      <ExpenseCard
+        description={item.description}
+        category={item.category}
+        cost={item.cost}
+        date={item.date}
+        merchantName={item.merchant_name}
+        paidByNames={payerNames}
+        myShare={item.my_share}
+        currency={item.currency}
+        groupCurrency={detail?.currency}
+        onPress={() => setSelectedExpense(item)}
+        onEdit={() => handleEditExpense(item)}
+        onDelete={() => handleDeleteExpense(item.row_id)}
+      />
     );
   };
 
@@ -215,25 +260,7 @@ export default function GroupDetailScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </TouchableOpacity>
-        <View style={styles.groupIcon}>
-          <Text style={styles.groupIconEmoji}>{GROUP_TYPE_EMOJI[detail.group_type] ?? '👥'}</Text>
-        </View>
-        <Text style={styles.groupName} numberOfLines={1}>
-          {detail.name}
-        </Text>
-        <TouchableOpacity
-          style={styles.settingsBtn}
-          onPress={() => setSettingsVisible(true)}
-        >
-          <Ionicons name="settings-outline" size={22} color={theme.colors.primary} />
-        </TouchableOpacity>
-      </View>
-
+    <View style={[styles.container, { paddingTop: 0 }]}>
       {detail.status === 'archived' && (
         <View style={[styles.banner, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}>
           <Text style={[styles.bannerText, { color: theme.colors.warning }]}>
@@ -361,6 +388,28 @@ export default function GroupDetailScreen() {
           qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
           setSelectedExpense(null);
         }}
+        onDeleted={() => {
+          setSelectedExpense(null);
+          qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+          qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
+          qc.invalidateQueries({ queryKey: ['group-detail', groupId] });
+        }}
+      />
+
+      <EditGroupExpenseModal
+        visible={editModalVisible}
+        groupId={groupId}
+        expense={editingExpense}
+        members={members}
+        onClose={() => {
+          setEditModalVisible(false);
+          setEditingExpense(null);
+        }}
+        onUpdated={() => {
+          qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+          qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
+          qc.invalidateQueries({ queryKey: ['group-detail', groupId] });
+        }}
       />
 
       <Modal visible={inviteVisible} transparent animationType="slide" onRequestClose={() => setInviteVisible(false)}>
@@ -403,41 +452,6 @@ const createStyles = (theme: AppTheme) =>
     loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     errorText: { fontFamily: 'Inter-Regular', fontSize: 16, color: theme.colors.error },
     backLink: { color: theme.colors.primary, fontFamily: 'Inter-SemiBold', marginTop: 12 },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.borderLight,
-    },
-    backBtn: { marginRight: 8, padding: 4 },
-    groupIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: `${theme.colors.primary}15`,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginLeft: 12,
-    },
-    groupIconEmoji: { fontSize: 17 },
-    groupName: {
-      flex: 1,
-      fontFamily: 'Inter-Bold',
-      fontSize: 18,
-      color: theme.colors.text,
-      marginLeft: 12,
-    },
-    settingsBtn: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: `${theme.colors.primary}15`,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginLeft: 8,
-    },
     banner: {
       marginHorizontal: 16,
       marginBottom: 12,

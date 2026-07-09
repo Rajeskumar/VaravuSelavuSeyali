@@ -77,7 +77,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
 
 
   const defaultSplitVal: SplitEditorValue = group.default_split 
-    ? { type: group.default_split.split_type, entries: group.default_split.entries }
+    ? { type: group.default_split.type, entries: group.default_split.entries }
     : { type: 'equal', entries: [] };
   const [splitValue, setSplitValue] = useState<SplitEditorValue>(defaultSplitVal);
   const [saving, setSaving] = useState(false);
@@ -89,7 +89,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
     try {
       await updateGroup(group.group_id, {
         simplify_debts: simplifyDebts,
-        default_split: splitValue.type === 'equal' && splitValue.entries.length === 0 ? null : { split_type: splitValue.type, entries: splitValue.entries },
+        default_split: splitValue.type === 'equal' && splitValue.entries.length === 0 ? null : { type: splitValue.type, entries: splitValue.entries },
       });
       queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
       queryClient.invalidateQueries({ queryKey: ['group-balances', group.group_id] });

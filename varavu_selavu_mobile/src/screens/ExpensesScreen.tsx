@@ -19,16 +19,7 @@ import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
 import { onExpenseChanged } from '../utils/expenseEvents';
 
-// Category emoji mapping
-const categoryEmojis: Record<string, string> = {
-    food: '🍕', groceries: '🛒', transport: '🚗', entertainment: '🎬',
-    shopping: '🛍️', health: '🏥', utilities: '💡', rent: '🏠',
-    travel: '✈️', education: '📚', subscription: '📱', other: '📋',
-};
-
-function getCategoryEmoji(category: string): string {
-    return categoryEmojis[category?.toLowerCase().trim()] || '💳';
-}
+import ExpenseCard from '../components/ExpenseCard';
 
 export default function ExpensesScreen() {
     const { accessToken, userEmail } = useAuth();
@@ -204,52 +195,17 @@ export default function ExpensesScreen() {
     };
 
     const renderItem = ({ item }: { item: ExpenseRecord }) => (
-        <Card style={styles.card}>
-            <View style={styles.cardRow}>
-                {/* Category Icon */}
-                <View style={styles.iconContainer}>
-                    <Text style={styles.iconText}>{getCategoryEmoji(item.category)}</Text>
-                </View>
-
-                {/* Info */}
-                <View style={styles.info}>
-                    <Text style={styles.desc} numberOfLines={1}>{item.description}</Text>
-                    <View style={styles.metaRow}>
-                        <View style={styles.categoryBadge}>
-                            <Text style={styles.categoryText}>{item.category}</Text>
-                        </View>
-                        {item.merchant_name ? (
-                            <View style={styles.merchantBadge}>
-                                <Text style={styles.merchantText}>🏪 {item.merchant_name}</Text>
-                            </View>
-                        ) : null}
-                        <Text style={styles.dateText}>{item.date}</Text>
-                    </View>
-                </View>
-
-                {/* Cost & Actions */}
-                <View style={styles.cardRight}>
-                    <Text style={styles.cost}>-{formatCurrency(item.cost)}</Text>
-                    <View style={styles.actions}>
-                        <TouchableOpacity onPress={() => handleEdit(item)} style={styles.actionBtn} activeOpacity={0.7}>
-                            <Text style={styles.editText}>✏️</Text>
-                        </TouchableOpacity>
-                        {groupsEnabled && (
-                            <TouchableOpacity onPress={() => openMoveModal(item)} style={styles.actionBtn} activeOpacity={0.7}>
-                                <Text style={styles.editText}>🔀</Text>
-                            </TouchableOpacity>
-                        )}
-                        <TouchableOpacity
-                            onPress={() => handleDelete(item.row_id)}
-                            style={[styles.actionBtn, styles.deleteBtn]}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.deleteText}>🗑️</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
-        </Card>
+        <ExpenseCard
+            description={item.description}
+            category={item.category}
+            cost={item.cost}
+            date={item.date}
+            merchantName={item.merchant_name}
+            onEdit={() => handleEdit(item)}
+            onMove={groupsEnabled ? () => openMoveModal(item) : undefined}
+            onDelete={() => handleDelete(item.row_id)}
+            showMoveButton={groupsEnabled}
+        />
     );
 
     return (

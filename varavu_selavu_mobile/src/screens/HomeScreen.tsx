@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useContext } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl,
   ActivityIndicator,
@@ -9,6 +10,7 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { getChangeInsights, ChangeInsight } from '../api/analytics';
 import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
+import { checkGroupsEnabled, listAllMyGroupExpenses, UnifiedGroupExpenseRow } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -75,14 +77,14 @@ function HeroCard({ yearlyTotal, monthlyTotal, momDelta }: { yearlyTotal: number
     >
       {/* Top row */}
       <View style={heroStyles.topRow}>
-        <Text style={heroStyles.eyebrow}>TOTAL SPENT THIS YEAR</Text>
+        <Text style={heroStyles.eyebrow}>TOTAL SPENT THIS MONTH</Text>
         <View style={heroStyles.badge}>
-          <Text style={heroStyles.badgeText}>{new Date().getFullYear()}</Text>
+          <Text style={heroStyles.badgeText}>{currentMonth} {new Date().getFullYear()}</Text>
         </View>
       </View>
 
       {/* Big number */}
-      <Text style={[heroStyles.amount, !momDelta && heroStyles.amountNoDelta]}>{formatCurrency(yearlyTotal)}</Text>
+      <Text style={[heroStyles.amount, !momDelta && heroStyles.amountNoDelta]}>{formatCurrency(monthlyTotal)}</Text>
 
       {/* Month-over-month delta (TS-DES-112) — omitted entirely when there's no prior-month
           data to compare against (e.g. a brand-new user's first month). White text matches this
@@ -100,8 +102,8 @@ function HeroCard({ yearlyTotal, monthlyTotal, momDelta }: { yearlyTotal: number
       {/* Bottom stats row */}
       <View style={heroStyles.statsRow}>
         <View style={heroStyles.statBlock}>
-          <Text style={heroStyles.statLabel}>{currentMonth}</Text>
-          <Text style={heroStyles.statValue}>{formatCurrency(monthlyTotal)}</Text>
+          <Text style={heroStyles.statLabel}>Year to Date</Text>
+          <Text style={heroStyles.statValue}>{formatCurrency(yearlyTotal)}</Text>
         </View>
         <View style={heroStyles.statDivider} />
         <View style={heroStyles.statBlock}>
@@ -316,7 +318,9 @@ function ExpenseRow({
         </View>
         <View style={rowStyles.info}>
           <Text style={rowStyles.title} numberOfLines={1}>{expense.description}</Text>
-          <Text style={rowStyles.subtitle}>{expense.category} · {expense.date}</Text>
+          <Text style={rowStyles.subtitle}>
+            {expense.groupName ? `${expense.groupName} · my expense` : `${expense.category} · ${expense.date}`}
+          </Text>
         </View>
         <Text style={rowStyles.amount}>−{formatCurrency(expense.cost)}</Text>
       </View>
@@ -375,44 +379,66 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [yearlyData, setYearlyData] = useState<AnalysisResponse | null>(null);
-  const [monthlyData, setMonthlyData] = useState<AnalysisResponse | null>(null);
-  const [changeInsights, setChangeInsights] = useState<ChangeInsight[]>([]);
-  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplateDTO[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const now = useMemo(() => new Date(), []);
   const [refreshing, setRefreshing] = useState(false);
   const { openAddExpense } = useContext(AddExpenseContext);
+  
+  const { data: yearlyData, isLoading: loadingYear } = useQuery({
+    queryKey: ['analysis', userEmail, now.getFullYear(), 'combined'],
+    queryFn: () => getAnalysis(accessToken!, userEmail!, { year: now.getFullYear(), scope: 'combined' }),
+    enabled: !!accessToken && !!userEmail,
+  });
 
-  const fetchData = async () => {
-    if (!accessToken || !userEmail) return;
-    try {
-      const now = new Date();
-      const [yearResult, monthResult, insightsResult, templatesResult] = await Promise.all([
-        getAnalysis(accessToken, userEmail, { year: now.getFullYear() }),
-        getAnalysis(accessToken, userEmail, { year: now.getFullYear(), month: now.getMonth() + 1 }),
-        getChangeInsights(userEmail, { year: now.getFullYear(), month: now.getMonth() + 1 }).catch(() => []),
-        listRecurringTemplates().catch(() => []),
-      ]);
-      setYearlyData(yearResult);
-      setMonthlyData(monthResult);
-      setChangeInsights(insightsResult);
-      setRecurringTemplates(templatesResult);
-    } catch (e) {
-      console.error('fetchData error', e);
-      showToast({ message: 'Failed to load dashboard data', type: 'error' });
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const { data: monthlyData, isLoading: loadingMonth, refetch: refetchMonth } = useQuery({
+    queryKey: ['analysis', userEmail, now.getFullYear(), now.getMonth() + 1, 'combined'],
+    queryFn: () => getAnalysis(accessToken!, userEmail!, { year: now.getFullYear(), month: now.getMonth() + 1, scope: 'combined' }),
+    enabled: !!accessToken && !!userEmail,
+  });
+
+  const { data: changeInsights, isLoading: loadingInsights } = useQuery({
+    queryKey: ['insights', userEmail, now.getFullYear(), now.getMonth() + 1],
+    queryFn: () => getChangeInsights(userEmail!, { year: now.getFullYear(), month: now.getMonth() + 1 }).catch(() => []),
+    enabled: !!accessToken && !!userEmail,
+  });
+
+  const { data: recurringTemplates, isLoading: loadingTemplates } = useQuery({
+    queryKey: ['recurringTemplates', userEmail],
+    queryFn: () => listRecurringTemplates().catch(() => []),
+    enabled: !!accessToken && !!userEmail,
+  });
+
+  const { data: groupsEnabled } = useQuery({
+    queryKey: ['groupsEnabled'],
+    queryFn: checkGroupsEnabled,
+  });
+
+  const { data: groupExpenses } = useQuery({
+    queryKey: ['groupExpenses', userEmail],
+    queryFn: () => listAllMyGroupExpenses().catch(() => []),
+    enabled: !!accessToken && !!userEmail && !!groupsEnabled,
+  });
+
+  const loading = loadingYear || loadingMonth || loadingInsights || loadingTemplates;
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['analysis'] }),
+      queryClient.invalidateQueries({ queryKey: ['insights'] }),
+      queryClient.invalidateQueries({ queryKey: ['recurringTemplates'] }),
+      queryClient.invalidateQueries({ queryKey: ['groupExpenses'] }),
+    ]);
+    setRefreshing(false);
   };
 
   useEffect(() => {
-    if (isFocused) { setLoading(true); fetchData(); }
-  }, [isFocused]);
-
-  // TS-DES-112: the global "+" opens as a Modal overlay (not a navigator screen), so
-  // useIsFocused() never toggles when it closes — refetch on the expense-changed signal too.
-  useEffect(() => onExpenseChanged(() => fetchData()), [accessToken, userEmail]);
+    return onExpenseChanged(() => {
+      queryClient.invalidateQueries({ queryKey: ['analysis'] });
+      queryClient.invalidateQueries({ queryKey: ['insights'] });
+      queryClient.invalidateQueries({ queryKey: ['groupExpenses'] });
+    });
+  }, [queryClient]);
 
   // TS-DES-112: month-over-month delta from the year-wide fetch's own `monthly_trend`, which
   // already spans every month of the year (no separate trend-only fetch needed, unlike web).
@@ -441,12 +467,18 @@ export default function HomeScreen() {
   }, [monthlyData]);
 
   const recentExpenses = useMemo(() => {
-    if (!monthlyData?.category_expense_details) return [];
-    return Object.values(monthlyData.category_expense_details)
-      .flat()
+    const personalRecent = Object.values(monthlyData?.category_expense_details || {}).flat();
+    const groupRecent = (groupExpenses || []).map(e => ({
+      date: e.date,
+      description: e.description,
+      category: e.category,
+      cost: e.my_share,
+      groupName: e.group_name,
+    }));
+    return [...personalRecent, ...groupRecent]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 6);
-  }, [monthlyData]);
+  }, [monthlyData, groupExpenses]);
 
   const yearlyTotal = yearlyData?.total_expenses || 0;
   const monthlyTotal = monthlyData?.total_expenses || 0;
@@ -458,11 +490,7 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 160 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); fetchData(); }}
-            tintColor={theme.colors.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
         }
       >
         {/* ── Personalized Greeting Header ─────────────────── */}
@@ -486,8 +514,8 @@ export default function HomeScreen() {
         )}
 
         {/* ── What Changed / Due Soon (TS-DES-112) ──────────── */}
-        <WhatChangedTeaser insights={changeInsights} onPress={() => navigation.navigate('Analysis')} />
-        <DueSoonStrip templates={recurringTemplates} onPress={() => navigation.navigate('Recurring')} />
+        <WhatChangedTeaser insights={changeInsights || []} onPress={() => navigation.navigate('Analysis')} />
+        <DueSoonStrip templates={recurringTemplates || []} onPress={() => navigation.navigate('Recurring')} />
 
         {/* ── Quick Actions ─────────────────────────────────── */}
         <QuickActions navigation={navigation} />

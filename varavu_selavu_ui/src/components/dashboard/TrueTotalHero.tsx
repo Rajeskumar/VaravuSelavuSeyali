@@ -10,7 +10,7 @@ import { AnalysisGroupSummary, SpendBreakdown } from '../../api/analysis';
 export type TrueTotalLens = 'my_share' | 'i_paid' | 'group_total';
 
 const LENS_OPTIONS: { value: TrueTotalLens; label: string }[] = [
-  { value: 'my_share', label: 'My Share' },
+  { value: 'my_share', label: 'My Expense' },
   { value: 'i_paid', label: 'I Paid' },
   { value: 'group_total', label: 'Group Total' },
 ];
