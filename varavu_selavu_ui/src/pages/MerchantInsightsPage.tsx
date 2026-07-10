@@ -235,7 +235,7 @@ const MerchantInsightsPage: React.FC = () => {
                          {item.item_name}
                        </Typography>
                        <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                         {item.purchase_count} purchases
+                         {item.purchase_count} purchase{item.purchase_count === 1 ? '' : 's'}
                        </Typography>
                     </Box>
                     <Typography
@@ -325,7 +325,7 @@ const MerchantInsightsPage: React.FC = () => {
                       {row.merchant_name}
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                      {row.transaction_count ?? 0} visits
+                      {row.transaction_count ?? 0} visit{(row.transaction_count ?? 0) === 1 ? '' : 's'}
                     </Typography>
                   </Box>
                   <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>

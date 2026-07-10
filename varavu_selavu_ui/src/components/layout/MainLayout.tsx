@@ -1,6 +1,5 @@
 import React from 'react';
 import Box from '@mui/material/Box';
-import Container from '@mui/material/Container';
 import Fab from '@mui/material/Fab';
 import Dialog from '@mui/material/Dialog';
 import Snackbar from '@mui/material/Snackbar';
@@ -8,6 +7,7 @@ import Alert from '@mui/material/Alert';
 import AddIcon from '@mui/icons-material/Add';
 import { useQueryClient } from '@tanstack/react-query';
 import SideNav from './SideNav';
+import PageContainer from './PageContainer';
 import AddExpenseForm from '../expenses/AddExpenseForm';
 import { notifyExpenseChanged } from '../../utils/expenseEvents';
 
@@ -44,13 +44,13 @@ const MainLayout: React.FC<Props> = ({ children, mobileOpen, handleDrawerToggle 
       <SideNav mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle} />
       {/* Extra bottom padding clears the fixed FAB (56px + 24px offset) so it
           never overlaps the last row of page content. */}
-      <Container maxWidth="lg" sx={{ pb: 12, pt: 4 }}>
+      <PageContainer sx={{ pb: 12, pt: 4 }}>
         {children}
-      </Container>
+      </PageContainer>
 
       <Fab
         color="primary"
-        aria-label="Add expense"
+        aria-label="Add Expense"
         onClick={() => setAddOpen(true)}
         sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (theme) => theme.zIndex.speedDial }}
       >

@@ -13,6 +13,7 @@ import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import { loginWithGoogle, register } from '../api/auth';
 import { motion } from 'framer-motion';
+import PageContainer from '../components/layout/PageContainer';
 
 const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -84,7 +85,7 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
+    <PageContainer center maxWidth="sm" sx={{ p: 4 }}>
       <Backdrop open={googleLoading} sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 2 }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
           <CircularProgress color="inherit" />
@@ -172,7 +173,7 @@ const RegisterPage: React.FC = () => {
           </CardContent>
         </Card>
       </motion.div>
-    </Box>
+    </PageContainer>
   );
 };
 

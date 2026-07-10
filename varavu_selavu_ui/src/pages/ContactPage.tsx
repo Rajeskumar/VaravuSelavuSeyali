@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Box, Typography, TextField, Button, CircularProgress, Alert, Paper, Container } from '@mui/material';
+import { Box, Typography, TextField, Button, CircularProgress, Alert, Paper } from '@mui/material';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import { sendEmail } from '../api/email';
 import { motion } from 'framer-motion';
+import PageContainer from '../components/layout/PageContainer';
 
 const ContactPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -44,7 +45,7 @@ const ContactPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ mt: { xs: 4, md: 8 }, mb: 4 }}>
+    <PageContainer maxWidth="sm" sx={{ mt: { xs: 4, md: 8 }, mb: 4 }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <MailOutlineIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
@@ -145,7 +146,7 @@ const ContactPage: React.FC = () => {
           </form>
         </Paper>
       </motion.div>
-    </Container>
+    </PageContainer>
   );
 };
 

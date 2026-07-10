@@ -10,7 +10,7 @@ interface AnalysisLensSwitchProps {
 
 export const AnalysisLensSwitch: React.FC<AnalysisLensSwitchProps> = ({ value, onChange }) => {
   const tabs = [
-    { label: 'My Expense', value: 'combined' },
+    { label: 'My Expenses', value: 'combined' },
     { label: 'I Paid', value: 'i_paid' },
     { label: 'Group Total', value: 'group_total' },
   ];

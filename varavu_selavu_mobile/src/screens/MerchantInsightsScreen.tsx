@@ -166,7 +166,7 @@ export default function MerchantInsightsScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.detailName}>{selectedMerchant.merchant_name}</Text>
             <Text style={styles.detailTotal}>
-              ${selectedMerchant.total_spent.toFixed(2)} · {selectedMerchant.transaction_count} transactions
+              ${selectedMerchant.total_spent.toFixed(2)} · {selectedMerchant.transaction_count} transaction{selectedMerchant.transaction_count === 1 ? '' : 's'}
             </Text>
           </View>
         </View>
@@ -213,7 +213,7 @@ export default function MerchantInsightsScreen() {
                 <View key={y.year} style={styles.yearlyTile}>
                   <Text style={styles.statLabel}>{y.year}</Text>
                   <Text style={styles.statValue}>${y.total_spent.toFixed(2)}</Text>
-                  <Text style={styles.itemMeta}>{y.transaction_count} transactions</Text>
+                  <Text style={styles.itemMeta}>{y.transaction_count} transaction{y.transaction_count === 1 ? '' : 's'}</Text>
                 </View>
               ))}
             </View>
@@ -387,7 +387,7 @@ export default function MerchantInsightsScreen() {
                     <View style={[styles.confidenceDot, { backgroundColor: confidenceColor(theme, m.confidence) }]} />
                   )}
                 </View>
-                <Text style={styles.merchantMeta}>{m.transaction_count} transactions</Text>
+                <Text style={styles.merchantMeta}>{m.transaction_count} transaction{m.transaction_count === 1 ? '' : 's'}</Text>
               </View>
               <View style={styles.merchantRight}>
                 {m.month_over_month_change_percent != null && (

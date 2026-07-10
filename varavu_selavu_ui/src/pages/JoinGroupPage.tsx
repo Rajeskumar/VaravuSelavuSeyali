@@ -1,12 +1,12 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import { acceptInvite, ApiError } from '../api/groups';
+import PageContainer from '../components/layout/PageContainer';
 
 export const PENDING_INVITE_KEY = 'vs_pending_invite_token';
 
@@ -46,7 +46,7 @@ const JoinGroupPage: React.FC = () => {
   }, [token, navigate]);
 
   return (
-    <Box sx={{ minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
+    <PageContainer center maxWidth="sm" sx={{ p: 4 }}>
       <Card sx={{ maxWidth: 420, width: '100%' }}>
         <CardContent sx={{ p: 4, textAlign: 'center' }}>
           {(state === 'checking' || state === 'accepting') && (
@@ -83,7 +83,7 @@ const JoinGroupPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
-    </Box>
+    </PageContainer>
   );
 };
 

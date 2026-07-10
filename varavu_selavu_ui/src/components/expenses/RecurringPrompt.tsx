@@ -2,8 +2,10 @@ import React from 'react';
 import { Drawer, Box, Typography, TextField, Checkbox, IconButton, Button, Grid, Alert, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleRounded';
+import { useQueryClient } from '@tanstack/react-query';
 import { getRecurringDue, confirmRecurring, DueOccurrenceDTO } from '../../api/recurring';
 import { typeScale } from '../../theme';
+import { notifyExpenseChanged } from '../../utils/expenseEvents';
 
 interface ItemState {
   selected: boolean;
@@ -12,6 +14,7 @@ interface ItemState {
 
 const RecurringPrompt: React.FC = () => {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [items, setItems] = React.useState<Record<string, ItemState>>({});
   const [error, setError] = React.useState<string | null>(null);
@@ -66,7 +69,17 @@ const RecurringPrompt: React.FC = () => {
         if (cost <= 0) continue;
         toSend.push({ template_id: d.template_id, date_iso: d.date_iso, cost });
       }
-      if (toSend.length > 0) await confirmRecurring(toSend);
+      if (toSend.length > 0) {
+        await confirmRecurring(toSend);
+        // TS-GRP-147: this confirm flow previously created the expense(s) but never signaled
+        // either data source to refetch — the Expenses page's React Query cache stayed stale
+        // for up to a minute, and a currently-mounted Dashboard (which listens for this event
+        // since TS-DES-111) never learned about it at all. Same invalidation RecurringPage's
+        // "Run Now" already does, plus the event bus for non-React-Query pages.
+        queryClient.invalidateQueries({ queryKey: ['expenses'] });
+        queryClient.invalidateQueries({ queryKey: ['all-group-expenses'] });
+        notifyExpenseChanged();
+      }
       setOpen(false);
     } catch (e) {
       setError('Failed to add one or more expenses. Please try again.');
@@ -94,7 +107,7 @@ const RecurringPrompt: React.FC = () => {
         
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
           <Typography sx={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
-            {due.length} recurring expenses are due
+            {due.length} recurring expense{due.length === 1 ? ' is' : 's are'} due
           </Typography>
           <IconButton onClick={() => setOpen(false)} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
             <CloseIcon fontSize="small" />

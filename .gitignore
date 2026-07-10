@@ -15,3 +15,4 @@ varavu_selavu_mobile/android/
 varavu_selavu_mobile/.expo/
 .vscode/settings.json
 *.DS_Store
+.playwright-mcp/

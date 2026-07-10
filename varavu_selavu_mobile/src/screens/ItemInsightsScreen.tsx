@@ -355,7 +355,7 @@ export default function ItemInsightsScreen() {
                 <Text style={styles.kpiValue} numberOfLines={1}>
                   {summary.mostFrequent ? (summary.mostFrequent.item_name || summary.mostFrequent.normalized_name) : '—'}
                 </Text>
-                <Text style={styles.kpiSub}>{summary.mostFrequent?.transaction_count ?? 0} purchases</Text>
+                <Text style={styles.kpiSub}>{summary.mostFrequent?.transaction_count ?? 0} purchase{(summary.mostFrequent?.transaction_count ?? 0) === 1 ? '' : 's'}</Text>
               </View>
             </View>
           ) : null}

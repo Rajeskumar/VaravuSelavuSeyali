@@ -271,7 +271,7 @@ const ItemInsightsPage: React.FC = () => {
                       {row.item_name || row.normalized_name}
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                      {row.transaction_count ?? 0} purchases · avg ${(row.average_unit_price ?? row.avg_unit_price ?? 0).toFixed(2)}
+                      {row.transaction_count ?? 0} purchase{(row.transaction_count ?? 0) === 1 ? '' : 's'} · avg ${(row.average_unit_price ?? row.avg_unit_price ?? 0).toFixed(2)}
                     </Typography>
                   </Box>
                   <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>

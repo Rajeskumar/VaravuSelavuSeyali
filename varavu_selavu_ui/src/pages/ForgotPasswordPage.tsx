@@ -10,6 +10,7 @@ import Box from '@mui/material/Box';
 import { forgotPassword } from '../api/auth';
 import Link from "@mui/material/Link";
 import { motion } from 'framer-motion';
+import PageContainer from '../components/layout/PageContainer';
 
 const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -43,7 +44,7 @@ const ForgotPasswordPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ minHeight: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 4 }}>
+    <PageContainer center maxWidth="sm" sx={{ p: 4 }}>
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -110,7 +111,7 @@ const ForgotPasswordPage: React.FC = () => {
         </CardContent>
       </Card>
       </motion.div>
-    </Box>
+    </PageContainer>
   );
 };
 

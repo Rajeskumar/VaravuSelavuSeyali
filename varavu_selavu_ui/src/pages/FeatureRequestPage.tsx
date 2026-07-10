@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Box, Typography, TextField, Button, CircularProgress, Alert, Paper, Container } from '@mui/material';
+import { Box, Typography, TextField, Button, CircularProgress, Alert, Paper } from '@mui/material';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import { sendEmail } from '../api/email';
 import { motion } from 'framer-motion';
+import PageContainer from '../components/layout/PageContainer';
 
 const FeatureRequestPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -42,7 +43,11 @@ const FeatureRequestPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ mt: { xs: 4, md: 8 }, mb: 4 }}>
+    <PageContainer maxWidth="lg" sx={{ mt: { xs: 4, md: 8 }, mb: 4 }}>
+      {/* TS-GRP-141: outer frame matches every other authenticated page (lg), but the form
+          itself stays a comfortable reading/typing width — a full-width multiline textarea
+          at 1200px would be worse, not better. */}
+      <Box sx={{ maxWidth: 600, mx: 'auto' }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <Box sx={{ textAlign: 'center', mb: 4 }}>
         <LightbulbOutlinedIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
@@ -140,7 +145,8 @@ const FeatureRequestPage: React.FC = () => {
         </form>
       </Paper>
       </motion.div>
-    </Container>
+      </Box>
+    </PageContainer>
   );
 };
 

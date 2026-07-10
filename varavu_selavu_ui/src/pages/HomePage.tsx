@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Container, Typography, Button, Grid, Stack, useTheme, Link as MuiLink } from '@mui/material';
+import { Box, Typography, Button, Grid, Stack, useTheme, Link as MuiLink } from '@mui/material';
+import PageContainer from '../components/layout/PageContainer';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -97,7 +98,7 @@ const HomePage: React.FC = () => {
               : `radial-gradient(60% 50% at 50% 0%, ${withAlpha(brand.gradientStart, 0.12)} 0%, transparent 60%)`,
           }}
         />
-        <Container maxWidth="md">
+        <PageContainer maxWidth="md">
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: motionTokens.slow, ease: motionTokens.easing }}>
             <Typography
               variant="h1"
@@ -159,11 +160,11 @@ const HomePage: React.FC = () => {
               <ProductShot image="/screenshots/dashboard.png" title="TrackSpense dashboard" />
             </Box>
           </motion.div>
-        </Container>
+        </PageContainer>
       </Box>
 
       {/* Product showcase — real screenshots */}
-      <Container id="product" maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
+      <PageContainer id="product" maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
         <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
           <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 2 }}>
             One app, your whole financial picture
@@ -202,11 +203,11 @@ const HomePage: React.FC = () => {
             </Grid>
           ))}
         </Stack>
-      </Container>
+      </PageContainer>
 
       {/* Vision */}
       <Box sx={{ bgcolor: theme.palette.mode === 'dark' ? '#0a0a0a' : '#F5F5F7', py: { xs: 10, md: 14 } }}>
-        <Container maxWidth="md">
+        <PageContainer maxWidth="md">
           <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
             <Typography
               variant="h2"
@@ -216,11 +217,11 @@ const HomePage: React.FC = () => {
               <Box component="span" sx={{ color: 'text.secondary' }}> Just clarity and confidence.</Box>
             </Typography>
           </motion.div>
-        </Container>
+        </PageContainer>
       </Box>
 
       {/* Privacy / trust block */}
-      <Container maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
+      <PageContainer maxWidth="lg" sx={{ py: { xs: 10, md: 14 } }}>
         <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
           <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '2.75rem' }, textAlign: 'center', mb: 2 }}>
             Privacy-first, substantiated
@@ -265,7 +266,7 @@ const HomePage: React.FC = () => {
           {' '}or{' '}
           <MuiLink href={`${API_BASE_URL}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</MuiLink>.
         </Typography>
-      </Container>
+      </PageContainer>
 
       {/* CTA Footer */}
       <Box
@@ -274,7 +275,7 @@ const HomePage: React.FC = () => {
           background: `linear-gradient(135deg, ${brand.gradientStart} 0%, ${brand.gradientEnd} 100%)`,
         }}
       >
-        <Container maxWidth="md" sx={{ py: { xs: 10, md: 14 }, textAlign: 'center' }}>
+        <PageContainer maxWidth="md" sx={{ py: { xs: 10, md: 14 }, textAlign: 'center' }}>
           <motion.div {...reveal} transition={{ duration: motionTokens.base, ease: motionTokens.easing }}>
             <Typography variant="h2" sx={{ fontSize: { xs: '2rem', md: '3rem' }, mb: 2 }}>
               Ready to take control?
@@ -290,12 +291,12 @@ const HomePage: React.FC = () => {
               {token ? 'Open Dashboard' : 'Try TrackSpense free'}
             </Button>
           </motion.div>
-        </Container>
+        </PageContainer>
       </Box>
 
       {/* Footer */}
       <Box component="footer" sx={{ bgcolor: theme.palette.mode === 'dark' ? '#000' : '#F5F5F7', borderTop: `1px solid ${theme.palette.divider}` }}>
-        <Container maxWidth="lg" sx={{ py: 6 }}>
+        <PageContainer maxWidth="lg" sx={{ py: 6 }}>
           <Grid container columns={12} spacing={4}>
             <Grid size={{ xs: 12, sm: 4 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>TrackSpense</Typography>
@@ -329,7 +330,7 @@ const HomePage: React.FC = () => {
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 5 }}>
             © {year} TrackSpense. All rights reserved.
           </Typography>
-        </Container>
+        </PageContainer>
       </Box>
     </Box>
   );
