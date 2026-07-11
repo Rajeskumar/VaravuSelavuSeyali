@@ -7,20 +7,18 @@ import Alert from '@mui/material/Alert';
 import { motion } from 'framer-motion';
 import { useTheme } from '@mui/material/styles';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import TrueTotalHero, { TrueTotalLens } from '../components/dashboard/TrueTotalHero';
+import TrueTotalHero, { MomDelta } from '../components/dashboard/TrueTotalHero';
 import SpendSpectrum from '../components/dashboard/SpendSpectrum';
 import MyGroupsStrip from '../components/dashboard/MyGroupsStrip';
-import WhatChangedTeaser from '../components/dashboard/WhatChangedTeaser';
-import DueSoonStrip from '../components/dashboard/DueSoonStrip';
+import InsightOfTheDay, { Insight } from '../components/dashboard/InsightOfTheDay';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { getChangeInsights, ChangeInsight } from '../api/analytics';
-import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
 import { parseAppDate, formatAppDate } from '../utils/date';
 import { listExpenses } from '../api/expenses';
 import { listAllMyGroupExpenses, listGroups, UnifiedGroupExpenseRow, GroupSummary } from '../api/groups';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { onExpenseChanged } from '../utils/expenseEvents';
-import { reconcile, tabularNums } from '../theme';
+import { slate, tabularNums } from '../theme';
 
 const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
 const RECENT_FEED_LIMIT = 6;
@@ -30,11 +28,72 @@ function formatMoney(n: number): string {
   return `${sign}$${Math.abs(n).toFixed(2)}`;
 }
 
+interface RecentItem {
+  date: string;
+  description: string;
+  category: string;
+  cost: number;
+}
+
+/**
+ * TS-DES-203 — picks the single insight to show, in priority order:
+ * 1. The top-ranked backend `ChangeInsight` (TS-ANL-004's 7 types — category spikes, new
+ *    merchants, unusual transactions, etc. — already relevance-ranked server-side).
+ * 2. A locally-computed pace projection ("on pace for $X this month"), when there's enough
+ *    signal (a MoM delta exists) to say something meaningful about the projection.
+ * 3. The single biggest expense so far this month, from the already-fetched recent feed.
+ * Returns null (renders nothing) if none of the three have anything to say — a brand-new
+ * user's first few days, for instance.
+ */
+function pickInsight(
+  changeInsights: ChangeInsight[],
+  personalTotal: number,
+  momDelta: MomDelta | null,
+  now: Date,
+  recent: RecentItem[]
+): Insight | null {
+  if (changeInsights.length > 0) {
+    const top = changeInsights[0];
+    const isNew = top.change_percent === 100;
+    const isIncrease = top.change_amount > 0;
+    const headline = isNew
+      ? `New this month: ${top.metric_name}`
+      : `${top.metric_name} ${isIncrease ? 'is up' : 'is down'} ${Math.abs(top.change_percent).toFixed(0)}% vs last period`;
+    const detail = isNew
+      ? `${formatMoney(top.current_value)} so far — nothing recorded for this in the comparison period.`
+      : `${formatMoney(top.previous_value)} → ${formatMoney(top.current_value)} (${top.change_amount > 0 ? '+' : ''}${formatMoney(top.change_amount)}).`;
+    return { headline, detail };
+  }
+
+  if (momDelta) {
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const dayOfMonth = now.getDate();
+    if (dayOfMonth >= 3 && personalTotal > 0) {
+      const projected = personalTotal / (dayOfMonth / daysInMonth);
+      return {
+        headline: `On pace for ${formatMoney(projected)} this month`,
+        detail: `${dayOfMonth} of ${daysInMonth} days elapsed, ${momDelta.percent > 0 ? '+' : ''}${momDelta.percent.toFixed(0)}% vs last month so far.`,
+      };
+    }
+  }
+
+  if (recent.length > 0) {
+    const biggest = recent.reduce((max, item) => (item.cost > max.cost ? item : max), recent[0]);
+    if (biggest.cost > 0) {
+      return {
+        headline: `Biggest expense this month: ${biggest.description} (${formatMoney(biggest.cost)})`,
+        detail: `${formatAppDate(biggest.date)} · ${biggest.category}`,
+      };
+    }
+  }
+
+  return null;
+}
+
 const DashboardPage: React.FC = () => {
   const [data, setData] = React.useState<AnalysisResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [lens, setLens] = React.useState<TrueTotalLens>('my_share');
   const now = React.useMemo(() => new Date(), []);
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
@@ -48,7 +107,6 @@ const DashboardPage: React.FC = () => {
   const [personalRecent, setPersonalRecent] = React.useState<{ date: string; description: string; category: string; cost: number }[]>([]);
   const [showCombinedToast, setShowCombinedToast] = React.useState(false);
   const [changeInsights, setChangeInsights] = React.useState<ChangeInsight[]>([]);
-  const [recurringTemplates, setRecurringTemplates] = React.useState<RecurringTemplateDTO[]>([]);
   const [yearTrend, setYearTrend] = React.useState<{ month: string; total: number }[]>([]);
   // TS-DES-111: bumped whenever the global Add Expense FAB (MainLayout.tsx)
   // saves — DashboardPage fetches via plain useEffect rather than react-query,
@@ -102,7 +160,8 @@ const DashboardPage: React.FC = () => {
     })();
   }, [year, refreshKey]);
 
-  // TS-DES-111: top "what changed" teaser, same current-month scope as the main fetch.
+  // TS-DES-111, scope reused by TS-DES-203's InsightOfTheDay: ranked change insights for the
+  // current month, same scope as the main fetch.
   React.useEffect(() => {
     let mounted = true;
     (async () => {
@@ -115,20 +174,6 @@ const DashboardPage: React.FC = () => {
     })();
     return () => { mounted = false; };
   }, [year, month, refreshKey]);
-
-  // TS-DES-111: "Due Soon" strip.
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const templates = await listRecurringTemplates();
-        if (mounted) setRecurringTemplates(templates);
-      } catch {
-        if (mounted) setRecurringTemplates([]);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
 
   // Unified recent-transactions feed: personal + (if enabled) my group shares, merged.
   const expensesQuery = useQuery({
@@ -190,7 +235,7 @@ const DashboardPage: React.FC = () => {
     .sort((a, b) => parseAppDate(b.date).getTime() - parseAppDate(a.date).getTime())
     .slice(0, RECENT_FEED_LIMIT);
 
-  const periodLabel = `${now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} · everything`;
+  const periodLabel = now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const groupSummaries = data.group_summaries || [];
   const personalTotal = data.spend_breakdown ? data.spend_breakdown.personal : data.total_expenses;
 
@@ -211,12 +256,24 @@ const DashboardPage: React.FC = () => {
     ? { amount: thisMonthTrend - prevMonthTrend, percent: ((thisMonthTrend - prevMonthTrend) / prevMonthTrend) * 100 }
     : null;
 
+  // TS-DES-203: picks the single most notable insight to show — a ranked backend change
+  // insight (covers category-spike/new-merchant/etc., per TS-ANL-004's 7 types) takes priority
+  // since it's already relevance-ranked server-side; falls back to a locally-computed pace
+  // projection, then the single biggest expense this month; null (renders nothing) if none of
+  // the three have anything to say. Replaces TS-DES-111's three permanent strips with one line.
+  const insight = pickInsight(changeInsights, personalTotal, momDelta, now, recent);
+
+  const hasGroupsStrip = groupsEnabled && groups.length > 0;
+
   return (
-    <Box sx={{ maxWidth: 480, mx: 'auto' }}>
+    // TS-DES-210 desktop fix: this page was still capped at the mobile prototype's card width
+    // (480px, centered) at every viewport, per Live_QA_Findings_and_Plan.md's "Dashboard's inner
+    // content doesn't use its container width at desktop size" finding. `md`+ now uses the full
+    // width MainLayout's sidebar-aware content column provides, matching DesktopDashboard.jsx;
+    // `xs`/`sm` keep the original bounded, centered mobile layout unchanged.
+    <Box sx={{ maxWidth: { xs: 480, md: '100%' }, mx: { xs: 'auto', md: 0 } }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
         <TrueTotalHero
-          lens={lens}
-          onLensChange={setLens}
           personalTotal={personalTotal}
           spendBreakdown={data.spend_breakdown}
           groupSummaries={groupSummaries}
@@ -226,51 +283,51 @@ const DashboardPage: React.FC = () => {
         />
       </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-60px' }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <Box sx={{ mb: 3 }}>
-          <WhatChangedTeaser insights={changeInsights} />
-        </Box>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-60px' }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-      >
-        <Box sx={{ mb: 3 }}>
-          <SpendSpectrum data={data.category_totals} />
-        </Box>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-60px' }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.04 }}
-      >
-        <Box sx={{ mb: 3 }}>
-          <DueSoonStrip templates={recurringTemplates} />
-        </Box>
-      </motion.div>
-
-      {groupsEnabled && groups.length > 0 && (
+      {insight && (
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: '-60px' }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.06 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
-          <Box sx={{ mb: 3 }}>
-            <MyGroupsStrip groups={groups} groupSummaries={groupSummaries} />
+          {/* DesktopDashboard.jsx caps the insight line at 420px instead of spanning the full
+              two-column content width below it. */}
+          <Box sx={{ mb: 3, maxWidth: { xs: '100%', md: 420 } }}>
+            <InsightOfTheDay insight={insight} />
           </Box>
         </motion.div>
       )}
+
+      {/* DesktopDashboard.jsx puts "Where it went" and "My Groups" side by side
+          (`grid-cols-2`); stacked full-width on mobile, same as before. When there's no groups
+          strip to show, SpendSpectrum keeps the full row rather than leaving an empty column. */}
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 0, md: 4 } }}>
+        <motion.div
+          style={{ flex: 1, minWidth: 0 }}
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <Box sx={{ mb: 3 }}>
+            <SpendSpectrum data={data.category_totals} />
+          </Box>
+        </motion.div>
+
+        {hasGroupsStrip && (
+          <motion.div
+            style={{ flex: 1, minWidth: 0 }}
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-60px' }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.06 }}
+          >
+            <Box sx={{ mb: 3 }}>
+              <MyGroupsStrip groups={groups} groupSummaries={groupSummaries} />
+            </Box>
+          </motion.div>
+        )}
+      </Box>
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}
@@ -296,7 +353,7 @@ const DashboardPage: React.FC = () => {
               backgroundColor: 'background.paper',
               border: '1px solid',
               borderColor: 'divider',
-              borderRadius: `${reconcile.radius.surface}px`,
+              borderRadius: `${slate.radius.surface}px`,
               overflow: 'hidden',
             }}
           >

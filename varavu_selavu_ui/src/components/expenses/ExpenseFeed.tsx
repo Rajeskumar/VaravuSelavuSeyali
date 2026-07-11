@@ -107,9 +107,9 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
         position: 'relative',
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
-        px: 2.5,
-        py: 1.5,
+        gap: 1.25,
+        px: 2,
+        py: 1,
         cursor: 'pointer',
         borderBottom: `1px solid ${theme.palette.divider}`,
         transition: 'background-color 0.15s ease',
@@ -120,18 +120,18 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
     >
       <Box
         sx={{
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           borderRadius: '50%',
           flexShrink: 0,
           backgroundColor: dot,
         }}
       />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 600, fontSize: 15 }} noWrap>
+        <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem' }} noWrap>
           {expense.merchantName || expense.description}
         </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap component="div">
+        <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ fontSize: '0.6875rem' }}>
           {expense.kind === 'group' ? expense.groupName : expense.category}
         </Typography>
       </Box>
@@ -147,14 +147,14 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
         }}
         className="expense-row-amount"
       >
-        <Typography sx={{ ...typeScale.amount, color: theme.palette.text.primary }}>
+        <Typography sx={{ ...typeScale.amount, fontSize: '0.8125rem', color: theme.palette.text.primary }}>
           {formatMoney(expense.amount)}
         </Typography>
         {expense.kind === 'group' && (
           <Typography
             variant="caption"
             color="text.secondary"
-            sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.6875rem' }}
           >
             <span aria-hidden>◐</span> my expense
             {typeof expense.groupAmount === 'number' && (
@@ -291,8 +291,8 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              px: 2.5,
-              py: 1,
+              px: 2,
+              py: 0.75,
               backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#EFEFEA',
               borderBottom: `1px solid ${theme.palette.divider}`,
             }}

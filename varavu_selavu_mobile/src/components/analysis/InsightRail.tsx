@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../context/ThemeContext';
 import { AppTheme } from '../../theme';
@@ -23,11 +23,11 @@ export const InsightRail: React.FC<InsightRailProps> = ({ insights, onAsk }) => 
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>WHAT CHANGED</Text>
             </View>
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
-            >
+            {/* Vertical stack, matching the web app's What Changed rail — a horizontal-scroll row
+                of fixed-width cards read as a swipe you had to discover rather than an
+                intentional affordance; a vertical list needs no discovery and each card gets the
+                full row width instead of being cropped to a fixed card width. */}
+            <View style={styles.list}>
                 {insights.map((insight, idx) => {
                     const isUp = insight.change_amount > 0;
                     return (
@@ -68,7 +68,7 @@ export const InsightRail: React.FC<InsightRailProps> = ({ insights, onAsk }) => 
                         </View>
                     );
                 })}
-            </ScrollView>
+            </View>
         </View>
     );
 };
@@ -87,12 +87,11 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         letterSpacing: 0.6,
         color: theme.colors.textSecondary,
     },
-    scrollContent: {
+    list: {
         paddingHorizontal: 20,
         gap: 12,
     },
     card: {
-        width: 260,
         backgroundColor: theme.colors.surface,
         borderRadius: 16,
         padding: 16,

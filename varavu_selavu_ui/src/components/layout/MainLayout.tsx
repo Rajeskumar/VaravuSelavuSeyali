@@ -7,9 +7,11 @@ import Alert from '@mui/material/Alert';
 import AddIcon from '@mui/icons-material/Add';
 import { useQueryClient } from '@tanstack/react-query';
 import SideNav from './SideNav';
+import Footer from './Footer';
 import PageContainer from './PageContainer';
 import AddExpenseForm from '../expenses/AddExpenseForm';
 import { notifyExpenseChanged } from '../../utils/expenseEvents';
+import { HEADER_HEIGHT, FOOTER_HEIGHT } from './layoutConstants';
 
 interface Props {
   children: React.ReactNode;
@@ -40,19 +42,33 @@ const MainLayout: React.FC<Props> = ({ children, mobileOpen, handleDrawerToggle 
   };
 
   return (
-    <Box>
-      <SideNav mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle} />
-      {/* Extra bottom padding clears the fixed FAB (56px + 24px offset) so it
-          never overlaps the last row of page content. */}
-      <PageContainer sx={{ pb: 12, pt: 4 }}>
-        {children}
-      </PageContainer>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: `calc(100vh - ${HEADER_HEIGHT}px)` }}>
+      {/* TS-DES-210 — full-viewport-width shell: sidebar + content column span the entire
+          available width at every desktop size, not the desktop prototypes' bounded "card"
+          (that bounding is a mockup-viewing convention, not a spec — see TS-DES-210's ticket).
+          Only page *content* inside PageContainer optionally caps at a reading width. Footer is
+          a sibling of this row (not nested in the content column), matching the reference
+          prototypes' shell — it spans the full width, under the sidebar too. */}
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <SideNav mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle} />
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Extra bottom padding clears the fixed FAB (56px + 24px offset) so it
+              never overlaps the last row of page content. */}
+          <PageContainer sx={{ pb: 12, pt: 4, flex: 1 }}>
+            {children}
+          </PageContainer>
+        </Box>
+      </Box>
+      <Footer />
 
+      {/* `bottom` clears the app-shell Footer (TS-DES-210, added after this FAB existed) —
+          the Footer isn't fixed, but on any page short enough that it's visible without
+          scrolling, a plain `bottom: 24` FAB rendered directly on top of it. */}
       <Fab
         color="primary"
         aria-label="Add Expense"
         onClick={() => setAddOpen(true)}
-        sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (theme) => theme.zIndex.speedDial }}
+        sx={{ position: 'fixed', bottom: FOOTER_HEIGHT + 24, right: 24, zIndex: (theme) => theme.zIndex.speedDial }}
       >
         <AddIcon />
       </Fab>

@@ -15,7 +15,7 @@ const FriendBalancesWidget: React.FC = () => {
   if (isLoading || !data || data.length === 0) return null;
 
   return (
-    <Paper sx={{ p: 2.5, mb: 3, borderRadius: 3 }}>
+    <Paper sx={{ p: 2.5, mb: 3, borderRadius: 1 }}>
       <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
         Balances with people
       </Typography>

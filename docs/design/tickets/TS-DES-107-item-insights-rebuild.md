@@ -1,6 +1,6 @@
 # TS-DES-107 — Item Insights rebuild
 
-**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no cross-team dependency, can go first) · **Spec:** `UX_Design_Spec.md` §4.4/§6, `UX_Audit_and_Redesign.md` §3 (item-level intelligence framing), `docs/design/prototypes/ItemInsights.jsx` · **Status:** 🔴 Not started
+**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no cross-team dependency, can go first) · **Spec:** `UX_Design_Spec.md` §4.4/§6, `UX_Audit_and_Redesign.md` §3 (item-level intelligence framing), `docs/design/prototypes/ItemInsights.jsx` · **Status:** ✅ Built — Ranked list, `PriceHistoryChart`, `StoreComparisonChips`, `PurchaseTape`, `StatBlock` (header corrected 2026-07-10 to match `FEATURE_STATUS.md`; was stale "Not started" — see `ORIENTATION_REPORT_V2.md` §4)
 
 ## Located before scoping, per instruction
 

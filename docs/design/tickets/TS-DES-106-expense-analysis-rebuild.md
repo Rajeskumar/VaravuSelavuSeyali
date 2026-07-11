@@ -1,6 +1,6 @@
 # TS-DES-106 — Expense Analysis rebuild
 
-**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no dependency on 107/108/110) · **Spec:** `UX_Design_Spec.md` §4.2/§4.3/§4.6/§6, `UX_Audit_and_Redesign.md` §3.4/§6, `docs/design/prototypes/ExpenseAnalysis.jsx` · **Status:** 🔴 Not started
+**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no dependency on 107/108/110) · **Spec:** `UX_Design_Spec.md` §4.2/§4.3/§4.6/§6, `UX_Audit_and_Redesign.md` §3.4/§6, `docs/design/prototypes/ExpenseAnalysis.jsx` · **Status:** ✅ Built — `AnalysisLensSwitch`, `TrendNavigator`, `WhatChangedRail`, `CategorySpectrum`, `AskSheet` (header corrected 2026-07-10 to match `FEATURE_STATUS.md`; was stale "Not started" — see `ORIENTATION_REPORT_V2.md` §4)
 
 ## Scope
 

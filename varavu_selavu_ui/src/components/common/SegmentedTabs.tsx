@@ -20,36 +20,45 @@ interface SegmentedTabsProps<T extends string> {
 
 /** A pill-shaped segmented control — the modern alternative to MUI's default
  * underlined Tabs, used wherever a small set of mutually-exclusive views need
- * switching (Expenses/Balances, split type, etc). */
+ * switching (Expenses/Balances, split type, etc).
+ *
+ * Sleek/compact pass: sized to match the reference prototypes' 30-34px-tall lens/
+ * sub-tab bars (`LensSwitch`/`SubTabBar` in `docs/design/prototypes/v2/**`) instead
+ * of MUI's much taller default `ToggleButtonGroup` control — this was the "slider"
+ * flagged as too big/rounded on Dashboard, Expenses, Analysis, and Groups. */
 function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, size = 'medium', ariaLabel }: SegmentedTabsProps<T>) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const compact = size === 'small';
 
   return (
     <ToggleButtonGroup
       exclusive
       value={value}
       onChange={(_, next) => next && onChange(next)}
-      size={size}
       fullWidth={fullWidth}
       aria-label={ariaLabel}
       sx={{
-        p: 0.5,
-        borderRadius: 980,
+        p: '3px',
+        height: compact ? 28 : 32,
+        borderRadius: `${theme.shape.borderRadius}px`,
         backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
         border: 'none',
-        gap: 0.5,
+        gap: 0.25,
         '& .MuiToggleButton-root': {
           border: 'none',
-          borderRadius: 980,
+          borderRadius: `${Math.max(Number(theme.shape.borderRadius) - 2, 4)}px`,
           textTransform: 'none',
           fontWeight: 600,
-          px: 2.5,
+          fontSize: compact ? '0.6875rem' : '0.75rem',
+          lineHeight: 1,
+          px: compact ? 1.25 : 1.5,
+          py: 0,
           color: 'text.secondary',
           '&.Mui-selected': {
             backgroundColor: theme.palette.background.paper,
             color: theme.palette.primary.main,
-            boxShadow: isDark ? '0 2px 8px rgba(0,0,0,0.4)' : '0 2px 8px rgba(0,0,0,0.08)',
+            boxShadow: isDark ? '0 1px 3px rgba(0,0,0,0.4)' : '0 1px 3px rgba(0,0,0,0.08)',
             '&:hover': {
               backgroundColor: theme.palette.background.paper,
             },

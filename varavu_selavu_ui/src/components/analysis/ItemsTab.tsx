@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Box, Typography, Paper, Chip, IconButton, LinearProgress, Button, Skeleton, Grid, useTheme,
+  Box, Typography, Paper, Chip, IconButton, LinearProgress, Button, Skeleton, useTheme,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded';
 import ReceiptIcon from '@mui/icons-material/ReceiptRounded';
@@ -10,29 +10,16 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRightRounded';
 import {
   getTopItems, getItemDetail,
   ItemInsightSummary, ItemInsightDetail,
-} from '../api/analytics';
-import InsightScopeFilter, { ScopeBadge, defaultInsightScopeState, resolveScopeFilters } from '../components/common/InsightScopeFilter';
+} from '../../api/analytics';
+import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../common/InsightScopeFilter';
 import { motion } from 'framer-motion';
 
-// New Reconcile components
-import { StatBlock } from '../components/analysis/StatBlock';
-import { StoreComparisonChips } from '../components/analysis/StoreComparisonChips';
-import { PurchaseTape } from '../components/analysis/PurchaseTape';
-import { PriceHistoryChart } from '../components/analysis/PriceHistoryChart';
+import { StatBlock } from './StatBlock';
+import { StoreComparisonChips } from './StoreComparisonChips';
+import { PurchaseTape } from './PurchaseTape';
+import { PriceHistoryChart } from './PriceHistoryChart';
 
-import { typeScale } from '../theme';
-
-type Confidence = 'Low' | 'Medium' | 'High';
-
-function getConfidence(transactionCount: number, distinctMerchants?: number, backendConfidence?: string | null): Confidence {
-  if (backendConfidence) {
-    const capitalized = backendConfidence.charAt(0).toUpperCase() + backendConfidence.slice(1);
-    if (capitalized === 'High' || capitalized === 'Medium' || capitalized === 'Low') return capitalized;
-  }
-  if (transactionCount >= 6 && (distinctMerchants ?? 0) >= 2) return 'High';
-  if (transactionCount >= 3) return 'Medium';
-  return 'Low';
-}
+import { typeScale } from '../../theme';
 
 function monthSpan(firstSeenAt?: string | null, lastSeenAt?: string | null): number {
   if (!firstSeenAt || !lastSeenAt) return 1;
@@ -43,7 +30,14 @@ function monthSpan(firstSeenAt?: string | null, lastSeenAt?: string | null): num
   return Math.max(1, months);
 }
 
-const ItemInsightsPage: React.FC = () => {
+/**
+ * TS-DES-205 — Items tab, migrated from the standalone `ItemInsightsPage.tsx` (deleted; that
+ * route, `/item-insights`, now redirects here). Content and behavior unchanged — deep-linking
+ * via `?item=<name>` still works, the "Ask AI" chip still opens `/ask?q=...`. Only the host
+ * changed: no more page-level title/maxWidth wrapper (the parent `ExpenseAnalysisPage` owns
+ * that now), and the back button on the detail view clears local state instead of navigating.
+ */
+const ItemsTab: React.FC = () => {
   const theme = useTheme();
   const userId = localStorage.getItem('vs_user') || '';
   const navigate = useNavigate();
@@ -63,6 +57,7 @@ const ItemInsightsPage: React.FC = () => {
       .then(setItems)
       .catch(() => {})
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, scope.mode, scope.year, scope.month, scope.startDate, scope.endDate]);
 
   useEffect(() => {
@@ -82,6 +77,7 @@ const ItemInsightsPage: React.FC = () => {
         }
       })();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, userId]);
 
   const handleSelect = async (item: ItemInsightSummary) => {
@@ -99,25 +95,22 @@ const ItemInsightsPage: React.FC = () => {
   };
 
   const askAi = (question: string) => {
-    navigate(`/ai-analyst?q=${encodeURIComponent(question)}`);
+    navigate(`/ask?q=${encodeURIComponent(question)}`);
   };
 
   if (loading) {
     return (
-      <Box sx={{ py: 4, maxWidth: 600, mx: 'auto' }}>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
-          <Skeleton width={200} />
-        </Typography>
-        <Paper sx={{ borderRadius: 2, mt: 4, p: 2 }}>
-            {[1, 2, 3, 4, 5].map((i) => (
-               <Box key={i} sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
-                  <Box sx={{ flex: 1 }}>
-                     <Skeleton width="40%" height={24} />
-                     <Skeleton width="20%" height={20} />
-                  </Box>
-                  <Skeleton width={60} height={30} />
-               </Box>
-            ))}
+      <Box>
+        <Paper sx={{ borderRadius: 1, mt: 2, p: 2 }}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Box key={i} sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
+              <Box sx={{ flex: 1 }}>
+                <Skeleton width="40%" height={24} />
+                <Skeleton width="20%" height={20} />
+              </Box>
+              <Skeleton width={60} height={30} />
+            </Box>
+          ))}
         </Paper>
       </Box>
     );
@@ -131,7 +124,7 @@ const ItemInsightsPage: React.FC = () => {
     const hasStoreComparison = (detail.store_comparison?.length ?? 0) >= 2;
 
     return (
-      <Box sx={{ maxWidth: 600, mx: 'auto', pb: 8 }}>
+      <Box>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
           {/* Header */}
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
@@ -205,16 +198,12 @@ const ItemInsightsPage: React.FC = () => {
   }
 
   // List view
-  // Sort descending by total_spent
   const listRows = [...items].sort((a, b) => (b.total_spent ?? 0) - (a.total_spent ?? 0));
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', pb: 8 }}>
+    <Box>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 2 }}>
-          <Typography sx={{ ...typeScale.display, fontSize: '1.75rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-            Item Insights
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
           <InsightScopeFilter value={scope} onChange={setScope} />
         </Box>
         <Typography sx={{ fontSize: 14, color: 'text.secondary', mb: 3 }}>
@@ -222,7 +211,7 @@ const ItemInsightsPage: React.FC = () => {
         </Typography>
 
         {listRows.length === 0 ? (
-          <Paper sx={{ p: 6, mt: 4, borderRadius: 2, textAlign: 'center', bgcolor: 'transparent', borderStyle: 'dashed' }}>
+          <Paper sx={{ p: 6, mt: 2, borderRadius: 1, textAlign: 'center', bgcolor: 'transparent', borderStyle: 'dashed' }}>
             <ReceiptIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
             <Typography variant="h6" fontWeight={600} gutterBottom>
               No item insights yet
@@ -236,7 +225,7 @@ const ItemInsightsPage: React.FC = () => {
           </Paper>
         ) : (
           <Box sx={{ position: 'relative' }}>
-            {detailLoading && <LinearProgress sx={{ position: 'absolute', top: -4, left: 0, right: 0, borderRadius: 2 }} />}
+            {detailLoading && <LinearProgress sx={{ position: 'absolute', top: -4, left: 0, right: 0, borderRadius: 1 }} />}
             <Box role="list" sx={{ display: 'flex', flexDirection: 'column' }}>
               {listRows.map((row) => (
                 <Box
@@ -288,4 +277,4 @@ const ItemInsightsPage: React.FC = () => {
   );
 };
 
-export default ItemInsightsPage;
+export default ItemsTab;

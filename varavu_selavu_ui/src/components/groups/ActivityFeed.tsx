@@ -94,7 +94,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ groupId, group }) =>
         const timeStr = isToday ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
         
         return (
-          <Paper key={item.id} sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2, borderRadius: 2 }}>
+          <Paper key={item.id} sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 2, borderRadius: 1 }}>
             <Box sx={{ p: 1, borderRadius: '50%', bgcolor: 'background.default', display: 'flex' }}>
               {icon}
             </Box>

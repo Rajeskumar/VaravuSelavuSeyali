@@ -12,7 +12,7 @@ import TaskAltRoundedIcon from '@mui/icons-material/TaskAltRounded';
 import { useTheme } from '@mui/material/styles';
 import { createSettlement, ApiError, MemberBalance } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
-import { withAlpha, reconcile, typeScale, tabularNums } from '../../theme';
+import { withAlpha, slate, typeScale, tabularNums } from '../../theme';
 import { venmoLink, paypalMeLink, upiLink } from '../../utils/paymentDeepLinks';
 
 interface SettleUpDialogProps {
@@ -133,7 +133,10 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
   };
 
   const hasPair = !!(fromMemberId && toMemberId && fromMemberId !== toMemberId);
-  const heroColor = isDark ? reconcile.jadeDark : reconcile.jadeText;
+  const heroColor = isDark ? slate.positiveDark : slate.positive;
+  // "Done" celebration reuses the brand accent (Slate has no dedicated ceremony hue), same
+  // policy as TrueTotalHero's RECONCILED badge.
+  const doneColor = isDark ? slate.accentDark : slate.accent;
 
   return (
     <Dialog open={open} onClose={stage === 'settling' ? undefined : onClose} maxWidth="xs" fullWidth>
@@ -163,7 +166,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                 alignItems: 'center',
                 gap: 1,
                 mt: 0.5,
-                color: stage === 'done' ? reconcile.gold : heroColor,
+                color: stage === 'done' ? doneColor : heroColor,
               }}
             >
               {stage === 'done' && <TaskAltRoundedIcon sx={{ fontSize: 28 }} />}
@@ -194,7 +197,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                   gap: 1.5,
                   p: 2,
                   mb: 2.5,
-                  borderRadius: 3,
+                  borderRadius: 1,
                   backgroundColor: withAlpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.12 : 0.06),
                   opacity: stage === 'settling' ? 0.6 : 1,
                   transition: 'opacity 0.3s ease-out',

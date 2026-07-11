@@ -9,25 +9,24 @@ import IconButton from '@mui/material/IconButton';
 import Dialog from '@mui/material/Dialog';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
-import Paper from '@mui/material/Paper';
-import Card from '@mui/material/Card';
 import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
-import Divider from '@mui/material/Divider';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
-import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { GroupSettingsDialog } from '../components/groups/GroupSettingsDialog';
 import { ActivityFeed } from '../components/groups/ActivityFeed';
 import { motion } from 'framer-motion';
 import MemberAvatarStack from '../components/groups/MemberAvatarStack';
 import GroupAvatar from '../components/groups/GroupAvatar';
+import GroupBalancesPanel from '../components/groups/GroupBalancesPanel';
 import SegmentedTabs from '../components/common/SegmentedTabs';
+import ExpenseFeed, { FeedExpense } from '../components/expenses/ExpenseFeed';
+import { findMainCategory } from '../components/expenses/AddExpenseForm';
 import SplitEditor, { SplitEditorValue } from '../components/groups/SplitEditor';
 import PayerPicker from '../components/groups/PayerPicker';
 import BalanceList from '../components/groups/BalanceList';
@@ -38,6 +37,7 @@ import {
   listGroupExpenses,
   getBalances,
   createGroupExpense,
+  deleteGroupExpense,
   addMember,
   ApiError,
   MemberDTO,
@@ -45,7 +45,7 @@ import {
   GroupExpenseRow,
 } from '../api/groups';
 import { isoToMMDDYYYY } from '../utils/date';
-import { glassCardSx } from '../theme';
+import { typeScale, tabularNums } from '../theme';
 
 type TabKey = 'expenses' | 'balances' | 'activity';
 
@@ -204,6 +204,49 @@ const GroupDetailPage: React.FC = () => {
   // --- Settle up dialog ---
   const [settleOpen, setSettleOpen] = React.useState(false);
 
+  // TS-DES-206 — row-level swipe/hover delete action (GroupExpenseRow), separate from
+  // ExpenseDetailDialog's own delete-with-confirm flow (still reachable via the row's Edit
+  // action / row click). A native confirm() keeps this a one-step action without a second
+  // dialog component to build and maintain in parallel with the existing one.
+  const handleQuickDeleteExpense = async (row: GroupExpenseRow) => {
+    if (!groupId) return;
+    if (!window.confirm(`Delete "${row.description}"?`)) return;
+    try {
+      await deleteGroupExpense(groupId, row.row_id);
+      queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+      setToast({ open: true, message: 'Expense deleted', severity: 'success' });
+    } catch (e) {
+      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to delete expense', severity: 'error' });
+    }
+  };
+
+  // Group expense list rendered through the same `ExpenseFeed` component the
+  // Expenses page uses (day-grouped, tint-dot rows, hover-reveal edit/delete) —
+  // requested so the two lists read as one design language instead of two.
+  const groupFeedExpenses: FeedExpense[] = React.useMemo(
+    () =>
+      (expensesQuery.data?.items || []).map((row) => ({
+        key: row.row_id,
+        kind: 'group' as const,
+        id: row.row_id,
+        groupId,
+        date: row.date,
+        description: row.description,
+        merchantName: row.merchant_name || undefined,
+        category: row.category,
+        mainCategory: findMainCategory(row.category),
+        amount: row.my_share,
+        groupAmount: row.cost,
+        groupName: groupQuery.data?.name,
+        payerSummary: row.payer_summary,
+      })),
+    [expensesQuery.data, groupId, groupQuery.data?.name]
+  );
+
+  const resolveGroupExpense = (feedRow: FeedExpense): GroupExpenseRow | undefined =>
+    expensesQuery.data?.items.find((row) => row.row_id === feedRow.id);
+
   if (groupQuery.isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', mt: 6 }}>
@@ -225,190 +268,167 @@ const GroupDetailPage: React.FC = () => {
 
   const group = groupQuery.data;
 
-  const balanceLabel = myBalance > 0 ? `You're owed $${myBalance.toFixed(2)}` : myBalance < 0 ? `You owe $${Math.abs(myBalance).toFixed(2)}` : "You're all settled up";
-  const balanceColor = myBalance > 0 ? theme.palette.success.main : myBalance < 0 ? theme.palette.error.main : theme.palette.text.secondary;
+  const positiveColor = theme.palette.success.main;
+  const negativeColor = theme.palette.error.main;
+  const balanceDirectionLabel = myBalance > 0 ? "You're owed" : myBalance < 0 ? 'You owe' : "You're all settled up";
+  const balanceColor = myBalance > 0 ? positiveColor : myBalance < 0 ? negativeColor : theme.palette.text.secondary;
+  const invitedMembers = members.filter((m) => m.status === 'invited');
 
   return (
-    <Box sx={{ mt: 4 }}>
-      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-          <IconButton onClick={() => navigate('/groups')} size="small">
-            <ArrowBackIcon />
-          </IconButton>
-          <GroupAvatar seed={group.group_id} groupType={group.group_type} size={44} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
-              {group.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {members.length} member{members.length === 1 ? '' : 's'}
-            </Typography>
+    // `gap` here (previously 0) — the content column and GroupBalancesPanel were flex
+    // siblings with nothing between them, so the panel's own `borderLeft` sat flush against
+    // the content with no breathing room, while the page's own centered reading-width gutter
+    // sits on the *outside* of this row — the two together read as "close on the right, far
+    // on the left" even though the outer container itself is symmetric.
+    <Box sx={{ mt: 4, display: 'flex', gap: { lg: 4 } }}>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+            <IconButton onClick={() => navigate('/groups')} size="small">
+              <ArrowBackIcon />
+            </IconButton>
+            <GroupAvatar seed={group.group_id} groupType={group.group_type} size={44} />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
+                {group.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {members.length} member{members.length === 1 ? '' : 's'}
+              </Typography>
+            </Box>
+            <MemberAvatarStack members={members} />
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<PersonAddAlt1RoundedIcon />}
+              onClick={() => setMemberDialogOpen(true)}
+              sx={{ flexShrink: 0 }}
+            >
+              Add Member
+            </Button>
+            <IconButton onClick={() => setSettingsOpen(true)} size="small">
+              <SettingsRoundedIcon />
+            </IconButton>
           </Box>
-          <MemberAvatarStack members={members} />
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<PersonAddAlt1RoundedIcon />}
-            onClick={() => setMemberDialogOpen(true)}
-            sx={{ flexShrink: 0 }}
-          >
-            Add Member
-          </Button>
-          <IconButton onClick={() => setSettingsOpen(true)} size="small">
-            <SettingsRoundedIcon />
-          </IconButton>
-        </Box>
 
-        {group.status === 'archived' && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            This group is archived. You cannot add new expenses or members.
-          </Alert>
-        )}
-        
-        {group.status === 'deleted' && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            This group has been deleted. It will be permanently removed after 30 days.
-          </Alert>
-        )}
+          {group.status === 'archived' && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              This group is archived. You cannot add new expenses or members.
+            </Alert>
+          )}
 
-        <Card sx={{ ...glassCardSx(theme), p: 2.5, mb: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
-          <Box>
-            <Typography variant="caption" color="text.secondary">Your balance in this group</Typography>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: balanceColor }}>
-              {balanceLabel}
+          {group.status === 'deleted' && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              This group has been deleted. It will be permanently removed after 30 days.
+            </Alert>
+          )}
+
+          {/* TS-DES-206 — avatar-forward, standalone (no card border) balance hero. Only shown
+              below `lg`; at `lg+` the same information lives in GroupBalancesPanel instead, so
+              the two never show at once. */}
+          <Box sx={{ display: { xs: 'flex', lg: 'none' }, flexDirection: 'column', alignItems: 'center', py: 3, mb: 1 }}>
+            <MemberAvatarStack members={members} size={44} max={6} />
+            <Typography sx={{ ...typeScale.label, color: 'text.secondary', mt: 1.5 }}>
+              {balanceDirectionLabel}
             </Typography>
+            {myBalance !== 0 && (
+              <Typography component="div" sx={{ ...typeScale.display, ...tabularNums, color: balanceColor, mt: 0.5 }}>
+                ${Math.abs(myBalance).toFixed(2)}
+              </Typography>
+            )}
+            {invitedMembers.length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1, mt: 2 }}>
+                {invitedMembers.map((m) => (
+                  <Chip key={m.member_id} label={`${m.display_name} · pending`} size="small" variant="outlined" />
+                ))}
+              </Box>
+            )}
           </Box>
-          {members.some((m) => m.status === 'invited') && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {members.filter((m) => m.status === 'invited').map((m) => (
-                <Chip
-                  key={m.member_id}
-                  label={`${m.display_name} · pending`}
-                  size="small"
-                  variant="outlined"
-                />
-              ))}
+
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1.5 }}>
+            <SegmentedTabs
+              value={tab}
+              onChange={setTab}
+              options={[
+                { value: 'expenses', label: 'Expenses' },
+                { value: 'balances', label: 'Balances' },
+                { value: 'activity', label: 'Activity' },
+              ]}
+            />
+            {tab === 'expenses' ? (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} disabled={members.length === 0}>
+                Add Expense
+              </Button>
+            ) : (
+              <Button variant="contained" onClick={() => setSettleOpen(true)} disabled={members.length < 2}>
+                Settle Up
+              </Button>
+            )}
+          </Box>
+
+          {tab === 'expenses' && (
+            <Box>
+              <ExpenseFeed
+                expenses={groupFeedExpenses}
+                loading={expensesQuery.isLoading}
+                emptyMessage="No group expenses yet."
+                onSelect={(feedRow) => {
+                  const row = resolveGroupExpense(feedRow);
+                  if (row) setSelectedExpense(row);
+                }}
+                onEdit={(feedRow) => {
+                  const row = resolveGroupExpense(feedRow);
+                  if (row) setSelectedExpense(row);
+                }}
+                onDelete={(feedRow) => {
+                  const row = resolveGroupExpense(feedRow);
+                  if (row) handleQuickDeleteExpense(row);
+                }}
+              />
             </Box>
           )}
-        </Card>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1.5 }}>
-          <SegmentedTabs
-            value={tab}
-            onChange={setTab}
-            options={[
-              { value: 'expenses', label: 'Expenses' },
-              { value: 'balances', label: 'Balances' },
-              { value: 'activity', label: 'Activity' },
-            ]}
-          />
-          {tab === 'expenses' ? (
-            <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} disabled={members.length === 0}>
-              Add Expense
-            </Button>
-          ) : (
-            <Button variant="contained" onClick={() => setSettleOpen(true)} disabled={members.length < 2}>
-              Settle Up
-            </Button>
+          {tab === 'balances' && (
+            <Box>
+              {balancesQuery.isLoading && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress />
+                </Box>
+              )}
+              {balancesQuery.data && <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} />}
+            </Box>
           )}
-        </Box>
 
-        {tab === 'expenses' && (
-          <Box>
-            {expensesQuery.isLoading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
-            )}
-            {!expensesQuery.isLoading && (expensesQuery.data?.items.length ?? 0) === 0 && (
-              <Paper sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
-                <Typography color="text.secondary">No group expenses yet.</Typography>
-              </Paper>
-            )}
-            {!expensesQuery.isLoading && (expensesQuery.data?.items.length ?? 0) > 0 && (
-              <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
-                {expensesQuery.data?.items.map((row, idx) => (
-                  <Box
-                    key={row.row_id}
-                    onClick={() => setSelectedExpense(row)}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      px: 2.5,
-                      py: 1.75,
-                      cursor: 'pointer',
-                      borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
-                      transition: 'background-color 0.15s ease',
-                      '&:hover': { backgroundColor: theme.palette.action.hover },
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-                        color: 'text.secondary',
-                      }}
-                    >
-                      <ReceiptLongRoundedIcon fontSize="small" />
-                    </Box>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }} noWrap>
-                        {row.description}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {row.category} · {row.date}
-                        {row.currency && row.currency !== group.currency ? ` · ${row.currency}` : ''}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                      <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                        ${row.my_share.toFixed(2)}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        ${row.cost.toFixed(2)} total
-                      </Typography>
-                    </Box>
-                  </Box>
-                ))}
-              </Paper>
-            )}
-          </Box>
-        )}
+          {tab === 'activity' && (
+            <Box sx={{ mt: 3 }}>
+              <ActivityFeed groupId={group.group_id} group={group} />
+            </Box>
+          )}
+        </motion.div>
+      </Box>
 
-        {tab === 'balances' && (
-          <Box>
-            {balancesQuery.isLoading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
-            )}
-            {balancesQuery.data && <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} />}
-          </Box>
-        )}
+      {balancesQuery.data && (
+        <GroupBalancesPanel
+          members={balancesQuery.data.members}
+          myMemberId={myMember?.member_id}
+          onSettleUp={() => setSettleOpen(true)}
+          disabled={members.length < 2}
+        />
+      )}
 
-        {tab === 'activity' && (
-          <Box sx={{ mt: 3 }}>
-            <ActivityFeed groupId={group.group_id} group={group} />
-          </Box>
-        )}
-      </motion.div>
-
-      {/* Add Expense dialog */}
+      {/* Add Expense dialog — compact pass: size="small" fields, no Dividers (the
+          hairline border already wrapping PayerPicker's/SplitEditor's own row list
+          separates them visually), tighter gaps so this fits without an internal
+          dialog scroll for a typical small-group member count. */}
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
-        <Box sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
+        <Box sx={{ p: 2.5 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
             Add Group Expense
           </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <TextField
               label="Description"
+              size="small"
               fullWidth
               value={description}
               onChange={handleDescriptionChange}
@@ -418,10 +438,11 @@ const GroupDetailPage: React.FC = () => {
               }}
               required
             />
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            <Box sx={{ display: 'flex', gap: 1.5 }}>
               <TextField
                 label="Date"
                 type="date"
+                size="small"
                 fullWidth
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
@@ -430,6 +451,7 @@ const GroupDetailPage: React.FC = () => {
               <TextField
                 label="Amount"
                 type="number"
+                size="small"
                 fullWidth
                 value={amount}
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
@@ -437,15 +459,16 @@ const GroupDetailPage: React.FC = () => {
               />
               <TextField
                 label="Currency"
+                size="small"
                 fullWidth
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-                helperText={`Group currency: ${group.currency}`}
-                sx={{ maxWidth: 140 }}
+                sx={{ maxWidth: 110 }}
               />
             </Box>
             <TextField
               label="Category"
+              size="small"
               fullWidth
               value={category}
               onChange={(e) => {
@@ -455,7 +478,6 @@ const GroupDetailPage: React.FC = () => {
               required
             />
 
-            <Divider />
             <PayerPicker
               amount={amount}
               members={members}
@@ -463,8 +485,6 @@ const GroupDetailPage: React.FC = () => {
               onChange={setPayers}
               onValidityChange={setPayersValid}
             />
-            <Divider />
-            <Typography variant="subtitle2">Split</Typography>
             <SplitEditor
               amount={amount}
               members={members}
@@ -478,7 +498,7 @@ const GroupDetailPage: React.FC = () => {
               </Typography>
             )}
           </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
             <Button onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button
               variant="contained"
@@ -493,11 +513,11 @@ const GroupDetailPage: React.FC = () => {
 
       {/* Add Member dialog */}
       <Dialog open={memberDialogOpen} onClose={() => setMemberDialogOpen(false)} maxWidth="xs" fullWidth>
-        <Box sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>
+        <Box sx={{ p: 2.5 }}>
+          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
             Add Member
           </Typography>
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: 1.5 }}>
             <SegmentedTabs
               value={memberMode}
               onChange={setMemberMode}
@@ -512,6 +532,7 @@ const GroupDetailPage: React.FC = () => {
             <TextField
               label="Email"
               type="email"
+              size="small"
               fullWidth
               value={memberEmail}
               onChange={(e) => setMemberEmail(e.target.value)}
@@ -519,10 +540,11 @@ const GroupDetailPage: React.FC = () => {
           ) : (
             <TextField
               label="Name"
+              size="small"
               fullWidth
               value={memberName}
               onChange={(e) => setMemberName(e.target.value)}
-              helperText="For people who aren't on TrackSpense yet — invite them later"
+              helperText="For people who aren't on TrackSpense yet"
             />
           )}
           {memberError && (
@@ -530,7 +552,7 @@ const GroupDetailPage: React.FC = () => {
               {memberError}
             </Typography>
           )}
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
             <Button onClick={() => setMemberDialogOpen(false)}>Cancel</Button>
             <Button
               variant="contained"

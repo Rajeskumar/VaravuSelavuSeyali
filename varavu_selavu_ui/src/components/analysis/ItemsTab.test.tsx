@@ -1,14 +1,16 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import ItemInsightsPage from './ItemInsightsPage';
+import ItemsTab from './ItemsTab';
 import { MemoryRouter } from 'react-router-dom';
-import * as analyticsApi from '../api/analytics';
+import * as analyticsApi from '../../api/analytics';
 
 // Mock the API client
-jest.mock('../api/analytics');
+jest.mock('../../api/analytics');
 
-describe('ItemInsightsPage', () => {
+// TS-DES-205 — migrated from pages/ItemInsightsPage.test.tsx (that page is deleted; this tab
+// component is its replacement, mounted inside ExpenseAnalysisPage's SubTabBar).
+describe('ItemsTab', () => {
   beforeEach(() => {
     localStorage.setItem('vs_user', 'test@user.com');
   });
@@ -20,7 +22,7 @@ describe('ItemInsightsPage', () => {
 
   it('renders the empty state when no items are returned', async () => {
     (analyticsApi.getTopItems as jest.Mock).mockResolvedValueOnce([]);
-    render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
+    render(<MemoryRouter><ItemsTab /></MemoryRouter>);
 
     expect(await screen.findByText(/No item insights yet/i)).toBeInTheDocument();
   });
@@ -31,7 +33,7 @@ describe('ItemInsightsPage', () => {
       { id: '2', normalized_name: 'Whole Milk', avg_unit_price: 4.0, total_quantity_bought: 5, total_spent: 20.0 }
     ]);
 
-    render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
+    render(<MemoryRouter><ItemsTab /></MemoryRouter>);
 
     const list = await screen.findByRole('list');
     expect(await within(list).findByText('Fuji Apples')).toBeInTheDocument();
@@ -63,7 +65,7 @@ describe('ItemInsightsPage', () => {
       ]
     });
 
-    render(<MemoryRouter><ItemInsightsPage /></MemoryRouter>);
+    render(<MemoryRouter><ItemsTab /></MemoryRouter>);
 
     // Click the item (within the list, since the summary card also shows its name)
     const list = await screen.findByRole('list');

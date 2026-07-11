@@ -1,6 +1,6 @@
 # TS-DES-108 — Merchant Insights rebuild
 
-**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no cross-team dependency, can go first) · **Spec:** `UX_Design_Spec.md` §4.4/§6 (screen-by-screen: "Merchant header → item tape → what-changed tile"), `docs/design/prototypes/MerchantInsights.jsx` · **Status:** 🔴 Not started
+**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no cross-team dependency, can go first) · **Spec:** `UX_Design_Spec.md` §4.4/§6 (screen-by-screen: "Merchant header → item tape → what-changed tile"), `docs/design/prototypes/MerchantInsights.jsx` · **Status:** ✅ Built — Ranked list, `MonthlySpendSparkline`, `WhatChangedCallout` (header corrected 2026-07-10 to match `FEATURE_STATUS.md`; was stale "Not started" — see `ORIENTATION_REPORT_V2.md` §4)
 
 ## Located before scoping, per instruction
 

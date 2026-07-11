@@ -12,8 +12,9 @@ interface CardProps {
 }
 
 /**
- * Card — iOS-style elevated white container.
- * Mimics premium card layouts: generous radius, diffused shadow, zero border.
+ * Card — flat container with a hairline border (TS-DES-209). Elevation is reserved for sheets
+ * only (see theme.ts's buildShadows comment), so the border — not a shadow — is what separates
+ * the card from the background.
  */
 export default function Card({ children, style, noPadding = false, inset = false }: CardProps) {
     const { theme } = useAppTheme();

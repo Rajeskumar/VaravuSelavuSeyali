@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Box, Typography, TextField, IconButton } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import SendIcon from '@mui/icons-material/SendRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { fetchWithAuth } from '../../api/api';
 import { getModels, ModelsResponse, ModelOption } from '../../api/models';
 import SegmentedTabs from '../common/SegmentedTabs';
@@ -10,6 +11,9 @@ import { typeScale } from '../../theme';
 interface AIAnalystChatProps {
   userId: string | null;
   initialQuery?: string;
+  /** TS-DES-207 — rendered as a close (X) button in the header when this component is hosted
+   * inside an ambient overlay/sheet rather than a full page. Omit for the full-page route. */
+  onClose?: () => void;
 }
 
 interface Message {
@@ -25,7 +29,7 @@ const SUGGESTED_PROMPTS = [
   "Where did I buy eggs cheapest?"
 ];
 
-export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatProps) {
+export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnalystChatProps) {
   const theme = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [query, setQuery] = useState("");
@@ -173,21 +177,28 @@ export default function AIAnalystChat({ userId, initialQuery }: AIAnalystChatPro
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
-      <Box sx={{ px: 3, pt: 3, pb: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Box sx={{ px: 3, pt: 3, pb: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
         <Typography sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
-          AI Analyst
+          Ask
         </Typography>
-        <Box sx={{ width: 140 }}>
-          <SegmentedTabs
-            options={[
-              { value: 'fast', label: 'Fast' },
-              { value: 'deep', label: 'Deep' }
-            ]}
-            value={selectedSpeed}
-            onChange={(v) => setSelectedSpeed(v as 'fast' | 'deep')}
-            size="small"
-            fullWidth
-          />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ width: 140 }}>
+            <SegmentedTabs
+              options={[
+                { value: 'fast', label: 'Fast' },
+                { value: 'deep', label: 'Deep' }
+              ]}
+              value={selectedSpeed}
+              onChange={(v) => setSelectedSpeed(v as 'fast' | 'deep')}
+              size="small"
+              fullWidth
+            />
+          </Box>
+          {onClose && (
+            <IconButton size="small" onClick={onClose} aria-label="Close Ask">
+              <CloseRoundedIcon fontSize="small" />
+            </IconButton>
+          )}
         </Box>
       </Box>
 

@@ -28,9 +28,9 @@ export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, 
 
   if (loading) {
     return (
-      <Box sx={{ px: 2, pb: 2, display: 'flex', gap: 2, overflowX: 'auto' }}>
+      <Box sx={{ px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         {[1, 2, 3].map(i => (
-          <Box key={i} sx={{ width: 190, height: 132, borderRadius: 2.5, bgcolor: theme.palette.divider, flexShrink: 0, opacity: 0.5 }} />
+          <Box key={i} sx={{ height: 88, borderRadius: 1.2, bgcolor: theme.palette.divider, opacity: 0.5 }} />
         ))}
       </Box>
     );
@@ -47,69 +47,62 @@ export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, 
   }
 
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', px: 2, pb: 2, '&::-webkit-scrollbar': { display: 'none' }, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+    // Vertical stack, not a horizontal-scroll rail — a row of fixed-width cards wider than the
+    // viewport forced a horizontal scrollbar to appear on the page itself (not just within the
+    // rail), which read as broken layout rather than an intentional scroll affordance.
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, px: 2, pb: 2 }}>
       {insights.map((insight, idx) => {
         const isNew = insight.change_percent === 100;
         const isUp = insight.change_amount > 0;
-        
+
         let headline = '';
         if (isNew) {
           headline = `New ${insight.time_scope}: ${insight.entity_name || insight.metric_name} — $${insight.change_amount.toFixed(2)}`;
         } else {
           headline = `${insight.entity_name || insight.metric_name} is ${isUp ? 'up' : 'down'} ${Math.abs(insight.change_percent)}% vs last period`;
         }
-        
+
         let sub = isNew ? `First time here this ${month ? 'month' : 'year'}` : '';
 
         return (
           <Box
             key={idx}
             sx={{
-              flexShrink: 0,
               display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              width: 190,
-              height: 132,
+              alignItems: 'center',
+              gap: 1.5,
               backgroundColor: theme.palette.background.paper,
               border: `1px solid ${theme.palette.divider}`,
-              borderRadius: 2.5,
-              p: 1.75,
+              borderRadius: 1.2,
+              p: 1.5,
             }}
           >
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
-                <Typography sx={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'text.primary', lineHeight: 1.3 }}>
-                  {headline}
-                </Typography>
-                {!isNew && (
-                  isUp ? (
-                    <ArrowUpRightIcon sx={{ fontSize: 16, color: 'error.main', flexShrink: 0, mt: 0.25 }} />
-                  ) : (
-                    <ArrowDownRightIcon sx={{ fontSize: 16, color: 'success.main', flexShrink: 0, mt: 0.25 }} />
-                  )
-                )}
-              </Box>
+            {!isNew && (
+              isUp ? (
+                <ArrowUpRightIcon sx={{ fontSize: 18, color: 'error.main', flexShrink: 0 }} />
+              ) : (
+                <ArrowDownRightIcon sx={{ fontSize: 18, color: 'success.main', flexShrink: 0 }} />
+              )
+            )}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography sx={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, color: 'text.primary', lineHeight: 1.3 }}>
+                {headline}
+              </Typography>
               {sub && (
-                <Typography sx={{ fontFamily: 'Inter', fontSize: 12, color: 'text.secondary', mt: 0.5 }}>
+                <Typography sx={{ fontFamily: 'Inter', fontSize: 11, color: 'text.secondary', mt: 0.25 }}>
                   {sub}
                 </Typography>
               )}
             </Box>
-            
-            <Box sx={{ height: 28, display: 'flex', alignItems: 'flex-end', gap: '4px' }}>
-              {/* No sparkline data available from backend, keeping empty space for layout stability */}
-            </Box>
-            
             <Box
               component="button"
               onClick={() => onAsk(insight)}
               sx={{
+                flexShrink: 0,
                 fontFamily: 'Inter',
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: 600,
                 color: theme.palette.primary.main,
-                textAlign: 'left',
                 background: 'none',
                 border: 'none',
                 padding: 0,

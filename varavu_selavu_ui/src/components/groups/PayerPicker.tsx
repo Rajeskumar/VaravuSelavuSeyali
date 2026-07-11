@@ -60,7 +60,7 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
       </Typography>
       <Box
         sx={{
-          borderRadius: 3,
+          borderRadius: 1,
           overflow: 'hidden',
           border: `1px solid ${theme.palette.divider}`,
         }}

@@ -19,7 +19,7 @@ import { motion } from 'framer-motion';
 import GroupCard from '../components/groups/GroupCard';
 import FriendBalancesWidget from '../components/groups/FriendBalancesWidget';
 import { listGroups, createGroup, ApiError } from '../api/groups';
-import { reconcile, withAlpha } from '../theme';
+import { slate, withAlpha } from '../theme';
 
 const GROUP_TYPES = [
   { value: 'trip', label: 'Trip' },
@@ -31,7 +31,7 @@ const GROUP_TYPES = [
 const GroupsPage: React.FC = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const jade = isDark ? reconcile.jadeDark : reconcile.jade;
+  const jade = isDark ? slate.accentDark : slate.accent;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tabIndex, setTabIndex] = React.useState(0);
@@ -76,7 +76,7 @@ const GroupsPage: React.FC = () => {
   if (notEnabled) {
     return (
       <Box sx={{ mt: 4 }}>
-        <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
+        <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 1 }}>
           <GroupsRoundedIcon sx={{ fontSize: 64, color: 'primary.light', mb: 2 }} />
           <Typography variant="h6" fontWeight={700} gutterBottom>
             Groups isn't available yet
@@ -98,7 +98,7 @@ const GroupsPage: React.FC = () => {
               sx={{
                 width: 48,
                 height: 48,
-                borderRadius: 2.5,
+                borderRadius: 1.2,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -117,7 +117,7 @@ const GroupsPage: React.FC = () => {
               </Typography>
             </Box>
           </Box>
-          <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
             Create Group
           </Button>
         </Box>
@@ -132,7 +132,11 @@ const GroupsPage: React.FC = () => {
 
         {!isLoading && !notEnabled && (
           <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs value={tabIndex} onChange={(_, val) => setTabIndex(val)}>
+            <Tabs
+              value={tabIndex}
+              onChange={(_, val) => setTabIndex(val)}
+              sx={{ minHeight: 36, '& .MuiTab-root': { minHeight: 36, py: 0.5, fontSize: '0.8125rem' } }}
+            >
               <Tab label="Active" />
               <Tab label="Archived" />
             </Tabs>
@@ -140,7 +144,7 @@ const GroupsPage: React.FC = () => {
         )}
 
         {!isLoading && groups.length === 0 && (
-          <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 3 }}>
+          <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 1 }}>
             <Box
               sx={{
                 width: 88,
@@ -166,7 +170,7 @@ const GroupsPage: React.FC = () => {
                 : 'Groups you archive will appear here.'}
             </Typography>
             {tabIndex === 0 && (
-              <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpen(true)}>
                 Create your first group
               </Button>
             )}

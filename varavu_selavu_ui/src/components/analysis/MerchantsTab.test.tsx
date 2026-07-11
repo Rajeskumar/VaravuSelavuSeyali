@@ -1,14 +1,16 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import MerchantInsightsPage from './MerchantInsightsPage';
+import MerchantsTab from './MerchantsTab';
 import { MemoryRouter } from 'react-router-dom';
-import * as analyticsApi from '../api/analytics';
+import * as analyticsApi from '../../api/analytics';
 
 // Mock the API client
-jest.mock('../api/analytics');
+jest.mock('../../api/analytics');
 
-describe('MerchantInsightsPage', () => {
+// TS-DES-205 — migrated from pages/MerchantInsightsPage.test.tsx (that page is deleted; this tab
+// component is its replacement, mounted inside ExpenseAnalysisPage's SubTabBar).
+describe('MerchantsTab', () => {
   beforeEach(() => {
     localStorage.setItem('vs_user', 'test@user.com');
   });
@@ -20,7 +22,7 @@ describe('MerchantInsightsPage', () => {
 
   it('renders the empty state when no merchants are returned', async () => {
     (analyticsApi.getTopMerchants as jest.Mock).mockResolvedValueOnce([]);
-    render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
+    render(<MemoryRouter><MerchantsTab /></MemoryRouter>);
 
     expect(await screen.findByText(/No merchant insights yet/i)).toBeInTheDocument();
   });
@@ -31,7 +33,7 @@ describe('MerchantInsightsPage', () => {
       { id: '2', merchant_name: 'Target', total_spent: 120.0, transaction_count: 5 }
     ]);
 
-    render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
+    render(<MemoryRouter><MerchantsTab /></MemoryRouter>);
 
     const list = await screen.findByRole('list');
     expect(await within(list).findByText('Costco')).toBeInTheDocument();
@@ -58,7 +60,7 @@ describe('MerchantInsightsPage', () => {
       ]
     });
 
-    render(<MemoryRouter><MerchantInsightsPage /></MemoryRouter>);
+    render(<MemoryRouter><MerchantsTab /></MemoryRouter>);
 
     // Click the merchant (within the list, since the summary card also shows its name)
     const list = await screen.findByRole('list');

@@ -35,6 +35,7 @@ import {
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
+import SegmentedTabs from '../components/SegmentedTabs';
 import FriendBalancesWidget from '../components/FriendBalancesWidget';
 import { showToast } from '../components/Toast';
 
@@ -186,19 +187,15 @@ export default function GroupsScreen() {
             
             {tabIndex === 0 && <FriendBalancesWidget />}
 
-            <View style={styles.tabsContainer}>
-              <TouchableOpacity
-                style={[styles.tab, tabIndex === 0 && styles.tabActive]}
-                onPress={() => setTabIndex(0)}
-              >
-                <Text style={[styles.tabText, tabIndex === 0 && styles.tabTextActive]}>Active</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tab, tabIndex === 1 && styles.tabActive]}
-                onPress={() => setTabIndex(1)}
-              >
-                <Text style={[styles.tabText, tabIndex === 1 && styles.tabTextActive]}>Archived</Text>
-              </TouchableOpacity>
+            <View style={styles.tabsRow}>
+              <SegmentedTabs
+                value={tabIndex === 0 ? 'active' : 'archived'}
+                onChange={(v) => setTabIndex(v === 'active' ? 0 : 1)}
+                options={[
+                  { value: 'active', label: 'Active' },
+                  { value: 'archived', label: 'Archived' },
+                ]}
+              />
             </View>
           </>
         }
@@ -309,35 +306,9 @@ const createStyles = (theme: AppTheme) =>
       paddingTop: 16,
       paddingBottom: 16,
     },
-    tabsContainer: {
-      flexDirection: 'row',
+    tabsRow: {
       marginHorizontal: 20,
       marginBottom: 16,
-      backgroundColor: theme.colors.surfaceSecondary,
-      borderRadius: 12,
-      padding: 4,
-    },
-    tab: {
-      flex: 1,
-      paddingVertical: 8,
-      alignItems: 'center',
-      borderRadius: 8,
-    },
-    tabActive: {
-      backgroundColor: theme.colors.surface,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.1,
-      shadowRadius: 1,
-      elevation: 2,
-    },
-    tabText: {
-      fontSize: 14,
-      fontFamily: 'Inter-SemiBold',
-      color: theme.colors.textSecondary,
-    },
-    tabTextActive: {
-      color: theme.colors.text,
     },
     listContent: { flexGrow: 1 },
     heading: {

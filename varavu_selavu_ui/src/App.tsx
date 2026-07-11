@@ -1,6 +1,6 @@
 import React, { JSX } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter as Router, Route, Routes, useNavigate, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -9,22 +9,21 @@ import { useTheme, useMediaQuery, IconButton, Tooltip } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import ExpensesPage from './pages/ExpensesPage';
 import ExpenseAnalysisPage from './pages/ExpenseAnalysisPage';
 import HomePage from './pages/HomePage';
-import RecurringPage from './pages/RecurringPage';
 import MainLayout from './components/layout/MainLayout';
 import Button from '@mui/material/Button';
 import LoginIcon from '@mui/icons-material/Login';
 import UserMenu from './components/layout/UserMenu';
-import ProfilePage from './pages/ProfilePage';
+import AccountPage from './pages/AccountPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import AIAnalystPage from './pages/AIAnalystPage';
-import ItemInsightsPage from './pages/ItemInsightsPage';
-import MerchantInsightsPage from './pages/MerchantInsightsPage';
+import AskPage from './pages/AskPage';
+import AskOverlay from './components/ask/AskOverlay';
 import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
 import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
@@ -33,9 +32,9 @@ import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
 import GroupDetailPage from './pages/GroupDetailPage';
 import JoinGroupPage from './pages/JoinGroupPage';
-import NavPills from './components/layout/NavPills';
 import Box from '@mui/material/Box';
 import { brand } from './theme';
+import { HEADER_HEIGHT } from './components/layout/layoutConstants';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
   const token = localStorage.getItem('vs_token');
@@ -46,10 +45,33 @@ const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
 // Home is now the default route and is public
 const Root: React.FC = () => <HomePage />;
 
+// TS-DES-207: /ai-analyst → /ask, preserving ?q=... so existing "Ask AI about this item/merchant"
+// deep links (now repointed at /ask directly, but this covers any stale bookmark) still auto-submit.
+const AiAnalystRedirect: React.FC = () => {
+  const location = useLocation();
+  return <Navigate to={`/ask${location.search}`} replace />;
+};
+
+// TS-DES-205: /item-insights and /merchant-insights → /analysis?tab=items|merchants, preserving
+// ?item=/?merchant= so existing deep links still land on the right detail view, not just the tab.
+const ItemInsightsRedirect: React.FC = () => {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set('tab', 'items');
+  return <Navigate to={`/analysis?${params.toString()}`} replace />;
+};
+const MerchantInsightsRedirect: React.FC = () => {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set('tab', 'merchants');
+  return <Navigate to={`/analysis?${params.toString()}`} replace />;
+};
+
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = React.useState<string | null>(() => localStorage.getItem('vs_user'));
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [askOpen, setAskOpen] = React.useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { isDark, toggleMode } = useThemeMode();
@@ -89,7 +111,7 @@ const AppContent: React.FC = () => {
         color="transparent"
         elevation={0}
       >
-        <Toolbar sx={{ gap: 1.5 }}>
+        <Toolbar sx={{ gap: 1.5, minHeight: { xs: 56, md: HEADER_HEIGHT } }}>
           {user && isMobile && (
             <IconButton
               color="inherit"
@@ -115,17 +137,36 @@ const AppContent: React.FC = () => {
                 objectFit: 'cover'
               }}
             />
-            <Typography variant="h6" component="div" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+            {/* Hidden below `sm`: the hamburger + logo + Ask/theme/avatar icons can
+                otherwise exceed a narrow phone's width and wrap the Toolbar onto a
+                second line — since the fixed AppBar and its spacer share one hardcoded
+                height, a wrapped header silently overlaps whatever renders at the very
+                top of the page below it (e.g. Dashboard's hero total). */}
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{ fontWeight: 700, letterSpacing: '-0.02em', display: { xs: 'none', sm: 'block' } }}
+            >
               TrackSpense
             </Typography>
           </Box>
 
-          {user && !isMobile && (
-            <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
-              <NavPills />
-            </Box>
+          {/* TS-DES-210: nav lives in the permanent desktop sidebar / mobile drawer now
+              (SideNav.tsx), not a horizontal NavPills row in the header — this spacer just
+              pushes the trailing icons/buttons to the end of the bar. */}
+          <Box sx={{ flexGrow: 1 }} />
+
+          {/* TS-DES-210/207: Ask's entry point — a header icon next to the theme toggle and
+              avatar (desktop), not a floating button (avoids colliding with the Add-Expense
+              FAB's bottom:24/right:24 corner). Shown at every width, not just desktop — mobile
+              has no other trigger for its summonable-sheet variant of the same AskOverlay. */}
+          {user && (
+            <Tooltip title="Ask AI">
+              <IconButton color="inherit" onClick={() => setAskOpen(true)} aria-label="Ask AI">
+                <AutoAwesomeRoundedIcon />
+              </IconButton>
+            </Tooltip>
           )}
-          {(!user || isMobile) && <Box sx={{ flexGrow: 1 }} />}
 
           <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
             <IconButton color="inherit" onClick={toggleMode}>
@@ -135,7 +176,7 @@ const AppContent: React.FC = () => {
           {user ? (
             <UserMenu
               email={user}
-              onProfile={() => navigate('/profile')}
+              onProfile={() => navigate('/account')}
               onLogout={handleLogout}
             />
           ) : (
@@ -150,12 +191,17 @@ const AppContent: React.FC = () => {
           )}
         </Toolbar>
       </AppBar>
-      <Toolbar />
+      {/* Spacer — must match the AppBar Toolbar's own height exactly (HEADER_HEIGHT at desktop) so
+          routed content starts right below the fixed header with no gap/overlap. */}
+      <Toolbar sx={{ minHeight: { xs: 56, md: HEADER_HEIGHT } }} />
       <Routes>
         <Route path="/" element={<Root />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        {/* Public (unauthenticated marketing footer links here — HomePage.tsx). The nav-visible,
+            logged-in path to the same content is now /account?tab=feedback (below); both serve
+            the same FeatureRequestPage component, so there's nothing to keep in sync. */}
         <Route path="/feature-request" element={<FeatureRequestPage />} />
         <Route path="/contact" element={<ContactPage />} />
         {/* Public: must be reachable pre-login (deep link from an invite email/text); resumes after auth via LoginPage. */}
@@ -165,14 +211,30 @@ const AppContent: React.FC = () => {
         <Route path="/groups" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupsPage /></MainLayout></RequireAuth>} />
         <Route path="/groups/:id" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupDetailPage /></MainLayout></RequireAuth>} />
         <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
-        <Route path="/recurring" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><RecurringPage /></MainLayout></RequireAuth>} />
-        <Route path="/ai-analyst" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AIAnalystPage /></MainLayout></RequireAuth>} />
-        <Route path="/item-insights" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ItemInsightsPage /></MainLayout></RequireAuth>} />
-        <Route path="/merchant-insights" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><MerchantInsightsPage /></MainLayout></RequireAuth>} />
-        <Route path="/profile" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ProfilePage /></MainLayout></RequireAuth>} />
+        {/* TS-DES-204: Recurring is now a sub-tab of Expenses, not a standalone page. */}
+        <Route path="/recurring" element={<Navigate to="/expenses?tab=recurring" replace />} />
+        <Route path="/ask" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AskPage /></MainLayout></RequireAuth>} />
+        {/* TS-DES-207: AI Analyst is no longer a nav tab or dedicated page destination — this
+            redirect exists purely for old bookmarks/links, preserving ?q=... */}
+        <Route path="/ai-analyst" element={<AiAnalystRedirect />} />
+        {/* TS-DES-205: Item/Merchant Insights are no longer standalone pages — they're the
+            Items/Merchants tabs on /analysis. */}
+        <Route path="/item-insights" element={<ItemInsightsRedirect />} />
+        <Route path="/merchant-insights" element={<MerchantInsightsRedirect />} />
+        <Route path="/account" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AccountPage /></MainLayout></RequireAuth>} />
+        {/* TS-DES-202: /profile is no longer a primary nav destination — folds into /account's
+            default Profile tab. Redirect shim so no existing bookmark/link 404s. */}
+        <Route path="/profile" element={<Navigate to="/account" replace />} />
       </Routes>
       {/* Recurring expenses prompt appears after login */}
       {user && <RecurringPrompt />}
+
+      {/* TS-DES-207 — ambient Ask panel: desktop slide-in / mobile summonable sheet, triggered by
+          the header icon above. Wraps the same AIAnalystChat component the old /ai-analyst page
+          used (TS-DES-109), just rehosted off the nav tab. Gated on `user` like RecurringPrompt
+          above — an authenticated-only feature, and AIAnalystChat isn't meant to mount at all
+          for a logged-out visitor. */}
+      {user && <AskOverlay open={askOpen} onClose={() => setAskOpen(false)} />}
     </>
   );
 };

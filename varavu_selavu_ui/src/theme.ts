@@ -1,51 +1,52 @@
 import { createTheme, PaletteMode, Theme } from '@mui/material/styles';
 
 /**
- * "Reconcile" — TrackSpense's design language (docs/design/TrackSpense_UX_Design_Spec.md §9).
- * One flat signature color (jade) on a quiet ink/paper neutral system. No gradients, no
- * glassmorphism, no blanket hover-lift. Money renders in `ink` by default; jade/ember/gold
- * carry meaning (positive / negative / ceremony), not decoration — see `directionalColor()`.
+ * "Slate" — TrackSpense's Redesign v2 design language (docs/design/Redesign_Proposal_v2.md §1,
+ * TS-DES-201). A neutral canvas/surface/border system with one indigo-slate brand accent and
+ * dedicated, distinct semantic colors for positive/negative/caution. Unlike the prior "Reconcile"
+ * palette (TS-DES-101), brand and semantic-positive are deliberately NOT the same hue here — a
+ * user who can't distinguish hue (colorblind) could previously not tell "this is a branded
+ * control" from "this number is good news" apart; `accent` and `positive` now carry those two
+ * meanings separately. Hex values confirmed identical across every `docs/design/prototypes/v2/**`
+ * reference file's own `colors`/`LIGHT`/`DARK` constant.
  */
-export const reconcile = {
-  ink: '#191A1E',
-  inkMuted: '#6B6D74',
-  paper: '#F7F7F4',
+export const slate = {
+  ink: '#18181B',
+  inkDark: '#FAFAFA', // dark-mode "ink" (primary text-on-dark) — matches prototypes' DARK.ink exactly
+  inkMuted: '#71717A',
+  inkMutedDark: '#A1A1AA',
+  canvas: '#FAFAFA',
+  canvasDark: '#09090B',
   surface: '#FFFFFF',
-  surfaceDark: '#202127',
-  hairline: '#E4E4DF',
-  hairlineDark: '#33343B',
-  jade: '#0FA37F',
-  jadeText: '#0B8A6B', // accessible small-text variant on light backgrounds (§2 a11y floor)
-  jadeDark: '#1CBE94', // ~8% luminance lift for dark-mode contrast (§2)
-  ember: '#DE5B4B',
-  emberDark: '#E8705F',
-  gold: '#C9973F', // ceremony only — reconcile tick, streaks, receipt-parse success. Never a fill.
-  goldDark: '#D9A752',
-  // Reconcile has no dedicated "caution" token (gold is ceremony-only, not generic warning) —
-  // this is a plain, deliberately unglamorous amber kept distinct from `gold` so gold's scarcity
-  // (Design Spec §2: "gold appears maybe twice per session") isn't diluted by routine form/toast
-  // warnings borrowing it.
-  caution: '#B78A2E',
-  cautionDark: '#C99A42',
+  surfaceDark: '#18181B',
+  border: '#E4E4E7',
+  borderDark: '#27272A',
+  accent: '#3F3F9E',
+  accentDark: '#6D6DC7',
+  positive: '#15803D',
+  positiveDark: '#4ADE80',
+  negative: '#B91C1C',
+  negativeDark: '#F87171',
+  caution: '#B45309',
+  cautionDark: '#FBBF24',
   radius: { surface: 10, control: 8, pill: 999 },
 } as const;
 
 /**
- * Back-compat shim: every pre-Reconcile consumer (App.tsx, HomePage.tsx, LoginPage.tsx,
- * GroupsPage.tsx — none of them owned by this ticket) builds its own
- * `linear-gradient(135deg, brand.gradientStart, brand.gradientEnd)` / radial wash inline. Rather
- * than edit those files, both stops now resolve to the same flat jade, so every existing gradient
- * call site renders as a flat fill with zero call-site changes (TS-DES-101's own acceptance
- * criterion). `pop`/`popDark` (Apple system Pink) are dropped — nothing consumed them.
+ * Back-compat shim: every pre-existing gradient consumer (App.tsx, HomePage.tsx, LoginPage.tsx,
+ * GroupsPage.tsx) builds its own `linear-gradient(135deg, brand.gradientStart, brand.gradientEnd)`
+ * inline. Both stops resolve to the same flat `accent` (brand's dedicated hue under Slate), so
+ * every existing gradient call site renders as a flat brand-colored fill with zero call-site
+ * changes — same shim strategy TS-DES-101 established, just repointed at the new brand hue.
  */
 export const brand = {
-  gradientStart: reconcile.jade,
-  gradientEnd: reconcile.jade,
-  gradientStartDark: reconcile.jadeDark,
-  gradientEndDark: reconcile.jadeDark,
+  gradientStart: slate.accent,
+  gradientEnd: slate.accent,
+  gradientStartDark: slate.accentDark,
+  gradientEndDark: slate.accentDark,
 };
 
-/** Reconcile's restrained motion cadence (Design Spec §5): 150ms fades/slides, no bounce. */
+/** Restrained motion cadence (Design Spec §5, unchanged by the Slate pivot): 150ms fades/slides, no bounce. */
 export const motion = {
   easing: [0.16, 1, 0.3, 1] as const,
   easingCss: 'cubic-bezier(0.16, 1, 0.3, 1)',
@@ -63,16 +64,17 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /**
- * Money-color policy (Design Spec §2): `ink` is the default for every neutral amount. jade/ember
- * are reserved for signed, directional amounts (owed-to-you / you-owe, over/under budget) and
- * must always be paired with a sign and a word — never color alone (§2 a11y floor). Components
- * rendering a directional balance should call this instead of reaching for `success`/`error`
- * ad hoc, so the "ink unless directional" rule is encoded once, not re-decided per component.
+ * Money-color policy (carried from Design Spec §2, values repointed to Slate): `ink` is the
+ * default for every neutral amount. `positive`/`negative` are reserved for signed, directional
+ * amounts (owed-to-you / you-owe, over/under budget) and must always be paired with a sign and a
+ * word — never color alone (a11y floor). Components rendering a directional balance should call
+ * this instead of reaching for `success`/`error` ad hoc, so the "ink unless directional" rule is
+ * encoded once, not re-decided per component.
  */
 export function directionalColor(theme: Theme, net: number): string {
   const isDark = theme.palette.mode === 'dark';
-  if (net > 0) return isDark ? reconcile.jadeDark : reconcile.jadeText;
-  if (net < 0) return isDark ? reconcile.emberDark : reconcile.ember;
+  if (net > 0) return isDark ? slate.positiveDark : slate.positive;
+  if (net < 0) return isDark ? slate.negativeDark : slate.negative;
   return theme.palette.text.secondary;
 }
 
@@ -83,17 +85,20 @@ const bodyFontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 
 export const tabularNums = { fontVariantNumeric: 'tabular-nums' } as const;
 
 /**
- * Reconcile's numeral-first type roles (Design Spec §3), exported as reusable `sx` fragments
- * rather than MUI typography variants — components opt in explicitly (`sx={typeScale.amount}`)
- * instead of every `variant="h1"` silently picking up the display face. Display face is reserved
- * for the True Total / big balances / section moments only, per the ticket's scope.
+ * Numeral-first type roles (Design Spec §3), exported as reusable `sx` fragments rather than MUI
+ * typography variants — components opt in explicitly (`sx={typeScale.amount}`) instead of every
+ * `variant="h1"` silently picking up the display face. Unaffected by the Slate token swap — this
+ * is layout/type policy, not color.
  */
 export const typeScale = {
   displayHero: {
     fontFamily: displayFontFamily,
     fontWeight: 600,
     fontSize: '3rem', // 48px, within the spec's 44–56px hero range
-    lineHeight: 1.05,
+    // 1.05 was tight enough that Space Grotesk's cap-height clipped at the top edge
+    // of its own line box in some renders (reported as "the total amount is cut off
+    // at the top"); 1.2 gives the glyph room without meaningfully loosening the look.
+    lineHeight: 1.2,
     ...tabularNums,
   },
   display: {
@@ -121,16 +126,16 @@ export const typeScale = {
 export function getTheme(mode: PaletteMode): Theme {
   const isDark = mode === 'dark';
 
-  const primaryMain = isDark ? reconcile.jadeDark : reconcile.jade;
-  const secondaryMain = isDark ? reconcile.paper : reconcile.ink;
-  const hairlineColor = isDark ? reconcile.hairlineDark : reconcile.hairline;
-  const surfaceColor = isDark ? reconcile.surfaceDark : reconcile.surface;
+  const primaryMain = isDark ? slate.accentDark : slate.accent;
+  const secondaryMain = isDark ? slate.canvas : slate.ink;
+  const hairlineColor = isDark ? slate.borderDark : slate.border;
+  const surfaceColor = isDark ? slate.surfaceDark : slate.surface;
 
-  const backgroundDefault = isDark ? reconcile.ink : reconcile.paper;
+  const backgroundDefault = isDark ? slate.canvasDark : slate.canvas;
   const backgroundPaper = surfaceColor;
 
-  const textPrimary = isDark ? '#F5F5F2' : reconcile.ink;
-  const textSecondary = isDark ? '#9A9CA3' : reconcile.inkMuted;
+  const textPrimary = isDark ? slate.inkDark : slate.ink;
+  const textSecondary = isDark ? slate.inkMutedDark : slate.inkMuted;
 
   return createTheme({
     palette: {
@@ -138,13 +143,13 @@ export function getTheme(mode: PaletteMode): Theme {
       primary: { main: primaryMain },
       secondary: { main: secondaryMain },
       background: { default: backgroundDefault, paper: backgroundPaper },
-      success: { main: isDark ? reconcile.jadeDark : reconcile.jadeText },
-      error: { main: isDark ? reconcile.emberDark : reconcile.ember },
-      warning: { main: isDark ? reconcile.cautionDark : reconcile.caution },
+      success: { main: isDark ? slate.positiveDark : slate.positive },
+      error: { main: isDark ? slate.negativeDark : slate.negative },
+      warning: { main: isDark ? slate.cautionDark : slate.caution },
       text: { primary: textPrimary, secondary: textSecondary },
       divider: hairlineColor,
     },
-    shape: { borderRadius: reconcile.radius.surface },
+    shape: { borderRadius: slate.radius.surface },
     typography: {
       fontFamily: bodyFontFamily,
       fontSize: 15,
@@ -166,8 +171,8 @@ export function getTheme(mode: PaletteMode): Theme {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          // Flat neutral canvas — no radial/linear wash. Reconcile spends its one signature
-          // color on interaction and state, not on ambient page decoration (Design Spec §1.5).
+          // Flat neutral canvas — no radial/linear wash. Slate spends its one signature
+          // color (accent) on interaction and state, not on ambient page decoration.
           body: {
             backgroundColor: backgroundDefault,
           },
@@ -185,7 +190,7 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: reconcile.radius.surface,
+            borderRadius: slate.radius.surface,
             border: `1px solid ${hairlineColor}`,
             boxShadow: 'none',
             transition: `border-color ${motion.fast}s ${motion.easingCss}`,
@@ -194,11 +199,20 @@ export function getTheme(mode: PaletteMode): Theme {
       },
       MuiButton: {
         styleOverrides: {
+          // Sleek/compact pass: MUI's own default sizing (large horizontal padding, a
+          // ~52px sizeLarge height) read as oversized against the rest of the Slate
+          // system's small type scale — buttons are now sized closer to the reference
+          // prototypes' ~34-40px controls at every size, not just the lens/chip controls.
           root: {
             textTransform: 'none',
-            borderRadius: reconcile.radius.control,
-            paddingLeft: 22,
-            paddingRight: 22,
+            borderRadius: slate.radius.control,
+            paddingLeft: 14,
+            paddingRight: 14,
+            paddingTop: 6,
+            paddingBottom: 6,
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            minHeight: 34,
             boxShadow: 'none',
             transition: `all ${motion.fast}s ${motion.easingCss}`,
             '&:hover': { boxShadow: 'none' },
@@ -209,25 +223,31 @@ export function getTheme(mode: PaletteMode): Theme {
             backgroundImage: 'none',
             '&:hover': { backgroundColor: primaryMain, filter: 'brightness(1.08)' },
           },
+          sizeSmall: {
+            minHeight: 28,
+            paddingLeft: 10,
+            paddingRight: 10,
+            fontSize: '0.75rem',
+          },
           sizeLarge: {
-            paddingTop: 12,
-            paddingBottom: 12,
-            fontSize: '1.05rem',
-            // Large/CTA buttons read as pill, matching the reference prototypes
-            // (ExpenseFeed.jsx / SettleUp.jsx / Dashboard.jsx render every full-width primary
-            // action as rounded-full); ordinary default-size buttons stay at the control radius.
-            borderRadius: reconcile.radius.pill,
+            minHeight: 40,
+            paddingLeft: 20,
+            paddingRight: 20,
+            fontSize: '0.875rem',
+            // Large/CTA buttons read as pill, matching the reference prototypes; ordinary
+            // default-size buttons stay at the control radius.
+            borderRadius: slate.radius.pill,
           },
         },
       },
       MuiOutlinedInput: {
         styleOverrides: {
-          root: { borderRadius: reconcile.radius.control },
+          root: { borderRadius: slate.radius.control },
         },
       },
       MuiFilledInput: {
         styleOverrides: {
-          root: { borderRadius: reconcile.radius.control },
+          root: { borderRadius: slate.radius.control },
         },
       },
       MuiAppBar: {
@@ -252,7 +272,7 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiChip: {
         styleOverrides: {
           root: {
-            borderRadius: reconcile.radius.pill,
+            borderRadius: slate.radius.pill,
             '&.MuiChip-filledPrimary': {
               backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
               color: primaryMain,
@@ -263,11 +283,11 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiLinearProgress: {
         styleOverrides: {
           root: {
-            borderRadius: reconcile.radius.pill,
+            borderRadius: slate.radius.pill,
             backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
           },
           bar: {
-            borderRadius: reconcile.radius.pill,
+            borderRadius: slate.radius.pill,
             backgroundColor: primaryMain,
             backgroundImage: 'none',
           },
@@ -276,7 +296,7 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiListItemButton: {
         styleOverrides: {
           root: {
-            borderRadius: reconcile.radius.control,
+            borderRadius: slate.radius.control,
             transition: `background-color ${motion.fast}s ${motion.easingCss}`,
             '&.Mui-selected': {
               backgroundColor: isDark ? withAlpha(primaryMain, 0.18) : withAlpha(primaryMain, 0.08),
@@ -295,39 +315,44 @@ export function getTheme(mode: PaletteMode): Theme {
 }
 
 /**
- * Reconcile's flat "hairline card" treatment — surface background + 1px hairline border, no
- * blur/gradient/tint, no shadow. Elevation is reserved for real sheets/dialogs (which keep MUI's
- * default elevation shadow scale, untouched above); ordinary cards use hairline + flat surface
- * instead (Design Spec §9). Function name kept from the pre-Reconcile "glass card" treatment so
- * the ~17 existing call sites (Dashboard/Analysis/AI-Analyst/Groups/Login/Home cards) don't need
- * edits — restyling what each of those screens does with it is follow-on work (TS-DES-102/103/104).
+ * Flat "hairline card" treatment — surface background + 1px hairline border, no blur/gradient/
+ * tint, no shadow. Elevation is reserved for real sheets/dialogs (which keep MUI's default
+ * elevation shadow scale, untouched above); ordinary cards use hairline + flat surface instead.
+ * Function name kept from the pre-Reconcile "glass card" treatment so existing call sites
+ * (Dashboard/Analysis/AI-Analyst/Groups/Login/Home cards) don't need edits.
  */
 export function glassCardSx(theme: Theme) {
   const isDark = theme.palette.mode === 'dark';
   return {
-    backgroundColor: isDark ? reconcile.surfaceDark : reconcile.surface,
+    backgroundColor: isDark ? slate.surfaceDark : slate.surface,
     backgroundImage: 'none',
-    border: `1px solid ${isDark ? reconcile.hairlineDark : reconcile.hairline}`,
+    border: `1px solid ${isDark ? slate.borderDark : slate.border}`,
     boxShadow: 'none',
-    borderRadius: reconcile.radius.surface / 8, // sx shorthand: theme.spacing(1) = 8px by default
+    borderRadius: slate.radius.surface / 8, // sx shorthand: theme.spacing(1) = 8px by default
   } as const;
 }
 
-/** Convenience flat-token export for non-MUI-Theme consumers (inline SVG, chart restyling — TS-DES-105). */
+/**
+ * Convenience flat-token export for non-MUI-Theme consumers (inline SVG, chart restyling —
+ * TS-DES-105/208). `ceremony` has no dedicated Slate hue (unlike Reconcile's gold) — repointed at
+ * `caution` (an amber, still visually distinct from `primary`/`negative`) purely so existing
+ * consumers (`chartTheme.ts`'s `categoryPalette`) keep compiling with zero call-site changes;
+ * TS-DES-208 owns deciding whether chart series should keep using this key at all.
+ */
 export function gradientTokens(mode: PaletteMode) {
   return mode === 'dark'
     ? {
-        primary: reconcile.jadeDark,
-        positive: reconcile.jadeDark,
-        negative: reconcile.emberDark,
-        ceremony: reconcile.goldDark,
-        surfaceSecondary: '#2C2C2E',
+        primary: slate.accentDark,
+        positive: slate.positiveDark,
+        negative: slate.negativeDark,
+        ceremony: slate.cautionDark,
+        surfaceSecondary: '#232326',
       }
     : {
-        primary: reconcile.jade,
-        positive: reconcile.jadeText,
-        negative: reconcile.ember,
-        ceremony: reconcile.gold,
+        primary: slate.accent,
+        positive: slate.positive,
+        negative: slate.negative,
+        ceremony: slate.caution,
         surfaceSecondary: '#F5F5F7',
       };
 }

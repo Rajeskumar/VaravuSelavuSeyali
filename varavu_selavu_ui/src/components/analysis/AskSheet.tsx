@@ -110,7 +110,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
                 backgroundColor: m.role === 'user' ? 'text.primary' : 'background.paper',
                 border: m.role === 'assistant' ? `1px solid ${theme.palette.divider}` : 'none',
                 color: m.role === 'user' ? 'background.paper' : 'text.primary',
-                borderRadius: 3,
+                borderRadius: 1,
                 borderBottomRightRadius: m.role === 'user' ? 1 : 3,
                 borderBottomLeftRadius: m.role === 'assistant' ? 1 : 3,
                 px: 2,
@@ -131,7 +131,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
               sx={{
                 backgroundColor: 'background.paper',
                 border: `1px solid ${theme.palette.divider}`,
-                borderRadius: 3,
+                borderRadius: 1,
                 borderBottomLeftRadius: 1,
                 px: 2,
                 py: 1.5,

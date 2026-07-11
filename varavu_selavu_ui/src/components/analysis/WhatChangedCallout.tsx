@@ -13,7 +13,7 @@ export const WhatChangedCallout: React.FC<WhatChangedCalloutProps> = ({ message 
       sx={{
         backgroundColor: theme.palette.background.paper,
         border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 2.5,
+        borderRadius: 1.2,
         padding: 2,
         display: 'flex',
         alignItems: 'flex-start',

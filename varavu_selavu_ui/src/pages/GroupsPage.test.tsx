@@ -24,7 +24,10 @@ test('renders the user\'s groups', async () => {
   renderPage();
   await waitFor(() => screen.getByText(/Apartment 4B/));
   expect(screen.getByText(/Apartment 4B/)).toBeInTheDocument();
-  expect(screen.getByText("You're owed $42.17")).toBeInTheDocument();
+  // TS-DES-206 split the old single-string balance chip ("You're owed $42.17") into a
+  // standalone-typography label + amount pair (no chip/border) — assert both separately.
+  expect(screen.getByText("You're owed")).toBeInTheDocument();
+  expect(screen.getByText('$42.17')).toBeInTheDocument();
 });
 
 test('shows an empty state when the user has no groups', async () => {

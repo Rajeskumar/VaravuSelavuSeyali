@@ -4,7 +4,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import { useTheme } from '@mui/material/styles';
-import { reconcile, typeScale, tabularNums } from '../../theme';
+import { slate, typeScale, tabularNums } from '../../theme';
 import { GroupSummary } from '../../api/groups';
 import { AnalysisGroupSummary } from '../../api/analysis';
 
@@ -49,8 +49,8 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const jadeColor = isDark ? reconcile.jadeDark : reconcile.jadeText;
-  const emberColor = isDark ? reconcile.emberDark : reconcile.ember;
+  const positiveColor = isDark ? slate.positiveDark : slate.positive;
+  const negativeColor = isDark ? slate.negativeDark : slate.negative;
   const merged = mergeGroups(groups, groupSummaries);
 
   if (merged.length === 0) return null;
@@ -72,7 +72,7 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
               backgroundColor: 'background.paper',
               border: '1px solid',
               borderColor: 'divider',
-              borderRadius: `${reconcile.radius.surface}px`,
+              borderRadius: `${slate.radius.surface}px`,
               p: 1.5,
               cursor: 'pointer',
             }}
@@ -85,13 +85,13 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
             </Typography>
             {g.settled ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                <CheckIcon sx={{ fontSize: 13, color: jadeColor }} />
-                <Typography variant="caption" sx={{ fontWeight: 600, color: jadeColor }}>
+                <CheckIcon sx={{ fontSize: 13, color: positiveColor }} />
+                <Typography variant="caption" sx={{ fontWeight: 600, color: positiveColor }}>
                   Settled
                 </Typography>
               </Box>
             ) : (
-              <Typography variant="caption" sx={{ fontWeight: 600, color: emberColor, ...tabularNums }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, color: negativeColor, ...tabularNums }}>
                 {formatMoney(g.pendingAmount)} pending
               </Typography>
             )}

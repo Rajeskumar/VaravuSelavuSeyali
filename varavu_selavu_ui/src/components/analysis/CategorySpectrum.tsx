@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import ChevronDownIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import ChevronUpIcon from '@mui/icons-material/KeyboardArrowUpRounded';
-import { typeScale } from '../../theme';
+import { typeScale, withAlpha } from '../../theme';
+import { categoryTint } from '../expenses/categoryColors';
 
 interface CategorySpectrumProps {
   total: number;
@@ -10,19 +11,11 @@ interface CategorySpectrumProps {
   details: Record<string, { date: string; description: string; category: string; cost: number }[]>;
 }
 
-// Same as categoryColors from the prototype or theme
-const categoryColors: Record<string, string> = {
-  'Food & Drink': '#C97B4D',
-  'Home': '#7E8CA3',
-  'Transportation': '#5E9C8F',
-  'Utilities': '#A3A86B',
-  'Life': '#C77B9E',
-  'Entertainment': '#B98CC2',
-  'Other': '#9AA0A6',
-};
-
+// Reuses the same category→color mapping as ExpenseFeed's tint dots (was its own
+// hex-for-hex-identical duplicate table before) — one source of truth so a category
+// is always the same color everywhere in the app, not just internally consistent here.
 function getCatColor(cat: string) {
-  return categoryColors[cat] || categoryColors['Other'];
+  return categoryTint(cat);
 }
 
 export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categoryTotals, details }) => {
@@ -79,11 +72,27 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                   my: 1.5
                 }}
               >
-                <Box sx={{ width: 8, height: 8, borderRadius: 999, flexShrink: 0, backgroundColor: getCatColor(c.category) }} />
-                <Typography sx={{ flex: 1, textAlign: 'left', fontFamily: 'Inter', fontSize: 14, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <Box sx={{ width: 12, height: 12, borderRadius: 999, flexShrink: 0, backgroundColor: getCatColor(c.category) }} />
+                <Typography
+                  sx={{
+                    flex: 1,
+                    textAlign: 'left',
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: getCatColor(c.category),
+                    backgroundColor: withAlpha(getCatColor(c.category), theme.palette.mode === 'dark' ? 0.22 : 0.14),
+                    borderRadius: 999,
+                    px: 1.25,
+                    py: 0.375,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
                   {c.category}
                 </Typography>
-                
+
                 <Box sx={{ width: 60, height: 6, borderRadius: 999, backgroundColor: theme.palette.divider, overflow: 'hidden', flexShrink: 0 }}>
                   <Box sx={{ width: `${pct}%`, height: '100%', backgroundColor: getCatColor(c.category) }} />
                 </Box>

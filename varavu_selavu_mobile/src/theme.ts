@@ -20,8 +20,8 @@ export interface ThemeColors {
   secondarySurface: string;
 
   // Kept for back-compat with every existing `LinearGradient colors={[gradientStart, gradientEnd]}`
-  // call site (~10 screens) — see TS-DES-101. Reconcile has no gradient, so both stops resolve to
-  // the same flat jade and those call sites render as a flat fill with zero edits.
+  // call site (~10 screens) — see TS-DES-101/201. Slate has no gradient, so both stops resolve to
+  // the same flat accent and those call sites render as a flat fill with zero edits.
   gradientStart: string;
   gradientEnd: string;
 
@@ -48,85 +48,92 @@ export interface ThemeColors {
 
   overlay: string;
 
-  /** Ceremony-only accent (Design Spec §2) — reconcile tick / settle-up "all squared up" moment. Never a fill. */
+  /**
+   * Ceremony accent — settle-up "all squared up" moment / reconciled tick. Slate has no
+   * dedicated ceremony hue (unlike Reconcile's gold); this now resolves to the brand accent for
+   * a distinct celebratory pop. Field name kept for zero call-site changes (TS-DES-201).
+   */
   gold: string;
 }
 
-// "Reconcile" (docs/design/TrackSpense_UX_Design_Spec.md §9): one flat signature color (jade) on
-// a quiet ink/paper neutral system. No gradients. Money is `text` (ink) by default; jade/ember/gold
-// carry meaning (positive / negative / ceremony) — see `directionalColor()` below.
+// "Slate" (docs/design/Redesign_Proposal_v2.md §1, TS-DES-201): a neutral canvas/surface/border
+// system with one indigo-slate brand accent (`primary`) and dedicated, distinct semantic colors
+// for positive/negative/caution — unlike Reconcile, brand and semantic-positive are NOT the same
+// hue. Money is `text` (ink) by default; success/error carry directional meaning — see
+// `directionalColor()` below. Hex values confirmed against `docs/design/prototypes/v2/desktop/*.jsx`'s
+// shared `LIGHT`/`DARK` constants.
 const lightColors: ThemeColors = {
-  primary: '#0FA37F',        // jade
-  primaryLight: '#3DBE9E',
-  primaryDark: '#0B8A6B',    // jadeText — accessible small-text variant
-  primarySurface: '#E3F5EF',
-  secondary: '#191A1E',      // ink — neutral secondary action, not a second brand hue
-  secondarySurface: '#ECECE7',
+  primary: '#3F3F9E',        // accent
+  primaryLight: '#5F5FB8',
+  primaryDark: '#33337E',
+  primarySurface: '#E8E8F5',
+  secondary: '#18181B',      // ink — neutral secondary action, not a second brand hue
+  secondarySurface: '#ECECEE',
 
-  gradientStart: '#0FA37F',
-  gradientEnd: '#0FA37F',
+  gradientStart: '#3F3F9E',
+  gradientEnd: '#3F3F9E',
 
-  background: '#F7F7F4',     // paper
+  background: '#FAFAFA',     // canvas
   surface: '#FFFFFF',
-  surfaceSecondary: '#EFEFEA',
+  surfaceSecondary: '#F5F5F7',
   surfaceElevated: '#FFFFFF',
 
-  text: '#191A1E',           // ink
-  textSecondary: '#6B6D74',  // ink-muted
+  text: '#18181B',           // ink
+  textSecondary: '#71717A',  // ink-muted
   textTertiary: '#8E8E93',
   textQuaternary: '#C7C7CC',
   textInverse: '#FFFFFF',
 
-  success: '#0B8A6B',        // jadeText (positive semantic doubles with brand, per §2)
-  successSurface: '#E3F5EF',
-  error: '#DE5B4B',          // ember
-  errorSurface: '#FBEAE7',
-  warning: '#B78A2E',        // caution — deliberately distinct from `gold`'s ceremony-only role
-  warningSurface: '#F5EEDD',
+  success: '#15803D',        // positive — distinct from brand accent, on purpose (a11y: hue alone no longer conflates "branded" with "good news")
+  successSurface: '#E3F5E9',
+  error: '#B91C1C',          // negative
+  errorSurface: '#FBEAEA',
+  warning: '#B45309',        // caution
+  warningSurface: '#F5ECDD',
 
-  border: '#D2D2D7',
-  borderLight: '#E4E4DF',    // hairline
+  border: '#E4E4E7',
+  borderLight: '#ECECEF',    // hairline
 
-  overlay: 'rgba(25,26,30,0.4)',
+  overlay: 'rgba(24,24,27,0.4)',
 
-  gold: '#C9973F',
+  gold: '#3F3F9E',           // ceremony → brand accent (see ThemeColors.gold doc comment)
 };
 
 const darkColors: ThemeColors = {
-  primary: '#1CBE94',        // jade, ~8% luminance lift for dark-mode contrast (§2)
-  primaryLight: '#3DBE9E',
-  primaryDark: '#17A17E',
-  primarySurface: '#0F2A22',
-  secondary: '#F7F7F4',      // paper — inverted neutral secondary action on dark backgrounds
-  secondarySurface: '#2A2B31',
+  primary: '#6D6DC7',        // accent, dark-mode lift for contrast
+  primaryLight: '#8A8AD4',
+  primaryDark: '#5B5BB0',
+  primarySurface: '#26264A',
+  secondary: '#FAFAFA',      // canvas — inverted neutral secondary action on dark backgrounds
+  secondarySurface: '#232326',
 
-  gradientStart: '#1CBE94',
-  gradientEnd: '#1CBE94',
+  gradientStart: '#6D6DC7',
+  gradientEnd: '#6D6DC7',
 
-  background: '#191A1E',     // ink — Reconcile's dark-mode background (§2)
-  surface: '#202127',
-  surfaceSecondary: '#28292F',
-  surfaceElevated: '#202127',
+  background: '#09090B',     // canvas (dark) — Slate's dark-mode background
+  surface: '#18181B',
+  surfaceSecondary: '#232326',
+  surfaceElevated: '#18181B',
 
-  text: '#F5F5F2',
-  textSecondary: '#9A9CA3',
+  text: '#FAFAFA',
+  textSecondary: '#A1A1AA',
   textTertiary: '#8E8E93',
   textQuaternary: '#48484A',
-  textInverse: '#191A1E',
+  textInverse: '#18181B',
 
-  success: '#1CBE94',
-  successSurface: '#0F2A22',
-  error: '#E8705F',          // ember, ~8% luminance lift for dark-mode contrast (§2)
-  errorSurface: '#3A211C',
-  warning: '#C99A42',
-  warningSurface: '#332B18',
+  success: '#4ADE80',
+  successSurface: '#0F2A1A',
+  error: '#F87171',
+  errorSurface: '#3A1C1C',
+  warning: '#FBBF24',
+  warningSurface: '#332818',
 
-  border: '#38383A',
-  borderLight: '#33343B',    // hairline (dark)
+  border: '#27272A',
+  borderLight: '#2E2E32',    // hairline (dark)
 
   overlay: 'rgba(0,0,0,0.6)',
 
-  gold: '#D9A752',
+  gold: '#6D6DC7',           // ceremony → brand accent (dark)
 };
 
 /** Spring/timing presets for react-native-reanimated — reused for the hero-count / settle-up count-to-zero moments (§5). */
@@ -145,7 +152,7 @@ export const spacing = {
   xxl: 48,
 };
 
-// Reconcile radius scale (Design Spec §9): 10px surfaces / 8px controls / pill for lens+chips.
+// Radius scale (unchanged by the Slate pivot — policy, not color): 10px surfaces / 8px controls / pill for lens+chips.
 // `full` stays a distinct, large numeric value reserved for pill-shaped CTA/lens/chip components
 // (e.g. CustomButton, matching the reference prototypes' full-width rounded-full primary actions)
 // rather than the general card/surface default.
@@ -167,7 +174,7 @@ function buildTypography(colors: ThemeColors) {
       semiBold: 'Inter-SemiBold',
       bold: 'Inter-Bold',
       black: 'Inter-Black',
-      display: 'SpaceGrotesk-SemiBold', // Reconcile display face — hero numbers/section moments only
+      display: 'SpaceGrotesk-SemiBold', // Display face — hero numbers/section moments only
     },
     // True Total / big balance — Design Spec §3 `display-hero` (44–56px).
     displayHero: {
@@ -250,7 +257,7 @@ function buildTypography(colors: ThemeColors) {
 }
 
 function buildShadows(mode: ThemeMode, colors: ThemeColors) {
-  // Reconcile: "elevation reserved for sheets only; everything else uses hairline + tint" (§9).
+  // Elevation policy (unchanged by the Slate pivot): reserved for sheets only; everything else uses hairline + tint.
   // Ordinary card/row tiers collapse to ~zero so `borderLight` (hairline) does the separation
   // work instead; only real bottom-sheet/modal-equivalent surfaces keep a visible shadow.
   const opacityScale = mode === 'dark' ? 0.5 : 1;

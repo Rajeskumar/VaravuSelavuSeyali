@@ -1,16 +1,21 @@
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../api/recurring';
-import { suggestCategory } from '../api/expenses';
+import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../../api/recurring';
+import { suggestCategory } from '../../api/expenses';
 import { Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControlLabel, Switch, Drawer, IconButton, CircularProgress } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddRounded';
 import CloseIcon from '@mui/icons-material/CloseRounded';
-import { motion } from 'framer-motion';
 
-import { RecurringCard } from '../components/recurring/RecurringCard';
-import { typeScale } from '../theme';
+import { RecurringCard } from '../recurring/RecurringCard';
 
-const RecurringPage: React.FC = () => {
+/**
+ * TS-DES-204 — Recurring, migrated from the standalone `RecurringPage.tsx` (now deleted) into a
+ * sub-tab of `ExpensesPage`. Content and behavior unchanged (`RecurringCard`'s pause/resume
+ * toggle and "Run now" action were already built, not new to this ticket) — only the host
+ * changed, from a page with its own title/route to a tab pane inside `ExpensesPage`'s
+ * `SubTabBar`, so the "Recurring" page-title heading is dropped (the tab label already says it).
+ */
+const RecurringTab: React.FC = () => {
   const qc = useQueryClient();
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['recurring-templates'],
@@ -28,7 +33,7 @@ const RecurringPage: React.FC = () => {
     start_date_iso: new Date().toISOString().split('T')[0],
     status: 'Active',
   });
-  
+
   const [editing, setEditing] = React.useState<boolean>(false);
   const typingRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -119,11 +124,6 @@ const RecurringPage: React.FC = () => {
   };
 
   const handleFormSubmit = () => {
-    // If not editing, id is blank, so we just don't pass it or let the backend generate it.
-    // Actually the backend endpoint for upsert expects just the fields for create if we don't pass id?
-    // Wait, the python backend upserts on matching (description, merchant_name, category) if id is omitted or missing.
-    // If we have an id, we should pass it. But the UpsertRecurringTemplatePayload does not have `id`.
-    // Let's pass what `UpsertRecurringTemplatePayload` expects.
     saveMut.mutate({
       description: form.description,
       category: form.category,
@@ -159,58 +159,53 @@ const RecurringPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', pb: 8, pt: 2 }}>
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography sx={{ ...typeScale.display, fontSize: '1.75rem' }}>
-            Recurring
-          </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={handleAddClick}
-            sx={{ borderRadius: 999, fontWeight: 600 }}
-          >
-            Add
-          </Button>
-        </Box>
-        <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 3 }}>
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
           {activeCount} active · ${activeCost.toFixed(2)}/mo
         </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={handleAddClick}
+          sx={{ borderRadius: 999, fontWeight: 600 }}
+        >
+          Add
+        </Button>
+      </Box>
 
-        {isLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-             <CircularProgress />
+      {isLoading && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
+      )}
+
+      {isError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {(error as Error)?.message || 'Failed to load templates'}
+        </Alert>
+      )}
+
+      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+        {templates.map(item => (
+          <RecurringCard
+            key={item.id}
+            item={item}
+            onToggle={handleToggle}
+            onEdit={handleEditClick}
+            onDelete={(t) => { setPendingDelete(t); setConfirmDeleteOpen(true); }}
+            onRunNow={handleRunNow}
+          />
+        ))}
+        {templates.length === 0 && !isLoading && !isError && (
+          <Box sx={{ textAlign: 'center', py: 6 }}>
+            <Typography variant="body1" color="text.secondary">
+              No recurring expenses set up yet.
+            </Typography>
           </Box>
         )}
-        
-        {isError && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {(error as Error)?.message || 'Failed to load templates'}
-          </Alert>
-        )}
-
-        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-          {templates.map(item => (
-            <RecurringCard
-              key={item.id}
-              item={item}
-              onToggle={handleToggle}
-              onEdit={handleEditClick}
-              onDelete={(t) => { setPendingDelete(t); setConfirmDeleteOpen(true); }}
-              onRunNow={handleRunNow}
-            />
-          ))}
-          {templates.length === 0 && !isLoading && !isError && (
-            <Box sx={{ textAlign: 'center', py: 6 }}>
-              <Typography variant="body1" color="text.secondary">
-                No recurring expenses set up yet.
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      </motion.div>
+      </Box>
 
       {/* Add/Edit Form Drawer (Bottom Sheet) */}
       <Drawer
@@ -230,7 +225,7 @@ const RecurringPage: React.FC = () => {
       >
         <Box sx={{ px: 3, pt: 2, pb: 4 }}>
           <Box sx={{ width: 40, height: 4, bgcolor: 'divider', borderRadius: 2, mx: 'auto', mb: 3 }} />
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
             <Typography sx={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
               {editing ? 'Edit Template' : 'Add Template'}
@@ -270,7 +265,7 @@ const RecurringPage: React.FC = () => {
               />
             </Grid>
           </Grid>
-          
+
           <Button
             variant="contained"
             color="primary"
@@ -321,4 +316,4 @@ const RecurringPage: React.FC = () => {
   );
 };
 
-export default RecurringPage;
+export default RecurringTab;
