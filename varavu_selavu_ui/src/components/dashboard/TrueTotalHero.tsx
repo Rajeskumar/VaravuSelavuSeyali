@@ -3,33 +3,25 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import { useTheme } from '@mui/material/styles';
-import SegmentedTabs from '../common/SegmentedTabs';
-import { reconcile, typeScale } from '../../theme';
+import { slate, typeScale } from '../../theme';
 import { AnalysisGroupSummary, SpendBreakdown } from '../../api/analysis';
-
-export type TrueTotalLens = 'my_share' | 'i_paid' | 'group_total';
-
-const LENS_OPTIONS: { value: TrueTotalLens; label: string }[] = [
-  { value: 'my_share', label: 'My Expenses' },
-  { value: 'i_paid', label: 'I Paid' },
-  { value: 'group_total', label: 'Group Total' },
-];
 
 function formatMoney(n: number): string {
   const sign = n < 0 ? '−' : '';
   return `${sign}$${Math.abs(n).toFixed(2)}`;
 }
 
-/** Sums personal spend + the requested per-group lens field across every group,
- * matching Dashboard.jsx's `computeLensTotal`. `spend_breakdown.personal` is used
- * (rather than `total_expenses`) so the personal portion always matches the same
- * "personal-only" number the lens's group figures are being added to. */
-export function computeLensTotal(
-  lens: TrueTotalLens,
-  personal: number,
-  groupSummaries: AnalysisGroupSummary[]
-): number {
-  return groupSummaries.reduce((sum, g) => sum + g[lens], personal);
+/** Sums personal spend + each group's `my_share` — the one number this hero shows.
+ * `spend_breakdown.personal` is used (rather than `total_expenses`) so the personal
+ * portion always matches the same "personal-only" number the group shares are added to.
+ *
+ * The "I Paid" lens this used to switch to was removed: what a member actually fronted
+ * for a group isn't really "their spend" (most of it comes back via settle-up), and it
+ * mixed a "money currently out of my account" concept into a page whose whole point is
+ * one honest "what did I actually spend" number. `my_share` is that number; a member who
+ * wants to track what they fronted has that in the group's own balance view already. */
+export function computeMyExpensesTotal(personal: number, groupSummaries: AnalysisGroupSummary[]): number {
+  return groupSummaries.reduce((sum, g) => sum + g.my_share, personal);
 }
 
 export interface MomDelta {
@@ -38,8 +30,6 @@ export interface MomDelta {
 }
 
 interface Props {
-  lens: TrueTotalLens;
-  onLensChange: (lens: TrueTotalLens) => void;
   personalTotal: number;
   spendBreakdown?: SpendBreakdown | null;
   groupSummaries: AnalysisGroupSummary[];
@@ -50,25 +40,26 @@ interface Props {
   momDelta?: MomDelta | null;
 }
 
-/** The "True Total + lens" hero (TS-DES-103): one display-face number, a
- * reconciled/pending status line, and the My Share/I Paid/Group Total lens that
- * re-scopes that same number. Reuses the shared `SegmentedTabs` control rather
- * than a bespoke lens switch. */
-const TrueTotalHero: React.FC<Props> = ({ lens, onLensChange, personalTotal, groupSummaries, groupsEnabled, periodLabel, momDelta }) => {
+/** The "True Total" hero (TS-DES-103): one display-face number (personal spend + my share of
+ * every group) and a reconciled/pending status line. No longer has a lens switch — see
+ * `computeMyExpensesTotal`'s comment for why "I Paid" was removed rather than kept as a toggle. */
+const TrueTotalHero: React.FC<Props> = ({ personalTotal, groupSummaries, groupsEnabled, periodLabel, momDelta }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const goldColor = isDark ? reconcile.goldDark : reconcile.gold;
-  const jadeColor = isDark ? reconcile.jadeDark : reconcile.jadeText;
-  const emberColor = isDark ? reconcile.emberDark : reconcile.ember;
+  // "Ceremony" (RECONCILED badge) has no dedicated Slate hue — reuses the brand accent for a
+  // distinct celebratory pop, since accent is otherwise reserved for interaction, not decoration.
+  const accentColor = isDark ? slate.accentDark : slate.accent;
+  const positiveColor = isDark ? slate.positiveDark : slate.positive;
+  const negativeColor = isDark ? slate.negativeDark : slate.negative;
 
-  const total = computeLensTotal(lens, personalTotal, groupSummaries);
+  const total = computeMyExpensesTotal(personalTotal, groupSummaries);
   const hasGroups = groupsEnabled && groupSummaries.length > 0;
   // "Settled" per the prototype means no outstanding balance either way.
   const allSettled = groupSummaries.every((g) => Math.abs(g.my_balance) < 0.005);
   const pendingCount = groupSummaries.filter((g) => Math.abs(g.my_balance) >= 0.005).length;
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 1, pb: 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: { xs: 'center', md: 'flex-start' }, pt: 1, pb: 2 }}>
       <Typography sx={{ ...typeScale.label, color: 'text.secondary', mb: 1.5 }}>
         {periodLabel}
       </Typography>
@@ -80,7 +71,7 @@ const TrueTotalHero: React.FC<Props> = ({ lens, onLensChange, personalTotal, gro
       {momDelta && (
         <Typography
           variant="caption"
-          sx={{ color: momDelta.amount > 0 ? emberColor : momDelta.amount < 0 ? jadeColor : 'text.secondary', mt: 0.5, fontWeight: 600 }}
+          sx={{ color: momDelta.amount > 0 ? negativeColor : momDelta.amount < 0 ? positiveColor : 'text.secondary', mt: 0.5, fontWeight: 600 }}
         >
           {momDelta.amount > 0 ? '+' : ''}{momDelta.percent.toFixed(0)}% vs last month
         </Typography>
@@ -90,8 +81,8 @@ const TrueTotalHero: React.FC<Props> = ({ lens, onLensChange, personalTotal, gro
         {hasGroups ? (
           allSettled ? (
             <>
-              <CheckIcon sx={{ fontSize: 14, color: goldColor }} />
-              <Typography sx={{ ...typeScale.label, color: goldColor }}>RECONCILED</Typography>
+              <CheckIcon sx={{ fontSize: 14, color: accentColor }} />
+              <Typography sx={{ ...typeScale.label, color: accentColor }}>RECONCILED</Typography>
             </>
           ) : (
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -100,12 +91,6 @@ const TrueTotalHero: React.FC<Props> = ({ lens, onLensChange, personalTotal, gro
           )
         ) : null}
       </Box>
-
-      {hasGroups && (
-        <Box sx={{ width: '100%', mt: 2.5 }}>
-          <SegmentedTabs value={lens} onChange={onLensChange} options={LENS_OPTIONS} fullWidth ariaLabel="Dashboard total lens" />
-        </Box>
-      )}
     </Box>
   );
 };

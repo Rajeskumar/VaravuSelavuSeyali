@@ -1,6 +1,6 @@
 # TS-DES-109 — AI Analyst rebuild
 
-**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; most backend-gated ticket in this batch) · **Spec:** `UX_Design_Spec.md` §1.4/§4/§5/§6 ("chat is a layer, not a room"), `UX_Audit_and_Redesign.md` §3.5/§6, `docs/design/prototypes/AIAnalyst.jsx` · **Status:** 🔴 Not started
+**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; most backend-gated ticket in this batch) · **Spec:** `UX_Design_Spec.md` §1.4/§4/§5/§6 ("chat is a layer, not a room"), `UX_Audit_and_Redesign.md` §3.5/§6, `docs/design/prototypes/AIAnalyst.jsx` · **Status:** ✅ Built — Fast/Deep picker, no manual period control, starter prompts, "Looked at" scope chip (header corrected 2026-07-10 to match `FEATURE_STATUS.md`; was stale "Not started" — see `ORIENTATION_REPORT_V2.md` §4)
 
 ## Scope
 

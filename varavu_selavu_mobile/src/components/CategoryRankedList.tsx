@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { categoryPalette } from '../utils/chartTheme';
@@ -26,9 +26,12 @@ interface CategoryRankedListProps {
     data: CategoryTotal[];
     title?: string;
     maxRows?: number;
+    /** Optional per-row tap handler (e.g. Analysis's "see this category's transactions" sheet).
+     * HomeScreen doesn't pass this — rows stay a plain, non-interactive `View` there. */
+    onSelectCategory?: (category: string) => void;
 }
 
-export default function CategoryRankedList({ data, title = 'Top Categories', maxRows = 5 }: CategoryRankedListProps) {
+export default function CategoryRankedList({ data, title = 'Top Categories', maxRows = 5, onSelectCategory }: CategoryRankedListProps) {
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const colors = useMemo(() => categoryPalette(theme), [theme]);
@@ -49,17 +52,21 @@ export default function CategoryRankedList({ data, title = 'Top Categories', max
             {ranked.map((row, i) => {
                 const pct = grandTotal > 0 ? (row.total / grandTotal) * 100 : 0;
                 const color = colors[i % colors.length];
+                const RowContainer = onSelectCategory ? TouchableOpacity : View;
+                const rowContainerProps = onSelectCategory
+                    ? { onPress: () => onSelectCategory(row.category), activeOpacity: 0.7 }
+                    : {};
                 return (
-                    <View key={row.category} style={styles.row}>
+                    <RowContainer key={row.category} style={styles.row} {...rowContainerProps}>
                         <View style={styles.rowHeader}>
-                            <Text style={styles.rowLabel} numberOfLines={1}>{row.category}</Text>
+                            <Text style={[styles.rowLabel, { color }]} numberOfLines={1}>{row.category}</Text>
                             <Text style={styles.rowAmount}>${row.total.toFixed(0)}</Text>
                         </View>
                         <View style={styles.barTrack}>
                             <View style={[styles.barFill, { width: `${Math.max(pct, 2)}%`, backgroundColor: color }]} />
                         </View>
                         <Text style={styles.rowPct}>{pct.toFixed(1)}%</Text>
-                    </View>
+                    </RowContainer>
                 );
             })}
         </Card>

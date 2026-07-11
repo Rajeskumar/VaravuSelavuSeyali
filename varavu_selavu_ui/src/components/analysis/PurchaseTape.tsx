@@ -21,7 +21,7 @@ export const PurchaseTape: React.FC<PurchaseTapeProps> = ({ history }) => {
       sx={{
         backgroundColor: theme.palette.background.paper,
         border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 2,
+        borderRadius: 1,
         borderTop: `2px dashed ${theme.palette.divider}`,
         overflow: 'hidden',
       }}

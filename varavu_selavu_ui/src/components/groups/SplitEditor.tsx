@@ -42,6 +42,19 @@ interface SplitEditorProps {
 const TOLERANCE = 0.01;
 const ALL_TYPES: SplitType[] = ['equal', 'exact', 'percentage', 'shares', 'adjustment'];
 
+/**
+ * Pure validity check, usable by a parent form even while this editor isn't mounted (it only
+ * mounts when its popover is open) — mirrors the isValid computation below exactly.
+ */
+export function computeSplitValid(value: SplitEditorValue, amount: number): boolean {
+  if (value.type === 'equal' || value.type === 'shares' || value.type === 'adjustment') {
+    return value.entries.length > 0;
+  }
+  const target = value.type === 'percentage' ? 100 : amount;
+  const totalEntered = value.entries.reduce((sum, e) => sum + (e.value || 0), 0);
+  return Math.abs(totalEntered - target) < TOLERANCE;
+}
+
 const SplitEditor: React.FC<SplitEditorProps> = ({
   amount,
   members,
@@ -54,11 +67,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
   const selectedIds = React.useMemo(() => new Set(value.entries.map((e) => e.member_id)), [value.entries]);
 
   const totalEntered = value.entries.reduce((sum, e) => sum + (e.value || 0), 0);
-  const target = value.type === 'percentage' ? 100 : value.type === 'exact' ? amount : null;
-  const isValid =
-    value.type === 'equal' || value.type === 'shares' || value.type === 'adjustment'
-      ? value.entries.length > 0
-      : target !== null && Math.abs(totalEntered - target) < TOLERANCE;
+  const isValid = computeSplitValid(value, amount);
 
   React.useEffect(() => {
     onValidityChange?.(isValid);
@@ -154,7 +163,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
 
       <Box
         sx={{
-          borderRadius: 3,
+          borderRadius: 1,
           overflow: 'hidden',
           border: `1px solid ${theme.palette.divider}`,
         }}

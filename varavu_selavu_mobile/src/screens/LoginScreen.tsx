@@ -1,15 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Linking } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
+import Card from '../components/Card';
 import CustomButton from '../components/CustomButton';
 import CustomInput from '../components/CustomInput';
 import { showToast } from '../components/Toast';
 import API_BASE_URL from '../api/apiconfig';
 
+/**
+ * Rebuilt to match the web app's post-Slate LoginPage: a flat canvas + single centered card,
+ * not the old gradient brand-header-plus-floating-card composition (a pre-Slate pattern that
+ * predated the TS-DES-201 palette pivot and was never revisited — the header still rendered as
+ * a flat block since `gradientStart`/`gradientEnd` both resolve to the same `primary` value now,
+ * but the split-panel *shape* itself was untouched). No dedicated mobile Login prototype exists
+ * in `docs/design/prototypes/v2/`, so this mirrors the web page's own composition instead.
+ */
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -41,61 +49,57 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Brand Header */}
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.brandHeader}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Text style={styles.brandIcon}>💰</Text>
-        <Text style={styles.brandName}>TrackSpense</Text>
-        <Text style={styles.brandTagline}>Smart expense tracking</Text>
-      </LinearGradient>
-
-      {/* Login Form Card */}
-      <View style={styles.formCard}>
-        <Text style={styles.formTitle}>Welcome Back</Text>
-        <Text style={styles.formSubtitle}>Sign in to continue</Text>
-
-        <CustomInput
-          label="Email"
-          icon="✉️"
-          placeholder="you@example.com"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          autoComplete="email"
-        />
-
-        <CustomInput
-          label="Password"
-          icon="🔒"
-          placeholder="Enter your password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          textContentType="password"
-        />
-
-        <CustomButton
-          title="Sign In"
-          onPress={handleLogin}
-          loading={loading}
-          style={{ marginTop: 8 }}
-        />
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-            <Text style={styles.footerLink}>Create Account</Text>
-          </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.brandRow}>
+          <View style={styles.brandMark}>
+            <Text style={styles.brandMarkText}>T</Text>
+          </View>
+          <Text style={styles.brandName}>TrackSpense</Text>
         </View>
 
+        <Card style={styles.formCard}>
+          <Text style={styles.formTitle}>Login</Text>
+          <Text style={styles.formSubtitle}>Sign in to continue</Text>
+
+          <CustomInput
+            label="Email"
+            icon="✉️"
+            placeholder="you@example.com"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            autoComplete="email"
+          />
+
+          <CustomInput
+            label="Password"
+            icon="🔒"
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            textContentType="password"
+          />
+
+          <CustomButton
+            title="Login"
+            onPress={handleLogin}
+            loading={loading}
+            style={{ marginTop: 8 }}
+          />
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Don't have an account?</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <Text style={styles.footerLink}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+
         <View style={styles.legalFooter}>
-          <Text style={styles.legalText}>By signing in, you agree to our</Text>
+          <Text style={styles.legalText}>By logging in, you agree to our</Text>
           <View style={styles.legalLinksRow}>
             <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
               <Text style={styles.legalLink}>Terms of Service</Text>
@@ -106,7 +110,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -116,54 +120,60 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  brandHeader: {
-    paddingTop: Platform.OS === 'android' ? 60 : 80,
-    paddingBottom: 40,
-    paddingHorizontal: 30,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 40,
   },
-  brandIcon: {
-    fontSize: 48,
-    marginBottom: 12,
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 28,
+  },
+  brandMark: {
+    width: 32,
+    height: 32,
+    borderRadius: theme.borderRadius.sm,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandMarkText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 16,
+    color: '#FFFFFF',
   },
   brandName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  brandTagline: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 4,
-    fontWeight: '500',
+    fontFamily: 'Inter-Bold',
+    fontSize: 20,
+    color: theme.colors.text,
+    letterSpacing: -0.3,
   },
   formCard: {
-    flex: 1,
-    backgroundColor: theme.colors.surface,
-    marginTop: -16,
-    marginHorizontal: 16,
-    borderRadius: 24,
-    padding: 28,
-    ...theme.shadows.lg,
+    padding: 24,
   },
   formTitle: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontFamily: 'Inter-Bold',
+    fontSize: 22,
     color: theme.colors.text,
     marginBottom: 4,
+    textAlign: 'center',
   },
   formSubtitle: {
-    fontSize: 15,
+    fontFamily: 'Inter-Regular',
+    fontSize: 14,
     color: theme.colors.textSecondary,
-    marginBottom: 28,
+    marginBottom: 20,
+    textAlign: 'center',
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 20,
     gap: 6,
   },
   footerText: {
@@ -176,7 +186,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontWeight: '700',
   },
   legalFooter: {
-    marginTop: 24,
+    marginTop: 20,
     alignItems: 'center',
   },
   legalText: {

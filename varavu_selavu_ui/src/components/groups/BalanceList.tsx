@@ -23,7 +23,7 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts }) =>
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+      <Paper sx={{ borderRadius: 1, overflow: 'hidden' }}>
         {balances.members.map((m, idx) => {
           const label = m.net > 0 ? `is owed $${m.net.toFixed(2)}` : m.net < 0 ? `owes $${Math.abs(m.net).toFixed(2)}` : 'is settled up';
           const color = m.net > 0 ? theme.palette.success.main : m.net < 0 ? theme.palette.error.main : theme.palette.text.secondary;
@@ -33,19 +33,19 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts }) =>
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 1.5,
-                px: 2.5,
-                py: 1.75,
+                gap: 1.25,
+                px: 2,
+                py: 1.25,
                 borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
               }}
             >
-              <Avatar sx={{ width: 36, height: 36, fontSize: 14, bgcolor: colorFromMemberId(m.member_id) }}>
+              <Avatar sx={{ width: 30, height: 30, fontSize: 13, bgcolor: colorFromMemberId(m.member_id) }}>
                 {initialsFromName(m.display_name)}
               </Avatar>
-              <Typography variant="body1" sx={{ fontWeight: 600, flex: 1 }}>
+              <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', flex: 1 }}>
                 {m.display_name}
               </Typography>
-              <Typography variant="body2" sx={{ color, fontWeight: 600 }}>
+              <Typography sx={{ color, fontWeight: 600, fontSize: '0.8125rem' }}>
                 {label}
               </Typography>
             </Box>
@@ -63,33 +63,33 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts }) =>
               <Chip size="small" label="Simplified" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.7rem' }} />
             )}
           </Box>
-          <Paper sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Paper sx={{ borderRadius: 1, overflow: 'hidden' }}>
             {balances.transfers.map((t, idx) => (
               <Box
                 key={idx}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 1.5,
-                  px: 2.5,
-                  py: 1.75,
+                  gap: 1.25,
+                  px: 2,
+                  py: 1.25,
                   borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
                 }}
               >
-                <Avatar sx={{ width: 32, height: 32, fontSize: 13, bgcolor: colorFromMemberId(t.from_member_id) }}>
+                <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: colorFromMemberId(t.from_member_id) }}>
                   {initialsFromName(nameFor(t.from_member_id))}
                 </Avatar>
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem' }}>
                   {nameFor(t.from_member_id)}
                 </Typography>
                 <ArrowForwardRoundedIcon fontSize="small" sx={{ color: 'text.disabled', mx: 0.5 }} />
-                <Avatar sx={{ width: 32, height: 32, fontSize: 13, bgcolor: colorFromMemberId(t.to_member_id) }}>
+                <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: colorFromMemberId(t.to_member_id) }}>
                   {initialsFromName(nameFor(t.to_member_id))}
                 </Avatar>
-                <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', flex: 1 }}>
                   {nameFor(t.to_member_id)}
                 </Typography>
-                <Chip size="small" label={`$${t.amount.toFixed(2)}`} sx={{ fontWeight: 700 }} />
+                <Chip size="small" label={`$${t.amount.toFixed(2)}`} sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
               </Box>
             ))}
           </Paper>

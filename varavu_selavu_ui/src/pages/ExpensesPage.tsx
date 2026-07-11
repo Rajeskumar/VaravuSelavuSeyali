@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -12,6 +13,8 @@ import GroupScopeFilter from '../components/common/GroupScopeFilter';
 import ExpenseFeed, { FeedExpense } from '../components/expenses/ExpenseFeed';
 import ExpenseDetailSheet, { ExpenseDetailForm } from '../components/expenses/ExpenseDetailSheet';
 import MoveToGroupDialog from '../components/expenses/MoveToGroupDialog';
+import RecurringTab from '../components/expenses/RecurringTab';
+import SegmentedTabs from '../components/common/SegmentedTabs';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
 import {
   listAllMyGroupExpenses,
@@ -22,18 +25,26 @@ import {
 import { AnalysisScope } from '../api/analysis';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 
+type ExpensesTab = 'transactions' | 'recurring';
+
 /**
- * ExpensesPage (TS-DES-102 rebuild) — all three scopes (personal/groups/
- * combined) now render through the single day-grouped `ExpenseFeed`
- * component instead of the old scope-conditional `<Table>` (personal) /
- * `<Box>`-row list (groups/combined). See
- * `docs/design/tickets/TS-DES-102-expenses-feed-rebuild.md`.
+ * ExpensesPage (TS-DES-102 rebuild, TS-DES-204 sub-tab host) — all three scopes (personal/
+ * groups/combined) render through the single day-grouped `ExpenseFeed` component. TS-DES-204
+ * adds a `Transactions`/`Recurring` `SubTabBar` (reusing the shared `SegmentedTabs` control);
+ * `Recurring` folds in the former standalone `/recurring` page (`RecurringTab`, migrated
+ * unchanged) as its second tab.
  */
 const ExpensesPage: React.FC = () => {
   const user = localStorage.getItem('vs_user') || '';
   const queryClient = useQueryClient();
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const [scope, setScope] = React.useState<AnalysisScope>('personal');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: ExpensesTab = tabParam === 'recurring' ? 'recurring' : 'transactions';
+  const handleTabChange = (next: ExpensesTab) => {
+    setSearchParams(next === 'transactions' ? {} : { tab: next }, { replace: true });
+  };
 
   const {
     data,
@@ -305,23 +316,44 @@ const ExpensesPage: React.FC = () => {
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             Expenses
           </Typography>
-          {groupsEnabled && <GroupScopeFilter value={scope} onChange={setScope} />}
-          <Button variant="contained" onClick={() => { setEditing(null); setOpen(true); }}>
-            Add Expense
-          </Button>
+          {tab === 'transactions' && groupsEnabled && <GroupScopeFilter value={scope} onChange={setScope} />}
+          {tab === 'transactions' && (
+            <Button variant="contained" onClick={() => { setEditing(null); setOpen(true); }}>
+              Add Expense
+            </Button>
+          )}
         </Box>
 
-        <ExpenseFeed
-          expenses={feedExpenses}
-          loading={feedLoading}
-          onSelect={handleRowSelect}
-          onEdit={handleRowEdit}
-          onDelete={handleRowDeleteRequest}
-          deletingKey={deletingKey}
-          onLoadMore={scope === 'personal' ? () => fetchNextPage() : undefined}
-          hasMore={scope === 'personal' ? !!hasNextPage : false}
-          loadingMore={isFetchingNextPage}
-        />
+        {/* TS-DES-204 — Transactions/Recurring sub-tab host; Recurring folds in the former
+            standalone /recurring page. */}
+        <Box sx={{ maxWidth: 320, mb: 2.5 }}>
+          <SegmentedTabs<ExpensesTab>
+            value={tab}
+            onChange={handleTabChange}
+            options={[
+              { value: 'transactions', label: 'Transactions' },
+              { value: 'recurring', label: 'Recurring' },
+            ]}
+            fullWidth
+            ariaLabel="Expenses section"
+          />
+        </Box>
+
+        {tab === 'transactions' ? (
+          <ExpenseFeed
+            expenses={feedExpenses}
+            loading={feedLoading}
+            onSelect={handleRowSelect}
+            onEdit={handleRowEdit}
+            onDelete={handleRowDeleteRequest}
+            deletingKey={deletingKey}
+            onLoadMore={scope === 'personal' ? () => fetchNextPage() : undefined}
+            hasMore={scope === 'personal' ? !!hasNextPage : false}
+            loadingMore={isFetchingNextPage}
+          />
+        ) : (
+          <RecurringTab />
+        )}
       </motion.div>
 
       <ExpenseDetailSheet

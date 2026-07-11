@@ -5,7 +5,15 @@ import { useTheme } from '@mui/material/styles';
 import AIAnalystChat from '../components/ai-analyst/AIAnalystChat';
 import { glassCardSx } from '../theme';
 
-const AIAnalystPage: React.FC = () => {
+/**
+ * TS-DES-207 — full-page fallback for direct navigation to `/ask` (deep links, bookmarks, the
+ * `?q=...` auto-submit cross-links from Item/Merchant Insights, back-navigation from the ambient
+ * overlay). The *primary* way to reach Ask is now the header icon (desktop) / summonable sheet
+ * (mobile) — `AskOverlay.tsx` — not this page; this route exists so those entry points still
+ * resolve to something concrete rather than a floating panel with no page underneath it.
+ * Supersedes the old `AIAnalystPage.tsx` (same content, `/ai-analyst` → `/ask`).
+ */
+const AskPage: React.FC = () => {
   const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
   const theme = useTheme();
   const location = useLocation();
@@ -30,4 +38,4 @@ const AIAnalystPage: React.FC = () => {
   );
 };
 
-export default AIAnalystPage;
+export default AskPage;

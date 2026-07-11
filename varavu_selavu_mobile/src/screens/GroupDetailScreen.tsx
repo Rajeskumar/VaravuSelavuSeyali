@@ -40,6 +40,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
+import SegmentedTabs from '../components/SegmentedTabs';
 import BalanceRow from '../components/BalanceRow';
 import SettleUpSheet from '../components/SettleUpSheet';
 import GroupSettingsSheet from '../components/GroupSettingsSheet';
@@ -283,17 +284,15 @@ export default function GroupDetailScreen() {
       </View>
 
       <View style={styles.tabBar}>
-        {(['expenses', 'balances', 'activity'] as Tab[]).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <SegmentedTabs<Tab>
+          value={activeTab}
+          onChange={setActiveTab}
+          options={[
+            { value: 'expenses', label: 'Expenses' },
+            { value: 'balances', label: 'Balances' },
+            { value: 'activity', label: 'Activity' },
+          ]}
+        />
       </View>
 
       {activeTab === 'expenses' && (
@@ -475,11 +474,10 @@ const createStyles = (theme: AppTheme) =>
     },
     balanceBannerLabel: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 },
     balanceBannerAmount: { fontFamily: 'Inter-Bold', fontSize: 20 },
-    tabBar: { flexDirection: 'row', backgroundColor: theme.colors.surfaceSecondary, margin: 16, borderRadius: 12, padding: 4 },
-    tabItem: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 9 },
-    tabItemActive: { backgroundColor: theme.colors.background, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight },
-    tabLabel: { fontFamily: 'Inter-SemiBold', fontSize: 14, color: theme.colors.textSecondary },
-    tabLabelActive: { color: theme.colors.primary },
+    // SegmentedTabs supplies its own background/padding/pill chrome — this wrapper now only
+    // owns the outer margin (was duplicating the same pill background+padding a second time
+    // around the old inline TouchableOpacity tab row).
+    tabBar: { margin: 16 },
     expenseCard: {
       flexDirection: 'row',
       alignItems: 'center',

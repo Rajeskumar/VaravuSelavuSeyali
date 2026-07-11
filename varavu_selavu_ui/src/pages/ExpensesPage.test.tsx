@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import ExpensesPage from './ExpensesPage';
 import * as api from '../api/expenses';
 import * as groupsApi from '../api/groups';
@@ -24,7 +25,9 @@ function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <ExpensesPage />
+      <MemoryRouter>
+        <ExpensesPage />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -111,6 +114,7 @@ test('scope filter switches the queried data and shows the group badge column', 
       cost: 90,
       my_share: 45,
       payer_summary: [],
+      splits: [],
       group_id: 'g1',
       group_name: 'Apartment 4B',
     },

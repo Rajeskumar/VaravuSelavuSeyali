@@ -11,10 +11,11 @@ import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { getChangeInsights, ChangeInsight } from '../api/analytics';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
-import { categoryPalette } from '../utils/chartTheme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
 import CustomButton from '../components/CustomButton';
+import SegmentedTabs from '../components/SegmentedTabs';
+import CategoryRankedList from '../components/CategoryRankedList';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
 import { TrendNavigator } from '../components/analysis/TrendNavigator';
 import { InsightRail } from '../components/analysis/InsightRail';
@@ -23,34 +24,49 @@ import { onExpenseChanged } from '../utils/expenseEvents';
 import { AddExpenseContext } from './AddExpenseScreen';
 import { CategoryTransactionsSheet, CategoryTransaction } from '../components/analysis/CategoryTransactionsSheet';
 
+type PeriodMode = 'month' | 'year';
+
 export default function AnalysisScreen() {
     const { accessToken, userEmail } = useAuth();
     const navigation = useNavigation<any>();
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
-    
+
     const [year, setYear] = useState(new Date().getFullYear());
     const [month, setMonth] = useState(new Date().getMonth() + 1);
+    const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
     const [selectedInsight, setSelectedInsight] = useState<ChangeInsight | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const { openAddExpense } = useContext(AddExpenseContext);
-    
+    const isYearMode = periodMode === 'year';
+
     const queryClient = useQueryClient();
 
-    const { data, isLoading: loadingData } = useQuery({
+    const { data: monthData, isLoading: loadingMonth } = useQuery({
         queryKey: ['analysis', userEmail, year, month, 'combined'],
         queryFn: () => getAnalysis(accessToken!, userEmail!, { year, month, scope: 'combined' }),
         enabled: !!accessToken && !!userEmail,
     });
 
+    // Whole-year aggregate — answers "how much did I spend in 2026 on rent/groceries/dining
+    // out", which the month-only view above can't. Only fetched when the Year tab is active;
+    // `monthData` still powers TrendNavigator's month bars regardless of mode.
+    const { data: yearData, isLoading: loadingYear } = useQuery({
+        queryKey: ['analysis', userEmail, year, null, 'combined'],
+        queryFn: () => getAnalysis(accessToken!, userEmail!, { year, scope: 'combined' }),
+        enabled: !!accessToken && !!userEmail && isYearMode,
+    });
+
+    const data = isYearMode ? yearData : monthData;
+
     const { data: insightsData, isLoading: loadingInsights } = useQuery({
-        queryKey: ['insights', userEmail, year, month],
-        queryFn: () => getChangeInsights(userEmail!, { year, month }).catch(() => []),
+        queryKey: ['insights', userEmail, year, isYearMode ? undefined : month],
+        queryFn: () => getChangeInsights(userEmail!, isYearMode ? { year } : { year, month }).catch(() => []),
         enabled: !!accessToken && !!userEmail,
     });
 
     const insights = insightsData || [];
-    const loading = loadingData || loadingInsights;
+    const loading = (isYearMode ? loadingYear : loadingMonth) || loadingInsights;
 
     useEffect(() => {
         return onExpenseChanged(() => {
@@ -70,8 +86,8 @@ export default function AnalysisScreen() {
         );
     }
 
-    const chartColors = categoryPalette(theme);
     const isEmpty = data?.total_expenses === 0 && data?.category_totals.length === 0;
+    const periodNoun = isYearMode ? 'this year' : 'this month';
 
     return (
         <ScreenWrapper>
@@ -88,9 +104,23 @@ export default function AnalysisScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {data?.monthly_trend && (
+                {/* Answers "how much did I spend in 2026 on rent/groceries/dining out" — Year
+                    swaps the summary/breakdown below to the whole calendar year's totals instead
+                    of just the selected month. */}
+                <View style={styles.periodToggleRow}>
+                    <SegmentedTabs<PeriodMode>
+                        value={periodMode}
+                        onChange={setPeriodMode}
+                        options={[
+                            { value: 'month', label: 'Month' },
+                            { value: 'year', label: 'Year' },
+                        ]}
+                    />
+                </View>
+
+                {!isYearMode && monthData?.monthly_trend && (
                     <TrendNavigator
-                        monthlyTrend={data.monthly_trend}
+                        monthlyTrend={monthData.monthly_trend}
                         selectedMonth={month}
                         year={year}
                         onSelect={setMonth}
@@ -102,7 +132,7 @@ export default function AnalysisScreen() {
                         <View style={styles.emptyIconBadge}>
                             <Ionicons name="stats-chart" size={32} color={theme.colors.primary} />
                         </View>
-                        <Text style={styles.emptyTitle}>No expenses this month yet</Text>
+                        <Text style={styles.emptyTitle}>No expenses {periodNoun} yet</Text>
                         <Text style={styles.emptySubtitle}>Add an expense to see category breakdowns and trends.</Text>
                         <CustomButton title="Add an Expense" onPress={openAddExpense} fullWidth={false} style={{ marginTop: 4 }} />
                     </Card>
@@ -111,7 +141,7 @@ export default function AnalysisScreen() {
                         <InsightRail insights={insights} onAsk={setSelectedInsight} />
 
                         <View style={styles.summaryContainer}>
-                            <Text style={styles.summaryLabel}>Total This Month</Text>
+                            <Text style={styles.summaryLabel}>{isYearMode ? `Total in ${year}` : 'Total This Month'}</Text>
                             <Text style={styles.summaryAmount}>{formatCurrency(data.total_expenses)}</Text>
                             <Text style={styles.summaryCategories}>
                                 across {data.category_totals.length} categories
@@ -119,32 +149,12 @@ export default function AnalysisScreen() {
                         </View>
 
                         <View style={styles.breakdownSection}>
-                            <Text style={styles.sectionTitle}>Category Details</Text>
-                            {data.category_totals.map((ct, index) => {
-                                const pct = data.total_expenses > 0 ? (ct.total / data.total_expenses) * 100 : 0;
-                                const color = chartColors[index % chartColors.length];
-                                const txCount = data.category_expense_details?.[ct.category]?.length ?? 0;
-                                return (
-                                    <TouchableOpacity 
-                                        key={`category-${ct.category}-${index}`} 
-                                        style={styles.breakdownRow}
-                                        onPress={() => setSelectedCategory(ct.category)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <View style={[styles.breakdownDot, { backgroundColor: color }]} />
-                                        <View style={styles.breakdownInfo}>
-                                            <Text style={styles.breakdownCategory}>{ct.category}</Text>
-                                            <Text style={styles.breakdownMeta}>
-                                                {txCount} transaction{txCount !== 1 ? 's' : ''}
-                                            </Text>
-                                        </View>
-                                        <View style={styles.breakdownRight}>
-                                            <Text style={styles.breakdownAmount}>{formatCurrency(ct.total)}</Text>
-                                            <Text style={styles.breakdownPct}>{pct.toFixed(1)}%</Text>
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
+                            <CategoryRankedList
+                                data={data.category_totals}
+                                title="Category Breakdown"
+                                maxRows={data.category_totals.length}
+                                onSelectCategory={setSelectedCategory}
+                            />
                         </View>
                     </>
                 ) : null}
@@ -197,17 +207,5 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     summaryCategories: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textTertiary },
 
     breakdownSection: { paddingHorizontal: 16, paddingBottom: 24 },
-    sectionTitle: { fontFamily: 'Inter-Bold', fontSize: 16, color: theme.colors.text, marginBottom: 16 },
-    breakdownRow: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.surface,
-        paddingVertical: 16, paddingHorizontal: 16, borderRadius: 14, marginBottom: 10,
-        ...theme.shadows.sm,
-    },
-    breakdownDot: { width: 12, height: 12, borderRadius: 6, marginRight: 14 },
-    breakdownInfo: { flex: 1 },
-    breakdownCategory: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.text },
-    breakdownMeta: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textTertiary, marginTop: 4 },
-    breakdownRight: { alignItems: 'flex-end' },
-    breakdownAmount: { fontFamily: 'Inter-Bold', fontSize: 15, color: theme.colors.text },
-    breakdownPct: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textTertiary, marginTop: 4 },
+    periodToggleRow: { paddingHorizontal: 16, marginBottom: 12 },
 });

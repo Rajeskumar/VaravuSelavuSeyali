@@ -5,7 +5,6 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Menu from '@mui/material/Menu';
 import Button from '@mui/material/Button';
-import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
@@ -17,7 +16,6 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import { keyframes } from '@mui/system';
-import { useTheme } from '@mui/material/styles';
 import heic2any from 'heic2any';
 import {
   addExpense,
@@ -31,7 +29,6 @@ import {
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
-import { glassCardSx } from '../../theme';
 import {
   GroupSummary,
   GroupDetailResponse,
@@ -159,7 +156,6 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [recurring, setRecurring] = useState(false);
   const [repeatDay, setRepeatDay] = useState<number>(new Date().getDate());
   const typingRef = useRef<NodeJS.Timeout | null>(null);
-  const theme = useTheme();
 
   // Compact "tap to edit" state (feedback: auto-populated fields shouldn't sit fully expanded
   // by default) — merchant/date collapse to a label until tapped; category opens a picker menu.
@@ -233,19 +229,6 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   `;
-
-  const glassFieldSx = {
-    '& .MuiInputBase-root': {
-      backdropFilter: 'blur(4px)',
-      background: 'rgba(255,255,255,0.6)',
-    },
-  } as const;
-
-  const glassButtonSx = {
-    backdropFilter: 'blur(4px)',
-    background: 'rgba(255,255,255,0.3)',
-    border: '1px solid rgba(255,255,255,0.18)',
-  } as const;
 
   // OpenAI only accepts PNG or JPEG. Any other image format (e.g., HEIC) must
   // be converted in-browser before sending to the backend.
@@ -582,18 +565,15 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   };
 
   return (
-    <Card
-      sx={{
-        ...glassCardSx(theme),
-        maxWidth: 600,
-        mx: 'auto',
-        mt: 2,
-        p: 2,
-      }}
-    >
-      <CardContent>
+    // Compact pass: this is always rendered nested inside a Dialog (MainLayout's FAB dialog,
+    // ExpensesPage's Add Expense dialog) whose Paper already provides the card surface/border
+    // — a second bordered `Card` here just doubled the chrome and padding, pushing the popup
+    // taller than it needed to be. Plain `Box` now; standalone (test-only) usage is unaffected
+    // since a bare form with no card framing still renders/behaves the same.
+    <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+      <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {existing ? 'Edit Expense' : 'Add Expense'}
           </Typography>
           {onCancel && (
@@ -612,7 +592,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 size="small"
                 label="Description"
                 value={description}
-                sx={glassFieldSx}
+                
                 onChange={handleDescriptionChange}
                 onBlur={handleDescriptionBlur}
                 placeholder="e.g., Electricity bill, Grocery at Costco"
@@ -640,7 +620,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                     fullWidth
                     label="Group"
                     value={selectedGroupId}
-                    sx={glassFieldSx}
+                    
                     onChange={(e) => setSelectedGroupId(e.target.value)}
                     required
                   >
@@ -710,7 +690,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   size="small"
                   label="Merchant / Store Name"
                   value={merchantName}
-                  sx={glassFieldSx}
+                  
                   onChange={(e) => {
                     setMerchantName(e.target.value);
                     setUserPickedMerchant(true);
@@ -742,7 +722,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   label="Date"
                   type="date"
                   value={expenseDate}
-                  sx={glassFieldSx}
+                  
                   onChange={e => {
                     const iso = e.target.value;
                     setExpenseDate(iso);
@@ -763,7 +743,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 label="Cost"
                 type="number"
                 value={cost}
-                sx={glassFieldSx}
+                
                 onChange={e => {
                   const val = parseFloat(e.target.value);
                   setCost(val);
@@ -789,7 +769,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                     value={repeatDay}
                     onChange={e => setRepeatDay(Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))))}
                     size="small"
-                    sx={{ width: 160, ...glassFieldSx }}
+                    sx={{ width: 160 }}
                     helperText="We’ll prompt you on this day each month"
                     inputProps={{ min: 1, max: 31 }}
                   />
@@ -875,11 +855,11 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   style={{ display: 'none' }}
                   onChange={handleFileChange}
                 />
-                <Button sx={glassButtonSx} onClick={() => fileInputRef.current?.click()}>
+                <Button  onClick={() => fileInputRef.current?.click()}>
                   Choose File
                 </Button>
                 {isMobile && (
-                  <Button sx={glassButtonSx} onClick={() => cameraInputRef.current?.click()}>
+                  <Button  onClick={() => cameraInputRef.current?.click()}>
                     Take Photo
                   </Button>
                 )}
@@ -924,7 +904,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                     <TextField
                       label="Name"
                       value={item.item_name}
-                      sx={glassFieldSx}
+                      
                       onChange={e => {
                         const items = [...draft.items];
                         items[idx].item_name = e.target.value;
@@ -935,7 +915,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                       label="Line Total ($)"
                       type="number"
                       value={item.line_total}
-                      sx={glassFieldSx}
+                      
                       onChange={e => {
                         const items = [...draft.items];
                         const val = e.target.value;
@@ -946,7 +926,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                     <TextField
                       label="Category"
                       value={item.category_name || ''}
-                      sx={glassFieldSx}
+                      
                       onChange={e => {
                         const items = [...draft.items];
                         items[idx].category_name = e.target.value;
@@ -1008,7 +988,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           </Grid>
         </Box>
       </CardContent>
-    </Card>
+    </Box>
   );
 };
 

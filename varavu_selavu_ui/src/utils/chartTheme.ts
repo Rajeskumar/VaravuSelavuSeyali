@@ -1,11 +1,11 @@
 import { PaletteMode } from '@mui/material/styles';
-import { gradientTokens, withAlpha } from '../theme';
+import { gradientTokens, withAlpha, slate } from '../theme';
 
 /**
- * TS-DES-105 — shared Plotly restyling helpers so every chart component pulls the same
- * Reconcile tokens (Inter, hairline gridlines, jade/ember/category-tint series colors) instead
+ * TS-DES-105/208 — shared Plotly restyling helpers so every chart component pulls the same
+ * Slate tokens (Inter, hairline gridlines, accent/negative/caution-tint series colors) instead
  * of Plotly's library-default qualitative palette/typeface/gridlines. Consumes `gradientTokens`
- * (TS-DES-101's flat non-Theme hex export) rather than reaching into MUI's `Theme` object, since
+ * (TS-DES-201's flat non-Theme hex export) rather than reaching into MUI's `Theme` object, since
  * Plotly's `layout`/`data` props are plain JSON, not `sx`.
  */
 
@@ -13,10 +13,11 @@ const INTER_STACK = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Robot
 
 /**
  * Categorical series palette for multi-category charts (bar/sunburst/pie-equivalent).
- * Anchored on jade (brand/primary) and ember (the only other hue Reconcile spends), then
- * extended with tint/shade steps of each plus gold as a rare accent — deliberately not a
- * rainbow of unrelated hues, matching Design Spec §2's "one signature color + disciplined
- * neutrals" policy applied to data series.
+ * Anchored on `accent` (brand) and `negative` (the other hue Slate spends on data), then
+ * extended with tint/shade steps of each plus `caution` as a rare third accent — deliberately
+ * not a rainbow of unrelated hues, matching the "one signature color + disciplined neutrals"
+ * policy applied to data series (unchanged by TS-DES-208 — only the hex values moved from
+ * Reconcile's jade/ember/gold to Slate's accent/negative/caution, via `gradientTokens`).
  */
 export function categoryPalette(mode: PaletteMode): string[] {
   const t = gradientTokens(mode);
@@ -32,14 +33,14 @@ export function categoryPalette(mode: PaletteMode): string[] {
   ];
 }
 
-/** Hairline gridline/axis color, dark-mode aware (Design Spec §2/§9 hairline tokens). */
+/** Hairline gridline/axis color, dark-mode aware (Slate's `border` token). */
 export function chartHairline(mode: PaletteMode): string {
-  return mode === 'dark' ? '#33343B' : '#E4E4DF';
+  return mode === 'dark' ? slate.borderDark : slate.border;
 }
 
-/** Ink/paper text color for chart labels, ticks, and titles. */
+/** Ink-muted text color for chart labels, ticks, and titles (Slate's `inkMuted` token). */
 export function chartTextColor(mode: PaletteMode): string {
-  return mode === 'dark' ? '#9A9CA3' : '#6B6D74';
+  return mode === 'dark' ? slate.inkMutedDark : slate.inkMuted;
 }
 
 /**

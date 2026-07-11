@@ -10,19 +10,24 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRightRounded';
 import {
   getTopMerchants, getMerchantDetail,
   MerchantInsightSummary, MerchantInsightDetail,
-} from '../api/analytics';
-import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../components/common/InsightScopeFilter';
+} from '../../api/analytics';
+import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../common/InsightScopeFilter';
 import { motion } from 'framer-motion';
 
-// Reconcile components
-import { StatBlock } from '../components/analysis/StatBlock';
-import { MonthlySpendSparkline } from '../components/analysis/MonthlySpendSparkline';
-import { WhatChangedCallout } from '../components/analysis/WhatChangedCallout';
-import { typeScale } from '../theme';
+import { StatBlock } from './StatBlock';
+import { MonthlySpendSparkline } from './MonthlySpendSparkline';
+import { WhatChangedCallout } from './WhatChangedCallout';
+import { typeScale } from '../../theme';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const MerchantInsightsPage: React.FC = () => {
+/**
+ * TS-DES-205 — Merchants tab, migrated from the standalone `MerchantInsightsPage.tsx` (deleted;
+ * that route, `/merchant-insights`, now redirects here). Content and behavior unchanged — deep-
+ * linking via `?merchant=<name>` still works, the "Ask AI" chip still opens `/ask?q=...`. Only
+ * the host changed, same as `ItemsTab.tsx`'s equivalent migration.
+ */
+const MerchantsTab: React.FC = () => {
   const theme = useTheme();
   const userId = localStorage.getItem('vs_user') || '';
   const navigate = useNavigate();
@@ -77,7 +82,7 @@ const MerchantInsightsPage: React.FC = () => {
   };
 
   const askAi = (question: string) => {
-    navigate(`/ai-analyst?q=${encodeURIComponent(question)}`);
+    navigate(`/ask?q=${encodeURIComponent(question)}`);
   };
 
   const yearlyRollup = useMemo(() => {
@@ -96,11 +101,8 @@ const MerchantInsightsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Box sx={{ py: 4, maxWidth: 600, mx: 'auto' }}>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
-          <Skeleton width={220} />
-        </Typography>
-        <Paper sx={{ borderRadius: 2, mt: 4, p: 2 }}>
+      <Box>
+        <Paper sx={{ borderRadius: 1, mt: 2, p: 2 }}>
           {[1, 2, 3, 4, 5].map((i) => (
             <Box key={i} sx={{ display: 'flex', gap: 2, mb: 3, alignItems: 'center' }}>
               <Box sx={{ flex: 1 }}>
@@ -118,8 +120,7 @@ const MerchantInsightsPage: React.FC = () => {
   // Detail view
   if (detail) {
     const avgPerVisit = detail.transaction_count > 0 ? detail.total_spent / detail.transaction_count : 0;
-    
-    // Synthesize "What Changed" callout based on MoM delta
+
     const mom = detail.month_over_month_change_percent;
     let whatChangedMsg = 'Your average spend per visit is steady.';
     if (mom != null) {
@@ -138,7 +139,7 @@ const MerchantInsightsPage: React.FC = () => {
     }));
 
     return (
-      <Box sx={{ maxWidth: 600, mx: 'auto', pb: 8 }}>
+      <Box>
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
           {/* Header */}
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
@@ -190,17 +191,17 @@ const MerchantInsightsPage: React.FC = () => {
           {/* Yearly Rollup (Keep historical data accessible) */}
           {yearlyRollup.length > 1 && (
             <Box sx={{ mb: 4 }}>
-               <Typography sx={{ ...typeScale.label, color: 'text.secondary', mb: 1.5 }}>
+              <Typography sx={{ ...typeScale.label, color: 'text.secondary', mb: 1.5 }}>
                 YEARLY SUMMARY
-               </Typography>
-               <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                 {yearlyRollup.map((y) => (
-                   <Box key={y.year}>
-                     <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 0.5 }}>{y.year}</Typography>
-                     <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>${y.total_spent.toFixed(2)}</Typography>
-                   </Box>
-                 ))}
-               </Box>
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                {yearlyRollup.map((y) => (
+                  <Box key={y.year}>
+                    <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 0.5 }}>{y.year}</Typography>
+                    <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>${y.total_spent.toFixed(2)}</Typography>
+                  </Box>
+                ))}
+              </Box>
             </Box>
           )}
 
@@ -214,7 +215,7 @@ const MerchantInsightsPage: React.FC = () => {
                 sx={{
                   backgroundColor: theme.palette.background.paper,
                   border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: 2.5,
+                  borderRadius: 1.2,
                   overflow: 'hidden',
                 }}
               >
@@ -231,12 +232,12 @@ const MerchantInsightsPage: React.FC = () => {
                     }}
                   >
                     <Box sx={{ minWidth: 0, flex: 1, mr: 2 }}>
-                       <Typography sx={{ fontFamily: 'Inter', fontSize: 14, color: 'text.primary', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                         {item.item_name}
-                       </Typography>
-                       <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
-                         {item.purchase_count} purchase{item.purchase_count === 1 ? '' : 's'}
-                       </Typography>
+                      <Typography sx={{ fontFamily: 'Inter', fontSize: 14, color: 'text.primary', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.item_name}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                        {item.purchase_count} purchase{item.purchase_count === 1 ? '' : 's'}
+                      </Typography>
                     </Box>
                     <Typography
                       sx={{
@@ -259,16 +260,12 @@ const MerchantInsightsPage: React.FC = () => {
   }
 
   // List view
-  // Sort descending by total_spent
   const listRows = [...merchants].sort((a, b) => (b.total_spent ?? 0) - (a.total_spent ?? 0));
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', pb: 8 }}>
+    <Box>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, flexWrap: 'wrap', gap: 2 }}>
-          <Typography sx={{ ...typeScale.display, fontSize: '1.75rem', display: 'flex', alignItems: 'center', gap: 1 }}>
-            Merchant Insights
-          </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
           <InsightScopeFilter value={scope} onChange={setScope} />
         </Box>
         <Typography sx={{ fontSize: 14, color: 'text.secondary', mb: 3 }}>
@@ -276,7 +273,7 @@ const MerchantInsightsPage: React.FC = () => {
         </Typography>
 
         {listRows.length === 0 ? (
-          <Paper sx={{ p: 6, mt: 4, borderRadius: 2, textAlign: 'center', bgcolor: 'transparent', borderStyle: 'dashed' }}>
+          <Paper sx={{ p: 6, mt: 2, borderRadius: 1, textAlign: 'center', bgcolor: 'transparent', borderStyle: 'dashed' }}>
             <StorefrontIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
             <Typography variant="h6" fontWeight={600} gutterBottom>
               No merchant insights yet
@@ -290,7 +287,7 @@ const MerchantInsightsPage: React.FC = () => {
           </Paper>
         ) : (
           <Box sx={{ position: 'relative' }}>
-            {detailLoading && <LinearProgress sx={{ position: 'absolute', top: -4, left: 0, right: 0, borderRadius: 2 }} />}
+            {detailLoading && <LinearProgress sx={{ position: 'absolute', top: -4, left: 0, right: 0, borderRadius: 1 }} />}
             <Box role="list" sx={{ display: 'flex', flexDirection: 'column' }}>
               {listRows.map((row) => (
                 <Box
@@ -342,4 +339,4 @@ const MerchantInsightsPage: React.FC = () => {
   );
 };
 
-export default MerchantInsightsPage;
+export default MerchantsTab;

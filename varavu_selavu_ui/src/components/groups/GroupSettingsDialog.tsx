@@ -10,6 +10,8 @@ import {
   Typography,
   Box,
   Divider,
+  TextField,
+  MenuItem,
 } from '@mui/material';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import { GroupDetailResponse, ApiError } from '../../api/groups';
@@ -33,6 +35,8 @@ interface GroupSettingsDialogProps {
   setToast: (toast: { open: boolean; message: string; severity: 'success' | 'error' }) => void;
 }
 
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD', 'JPY', 'CNY', 'SGD', 'MXN'];
+
 export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
   open,
   onClose,
@@ -41,6 +45,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const [simplifyDebts, setSimplifyDebts] = useState(group.simplify_debts);
+  const [currency, setCurrency] = useState(group.currency);
 
   // TS-GRP-125: notification preferences — self-scoped, saved immediately on
   // toggle (independent of the "Save" button below, which only covers
@@ -89,6 +94,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
     try {
       await updateGroup(group.group_id, {
         simplify_debts: simplifyDebts,
+        currency,
         default_split: splitValue.type === 'equal' && splitValue.entries.length === 0 ? null : { type: splitValue.type, entries: splitValue.entries },
       });
       queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
@@ -112,6 +118,22 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
           </Typography>
         )}
         
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom>Currency</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            One currency for the whole group — every expense is recorded in this currency.
+          </Typography>
+          <TextField select size="small" value={currency} onChange={(e) => setCurrency(e.target.value)} sx={{ minWidth: 140, mt: 1 }}>
+            {CURRENCIES.map((c) => (
+              <MenuItem key={c} value={c}>
+                {c}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
+
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" gutterBottom>Simplify Debts</Typography>
           <Typography variant="body2" color="text.secondary" gutterBottom>
@@ -257,23 +279,37 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
             )}
 
             {group.status !== 'deleted' && (
-              <Button 
-                variant="outlined" 
-                color="error" 
+              <Button
+                variant="outlined"
+                color="error"
                 disabled={saving}
                 onClick={async () => {
-                  if (window.confirm('Are you sure you want to delete this group? This will permanently delete it after 30 days.')) {
-                    setSaving(true);
-                    try {
-                      await deleteGroup(group.group_id);
-                      queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
-                      setToast({ open: true, message: 'Group deleted', severity: 'success' });
-                      onClose();
-                    } catch(e) {
-                      setError(e instanceof ApiError ? e.message : 'Failed to delete');
-                    } finally {
-                      setSaving(false);
+                  if (!window.confirm('Are you sure you want to delete this group? This will permanently delete it after 30 days.')) {
+                    return;
+                  }
+                  setSaving(true);
+                  try {
+                    await deleteGroup(group.group_id);
+                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    setToast({ open: true, message: 'Group deleted', severity: 'success' });
+                    onClose();
+                  } catch (e) {
+                    // Balance guard (group_service.delete_group) returns 409 when the group
+                    // isn't settled — offer force delete instead of leaving the user stuck.
+                    if (e instanceof ApiError && e.status === 409 && window.confirm(`${e.message}\n\nDelete anyway?`)) {
+                      try {
+                        await deleteGroup(group.group_id, true);
+                        queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                        setToast({ open: true, message: 'Group deleted', severity: 'success' });
+                        onClose();
+                      } catch (e2) {
+                        setToast({ open: true, message: e2 instanceof ApiError ? e2.message : 'Failed to delete', severity: 'error' });
+                      }
+                    } else if (!(e instanceof ApiError && e.status === 409)) {
+                      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to delete', severity: 'error' });
                     }
+                  } finally {
+                    setSaving(false);
                   }
                 }}
               >

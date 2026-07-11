@@ -1,6 +1,6 @@
 # TS-DES-110 — Recurring rebuild
 
-**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no cross-team dependency, can go first, lowest risk in this batch) · **Spec:** `UX_Design_Spec.md` §6 ("Recurring — card grid is correct here"), `UX_Audit_and_Redesign.md` §3.6/§6, `docs/design/prototypes/Recurring.jsx` · **Status:** 🔴 Not started
+**Initiative:** Reconcile UX Redesign · **Build order:** 4th (batch 2; no cross-team dependency, can go first, lowest risk in this batch) · **Spec:** `UX_Design_Spec.md` §6 ("Recurring — card grid is correct here"), `UX_Audit_and_Redesign.md` §3.6/§6, `docs/design/prototypes/Recurring.jsx` · **Status:** ✅ Built — Card list with toggles, dismissible bottom sheet prompt (header corrected 2026-07-10 to match `FEATURE_STATUS.md`; was stale "Not started" — see `ORIENTATION_REPORT_V2.md` §4)
 
 ## Scope
 

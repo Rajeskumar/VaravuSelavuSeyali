@@ -98,7 +98,7 @@ const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
             sx={{
               mb: 2,
               p: 2,
-              borderRadius: 2,
+              borderRadius: 1,
               border: `1px solid ${hasAssignment ? theme.palette.divider : theme.palette.error.main}`,
               backgroundColor: theme.palette.background.paper,
             }}

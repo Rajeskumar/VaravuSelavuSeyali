@@ -51,7 +51,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
       sx={{
         backgroundColor: theme.palette.background.paper,
         border: `1px solid ${theme.palette.divider}`,
-        borderRadius: 2.5,
+        borderRadius: 1.2,
         p: 2,
         mb: 2,
         position: 'relative'

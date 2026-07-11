@@ -134,7 +134,9 @@ function MainTabs() {
             else if (route.name === 'Expenses') iconName = focused ? 'wallet' : 'wallet-outline';
             else if (route.name === 'GroupsTab') iconName = focused ? 'people' : 'people-outline';
             else if (route.name === 'Analysis') iconName = focused ? 'pie-chart' : 'pie-chart-outline';
-            else if (route.name === 'AI Analyst') iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+            // Sparkle, not a chat bubble — matches the web header's Ask AI icon change; a
+            // generic chat-bubble icon didn't read as "AI" specifically.
+            else if (route.name === 'AI Analyst') iconName = focused ? 'sparkles' : 'sparkles-outline';
             return <Ionicons name={iconName as any} size={size} color={color} />;
           },
           tabBarActiveTintColor: theme.colors.primary,
