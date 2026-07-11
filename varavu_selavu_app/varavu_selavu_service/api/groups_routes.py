@@ -224,13 +224,14 @@ def update_group(
     user_email: str = Depends(auth_required),
 ):
     return svc.update_group(
-        group_id, 
-        user_email, 
-        name=data.name, 
-        group_type=data.group_type, 
+        group_id,
+        user_email,
+        name=data.name,
+        group_type=data.group_type,
         cover=data.cover,
         simplify_debts=data.simplify_debts,
-        default_split=data.default_split.model_dump() if data.default_split else None
+        default_split=data.default_split.model_dump() if data.default_split else None,
+        currency=data.currency,
     )
 
 

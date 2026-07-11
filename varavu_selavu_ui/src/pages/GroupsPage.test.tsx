@@ -6,6 +6,10 @@ import React from 'react';
 import GroupsPage from './GroupsPage';
 import * as api from '../api/groups';
 
+jest.mock('heic2any', () => ({
+  default: jest.fn(),
+}), { virtual: true });
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -24,10 +28,9 @@ test('renders the user\'s groups', async () => {
   renderPage();
   await waitFor(() => screen.getByText(/Apartment 4B/));
   expect(screen.getByText(/Apartment 4B/)).toBeInTheDocument();
-  // TS-DES-206 split the old single-string balance chip ("You're owed $42.17") into a
-  // standalone-typography label + amount pair (no chip/border) — assert both separately.
-  expect(screen.getByText("You're owed")).toBeInTheDocument();
-  expect(screen.getByText('$42.17')).toBeInTheDocument();
+  // Groups redesign — left rail row shows a single lowercase "you're owed $X" line
+  // instead of the old grid card's separate label + standalone amount typography.
+  expect(screen.getByText(/you're owed \$42\.17/i)).toBeInTheDocument();
 });
 
 test('shows an empty state when the user has no groups', async () => {

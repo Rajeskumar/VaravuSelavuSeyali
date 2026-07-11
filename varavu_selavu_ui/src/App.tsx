@@ -30,7 +30,6 @@ import RecurringPrompt from './components/expenses/RecurringPrompt';
 import FeatureRequestPage from './pages/FeatureRequestPage';
 import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
-import GroupDetailPage from './pages/GroupDetailPage';
 import JoinGroupPage from './pages/JoinGroupPage';
 import Box from '@mui/material/Box';
 import { brand } from './theme';
@@ -209,7 +208,7 @@ const AppContent: React.FC = () => {
         <Route path="/dashboard" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><DashboardPage /></MainLayout></RequireAuth>} />
         <Route path="/expenses" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpensesPage /></MainLayout></RequireAuth>} />
         <Route path="/groups" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupsPage /></MainLayout></RequireAuth>} />
-        <Route path="/groups/:id" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupDetailPage /></MainLayout></RequireAuth>} />
+        <Route path="/groups/:id" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupsPage /></MainLayout></RequireAuth>} />
         <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
         {/* TS-DES-204: Recurring is now a sub-tab of Expenses, not a standalone page. */}
         <Route path="/recurring" element={<Navigate to="/expenses?tab=recurring" replace />} />

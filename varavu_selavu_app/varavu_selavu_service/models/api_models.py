@@ -313,12 +313,12 @@ class CreateGroupRequest(BaseModel):
 
 
 class UpdateGroupRequest(BaseModel):
-    """Phase 1 only covers name/type/cover — default_split/simplify_debts/currency are Phase 2 (spec §5.1)."""
     name: Optional[str] = None
     group_type: Optional[str] = None
     cover: Optional[str] = None
     simplify_debts: Optional[bool] = None
     default_split: Optional["GroupSplitConfig"] = None
+    currency: Optional[str] = None
 
 
 class MemberDTO(BaseModel):
@@ -489,6 +489,11 @@ class PayerSummaryItem(BaseModel):
     amount_paid: float
 
 
+class ExpenseSplitItem(BaseModel):
+    member_id: str
+    share: float
+
+
 class GroupExpenseRow(BaseModel):
     row_id: str
     date: str
@@ -498,6 +503,10 @@ class GroupExpenseRow(BaseModel):
     merchant_name: Optional[str] = None
     my_share: float
     payer_summary: List[PayerSummaryItem]
+    # Every member's actual current dollar share (TS-GRP edit-fidelity fix) — lets the UI show
+    # who's involved directly on the expense, and lets Edit reconstruct the real current split
+    # instead of resetting to an equal-split guess.
+    splits: List[ExpenseSplitItem] = []
     currency: Optional[str] = None
     fx_rate_to_group_currency: Optional[float] = None
 

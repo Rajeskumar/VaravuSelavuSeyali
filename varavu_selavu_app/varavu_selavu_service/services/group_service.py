@@ -220,6 +220,7 @@ class GroupService:
         cover: Optional[str] = None,
         simplify_debts: Optional[bool] = None,
         default_split: Optional[dict] = None,
+        currency: Optional[str] = None,
     ) -> Dict:
         group = self._get_group_or_404(group_id)
         self._require_admin(group_id, email)
@@ -233,6 +234,9 @@ class GroupService:
             if split_type not in ["equal", "exact", "percentage", "shares", "adjustment"]:
                 raise HTTPException(status_code=400, detail=f"Invalid default_split type: {split_type}")
 
+        if currency is not None and (len(currency) != 3 or not currency.isalpha()):
+            raise HTTPException(status_code=400, detail="currency must be a 3-letter code")
+
         if name is not None:
             group.name = name
         if group_type is not None:
@@ -243,6 +247,8 @@ class GroupService:
             group.simplify_debts = simplify_debts
         if default_split is not None:
             group.default_split_json = default_split
+        if currency is not None:
+            group.currency = currency.upper()
         self.db.commit()
         
         self.activity_svc.log(

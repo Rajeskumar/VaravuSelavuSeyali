@@ -87,15 +87,13 @@ class GroupExpenseService:
 
     def _expense_row(self, expense: Expense, actor_email: str) -> Dict:
         caller_member = self.group_service.get_member_by_email(expense.group_id, actor_email)
+        split_rows = self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense.id).all()
         my_share = 0.0
         if caller_member is not None:
-            split = (
-                self.db.query(ExpenseSplit)
-                .filter(ExpenseSplit.expense_id == expense.id, ExpenseSplit.member_id == caller_member.id)
-                .first()
-            )
-            if split is not None:
-                my_share = float(split.amount_owed)
+            mine = next((s for s in split_rows if s.member_id == caller_member.id), None)
+            if mine is not None:
+                my_share = float(mine.amount_owed)
+        splits = [{"member_id": str(s.member_id), "share": float(s.amount_owed)} for s in split_rows]
 
         payer_rows = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == expense.id).all()
         payer_summary = [{"member_id": str(p.member_id), "amount_paid": float(p.amount_paid)} for p in payer_rows]
@@ -109,6 +107,7 @@ class GroupExpenseService:
             "merchant_name": expense.merchant_name,
             "my_share": my_share,
             "payer_summary": payer_summary,
+            "splits": splits,
             "currency": expense.currency,
             "fx_rate_to_group_currency": float(expense.fx_rate_to_group_currency) if expense.fx_rate_to_group_currency is not None else None,
         }

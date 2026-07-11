@@ -52,3 +52,44 @@ test('shows the backend error message when the request fails', async () => {
 
   expect(await screen.findByText('from_member_id and to_member_id must differ')).toBeInTheDocument();
 });
+
+test('with myMemberId, defaults to a row-per-debt picker scoped to the logged-in member', async () => {
+  const createSpy = jest.spyOn(api, 'createSettlement').mockResolvedValue({
+    id: 's1',
+    group_id: 'g1',
+    from_member_id: 'b',
+    to_member_id: 'a',
+    amount: 40,
+    settled_at: '2026-01-01T00:00:00Z',
+  });
+
+  render(
+    <SettleUpDialog
+      open
+      groupId="g1"
+      members={members}
+      transfers={[{ from_member_id: 'b', to_member_id: 'a', amount: 40 }]}
+      myMemberId="b"
+      onClose={jest.fn()}
+      onSuccess={jest.fn()}
+    />
+  );
+
+  // Picker shows the other party + direction, not a blank From/To form.
+  expect(screen.getByText('Alice')).toBeInTheDocument();
+  expect(screen.getByText('you owe $40.00')).toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: /from/i })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Settle' }));
+  fireEvent.click(screen.getByRole('button', { name: /record settlement/i }));
+
+  await waitFor(() =>
+    expect(createSpy).toHaveBeenCalledWith('g1', {
+      from_member_id: 'b',
+      to_member_id: 'a',
+      amount: 40,
+      method: 'cash',
+      notes: undefined,
+    })
+  );
+});

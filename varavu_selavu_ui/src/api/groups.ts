@@ -121,7 +121,7 @@ export async function getGroup(groupId: string): Promise<GroupDetailResponse> {
 
 export async function updateGroup(
   groupId: string,
-  payload: { name?: string; group_type?: string; cover?: string; simplify_debts?: boolean; default_split?: any }
+  payload: { name?: string; group_type?: string; cover?: string; simplify_debts?: boolean; default_split?: any; currency?: string }
 ): Promise<GroupDetailResponse> {
   const res = await fetchWithAuth(`/api/v1/groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) });
   if (!res.ok) await throwApiError(res, 'Failed to update group');
@@ -266,6 +266,11 @@ export interface PayerSummaryItem {
   amount_paid: number;
 }
 
+export interface ExpenseSplitItem {
+  member_id: string;
+  share: number;
+}
+
 export interface GroupExpenseRow {
   row_id: string;
   date: string;
@@ -275,6 +280,7 @@ export interface GroupExpenseRow {
   merchant_name?: string | null;
   my_share: number;
   payer_summary: PayerSummaryItem[];
+  splits: ExpenseSplitItem[];
   currency?: string | null;
   fx_rate_to_group_currency?: number | null;
 }
