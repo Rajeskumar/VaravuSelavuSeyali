@@ -39,7 +39,7 @@ interface SplitEditorProps {
   allowedTypes?: SplitType[];
 }
 
-const TOLERANCE = 0.01;
+const TOLERANCE = 0.02;
 const ALL_TYPES: SplitType[] = ['equal', 'exact', 'percentage', 'shares', 'adjustment'];
 
 /**
@@ -136,7 +136,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
     }
   };
 
-  const updateEntryValue = (memberId: string, newValue: number) => {
+  const updateEntryValue = (memberId: string, newValue: number | undefined) => {
     onChange({
       ...value,
       entries: value.entries.map((e) => (e.member_id === memberId ? { ...e, value: newValue } : e)),
@@ -198,8 +198,11 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
                 <TextField
                   size="small"
                   type="number"
-                  value={entry?.value ?? 0}
-                  onChange={(e) => updateEntryValue(m.member_id, parseFloat(e.target.value) || 0)}
+                  value={entry?.value === undefined ? '' : entry.value}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    updateEntryValue(m.member_id, val === '' ? undefined : parseFloat(val));
+                  }}
                   sx={{ width: 120 }}
                   inputProps={{ 'aria-label': `${value.type} for ${m.display_name}` }}
                   InputProps={

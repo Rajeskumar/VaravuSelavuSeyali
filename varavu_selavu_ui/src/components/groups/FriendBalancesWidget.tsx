@@ -21,10 +21,10 @@ const FriendBalancesWidget: React.FC = () => {
       </Typography>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         {data.map((b) => {
-          const owesYou = b.net > 0;
+          const owesYou = b.net < 0;
           const color = owesYou ? theme.palette.success.main : theme.palette.error.main;
           const label = owesYou
-            ? `${b.counterparty_display_name} owes you $${b.net.toFixed(2)}`
+            ? `${b.counterparty_display_name} owes you $${Math.abs(b.net).toFixed(2)}`
             : `You owe ${b.counterparty_display_name} $${Math.abs(b.net).toFixed(2)}`;
           return (
             <Box

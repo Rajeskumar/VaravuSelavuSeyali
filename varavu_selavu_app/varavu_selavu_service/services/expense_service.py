@@ -21,7 +21,7 @@ class ExpenseService:
                 date_str = str(date)
 
         new_id = uuid.uuid4()
-        purchased_at = datetime.strptime(date_str, "%m/%d/%Y").replace(tzinfo=timezone.utc)
+        purchased_at = datetime.strptime(date_str, "%m/%d/%Y").replace(hour=12, tzinfo=timezone.utc)
         
         db_expense = Expense(
             id=new_id,
@@ -128,7 +128,7 @@ class ExpenseService:
             except ValueError:
                 date_str = str(date)
                 
-        purchased_at = datetime.strptime(date_str, "%m/%d/%Y").replace(tzinfo=timezone.utc)
+        purchased_at = datetime.strptime(date_str, "%m/%d/%Y").replace(hour=12, tzinfo=timezone.utc)
         
         try:
             parsed_id = uuid.UUID(str(row_id))

@@ -260,8 +260,8 @@ const RecurringTab: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }} sx={{ display: 'flex', alignItems: 'center' }}>
               <FormControlLabel
-                control={<Switch checked={form.status === 'Paused'} onChange={e => setForm(f => ({ ...f, status: e.target.checked ? 'Paused' : 'Active' }))} />}
-                label={form.status === 'Paused' ? 'Paused' : 'Active'}
+                control={<Switch checked={form.status === 'Active'} onChange={e => setForm(f => ({ ...f, status: e.target.checked ? 'Active' : 'Paused' }))} />}
+                label={form.status === 'Active' ? 'Active' : 'Paused'}
               />
             </Grid>
           </Grid>

@@ -51,7 +51,7 @@ const GroupBalancesPanel: React.FC<Props> = ({ members, myMemberId, onSettleUp, 
 
       <Box sx={{ px: 3, py: 2.5, flex: 1, overflowY: 'auto' }}>
         <Typography sx={{ ...typeScale.label, color: 'text.secondary', mb: 1.5 }}>Balances</Typography>
-        {members.map((m) => (
+        {members.filter(m => m.member_id !== myMemberId).map((m) => (
           <Box
             key={m.member_id}
             sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}
@@ -64,11 +64,11 @@ const GroupBalancesPanel: React.FC<Props> = ({ members, myMemberId, onSettleUp, 
                 {m.display_name}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6875rem' }}>
-                {m.net >= 0 ? 'owes you' : 'you owe'}
+                {m.net > 0 ? 'you owe' : 'owes you'}
               </Typography>
             </Box>
-            <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', ...tabularNums, color: m.net >= 0 ? positiveColor : negativeColor }}>
-              {m.net >= 0 ? '+' : '−'}${Math.abs(m.net).toFixed(2)}
+            <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', ...tabularNums, color: m.net > 0 ? negativeColor : positiveColor }}>
+              {m.net > 0 ? '−' : '+'}${Math.abs(m.net).toFixed(2)}
             </Typography>
           </Box>
         ))}
