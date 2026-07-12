@@ -13,9 +13,9 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { typeScale, tabularNums } from '../../theme';
 import { CATEGORY_GROUPS, findMainCategory } from './AddExpenseForm';
-import { formatMoney } from './ExpenseFeed';
+import { formatMoney, dayLabel } from './ExpenseFeed';
 import type { FeedExpense } from './ExpenseFeed';
-import { formatAppDate } from '../../utils/date';
+import { parseAppDate } from '../../utils/date';
 
 export interface ExpenseDetailForm {
   merchantName: string;
@@ -112,7 +112,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
         <Box>
           <Typography variant="caption" color="text.secondary">
-            {formatAppDate(expense.date)}
+            {dayLabel(parseAppDate(expense.date))}
           </Typography>
           <Typography sx={{ ...typeScale.display, color: theme.palette.text.primary }}>
             {formatMoney(expense.groupAmount ?? expense.amount)}

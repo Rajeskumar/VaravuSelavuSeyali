@@ -7,6 +7,8 @@ import AddIcon from '@mui/icons-material/AddRounded';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 
 import { RecurringCard } from '../recurring/RecurringCard';
+import { findMainCategory } from './AddExpenseForm';
+import CategoryPickerField from './CategoryPickerField';
 
 /**
  * TS-DES-204 — Recurring, migrated from the standalone `RecurringPage.tsx` (now deleted) into a
@@ -244,7 +246,11 @@ const RecurringTab: React.FC = () => {
               }} onBlur={() => scheduleFetch(form.description)} />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField label="Category" fullWidth value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} />
+              <CategoryPickerField
+                mainCategory={findMainCategory(form.category)}
+                subcategory={form.category}
+                onChange={(_main, sub) => setForm(f => ({ ...f, category: sub }))}
+              />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Merchant" fullWidth value={form.merchant_name} onChange={e => setForm(f => ({ ...f, merchant_name: e.target.value }))} />

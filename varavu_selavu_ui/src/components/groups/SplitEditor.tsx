@@ -143,6 +143,14 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
     });
   };
 
+  // Deriving the exact/percentage/shares/adjustment TextField's displayed value straight from
+  // the committed numeric `entry.value` (as before) meant a trailing decimal point could never
+  // be typed: typing "0" then "." parses to the same `0`, so the display would immediately
+  // collapse "0." back to "0" and swallow the dot on every keystroke. This tracks each field's
+  // in-progress raw text separately while focused, falling back to the numeric value once the
+  // field blurs (so display still normalizes, e.g. "12." -> "12").
+  const [rawInputs, setRawInputs] = React.useState<Record<string, string>>({});
+
   return (
     <Box>
       {allowedTypes.length > 1 && (
@@ -197,11 +205,38 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
               {checked && value.type !== 'equal' && (
                 <TextField
                   size="small"
-                  type="number"
-                  value={entry?.value === undefined ? '' : entry.value}
+                  // `type="number"` was the root cause of the "can't select/edit" bug: native
+                  // number inputs don't support the text-selection API in most browsers (so a
+                  // single click drops the caret mid-string instead of selecting it, and even
+                  // Cmd/Ctrl+A no-ops), and their built-in spinner arrows sit right where a user
+                  // clicks to place the caret, silently incrementing/decrementing the value. A
+                  // plain text input with a decimal numeric keyboard hint gets full, normal text
+                  // selection back while keeping the same numeric entry behavior on mobile.
+                  type="text"
+                  inputMode="decimal"
+                  value={
+                    rawInputs[m.member_id] !== undefined
+                      ? rawInputs[m.member_id]
+                      : entry?.value === undefined
+                      ? ''
+                      : String(entry.value)
+                  }
                   onChange={(e) => {
                     const val = e.target.value;
-                    updateEntryValue(m.member_id, val === '' ? undefined : parseFloat(val));
+                    if (val !== '' && !/^\d*\.?\d*$/.test(val)) return;
+                    setRawInputs((prev) => ({ ...prev, [m.member_id]: val }));
+                    if (val === '') { updateEntryValue(m.member_id, undefined); return; }
+                    const parsed = parseFloat(val);
+                    updateEntryValue(m.member_id, Number.isNaN(parsed) ? 0 : parsed);
+                  }}
+                  onFocus={(e) => e.target.select()}
+                  onBlur={() => {
+                    setRawInputs((prev) => {
+                      if (!(m.member_id in prev)) return prev;
+                      const next = { ...prev };
+                      delete next[m.member_id];
+                      return next;
+                    });
                   }}
                   sx={{ width: 120 }}
                   inputProps={{ 'aria-label': `${value.type} for ${m.display_name}` }}

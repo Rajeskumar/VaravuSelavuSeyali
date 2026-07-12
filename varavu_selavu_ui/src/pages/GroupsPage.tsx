@@ -31,6 +31,7 @@ import FriendBalancesWidget from '../components/groups/FriendBalancesWidget';
 import SegmentedTabs from '../components/common/SegmentedTabs';
 import ExpenseFeed, { FeedExpense } from '../components/expenses/ExpenseFeed';
 import { findMainCategory } from '../components/expenses/AddExpenseForm';
+import CategoryPickerField from '../components/expenses/CategoryPickerField';
 import { SplitEditorValue, computeSplitValid } from '../components/groups/SplitEditor';
 import { computePayersValid } from '../components/groups/PayerPicker';
 import PaidBySplitSummary from '../components/groups/PaidBySplitSummary';
@@ -581,16 +582,13 @@ const GroupsPage: React.FC = () => {
                 InputProps={{ startAdornment: <InputAdornment position="start">{group?.currency || 'USD'}</InputAdornment> }}
               />
             </Box>
-            <TextField
-              label="Category"
-              size="small"
-              fullWidth
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
+            <CategoryPickerField
+              mainCategory={findMainCategory(category)}
+              subcategory={category}
+              onChange={(_main, sub) => {
+                setCategory(sub);
                 setUserPickedCategory(true);
               }}
-              required
             />
 
             <PaidBySplitSummary

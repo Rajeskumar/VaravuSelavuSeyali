@@ -31,3 +31,18 @@ code {
     transform: translateY(0);
   }
 }
+
+/* Honor OS-level "reduce motion". The app has no prefers-reduced-motion query anywhere, and
+   modal/toast/page-fade transitions (MUI Fade/Grow/Zoom/Slide, plus framer-motion page
+   entrances) all animate unconditionally. `!important` is required here because MUI's
+   Transition components and framer-motion set `transition`/`animation` via inline styles, and a
+   stylesheet `!important` rule is one of the few things that outranks an inline style — this is
+   the standard universal reduced-motion override, not framework-specific. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

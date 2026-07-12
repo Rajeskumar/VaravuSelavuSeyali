@@ -93,7 +93,12 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ mt: 4, maxWidth: 400, mx: 'auto', px: { xs: 1, sm: 2 } }}>
+    // 400px read as an unrelated narrow island next to Dashboard/Expenses' ~1000px content
+    // column with no visual link between them. 640px keeps the form at a readable width (a
+    // single-column form stretched to 1000px would look broken, with inputs far wider than
+    // their content) while no longer looking like an accidental leftover from a different
+    // layout system.
+    <Box sx={{ mt: 4, maxWidth: 640, mx: 'auto', px: { xs: 1, sm: 2 } }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
       <Card>
         <CardContent>

@@ -46,6 +46,7 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
         border: 'none',
         gap: 0.25,
         '& .MuiToggleButton-root': {
+          position: 'relative',
           border: 'none',
           borderRadius: `${Math.max(Number(theme.shape.borderRadius) - 2, 4)}px`,
           textTransform: 'none',
@@ -55,6 +56,19 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
           px: compact ? 1.25 : 1.5,
           py: 0,
           color: 'text.secondary',
+          // Touch target: the pill stays visually 28-32px tall (the intentional compact sizing
+          // above), but the tappable area is expanded to the 44×44 WCAG minimum via an invisible
+          // centered hit area, rather than growing the pill itself and reintroducing the
+          // "oversized slider" this compact pass was written to fix.
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 44,
+            height: 44,
+          },
           '&.Mui-selected': {
             backgroundColor: theme.palette.background.paper,
             color: theme.palette.primary.main,
