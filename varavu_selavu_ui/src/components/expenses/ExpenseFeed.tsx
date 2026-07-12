@@ -10,6 +10,22 @@ import { typeScale, tabularNums } from '../../theme';
 import { categoryTint } from './categoryColors';
 import { parseAppDate } from '../../utils/date';
 
+// Row edit/delete icon buttons measured 31×31px — below the 44×44 WCAG touch-target minimum.
+// Rather than growing the icon buttons themselves (which would crowd the compact row and push
+// into the amount column), an invisible centered hit area expands only the tappable region.
+const rowActionHitSlopSx = {
+  position: 'relative',
+  '&::after': {
+    content: '""',
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: 44,
+    height: 44,
+  },
+} as const;
+
 /**
  * Unified feed row shape — one type for personal, group, and combined scopes
  * (TS-DES-102). `kind` distinguishes which delete/edit path a row's actions
@@ -49,7 +65,13 @@ interface DayGroup {
   subtotal: number;
 }
 
-function dayLabel(d: Date): string {
+/**
+ * Exported so other surfaces showing dated line items (Dashboard's "Recent" list) can reuse the
+ * exact same TODAY/YESTERDAY/"JUL 15" convention instead of falling back to a raw locale date
+ * string — previously Dashboard showed "7/15/2026" for the same expense the Expenses page
+ * labeled "JUL 15", one of several date formats coexisting across the app.
+ */
+export function dayLabel(d: Date): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const cmp = new Date(d);
@@ -184,6 +206,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
             e.stopPropagation();
             onEdit(expense);
           }}
+          sx={rowActionHitSlopSx}
         >
           <EditIcon fontSize="small" sx={{ color: isDark ? theme.palette.primary.light : theme.palette.primary.main }} />
         </IconButton>
@@ -195,6 +218,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
             e.stopPropagation();
             onDelete(expense);
           }}
+          sx={rowActionHitSlopSx}
         >
           {deleting ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" color="error" />}
         </IconButton>

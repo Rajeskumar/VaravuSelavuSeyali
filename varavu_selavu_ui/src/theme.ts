@@ -13,7 +13,13 @@ import { createTheme, PaletteMode, Theme } from '@mui/material/styles';
 export const slate = {
   ink: '#18181B',
   inkDark: '#FAFAFA', // dark-mode "ink" (primary text-on-dark) — matches prototypes' DARK.ink exactly
-  inkMuted: '#71717A',
+  // Darkened one notch from the prototypes' literal #71717A (zinc-500): that value fails WCAG AA
+  // (4.19:1) against the Expenses sticky-header tint (#EFEFEA) and the segmented-tab pill
+  // background, both of which sit atop the canvas rather than pure white. #686870 clears 4.5:1
+  // against every secondary-text background in the app (4.79:1 on #EFEFEA, 5.52:1 on white) while
+  // reading as the same "muted gray" — dark mode's inkMutedDark was already comfortably passing
+  // (6.9–7.8:1) and is unchanged.
+  inkMuted: '#686870',
   inkMutedDark: '#A1A1AA',
   canvas: '#FAFAFA',
   canvasDark: '#09090B',
@@ -176,6 +182,22 @@ export function getTheme(mode: PaletteMode): Theme {
           body: {
             backgroundColor: backgroundDefault,
           },
+          // App-wide keyboard focus ring. Previously there was exactly one `:focus-visible` rule
+          // in the whole app (a single component class) and every MuiButton computed
+          // `outline: none` with no replacement ring, so keyboard users had no visible focus
+          // indicator on nav items, buttons, list rows, or tabs. One token-based rule here covers
+          // every interactive element instead of each component defining its own. `:focus-visible`
+          // (not `:focus`) so mouse/touch clicks don't show a ring, only keyboard/AT navigation.
+          // `!important` is required: MUI's own `.MuiButtonBase-root` base style sets
+          // `outline: 0` at the same specificity tier (one class vs. one pseudo-class) — without
+          // `!important`, whichever rule's <style> tag happens to be injected later wins the
+          // cascade, which verified to be MUI's own reset on ButtonBase-derived components
+          // (nav items, IconButtons, ToggleButtons), silently swallowing the ring on exactly the
+          // controls this fix exists for.
+          '*:focus-visible': {
+            outline: `2px solid ${primaryMain} !important`,
+            outlineOffset: '2px !important',
+          },
         },
       },
       MuiPaper: {
@@ -222,6 +244,12 @@ export function getTheme(mode: PaletteMode): Theme {
             backgroundColor: primaryMain,
             backgroundImage: 'none',
             '&:hover': { backgroundColor: primaryMain, filter: 'brightness(1.08)' },
+            // Primary CTAs (Add Expense, Create Group, Settle Up, …) are the controls tapped most
+            // often — the default 34px root height fell short of the 44×44 touch-target minimum.
+            // Scoped to containedPrimary (not the base `root`) so secondary/tertiary buttons and
+            // explicit `size="small"` primary buttons keep the compact sizing the rest of the
+            // "sleek/compact pass" intentionally uses.
+            minHeight: 44,
           },
           sizeSmall: {
             minHeight: 28,

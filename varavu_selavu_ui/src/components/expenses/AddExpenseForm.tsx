@@ -835,8 +835,15 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             </Grid>
             <Divider sx={{ width: '100%', my: 0.5 }} />
             <Grid size={12}>
-              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
                 Upload Receipt
+              </Typography>
+              {/* "Parse Receipt" already carries an explanatory Tooltip, but tooltips only
+                  surface on hover/focus — a user glancing at the form (or on touch, where
+                  hover doesn't apply) had no way to know what the button does before tapping
+                  it. This caption makes the AI-extraction behavior visible up front. */}
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                Add a photo or PDF, then Parse Receipt to auto-fill the merchant, amount, and items.
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <input

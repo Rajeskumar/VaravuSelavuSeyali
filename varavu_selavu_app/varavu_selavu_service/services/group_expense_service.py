@@ -32,7 +32,7 @@ class GroupExpenseService:
         # Mirrors ExpenseService.add_expense's MM/DD/YYYY -> tz-aware UTC datetime
         # conversion exactly, so group and personal expense dates behave identically
         # (services/expense_service.py:13-24).
-        return datetime.strptime(date_str, "%m/%d/%Y").replace(tzinfo=timezone.utc)
+        return datetime.strptime(date_str, "%m/%d/%Y").replace(hour=12, tzinfo=timezone.utc)
 
     def _validate_members_in_group(self, group_id: uuid.UUID, member_id_strs: set) -> None:
         if not member_id_strs:

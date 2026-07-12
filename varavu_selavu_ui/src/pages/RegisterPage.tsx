@@ -76,7 +76,14 @@ const RegisterPage: React.FC = () => {
     setError(null);
     try {
       await register({ name, email, phone, password });
-      navigate('/');
+      // Auto-login after successful registration
+      const { login } = await import('../api/auth');
+      const data = await login({ username: email, password });
+      localStorage.setItem('vs_token', data.access_token);
+      localStorage.setItem('vs_refresh', data.refresh_token);
+      if (data.email) localStorage.setItem('vs_user', data.email);
+      window.dispatchEvent(new Event('vs_auth_changed'));
+      navigate('/dashboard');
     } catch {
       setError('Registration failed');
     } finally {

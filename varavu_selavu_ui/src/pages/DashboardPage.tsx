@@ -13,7 +13,8 @@ import MyGroupsStrip from '../components/dashboard/MyGroupsStrip';
 import InsightOfTheDay, { Insight } from '../components/dashboard/InsightOfTheDay';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { getChangeInsights, ChangeInsight } from '../api/analytics';
-import { parseAppDate, formatAppDate } from '../utils/date';
+import { parseAppDate } from '../utils/date';
+import { dayLabel } from '../components/expenses/ExpenseFeed';
 import { listExpenses } from '../api/expenses';
 import { listAllMyGroupExpenses, listGroups, UnifiedGroupExpenseRow, GroupSummary } from '../api/groups';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
@@ -82,7 +83,7 @@ function pickInsight(
     if (biggest.cost > 0) {
       return {
         headline: `Biggest expense this month: ${biggest.description} (${formatMoney(biggest.cost)})`,
-        detail: `${formatAppDate(biggest.date)} · ${biggest.category}`,
+        detail: `${dayLabel(parseAppDate(biggest.date))} · ${biggest.category}`,
       };
     }
   }
@@ -380,7 +381,7 @@ const DashboardPage: React.FC = () => {
                     {item.description}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }} noWrap>
-                    {formatAppDate(item.date)} · {(item as any).groupName ? `${(item as any).groupName} · your share` : item.category}
+                    {dayLabel(parseAppDate(item.date))} · {(item as any).groupName ? `${(item as any).groupName} · your share` : item.category}
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', ...tabularNums }}>
