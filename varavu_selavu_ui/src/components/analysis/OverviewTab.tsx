@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Box, Typography, Paper, CircularProgress, Alert, IconButton, Menu, MenuItem, Button } from '@mui/material';
+import { Box, Typography, Paper, CircularProgress, Alert, IconButton, Menu, MenuItem, Button, Switch, FormControlLabel } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
 import ShoppingBasketIcon from '@mui/icons-material/ShoppingBagRounded';
@@ -34,8 +34,12 @@ type PeriodMode = 'month' | 'year';
  * The My Expenses/I Paid lens (`AnalysisLensSwitch`) that used to live here was removed —
  * `i_paid` mixed "money currently out of my account, most of which comes back" into a page about
  * what was actually spent; see `TrueTotalHero.tsx`'s `computeMyExpensesTotal` comment for the
- * full reasoning (the same call was made on the Dashboard). Scope is fixed to `'combined'`
- * (personal + my share of every group) since that's the only meaning "My Expenses" ever had.
+ * full reasoning (the same call was made on the Dashboard, though that page's hero later grew a
+ * different, narrower toggle back — see `TrueTotalHero.tsx`'s `lens` prop). That's a distinct
+ * question from this tab's own `includeGroups` toggle below (TrackSpense v3 Prototype's one
+ * proposed Analysis addition): whether group shares count *at all* in these breakdowns, not
+ * which of two spend interpretations to show. Scope defaults to `'combined'` (personal + my
+ * share of every group, unchanged from before) and switches to `'personal'` when toggled off.
  */
 const OverviewTab: React.FC = () => {
   const theme = useTheme();
@@ -47,6 +51,9 @@ const OverviewTab: React.FC = () => {
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
   const [askInsight, setAskInsight] = useState<ChangeInsight | null>(null);
+  // TrackSpense v3 Prototype's one proposed Analysis change — defaults on (unchanged behavior).
+  const [includeGroups, setIncludeGroups] = useState(true);
+  const scope = includeGroups ? 'combined' : 'personal';
 
   // Year/Month dropdown anchor
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -55,10 +62,10 @@ const OverviewTab: React.FC = () => {
 
   // 1. Fetch data for the specific selected month
   const { data: monthData, isLoading: monthLoading, isError: monthIsError, error: monthError } = useQuery({
-    queryKey: ['analysis', user, year, month, 'combined'],
+    queryKey: ['analysis', user, year, month, scope],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      return getAnalysis({ year, month, scope: 'combined' });
+      return getAnalysis({ year, month, scope });
     },
     enabled: !!user,
   });
@@ -67,10 +74,10 @@ const OverviewTab: React.FC = () => {
   // `periodMode === 'year'`, is the category-breakdown data source itself (answers "how much did
   // I spend in 2026 on rent/groceries/dining out", not just a single month at a time).
   const { data: yearData, isLoading: yearLoading } = useQuery({
-    queryKey: ['analysis', user, year, null, 'combined'],
+    queryKey: ['analysis', user, year, null, scope],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      return getAnalysis({ year, scope: 'combined' });
+      return getAnalysis({ year, scope });
     },
     enabled: !!user,
   });
@@ -190,20 +197,31 @@ const OverviewTab: React.FC = () => {
           </Menu>
         </Box>
 
-        {/* Answers "how much did I spend in 2026 on rent/groceries/dining out" — Year swaps the
-            category breakdown/treemap below to the whole calendar year's totals instead of just
-            the selected month; Month is the original single-month view, unchanged. */}
-        <Box sx={{ width: 160 }}>
-          <SegmentedTabs<PeriodMode>
-            value={periodMode}
-            onChange={setPeriodMode}
-            options={[
-              { value: 'month', label: 'Month' },
-              { value: 'year', label: 'Year' },
-            ]}
-            fullWidth
-            ariaLabel="Category breakdown period"
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          {/* TrackSpense v3 Prototype's one proposed Analysis addition — whether group shares
+              count at all in the breakdowns below, not a spend-interpretation lens (see the
+              component doc comment above for why this is a different question from that one). */}
+          <FormControlLabel
+            control={<Switch size="small" checked={includeGroups} onChange={(e) => setIncludeGroups(e.target.checked)} />}
+            label={<Typography sx={{ fontFamily: 'Inter', fontSize: 12.5, color: 'text.secondary' }}>Include group shares</Typography>}
+            sx={{ mr: 0 }}
           />
+
+          {/* Answers "how much did I spend in 2026 on rent/groceries/dining out" — Year swaps the
+              category breakdown/treemap below to the whole calendar year's totals instead of just
+              the selected month; Month is the original single-month view, unchanged. */}
+          <Box sx={{ width: 160 }}>
+            <SegmentedTabs<PeriodMode>
+              value={periodMode}
+              onChange={setPeriodMode}
+              options={[
+                { value: 'month', label: 'Month' },
+                { value: 'year', label: 'Year' },
+              ]}
+              fullWidth
+              ariaLabel="Category breakdown period"
+            />
+          </Box>
         </Box>
       </Box>
 

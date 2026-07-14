@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import ExpensesPage from './ExpensesPage';
+import { QuickCaptureProvider } from '../context/QuickCaptureContext';
 import * as api from '../api/expenses';
 import * as groupsApi from '../api/groups';
 import * as configApi from '../api/config';
@@ -26,13 +27,15 @@ function renderPage() {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <ExpensesPage />
+        <QuickCaptureProvider>
+          <ExpensesPage />
+        </QuickCaptureProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );
 }
 
-test('shows expenses and opens form', async () => {
+test('shows expenses and opens Quick Capture', async () => {
   jest.spyOn(api, 'listExpenses').mockResolvedValue({
     items: [
       { row_id: 1, user_id: 'user', date: '01/01/2024', description: 'Coffee', category: 'Food & Drink', cost: 3 },
@@ -43,13 +46,11 @@ test('shows expenses and opens form', async () => {
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   expect(screen.getByText('Coffee')).toBeInTheDocument();
+  // TrackSpense v3 Prototype: the page's "Add Expense" button now opens the shared
+  // QuickCaptureSheet instead of AddExpenseForm's dialog (AddExpenseForm is still used, but only
+  // reachable via a row's Edit icon now — see the "opens the full edit form" test below).
   fireEvent.click(screen.getByRole('button', { name: /add expense/i }));
-  // AddExpenseForm's dialog heading is "Add Expense" (not "Add New Expense" —
-  // that text never matched; pre-existing/unrelated to the TS-DES-102 feed
-  // rebuild, fixed here per the ticket's "don't leave DOM-asserting tests red"
-  // instruction). Scope to the <h6> heading since "Add Expense" also matches
-  // the page's toolbar button and the dialog's submit button.
-  expect(await screen.findByRole('heading', { name: 'Add Expense' })).toBeInTheDocument();
+  expect(await screen.findByText('New expense')).toBeInTheDocument();
 });
 
 test('deletes an expense', async () => {

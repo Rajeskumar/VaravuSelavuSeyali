@@ -18,7 +18,9 @@ const Footer: React.FC = () => (
     sx={{
       height: FOOTER_HEIGHT,
       flexShrink: 0,
-      display: 'flex',
+      // Hidden below `md`: BottomNav (TrackSpense v3 Mobile) now owns the bottom of the
+      // mobile viewport — a website-style link footer under a fixed tab bar is redundant.
+      display: { xs: 'none', md: 'flex' },
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 2,

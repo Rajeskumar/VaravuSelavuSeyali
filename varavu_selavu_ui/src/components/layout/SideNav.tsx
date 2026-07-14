@@ -5,22 +5,14 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import Toolbar from '@mui/material/Toolbar';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import { navItems } from './navItems';
 
-export const drawerWidth = 280;
 /** TS-DES-210 — permanent desktop sidebar width (~220–240px per `desktop/*.jsx`'s `Sidebar`). */
 export const desktopSidebarWidth = 232;
 
-interface SideNavProps {
-  mobileOpen: boolean;
-  handleDrawerToggle: () => void;
-}
-
-/** Shared nav-item list/active-state logic — both the mobile drawer and the desktop permanent
- * rail render this, so shrinking/reordering `navItems` (TS-DES-202) updates both for free. */
+/** Shared nav-item list/active-state logic — the desktop permanent rail renders this
+ * (BottomNav.tsx renders `navItems` itself for mobile), so shrinking/reordering `navItems`
+ * (TS-DES-202) updates both for free. */
 const NavList: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const location = useLocation();
   return (
@@ -42,65 +34,36 @@ const NavList: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate 
 };
 
 /**
- * App navigation — a temporary (overlay) drawer at narrow viewports, a permanent (docked) rail
- * at desktop widths (TS-DES-210, replacing `NavPills` in the top bar at those widths). Both
- * variants are always mounted; CSS `display` picks which one is visible, the same pattern this
- * component already used pre-210 for its single temporary variant — avoids a JS breakpoint
- * branch and any hydration/flash-of-wrong-nav concern.
+ * App navigation — a permanent (docked) rail at desktop widths (TS-DES-210, replacing
+ * `NavPills` in the top bar at those widths). Below `md`, BottomNav.tsx's fixed tab bar owns
+ * navigation instead of a hamburger-triggered drawer (TrackSpense v3 Mobile: "Groups is a
+ * first-class tab, never buried in a drawer") — this component now renders desktop-only, CSS
+ * `display` still gates it rather than a JS breakpoint branch to avoid any hydration/flash
+ * concern.
  */
-const SideNav: React.FC<SideNavProps> = ({ mobileOpen, handleDrawerToggle }) => {
+const SideNav: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <>
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: 'block', md: 'none' },
-          [`& .MuiDrawer-paper`]: {
-            width: drawerWidth,
-            boxSizing: 'border-box',
-            p: 1.5,
-          },
-        }}
-      >
-        <Toolbar />
-        <Box sx={{ px: 1, py: 1 }}>
-          <Typography variant="overline" sx={{ color: 'text.secondary', fontWeight: 700, letterSpacing: '0.06em' }}>
-            Menu
-          </Typography>
-        </Box>
-        <NavList
-          onNavigate={(path) => {
-            navigate(path);
-            handleDrawerToggle();
-          }}
-        />
-      </Drawer>
-
-      <Drawer
-        variant="permanent"
-        sx={{
-          display: { xs: 'none', md: 'block' },
+    <Drawer
+      variant="permanent"
+      sx={{
+        display: { xs: 'none', md: 'block' },
+        width: desktopSidebarWidth,
+        flexShrink: 0,
+        [`& .MuiDrawer-paper`]: {
           width: desktopSidebarWidth,
-          flexShrink: 0,
-          [`& .MuiDrawer-paper`]: {
-            width: desktopSidebarWidth,
-            boxSizing: 'border-box',
-            position: 'relative',
-            border: 'none',
-            borderRight: '1px solid',
-            borderColor: 'divider',
-            pt: 2,
-          },
-        }}
-      >
-        <NavList onNavigate={(path) => navigate(path)} />
-      </Drawer>
-    </>
+          boxSizing: 'border-box',
+          position: 'relative',
+          border: 'none',
+          borderRight: '1px solid',
+          borderColor: 'divider',
+          pt: 2,
+        },
+      }}
+    >
+      <NavList onNavigate={(path) => navigate(path)} />
+    </Drawer>
   );
 };
 

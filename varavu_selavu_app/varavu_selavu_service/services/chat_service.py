@@ -186,6 +186,141 @@ def _fetch_group_balance_summary(
     except Exception as e:
         return f"Error fetching group balances: {str(e)}"
 
+
+# Mirrors AddExpenseForm.tsx's CATEGORY_GROUPS on the frontend (kept in sync by hand — there's no
+# shared source of truth between the two codebases). Categories aren't a DB-enforced enum (any
+# string is accepted), but staying within this taxonomy keeps agent-created expenses consistent
+# with the rest of the app's category coloring/breakdowns instead of inventing new labels.
+_CATEGORY_GUIDE = (
+    "Home: Rent, Electronics, Furniture, Household supplies, Maintenance, Mortgage, Pets, Services, Other. "
+    "Transportation: Gas/fuel, Car, Parking, Plane, Bicycle, Bus/Train, Taxi, Hotel, Other. "
+    "Food & Drink: Groceries, Dining out, Liquor, Other. "
+    "Entertainment: Movies, Games, Music, Sports, Other. "
+    "Life: Medical expenses, Insurance, Taxes, Education, Childcare, Clothing, Gifts, Other. "
+    "Utilities: Heat/gas, Electricity, Water, Cleaning, Trash, TV/Phone/Internet, Other. "
+    "Other: Services, General, Electronics."
+)
+
+
+def _create_personal_expense_from_agent(
+    expense_service,
+    user_id: str,
+    description: str,
+    amount: float,
+    category: str,
+    expense_date: Optional[str] = None,
+    merchant_name: Optional[str] = None,
+) -> str:
+    """
+    Creates a personal expense on the caller's own behalf. Extracted as a standalone function
+    (same pattern as `_fetch_group_balance_summary`) so it's directly unit-testable without
+    invoking the LangGraph agent/a real LLM — the `create_expense` tool is a thin wrapper
+    around this. Reuses the exact same `ExpenseService.add_expense` the REST
+    `POST /api/v1/expenses` endpoint calls, so an agent-created expense is indistinguishable
+    from one created through the normal UI.
+    """
+    if amount is None or amount <= 0:
+        return "Error: amount must be a positive number."
+    if not description or not description.strip():
+        return "Error: a description is required."
+    try:
+        result = expense_service.add_expense(
+            user_id=user_id,
+            date=expense_date or date.today().isoformat(),
+            description=description.strip(),
+            category=category or "General",
+            cost=float(amount),
+            merchant_name=merchant_name,
+        )
+        return (
+            f'Logged "{result["description"]}" for ${float(amount):.2f} '
+            f'({result["category"]}) on {result["date"]}.'
+        )
+    except Exception as e:
+        return f"Error creating expense: {str(e)}"
+
+
+def _resolve_payer(members: list[dict], my_member: dict, paid_by: Optional[str]) -> tuple[Optional[dict], Optional[str]]:
+    """
+    Resolves who paid for a group expense from the agent's free-text `paid_by` param — unset
+    (or "me"/"myself"/"i") means the caller, otherwise matched against member display names
+    (case-insensitive substring, same style as group-name resolution). Returns
+    `(payer_member_or_None, error_message_or_None)` — exactly one is non-None.
+    """
+    if not paid_by or paid_by.strip().lower() in ("me", "myself", "i"):
+        return my_member, None
+    found = next((m for m in members if paid_by.strip().lower() in m["display_name"].lower()), None)
+    if not found:
+        names = ", ".join(m["display_name"] for m in members)
+        return None, f"No member named '{paid_by}' found in this group. Members are: {names}."
+    return found, None
+
+
+def _create_group_expense_from_agent(
+    group_service,
+    group_expense_service,
+    user_groups: list[dict],
+    actor_email: str,
+    group_name: str,
+    description: str,
+    amount: float,
+    category: str,
+    expense_date: Optional[str] = None,
+    merchant_name: Optional[str] = None,
+    paid_by: Optional[str] = None,
+) -> str:
+    """
+    Creates a group expense split equally among every current member. Payer defaults to the
+    caller (the same default the Quick Capture UI itself uses — see `useLogExpense.ts`'s
+    `logToGroup`), or a named member via `paid_by` (see `_resolve_payer`) when the user says
+    someone else paid. `group_name` is resolved against the caller's own groups only (never
+    another user's), matching `_fetch_group_balance_summary`'s resolution. Extracted standalone
+    for the same testability reason as that function.
+    """
+    if amount is None or amount <= 0:
+        return "Error: amount must be a positive number."
+    if not description or not description.strip():
+        return "Error: a description is required."
+    match = next((g for g in user_groups if group_name.lower() in g["name"].lower()), None)
+    if not match:
+        names = ", ".join(g["name"] for g in user_groups) or "(you have no groups)"
+        return f"No group found matching '{group_name}'. Your groups are: {names}."
+    try:
+        detail = group_service.get_group_detail(match["group_id"], actor_email)
+        members = detail.get("members", [])
+        my_member = next((m for m in members if m.get("user_email") == actor_email), None)
+        if not my_member:
+            return f"Error: you don't appear to be an active member of '{detail['name']}'."
+        payer, payer_error = _resolve_payer(members, my_member, paid_by)
+        if payer_error:
+            return payer_error
+        # GroupExpenseService.create_expense's `date` is strictly MM/DD/YYYY (unlike
+        # ExpenseService.add_expense, which also accepts ISO) — see its `_parse_date`.
+        parsed_date = date.fromisoformat(expense_date) if expense_date else date.today()
+        mmddyyyy = parsed_date.strftime("%m/%d/%Y")
+        result = group_expense_service.create_expense(
+            group_id=match["group_id"],
+            actor_email=actor_email,
+            date=mmddyyyy,
+            description=description.strip(),
+            category=category or "General",
+            amount=float(amount),
+            merchant_name=merchant_name,
+            payers=[{"member_id": payer["member_id"], "amount_paid": float(amount)}],
+            split_type="equal",
+            split_entries=[{"member_id": m["member_id"]} for m in members],
+        )
+        share = float(amount) / max(len(members), 1)
+        payer_label = "you" if payer["member_id"] == my_member["member_id"] else payer["display_name"]
+        return (
+            f'Logged "{description.strip()}" for ${float(amount):.2f} in \'{detail["name"]}\' '
+            f"(paid by {payer_label}), split equally among {len(members)} member(s) — "
+            f"your share is ${share:.2f}."
+        )
+    except Exception as e:
+        return f"Error creating group expense: {str(e)}"
+
+
 def _build_group_context_block(user_groups, analysis_service, balance_service, user_id, start_date=None, end_date=None, year=None, month=None) -> dict:
     from varavu_selavu_service.db.models import Expense, GroupMember
     from sqlalchemy import func
@@ -259,6 +394,8 @@ def call_chat_model(
     insight_service,
     group_service=None,
     balance_service=None,
+    expense_service=None,
+    group_expense_service=None,
     groups_enabled: bool = False,
     model: str | None = None,
     provider: str | None = None,
@@ -305,6 +442,27 @@ def call_chat_model(
             return f"Error fetching merchant insights: {str(e)}"
 
     tools = [get_expense_summary, get_item_insights, get_merchant_insights]
+
+    # Create-only for now (TS-CHAT-01x) — deliberately no update/delete tools yet. Those need a
+    # search-then-confirm gate (resolve the target expense, show it to the user, get an explicit
+    # next-turn "yes") before they're safe to expose to an LLM; create is additive and already as
+    # reversible as anything logged through the UI, so it doesn't need that gate.
+    if expense_service is not None:
+        @tool
+        def create_expense(description: str, amount: float, category: str, expense_date: str = None, merchant_name: str = None) -> str:
+            """Create/log a new PERSONAL expense (not shared with a group) for the current user.
+            Use this whenever the user asks you to log, add, record, or track an expense and does
+            not name one of their groups. `amount` is a positive number in dollars. `category`
+            should be the closest matching subcategory from the app's taxonomy — see the category
+            guide in your system prompt — or 'General' if nothing fits. `expense_date` is optional
+            YYYY-MM-DD (defaults to today). `merchant_name` is optional — the store/vendor name if
+            the user mentions one (e.g. "coffee at Blue Bottle" -> merchant_name="Blue Bottle"),
+            so it's searchable later via merchant insights, not just folded into the description."""
+            return _create_personal_expense_from_agent(
+                expense_service, user_id, description, amount, category, expense_date, merchant_name
+            )
+
+        tools.append(create_expense)
 
     # Group-name matching + the group-aware tool are only available when Groups
     # is enabled at all (TS-ANL-013) — mirrors how every other group-aware
@@ -363,6 +521,32 @@ def call_chat_model(
                 return f"Error fetching top group: {str(e)}"
 
         tools.extend([get_group_balance_summary, get_group_spend_summary, get_top_group_by_spend])
+
+        if group_expense_service is not None:
+            @tool
+            def create_group_expense(
+                group_name: str, description: str, amount: float, category: str,
+                expense_date: str = None, merchant_name: str = None, paid_by: str = None,
+            ) -> str:
+                """Create/log a new expense split with a specific group, by group name. Use this
+                whenever the user asks you to log/add/record/track an expense AND names one of
+                their groups (or a synonym close to a group's name). Splits equally among every
+                current member. `amount` is a positive number in dollars (the whole
+                expense, not any one member's share — the split is computed for you). `category`
+                should be the closest matching subcategory from the app's taxonomy — see the
+                category guide in your system prompt — or 'General' if nothing fits.
+                `merchant_name` is optional — the store/vendor name if mentioned. `paid_by` is
+                optional — the display name of the group member who actually paid, if the user
+                says someone other than themselves paid (e.g. "Sam paid for pizza" -> paid_by
+                ="Sam"); leave unset (or 'me') when the user doesn't say, which defaults to the
+                current user as payer. `expense_date` is optional YYYY-MM-DD (defaults to today)."""
+                return _create_group_expense_from_agent(
+                    group_service, group_expense_service, user_groups, user_id,
+                    group_name, description, amount, category, expense_date,
+                    merchant_name, paid_by,
+                )
+
+            tools.append(create_group_expense)
 
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
@@ -507,6 +691,25 @@ def call_chat_model(
         logger.exception("Failed to pre-fetch default expense summary for chat")
 
     today_str = date.today().isoformat()
+    can_log = expense_service is not None
+    logging_guidance = (
+        (
+            "\n\nYou can also log new expenses on the user's behalf using your create_expense / "
+            "create_group_expense tools — do this directly when the user clearly asks you to "
+            "log, add, record, or track something (e.g. \"log coffee 6.75 at Blue Bottle\" or "
+            "\"add a $40 dinner split with Roommates\"), without asking for confirmation first "
+            "(this only creates new expenses — it never updates or deletes existing ones, so "
+            "there's nothing to undo-by-mistake). If the amount is genuinely ambiguous or "
+            "missing, ask a brief clarifying question instead of guessing. Pass a merchant/vendor "
+            "name via `merchant_name` whenever the user mentions one, instead of only folding it "
+            "into the description — it's a separate searchable field. For group expenses, pass "
+            "`paid_by` when the user says someone other than themselves paid. After creating an "
+            "expense, confirm what you logged in one short sentence.\n\n"
+            f"Category taxonomy to pick from: {_CATEGORY_GUIDE}\n"
+        )
+        if can_log
+        else ""
+    )
     system_prompt = (
         "You are a financial analyst assistant. You help users understand their expenses. "
         f"Today's date is {today_str}. Unless the user specifies a different timeframe, the "
@@ -516,7 +719,7 @@ def call_chat_model(
         "Use your tools to query the database for anything not already provided, and answer the "
         "user's questions clearly and concisely. "
         "Format your answer using markdown. "
-    ) + default_summary_text + rag_context_text + group_context_text + scope_text + history_text
+    ) + logging_guidance + default_summary_text + rag_context_text + group_context_text + scope_text + history_text
 
     agent = create_react_agent(llm, tools, prompt=system_prompt)
 
