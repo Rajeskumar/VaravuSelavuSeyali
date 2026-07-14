@@ -138,6 +138,7 @@ varavu_selavu_ui/
 ### 🤖 AI Financial Analyst
 - Conversational chat interface
 - Asks natural language questions about your expenses
+- Can also create expenses on your behalf ("log $12 lunch at Chipotle", "Sam paid $40 for groceries, split with Roommates") via tool-calling — captures merchant name and, for group expenses, resolves a named payer from natural language
 - Powered by OpenAI (production) or Ollama (local)
 - Model selection dropdown (lists available models)
 - Context-aware: injects your expense data into the LLM

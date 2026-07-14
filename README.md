@@ -19,7 +19,7 @@ Say goodbye to manual data entry. Simply snap a photo or upload a receipt, and T
 Not sure where "Subway dinner" or "Cricket club dues" belong? TrackSpense features an intelligent categorization engine that semantically classifies your expenses into the correct main and sub-categories based entirely on the context of your purchase.
 
 ### 💬 Conversational AI Financial Analyst
-Talk directly to your financial data! TrackSpense includes a built-in AI assistant that understands your spending. Ask natural questions like *"How much did I spend on dining out this month?"* or *"Where can I cut back on subscriptions?"* and get instant, personalized, data-driven answers.
+Talk directly to your financial data! TrackSpense includes a built-in AI assistant that understands your spending. Ask natural questions like *"How much did I spend on dining out this month?"* or *"Where can I cut back on subscriptions?"* and get instant, personalized, data-driven answers — or just tell it what you spent, like *"log $12 lunch at Chipotle"* or *"Sam paid $40 for groceries, split with Roommates,"* and it logs the expense for you.
 
 ### 🔄 Recurring Expense Management
 Never lose track of a subscription or miss a bill again. Easily set up, monitor, and manage all your recurring monthly expenses in one dedicated dashboard, helping you identify and eliminate "zombie subscriptions."
