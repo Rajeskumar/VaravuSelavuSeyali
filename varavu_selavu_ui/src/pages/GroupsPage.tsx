@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@mui/material/styles';
 import Box from '@mui/material/Box';
@@ -10,7 +10,6 @@ import Paper from '@mui/material/Paper';
 import Dialog from '@mui/material/Dialog';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
-import InputAdornment from '@mui/material/InputAdornment';
 import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
 import Snackbar from '@mui/material/Snackbar';
@@ -27,36 +26,31 @@ import { ActivityFeed } from '../components/groups/ActivityFeed';
 import MemberAvatarStack from '../components/groups/MemberAvatarStack';
 import GroupAvatar from '../components/groups/GroupAvatar';
 import GroupBalancesPanel from '../components/groups/GroupBalancesPanel';
-import FriendBalancesWidget from '../components/groups/FriendBalancesWidget';
+import PeopleList from '../components/groups/PeopleList';
 import SegmentedTabs from '../components/common/SegmentedTabs';
 import ExpenseFeed, { FeedExpense } from '../components/expenses/ExpenseFeed';
 import { findMainCategory } from '../components/expenses/AddExpenseForm';
-import CategoryPickerField from '../components/expenses/CategoryPickerField';
-import { SplitEditorValue, computeSplitValid } from '../components/groups/SplitEditor';
-import { computePayersValid } from '../components/groups/PayerPicker';
-import PaidBySplitSummary from '../components/groups/PaidBySplitSummary';
 import BalanceList from '../components/groups/BalanceList';
 import SettleUpDialog from '../components/groups/SettleUpDialog';
 import ExpenseDetailDialog from '../components/groups/ExpenseDetailDialog';
+import { useQuickCapture } from '../context/QuickCaptureContext';
 import {
   getGroup,
   listGroups,
   listGroupExpenses,
   getBalances,
   createGroup,
-  createGroupExpense,
   deleteGroupExpense,
   addMember,
   ApiError,
   MemberDTO,
-  PayerSummaryItem,
   GroupExpenseRow,
 } from '../api/groups';
-import { isoToMMDDYYYY } from '../utils/date';
 import { typeScale, tabularNums } from '../theme';
 
 type TabKey = 'expenses' | 'balances' | 'activity';
 type RailTab = 'active' | 'archived';
+type RootTab = 'groups' | 'people';
 
 const GROUP_TYPES = [
   { value: 'trip', label: 'Trip' },
@@ -76,8 +70,17 @@ const GroupsPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const theme = useTheme();
+  const { openQuickCapture } = useQuickCapture();
   const [tab, setTab] = React.useState<TabKey>('expenses');
   const [railTab, setRailTab] = React.useState<RailTab>('active');
+  // Groups/People root-level tabs (TrackSpense v3 Mobile design) — "Groups is a first-class
+  // tab" applies to People too: promotes the old always-inline FriendBalancesWidget to a real
+  // peer destination in this same center pane, at every width. URL-backed (?tab=people, same
+  // pattern ExpensesPage uses for ?tab=recurring) so `/groups?tab=people` — e.g. the Dashboard
+  // hero's "Net with people" link — actually lands on People instead of resetting to Groups.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rootTab: RootTab = searchParams.get('tab') === 'people' ? 'people' : 'groups';
+  const setRootTab = (next: RootTab) => setSearchParams(next === 'people' ? { tab: 'people' } : {}, { replace: true });
   const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
     open: false,
     message: '',
@@ -147,101 +150,6 @@ const GroupsPage: React.FC = () => {
   const myMember = members.find((m) => m.user_email === myEmail);
   const myBalance = balancesQuery.data?.members.find((m) => m.member_id === myMember?.member_id)?.net ?? 0;
   const group = groupQuery.data;
-
-  // --- Add expense dialog ---
-  const [addOpen, setAddOpen] = React.useState(false);
-  const [date, setDate] = React.useState(new Date().toISOString().split('T')[0]);
-  const [description, setDescription] = React.useState('');
-  const [category, setCategory] = React.useState('');
-  const [amount, setAmount] = React.useState<number>(0);
-  const [payers, setPayers] = React.useState<PayerSummaryItem[]>([]);
-  const [splitValue, setSplitValue] = React.useState<SplitEditorValue>({ type: 'equal', entries: [] });
-  // Derived directly from payers/splitValue/amount (not tracked via a callback from the
-  // picker) so the Add Expense button reflects the real default state even when the user
-  // never opens the "Paid by X and split Y" popover at all — previously payersValid/splitValid
-  // only got a correct value once PayerPicker/SplitEditor mounted and reported back, which
-  // only happens while their popover is open, leaving the button stuck disabled otherwise.
-  const payersValid = computePayersValid(payers, amount);
-  const splitValid = computeSplitValid(splitValue, amount);
-  const [saving, setSaving] = React.useState(false);
-  const [formError, setFormError] = React.useState<string | null>(null);
-  const typingRef = React.useRef<NodeJS.Timeout | null>(null);
-  const [userPickedCategory, setUserPickedCategory] = React.useState(false);
-
-  const fetchCategory = async (desc: string) => {
-    if (!desc.trim() || userPickedCategory) return;
-    try {
-      const { suggestCategory } = await import('../api/expenses');
-      const res = await suggestCategory(desc.trim());
-      if (res.subcategory) {
-        setCategory(res.subcategory);
-      }
-    } catch {
-      // ignore errors
-    }
-  };
-
-  React.useEffect(() => {
-    return () => {
-      if (typingRef.current) clearTimeout(typingRef.current);
-    };
-  }, []);
-
-  const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setDescription(val);
-    setUserPickedCategory(false);
-    if (typingRef.current) clearTimeout(typingRef.current);
-    typingRef.current = setTimeout(() => fetchCategory(val), 1500);
-  };
-
-  const resetAddForm = () => {
-    setDate(new Date().toISOString().split('T')[0]);
-    setDescription('');
-    setCategory('');
-    setUserPickedCategory(false);
-    setAmount(0);
-    setPayers(myMember ? [{ member_id: myMember.member_id, amount_paid: 0 }] : []);
-    setSplitValue({ type: 'equal', entries: members.map((m) => ({ member_id: m.member_id })) });
-    setFormError(null);
-  };
-
-  const openAddDialog = () => {
-    resetAddForm();
-    setAddOpen(true);
-  };
-
-  // Keeps a single payer's amount in sync with the total — the common "You paid" default
-  // now lives behind PaidBySplitSummary's popover, so unlike the old always-expanded
-  // PayerPicker, the user can't see a stale $0 mismatch to notice and fix by hand. Multi-payer
-  // splits are left alone since those amounts are intentionally hand-entered.
-  React.useEffect(() => {
-    setPayers((prev) => (prev.length === 1 ? [{ ...prev[0], amount_paid: amount }] : prev));
-  }, [amount]);
-
-  const handleAddExpense = async () => {
-    if (!groupId) return;
-    setFormError(null);
-    setSaving(true);
-    try {
-      await createGroupExpense(groupId, {
-        date: isoToMMDDYYYY(date),
-        description,
-        category,
-        amount,
-        payers,
-        split: { type: splitValue.type, entries: splitValue.entries },
-      });
-      queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
-      queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
-      setAddOpen(false);
-      setToast({ open: true, message: 'Expense added', severity: 'success' });
-    } catch (e) {
-      setFormError(e instanceof ApiError ? e.message : 'Failed to add expense');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   // --- Add member dialog ---
@@ -336,43 +244,62 @@ const GroupsPage: React.FC = () => {
   const invitedMembers = members.filter((m) => m.status === 'invited');
 
   return (
-    <Box sx={{ mt: 2, display: 'flex', height: 'calc(100vh - 176px)', minHeight: 480, border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: 'hidden' }}>
-      <Box sx={{ display: { xs: groupId ? 'none' : 'flex', md: 'flex' }, width: { xs: '100%', md: 280 }, flexShrink: 0 }}>
-        <GroupsListRail
-          groups={railGroups}
-          loading={groupsQuery.isLoading}
-          selectedId={groupId}
-          onSelect={(id) => navigate(`/groups/${id}`)}
-          onCreate={openCreateDialog}
-          tab={railTab}
-          onTabChange={setRailTab}
-        />
-      </Box>
+    <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 176px)', minHeight: 480, border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: 'hidden' }}>
+      {/* Groups/People root tabs — a shared header above the rail+detail row (not nested inside
+          the detail pane) specifically so it's reachable on mobile regardless of which of the
+          two panes below is currently visible there; see the rail/center `display.xs` logic
+          just below, which keys off `rootTab` for exactly this reason. */}
+      {!groupId && (
+        <Box sx={{ px: { xs: 1.5, sm: 3 }, pt: 2, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+          <SegmentedTabs
+            value={rootTab}
+            onChange={setRootTab}
+            options={[
+              { value: 'groups', label: 'Groups' },
+              { value: 'people', label: 'People' },
+            ]}
+          />
+        </Box>
+      )}
 
-      <Box sx={{ display: { xs: groupId ? 'flex' : 'none', md: 'flex' }, flex: 1, minWidth: 0 }}>
-        {!groupId && (
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-            <Box sx={{ px: { xs: 1.5, sm: 3 }, py: 3 }}>
-              <FriendBalancesWidget />
-            </Box>
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', p: 4, gap: 1.5 }}>
-              <GroupsRoundedIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
-              <Typography variant="subtitle1" fontWeight={700}>
-                {railGroups.length === 0 ? 'No groups yet' : 'Select a group'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
-                {railGroups.length === 0
-                  ? 'Create a group to split rent, trips, or shared bills with roommates and friends.'
-                  : 'Choose a group from the list to see its expenses and balances.'}
-              </Typography>
-              <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog} sx={{ mt: 1 }}>
-                Create Group
-              </Button>
-            </Box>
-          </Box>
-        )}
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        <Box sx={{ display: { xs: !groupId && rootTab === 'groups' ? 'flex' : 'none', md: 'flex' }, width: { xs: '100%', md: 280 }, flexShrink: 0 }}>
+          <GroupsListRail
+            groups={railGroups}
+            loading={groupsQuery.isLoading}
+            selectedId={groupId}
+            onSelect={(id) => navigate(`/groups/${id}`)}
+            onCreate={openCreateDialog}
+            tab={railTab}
+            onTabChange={setRailTab}
+          />
+        </Box>
 
-        {groupId && groupQuery.isLoading && (
+        <Box sx={{ display: { xs: groupId || rootTab === 'people' ? 'flex' : 'none', md: 'flex' }, flex: 1, minWidth: 0 }}>
+          {!groupId && (
+            rootTab === 'people' ? (
+              <Box sx={{ flex: 1, overflowY: 'auto', px: { xs: 1.5, sm: 3 }, py: 3 }}>
+                <PeopleList onToast={(message, severity) => setToast({ open: true, message, severity })} />
+              </Box>
+            ) : (
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', p: 4, gap: 1.5 }}>
+                <GroupsRoundedIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
+                <Typography variant="subtitle1" fontWeight={700}>
+                  {railGroups.length === 0 ? 'No groups yet' : 'Select a group'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
+                  {railGroups.length === 0
+                    ? 'Create a group to split rent, trips, or shared bills with roommates and friends.'
+                    : 'Choose a group from the list to see its expenses and balances.'}
+                </Typography>
+                <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog} sx={{ mt: 1 }}>
+                  Create Group
+                </Button>
+              </Box>
+            )
+          )}
+
+          {groupId && groupQuery.isLoading && (
           <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <CircularProgress />
           </Box>
@@ -453,7 +380,7 @@ const GroupsPage: React.FC = () => {
                   ]}
                 />
                 {tab === 'expenses' ? (
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={openAddDialog} disabled={members.length === 0}>
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => openQuickCapture(groupId)} disabled={members.length === 0}>
                     Add Expense
                   </Button>
                 ) : (
@@ -512,9 +439,10 @@ const GroupsPage: React.FC = () => {
         )}
       </Box>
 
-      {groupId && group && balancesQuery.data && (
-        <GroupBalancesPanel members={balancesQuery.data.members} myMemberId={myMember?.member_id} onSettleUp={() => setSettleOpen(true)} disabled={members.length < 2} />
-      )}
+        {groupId && group && balancesQuery.data && (
+          <GroupBalancesPanel members={balancesQuery.data.members} myMemberId={myMember?.member_id} onSettleUp={() => setSettleOpen(true)} disabled={members.length < 2} />
+        )}
+      </Box>
 
       {/* Create Group dialog */}
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth>
@@ -541,75 +469,6 @@ const GroupsPage: React.FC = () => {
             <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button variant="contained" disabled={!newName.trim() || creating} onClick={handleCreateGroup}>
               {creating ? 'Creating...' : 'Create'}
-            </Button>
-          </Box>
-        </Box>
-      </Dialog>
-
-      {/* Add Expense dialog — narrow (Splitwise-proportioned) rather than wide, since a
-          compact vertical form reads better than long full-width fields. Who paid + how it
-          splits collapse to a single tap-to-edit summary line (PaidBySplitSummary) instead of
-          always-expanded pickers. Currency is fixed to the group's own (set in Group
-          Settings) — no per-expense override, so there's nothing to configure here. */}
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="xs" fullWidth>
-        <Box sx={{ p: 2.5 }}>
-          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
-            Add Group Expense
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <TextField
-              label="Description"
-              size="small"
-              fullWidth
-              value={description}
-              onChange={handleDescriptionChange}
-              onBlur={() => {
-                if (typingRef.current) clearTimeout(typingRef.current);
-                fetchCategory(description);
-              }}
-              required
-            />
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
-              <TextField label="Date" type="date" size="small" fullWidth value={date} onChange={(e) => setDate(e.target.value)} InputLabelProps={{ shrink: true }} />
-              <TextField
-                label="Amount"
-                type="number"
-                size="small"
-                fullWidth
-                value={amount}
-                onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-                inputProps={{ min: 0, step: 0.01 }}
-                InputProps={{ startAdornment: <InputAdornment position="start">{group?.currency || 'USD'}</InputAdornment> }}
-              />
-            </Box>
-            <CategoryPickerField
-              mainCategory={findMainCategory(category)}
-              subcategory={category}
-              onChange={(_main, sub) => {
-                setCategory(sub);
-                setUserPickedCategory(true);
-              }}
-            />
-
-            <PaidBySplitSummary
-              amount={amount}
-              members={members}
-              myMemberId={myMember?.member_id}
-              payers={payers}
-              onPayersChange={setPayers}
-              splitValue={splitValue}
-              onSplitChange={setSplitValue}
-            />
-            {formError && (
-              <Typography color="error" variant="body2">
-                {formError}
-              </Typography>
-            )}
-          </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
-            <Button onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button variant="contained" disabled={saving || !description.trim() || !category.trim() || amount <= 0 || !payersValid || !splitValid} onClick={handleAddExpense}>
-              {saving ? 'Saving...' : 'Add Expense'}
             </Button>
           </Box>
         </Box>

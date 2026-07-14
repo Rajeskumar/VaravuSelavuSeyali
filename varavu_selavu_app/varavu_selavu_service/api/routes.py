@@ -472,6 +472,8 @@ def analysis_chat(
     insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
     group_service: GroupService = Depends(get_group_service),
     balance_service: BalanceService = Depends(get_balance_service),
+    expense_service: ExpenseService = Depends(get_expense_service),
+    group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
     user_id: str = Depends(auth_required),
 ):
     """
@@ -487,6 +489,8 @@ def analysis_chat(
             insight_service=insight_service,
             group_service=group_service,
             balance_service=balance_service,
+            expense_service=expense_service,
+            group_expense_service=group_expense_service,
             groups_enabled=settings.GROUPS_ENABLED,
             model=body.model,
             provider=body.provider,

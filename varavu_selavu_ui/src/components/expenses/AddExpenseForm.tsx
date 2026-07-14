@@ -16,15 +16,14 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CircularProgress from '@mui/material/CircularProgress';
 import { keyframes } from '@mui/system';
-import heic2any from 'heic2any';
 import {
   addExpense,
   updateExpense,
-  parseReceipt,
   addExpenseWithItems,
   suggestCategory,
   ExpenseRecord,
   AddExpensePayload,
+  ReceiptParseDraft,
 } from '../../api/expenses';
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
@@ -41,6 +40,7 @@ import {
   ApiError,
 } from '../../api/groups';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
+import { useReceiptScan } from '../../hooks/useReceiptScan';
 import PayerPicker from '../groups/PayerPicker';
 import ItemSplitBoard from '../groups/ItemSplitBoard';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
@@ -147,11 +147,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [mainCategory, setMainCategory] = useState(initialMain);
   const [subcategory, setSubcategory] = useState(initialSub);
   const [userPickedCategory, setUserPickedCategory] = useState(!!existing);
-  const [file, setFile] = useState<File | null>(null);
   const [draft, setDraft] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
-  const [parsing, setParsing] = useState(false);
-  const [converting, setConverting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [recurring, setRecurring] = useState(false);
   const [repeatDay, setRepeatDay] = useState<number>(new Date().getDate());
@@ -230,14 +227,52 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     to { transform: rotate(360deg); }
   `;
 
-  // OpenAI only accepts PNG or JPEG. Any other image format (e.g., HEIC) must
-  // be converted in-browser before sending to the backend.
-  const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg'];
+  // Maps a parsed receipt draft onto this form's own state — shared by both the manual
+  // "Parse Receipt" button and the scan hook's auto-parse-on-camera-capture path.
+  const applyParseResult = (res: ReceiptParseDraft) => {
+    const hdr = res.header || {};
+    const sub = hdr.category_name || '';
+    const main = hdr.main_category_name || findMainCategory(sub);
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+    let desc = hdr.description || '';
+    const merchant = hdr.merchant_name || hdr.merchant || '';
+    if (!desc) {
+      if (sub === 'Dining out' && hdr.purchased_at) {
+        const hour = new Date(hdr.purchased_at).getHours();
+        const meal = hour >= 17 ? 'Dinner' : hour >= 11 ? 'Lunch' : 'Breakfast';
+        desc = `${meal} at ${merchant || 'restaurant'}`;
+      } else {
+        desc = merchant;
+      }
+    }
 
-  const isMobile = typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent);
+    const processed = {
+      ...res,
+      header: { ...res.header, description: desc, main_category_name: main, category_name: sub || CATEGORY_GROUPS[main][0] },
+    };
+    setDraft(processed);
+    setCost(Number(res.header.amount) || 0);
+    setGroupItems((res.items || []).map((i: any, idx: number) => ({
+      line_no: idx + 1,
+      item_name: i.item_name,
+      line_total: Number(i.line_total) || 0,
+      quantity: Number(i.quantity) || null,
+      unit_price: Number(i.unit_price) || null,
+      member_ratios: {},
+    })));
+    setMessage('Receipt parsed successfully. Review details below.');
+    setDescription(desc);
+    // Populate merchant from receipt header if user hasn't manually typed one
+    if (!userPickedMerchant && (hdr.merchant_name || hdr.merchant)) {
+      setMerchantName(hdr.merchant_name || hdr.merchant || '');
+    }
+    if (hdr.purchased_at) setExpenseDate(hdr.purchased_at.split('T')[0]);
+    setMainCategory(main);
+    if (sub && CATEGORY_GROUPS[main].includes(sub)) setSubcategory(sub); else setSubcategory(CATEGORY_GROUPS[main][0]);
+  };
+
+  const scan = useReceiptScan({ onAutoParse: applyParseResult });
+  const { file, converting, parsing, fileInputRef, cameraInputRef, isMobile } = scan;
 
   const fetchCategory = async () => {
     if (!description.trim() || userPickedCategory) return;
@@ -295,59 +330,6 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     }
   }, [existing]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] || null;
-    if (f) {
-      if (!(f.type.startsWith('image/') || f.type === 'application/pdf')) {
-        setMessage('Unsupported file type');
-        setFile(null);
-        return;
-      }
-      setConverting(true);
-      let processed = f;
-      if (f.type.startsWith('image/') && !SUPPORTED_IMAGE_TYPES.includes(f.type)) {
-        try {
-          // First handle HEIC explicitly via the heic2any library.  This avoids
-          // relying on createImageBitmap, which many browsers do not support
-          // for HEIC images captured on iOS devices.
-          if (f.type === 'image/heic' || f.name.toLowerCase().endsWith('.heic')) {
-            const heicBlob = await heic2any({ blob: f, toType: 'image/png' });
-            processed = new File([heicBlob], f.name.replace(/\.[^.]+$/, '.png'), {
-              type: 'image/png',
-            });
-          } else {
-            const img = await createImageBitmap(f);
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx?.drawImage(img, 0, 0);
-            const blob: Blob | null = await new Promise(res => canvas.toBlob(res, 'image/png'));
-            if (blob) {
-              processed = new File([blob], f.name.replace(/\.[^.]+$/, '.png'), {
-                type: 'image/png',
-              });
-            } else {
-              setMessage('Failed to process image');
-              setConverting(false);
-              return;
-            }
-          }
-        } catch {
-          setMessage('Unsupported image format');
-          setConverting(false);
-          return;
-        }
-      }
-      setFile(processed);
-      setConverting(false);
-      // Auto-parse when capturing from camera
-      if (e.target === cameraInputRef.current) {
-        await handleParse(processed);
-      }
-    }
-  };
-
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setDescription(val);
@@ -366,56 +348,15 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     fetchCategory();
   };
 
-  const handleParse = async (f?: File) => {
-    const target = f || file;
-    if (!target) return;
-    try {
-      setParsing(true);
-      const res = await parseReceipt(target);
-      const hdr = res.header || {};
-      const sub = hdr.category_name || '';
-      const main = hdr.main_category_name || findMainCategory(sub);
+  // Mirrors the hook's error (from either this manual click or an auto-parsed camera
+  // capture) into the same message banner the rest of the form already uses.
+  useEffect(() => {
+    if (scan.error) setMessage(scan.error);
+  }, [scan.error]);
 
-      let desc = hdr.description || '';
-      const merchant = hdr.merchant_name || hdr.merchant || '';
-      if (!desc) {
-        if (sub === 'Dining out' && hdr.purchased_at) {
-          const hour = new Date(hdr.purchased_at).getHours();
-          const meal = hour >= 17 ? 'Dinner' : hour >= 11 ? 'Lunch' : 'Breakfast';
-          desc = `${meal} at ${merchant || 'restaurant'}`;
-        } else {
-          desc = merchant;
-        }
-      }
-
-      const processed = {
-        ...res,
-        header: { ...res.header, description: desc, main_category_name: main, category_name: sub || CATEGORY_GROUPS[main][0] },
-      };
-      setDraft(processed);
-      setCost(Number(res.header.amount) || 0);
-      setGroupItems((res.items || []).map((i: any, idx: number) => ({
-        line_no: idx + 1,
-        item_name: i.item_name,
-        line_total: Number(i.line_total) || 0,
-        quantity: Number(i.quantity) || null,
-        unit_price: Number(i.unit_price) || null,
-        member_ratios: {},
-      })));
-      setMessage('Receipt parsed successfully. Review details below.');
-      setDescription(desc);
-      // Populate merchant from receipt header if user hasn't manually typed one
-      if (!userPickedMerchant && (hdr.merchant_name || hdr.merchant)) {
-        setMerchantName(hdr.merchant_name || hdr.merchant || '');
-      }
-      if (hdr.purchased_at) setExpenseDate(hdr.purchased_at.split('T')[0]);
-      setMainCategory(main);
-      if (sub && CATEGORY_GROUPS[main].includes(sub)) setSubcategory(sub); else setSubcategory(CATEGORY_GROUPS[main][0]);
-    } catch (e) {
-      setMessage('Failed to parse receipt');
-    } finally {
-      setParsing(false);
-    }
+  const handleParseClick = async () => {
+    const res = await scan.parseFile();
+    if (res) applyParseResult(res);
   };
 
   const reconcileDelta = () => {
@@ -480,7 +421,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           setDescription('');
           setCost(0);
           setDraft(null);
-          setFile(null);
+          scan.setFile(null);
           onSuccess?.();
         } catch (err) {
           const msg = err instanceof ApiError ? err.message : 'Failed to add group expense.';
@@ -552,7 +493,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
         setDescription('');
         setCost(0);
         setDraft(null);
-        setFile(null);
+        scan.setFile(null);
       }
       onSuccess?.();
     } catch (err) {
@@ -852,7 +793,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   type="file"
                   accept="image/*,application/pdf"
                   style={{ display: 'none' }}
-                  onChange={handleFileChange}
+                  onChange={scan.handleFileChange}
                 />
                 <input
                   ref={cameraInputRef}
@@ -860,7 +801,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   accept="image/*"
                   capture="environment"
                   style={{ display: 'none' }}
-                  onChange={handleFileChange}
+                  onChange={scan.handleFileChange}
                 />
                 <Button  onClick={() => fileInputRef.current?.click()}>
                   Choose File
@@ -874,7 +815,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 <Tooltip title="Upload a receipt image or PDF to pre-fill and itemize this expense">
                   <span>
                     <Button
-                      onClick={() => handleParse()}
+                      onClick={handleParseClick}
                       disabled={!file || parsing || converting}
                       startIcon={
                         parsing ? (

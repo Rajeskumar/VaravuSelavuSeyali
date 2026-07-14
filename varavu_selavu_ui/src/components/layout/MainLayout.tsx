@@ -1,45 +1,32 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import Fab from '@mui/material/Fab';
-import Dialog from '@mui/material/Dialog';
-import Snackbar from '@mui/material/Snackbar';
-import Alert from '@mui/material/Alert';
 import AddIcon from '@mui/icons-material/Add';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import SideNav from './SideNav';
+import BottomNav from './BottomNav';
 import Footer from './Footer';
 import PageContainer from './PageContainer';
-import AddExpenseForm from '../expenses/AddExpenseForm';
-import { notifyExpenseChanged } from '../../utils/expenseEvents';
-import { HEADER_HEIGHT, FOOTER_HEIGHT } from './layoutConstants';
+import { useQuickCapture } from '../../context/QuickCaptureContext';
+import { HEADER_HEIGHT, BOTTOM_NAV_HEIGHT } from './layoutConstants';
 
 interface Props {
   children: React.ReactNode;
-  mobileOpen: boolean;
-  handleDrawerToggle: () => void;
 }
 
 /**
- * Persistent "Add Expense" FAB (TS-DES-111) — reachable from every
- * authenticated route since every route wraps its page in this layout,
- * bringing web to parity with mobile's existing center "+" tab. Opens the
- * same AddExpenseForm ExpensesPage uses, scoped to personal expenses only
- * (group-scoped entry already has its own flow on GroupDetailPage).
+ * Mobile-only "Add Expense" FAB (TrackSpense v3 design) — desktop's equivalent is the header
+ * "+ New expense" button (App.tsx) instead of a floating corner button; the design's desktop
+ * shell has no FAB at all. Both open the single shared QuickCaptureSheet via QuickCaptureContext
+ * rather than each owning their own dialog state.
  */
-const MainLayout: React.FC<Props> = ({ children, mobileOpen, handleDrawerToggle }) => {
-  const queryClient = useQueryClient();
-  const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') || '' : '';
-  const [addOpen, setAddOpen] = React.useState(false);
-  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' }>(
-    { open: false, message: '', severity: 'success' }
-  );
-
-  const handleSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['expenses', user] });
-    notifyExpenseChanged();
-    setAddOpen(false);
-    setToast({ open: true, message: 'Expense added', severity: 'success' });
-  };
+const MainLayout: React.FC<Props> = ({ children }) => {
+  const theme = useTheme();
+  // Matches SideNav/App.tsx's own mobile-chrome breakpoint, so the FAB and the nav chrome
+  // around it switch at the same width.
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { openQuickCapture } = useQuickCapture();
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: `calc(100vh - ${HEADER_HEIGHT}px)` }}>
@@ -50,49 +37,39 @@ const MainLayout: React.FC<Props> = ({ children, mobileOpen, handleDrawerToggle 
           a sibling of this row (not nested in the content column), matching the reference
           prototypes' shell — it spans the full width, under the sidebar too. */}
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <SideNav mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle} />
+        <SideNav />
         <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* Extra bottom padding clears the fixed FAB (56px + 24px offset) so it
-              never overlaps the last row of page content. */}
-          <PageContainer sx={{ pb: 12, pt: 4, flex: 1 }}>
+          {/* Extra bottom padding clears BottomNav + its higher-riding FAB below `md`
+              (TrackSpense v3 Mobile); desktop has no floating chrome to clear. */}
+          <PageContainer
+            sx={{
+              pb: { xs: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 32px)`, md: 4 },
+              pt: 4,
+              flex: 1,
+            }}
+          >
             {children}
           </PageContainer>
         </Box>
       </Box>
       <Footer />
+      <BottomNav />
 
-      {/* `bottom` clears the app-shell Footer (TS-DES-210, added after this FAB existed) —
-          the Footer isn't fixed, but on any page short enough that it's visible without
-          scrolling, a plain `bottom: 24` FAB rendered directly on top of it. */}
-      <Fab
-        color="primary"
-        aria-label="Add Expense"
-        onClick={() => setAddOpen(true)}
-        sx={{ position: 'fixed', bottom: FOOTER_HEIGHT + 24, right: 24, zIndex: (theme) => theme.zIndex.speedDial }}
-      >
-        <AddIcon />
-      </Fab>
-
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
-        <Box sx={{ p: 2 }}>
-          <AddExpenseForm
-            onSuccess={handleSuccess}
-            onError={(msg) => setToast({ open: true, message: msg, severity: 'error' })}
-            onCancel={() => setAddOpen(false)}
-          />
-        </Box>
-      </Dialog>
-
-      <Snackbar
-        open={toast.open}
-        autoHideDuration={2500}
-        onClose={() => setToast((t) => ({ ...t, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setToast((t) => ({ ...t, open: false }))} severity={toast.severity} variant="filled" sx={{ width: '100%' }}>
-          {toast.message}
-        </Alert>
-      </Snackbar>
+      {isMobile && (
+        <Fab
+          color="primary"
+          aria-label="Add Expense"
+          onClick={() => openQuickCapture()}
+          sx={{
+            position: 'fixed',
+            bottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 16px)`,
+            right: 24,
+            zIndex: (t) => t.zIndex.speedDial,
+          }}
+        >
+          <AddIcon />
+        </Fab>
+      )}
     </Box>
   );
 };

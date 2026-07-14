@@ -4,13 +4,15 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { motion } from 'framer-motion';
 import { useTheme } from '@mui/material/styles';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import TrueTotalHero, { MomDelta } from '../components/dashboard/TrueTotalHero';
+import TrueTotalHero, { MomDelta, SpendLens } from '../components/dashboard/TrueTotalHero';
 import SpendSpectrum from '../components/dashboard/SpendSpectrum';
 import MyGroupsStrip from '../components/dashboard/MyGroupsStrip';
 import InsightOfTheDay, { Insight } from '../components/dashboard/InsightOfTheDay';
+import TypeToLogBar from '../components/dashboard/TypeToLogBar';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
 import { getChangeInsights, ChangeInsight } from '../api/analytics';
 import { parseAppDate } from '../utils/date';
@@ -100,6 +102,11 @@ const DashboardPage: React.FC = () => {
   const month = now.getMonth() + 1;
   const navigate = useNavigate();
   const theme = useTheme();
+  // Gates the mobile-only type-to-log bar (TrackSpense v3 Mobile design) — desktop has its own
+  // equivalent bar in the header now (App.tsx). Same breakpoint BottomNav/SideNav switch chrome
+  // at. TrueTotalHero's lens toggle is unconditional (both breakpoints) — see `lens` below.
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [lens, setLens] = React.useState<SpendLens>('share');
   const queryClient = useQueryClient();
   const user = localStorage.getItem('vs_user') || '';
   const { enabled: groupsEnabled } = useGroupsEnabled();
@@ -177,8 +184,12 @@ const DashboardPage: React.FC = () => {
   }, [year, month, refreshKey]);
 
   // Unified recent-transactions feed: personal + (if enabled) my group shares, merged.
+  // `refreshKey` is part of the query key (not just invalidated) so a bump forces a refetch even
+  // though this page fetches everything else via plain useEffect — matches how the effects below
+  // already depend on it. Previously missing here, so Quick Capture/chat/type-to-log saves never
+  // showed up in Recent without navigating away and back.
   const expensesQuery = useQuery({
-    queryKey: ['dashboard-expenses', user],
+    queryKey: ['dashboard-expenses', user, refreshKey],
     queryFn: () => listExpenses(0, 50),
     enabled: !!user,
   });
@@ -213,7 +224,9 @@ const DashboardPage: React.FC = () => {
       }
     })();
     return () => { mounted = false; };
-  }, [groupsEnabled]);
+    // refreshKey: same reason as expensesQuery above — a group expense logged via Quick
+    // Capture/chat/type-to-log needs this to refetch too, not just the personal list.
+  }, [groupsEnabled, refreshKey]);
 
   if (loading) return <Typography sx={{ mt: 4 }}>Loading dashboard...</Typography>;
   if (error) return <Typography color="error" sx={{ mt: 4 }}>{error}</Typography>;
@@ -273,6 +286,9 @@ const DashboardPage: React.FC = () => {
     // width MainLayout's sidebar-aware content column provides, matching DesktopDashboard.jsx;
     // `xs`/`sm` keep the original bounded, centered mobile layout unchanged.
     <Box sx={{ maxWidth: { xs: 480, md: '100%' }, mx: { xs: 'auto', md: 0 } }}>
+      {/* Mobile-only (TrackSpense v3 Mobile design) — desktop's Dashboard is unchanged. */}
+      {isMobile && <TypeToLogBar />}
+
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
         <TrueTotalHero
           personalTotal={personalTotal}
@@ -281,6 +297,8 @@ const DashboardPage: React.FC = () => {
           groupsEnabled={groupsEnabled}
           periodLabel={periodLabel}
           momDelta={momDelta}
+          lens={lens}
+          onLensChange={setLens}
         />
       </motion.div>
 

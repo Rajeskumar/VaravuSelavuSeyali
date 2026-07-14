@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 import GroupsPage from './GroupsPage';
+import { QuickCaptureProvider } from '../context/QuickCaptureContext';
 import * as api from '../api/groups';
 
 jest.mock('heic2any', () => ({
@@ -15,7 +16,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <GroupsPage />
+        <QuickCaptureProvider>
+          <GroupsPage />
+        </QuickCaptureProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );

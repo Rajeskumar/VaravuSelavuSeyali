@@ -164,7 +164,7 @@ All endpoints are prefixed with `/api/v1`. Auth-protected routes require `Author
 | Method | Path | Auth | Description |
 |:---|:---|:---|:---|
 | `GET` | `/analysis?user_id=&year=&month=&start_date=&end_date=` | Yes | Expense analytics (cached 60s) |
-| `POST` | `/analysis/chat` | Yes | AI chat about expenses |
+| `POST` | `/analysis/chat` | Yes | AI chat — answers questions about expenses, and can create personal/group expenses via tool-calling (`create_expense`/`create_group_expense`) |
 
 ### Recurring Expenses
 | Method | Path | Auth | Description |
@@ -202,7 +202,7 @@ ORM Models: [`db/models.py`](./varavu_selavu_service/db/models.py)
 
 ## AI/LLM Configuration
 
-The backend uses LLMs for three features: receipt OCR, expense categorization, and financial chat.
+The backend uses LLMs for three features: receipt OCR, expense categorization, and financial chat. The chat feature is a LangGraph tool-calling agent (`chat_service.py`) — besides answering questions (via read-only tools for expense/item/merchant summaries), it can create personal and group expenses on the user's behalf (`create_expense`/`create_group_expense`), including capturing a merchant name and resolving a named payer for group expenses from natural language. Update/delete are intentionally not supported yet.
 
 ### Provider Routing
 | Environment | Provider | Default Model |

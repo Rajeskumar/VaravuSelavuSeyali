@@ -4,12 +4,13 @@ import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation, Navig
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import { useTheme, useMediaQuery, IconButton, Tooltip } from '@mui/material';
+import TextField from '@mui/material/TextField';
+import { IconButton, Tooltip } from '@mui/material';
 
-import MenuIcon from '@mui/icons-material/Menu';
 import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -23,8 +24,11 @@ import UserMenu from './components/layout/UserMenu';
 import AccountPage from './pages/AccountPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AskPage from './pages/AskPage';
-import AskOverlay from './components/ask/AskOverlay';
 import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
+import { QuickCaptureProvider, useQuickCapture } from './context/QuickCaptureContext';
+import { AskProvider, useAsk } from './context/AskContext';
+import { useQuickLogBar } from './hooks/useQuickLogBar';
+import WillLogPreview from './components/common/WillLogPreview';
 import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
 import FeatureRequestPage from './pages/FeatureRequestPage';
@@ -69,15 +73,12 @@ const MerchantInsightsRedirect: React.FC = () => {
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = React.useState<string | null>(() => localStorage.getItem('vs_user'));
-  const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [askOpen, setAskOpen] = React.useState(false);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { isDark, toggleMode } = useThemeMode();
-
-  const handleDrawerToggle = () => {
-    setMobileOpen(!mobileOpen);
-  };
+  const { openQuickCapture } = useQuickCapture();
+  const { openAsk } = useAsk();
+  // Desktop-only header equivalent of the mobile Dashboard's TypeToLogBar (TrackSpense v3
+  // Prototype) — same shared parsing/submit hook, just a different input/preview shell.
+  const quickLog = useQuickLogBar();
 
   React.useEffect(() => {
     const onStorage = () => setUser(localStorage.getItem('vs_user'));
@@ -111,16 +112,6 @@ const AppContent: React.FC = () => {
         elevation={0}
       >
         <Toolbar sx={{ gap: 1.5, minHeight: { xs: 56, md: HEADER_HEIGHT } }}>
-          {user && isMobile && (
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={handleDrawerToggle}
-            >
-              <MenuIcon />
-            </IconButton>
-          )}
           <Box
             sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}
             onClick={() => navigate('/')}
@@ -136,7 +127,7 @@ const AppContent: React.FC = () => {
                 objectFit: 'cover'
               }}
             />
-            {/* Hidden below `sm`: the hamburger + logo + Ask/theme/avatar icons can
+            {/* Hidden below `sm`: the logo wordmark + Ask/theme/avatar icons can
                 otherwise exceed a narrow phone's width and wrap the Toolbar onto a
                 second line — since the fixed AppBar and its spacer share one hardcoded
                 height, a wrapped header silently overlaps whatever renders at the very
@@ -151,17 +142,51 @@ const AppContent: React.FC = () => {
           </Box>
 
           {/* TS-DES-210: nav lives in the permanent desktop sidebar / mobile drawer now
-              (SideNav.tsx), not a horizontal NavPills row in the header — this spacer just
-              pushes the trailing icons/buttons to the end of the bar. */}
-          <Box sx={{ flexGrow: 1 }} />
+              (SideNav.tsx), not a horizontal NavPills row in the header. Below `md` this is a
+              plain spacer pushing the trailing icons/buttons to the end of the bar; at `md`+ it
+              hosts the type-to-log bar (TrackSpense v3 Prototype) — same shared parser/save
+              path as mobile Dashboard's TypeToLogBar, just living in the header instead. */}
+          <Box sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center', minWidth: 0 }}>
+            {user && (
+              <TextField
+                size="small"
+                value={quickLog.text}
+                onChange={(e) => quickLog.setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') quickLog.submit(); }}
+                placeholder="✨ Log or ask anything… “dinner 84.20 at Nopa split with Weekend Trip”"
+                sx={{
+                  display: { xs: 'none', md: 'block' },
+                  width: '100%',
+                  maxWidth: 560,
+                  '& .MuiOutlinedInput-root': { borderRadius: 999, bgcolor: 'background.default' },
+                }}
+              />
+            )}
+          </Box>
+
+          {/* TrackSpense v3 Prototype (desktop) — the header's fast expense-entry point,
+              replacing the old desktop FAB (mobile keeps its own FAB in the bottom-tab bar;
+              this button is desktop-only so the two don't duplicate). Opens the same shared
+              QuickCaptureSheet every other "+ Add expense" entry point in the app now uses. */}
+          {user && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddRoundedIcon />}
+              onClick={() => openQuickCapture()}
+              sx={{ display: { xs: 'none', md: 'inline-flex' }, borderRadius: 999 }}
+            >
+              New expense
+            </Button>
+          )}
 
           {/* TS-DES-210/207: Ask's entry point — a header icon next to the theme toggle and
-              avatar (desktop), not a floating button (avoids colliding with the Add-Expense
-              FAB's bottom:24/right:24 corner). Shown at every width, not just desktop — mobile
-              has no other trigger for its summonable-sheet variant of the same AskOverlay. */}
+              avatar (desktop), not a floating button. Shown at every width, not just desktop —
+              mobile has no other trigger for its summonable-sheet variant of the same
+              AskOverlay. */}
           {user && (
             <Tooltip title="Ask AI">
-              <IconButton color="inherit" onClick={() => setAskOpen(true)} aria-label="Ask AI">
+              <IconButton color="inherit" onClick={() => openAsk()} aria-label="Ask AI">
                 <AutoAwesomeRoundedIcon />
               </IconButton>
             </Tooltip>
@@ -193,6 +218,24 @@ const AppContent: React.FC = () => {
       {/* Spacer — must match the AppBar Toolbar's own height exactly (HEADER_HEIGHT at desktop) so
           routed content starts right below the fixed header with no gap/overlap. */}
       <Toolbar sx={{ minHeight: { xs: 56, md: HEADER_HEIGHT } }} />
+      {user && quickLog.parsed && (
+        <Box sx={{ display: { xs: 'none', md: 'block' } }}>
+          <WillLogPreview
+            parsed={quickLog.parsed}
+            memberCount={quickLog.memberCount}
+            submitting={quickLog.submitting}
+            onSubmit={quickLog.submit}
+            variant="strip"
+          />
+        </Box>
+      )}
+      {user && quickLog.isQuestion && (
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'center', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="caption" color="text.secondary">
+            Press Enter to ask the AI
+          </Typography>
+        </Box>
+      )}
       <Routes>
         <Route path="/" element={<Root />} />
         <Route path="/login" element={<LoginPage />} />
@@ -205,14 +248,14 @@ const AppContent: React.FC = () => {
         <Route path="/contact" element={<ContactPage />} />
         {/* Public: must be reachable pre-login (deep link from an invite email/text); resumes after auth via LoginPage. */}
         <Route path="/groups/join/:token" element={<JoinGroupPage />} />
-        <Route path="/dashboard" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><DashboardPage /></MainLayout></RequireAuth>} />
-        <Route path="/expenses" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpensesPage /></MainLayout></RequireAuth>} />
-        <Route path="/groups" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupsPage /></MainLayout></RequireAuth>} />
-        <Route path="/groups/:id" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><GroupsPage /></MainLayout></RequireAuth>} />
-        <Route path="/analysis" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
+        <Route path="/dashboard" element={<RequireAuth><MainLayout><DashboardPage /></MainLayout></RequireAuth>} />
+        <Route path="/expenses" element={<RequireAuth><MainLayout><ExpensesPage /></MainLayout></RequireAuth>} />
+        <Route path="/groups" element={<RequireAuth><MainLayout><GroupsPage /></MainLayout></RequireAuth>} />
+        <Route path="/groups/:id" element={<RequireAuth><MainLayout><GroupsPage /></MainLayout></RequireAuth>} />
+        <Route path="/analysis" element={<RequireAuth><MainLayout><ExpenseAnalysisPage /></MainLayout></RequireAuth>} />
         {/* TS-DES-204: Recurring is now a sub-tab of Expenses, not a standalone page. */}
         <Route path="/recurring" element={<Navigate to="/expenses?tab=recurring" replace />} />
-        <Route path="/ask" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AskPage /></MainLayout></RequireAuth>} />
+        <Route path="/ask" element={<RequireAuth><MainLayout><AskPage /></MainLayout></RequireAuth>} />
         {/* TS-DES-207: AI Analyst is no longer a nav tab or dedicated page destination — this
             redirect exists purely for old bookmarks/links, preserving ?q=... */}
         <Route path="/ai-analyst" element={<AiAnalystRedirect />} />
@@ -220,20 +263,13 @@ const AppContent: React.FC = () => {
             Items/Merchants tabs on /analysis. */}
         <Route path="/item-insights" element={<ItemInsightsRedirect />} />
         <Route path="/merchant-insights" element={<MerchantInsightsRedirect />} />
-        <Route path="/account" element={<RequireAuth><MainLayout mobileOpen={mobileOpen} handleDrawerToggle={handleDrawerToggle}><AccountPage /></MainLayout></RequireAuth>} />
+        <Route path="/account" element={<RequireAuth><MainLayout><AccountPage /></MainLayout></RequireAuth>} />
         {/* TS-DES-202: /profile is no longer a primary nav destination — folds into /account's
             default Profile tab. Redirect shim so no existing bookmark/link 404s. */}
         <Route path="/profile" element={<Navigate to="/account" replace />} />
       </Routes>
       {/* Recurring expenses prompt appears after login */}
       {user && <RecurringPrompt />}
-
-      {/* TS-DES-207 — ambient Ask panel: desktop slide-in / mobile summonable sheet, triggered by
-          the header icon above. Wraps the same AIAnalystChat component the old /ai-analyst page
-          used (TS-DES-109), just rehosted off the nav tab. Gated on `user` like RecurringPrompt
-          above — an authenticated-only feature, and AIAnalystChat isn't meant to mount at all
-          for a logged-out visitor. */}
-      {user && <AskOverlay open={askOpen} onClose={() => setAskOpen(false)} />}
     </>
   );
 };
@@ -252,7 +288,11 @@ const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeModeProvider>
       <Router>
-        <AppContent />
+        <AskProvider>
+          <QuickCaptureProvider>
+            <AppContent />
+          </QuickCaptureProvider>
+        </AskProvider>
       </Router>
     </ThemeModeProvider>
   </QueryClientProvider>

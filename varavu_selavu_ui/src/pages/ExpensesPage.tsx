@@ -24,6 +24,7 @@ import {
 } from '../api/groups';
 import { AnalysisScope } from '../api/analysis';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
+import { useQuickCapture } from '../context/QuickCaptureContext';
 
 type ExpensesTab = 'transactions' | 'recurring';
 
@@ -38,6 +39,7 @@ const ExpensesPage: React.FC = () => {
   const user = localStorage.getItem('vs_user') || '';
   const queryClient = useQueryClient();
   const { enabled: groupsEnabled } = useGroupsEnabled();
+  const { openQuickCapture } = useQuickCapture();
   const [scope, setScope] = React.useState<AnalysisScope>('personal');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
@@ -317,8 +319,11 @@ const ExpensesPage: React.FC = () => {
             Expenses
           </Typography>
           {tab === 'transactions' && groupsEnabled && <GroupScopeFilter value={scope} onChange={setScope} />}
+          {/* TrackSpense v3 Prototype — this now opens the shared Quick Capture sheet/dialog
+              instead of AddExpenseForm; the Dialog+AddExpenseForm below is still used, but only
+              reached via a row's Edit icon (handleRowEdit) now. */}
           {tab === 'transactions' && (
-            <Button variant="contained" onClick={() => { setEditing(null); setOpen(true); }}>
+            <Button variant="contained" onClick={() => openQuickCapture()}>
               Add Expense
             </Button>
           )}
