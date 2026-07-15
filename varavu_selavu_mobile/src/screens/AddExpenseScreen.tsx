@@ -1,27 +1,38 @@
+/**
+ * AddExpenseScreen.tsx — TrackSpense v3 Mobile "Quick Capture" sheet (see
+ * `TrackSpense v3 Mobile.dc.html`'s `capIsEntry`/`capIsSaved` blocks). File path and the exported
+ * `AddExpenseContext`/`AddExpenseProvider` shell are kept as-is — six call sites across the app
+ * (`App.tsx`'s FAB, `HomeScreen`/`AnalysisScreen`/`ItemInsightsScreen`/`MerchantInsightsScreen`'s
+ * empty-state CTAs, `GroupDetailScreen`'s "+ Add expense") depend on
+ * `useContext(AddExpenseContext).openAddExpense` — only the internal sheet changed.
+ *
+ * This replaces what used to be a 759-line rich form (full category picker, date field, currency
+ * override, multi-payer, itemized receipt split) with the mock's much simpler keypad-driven flow:
+ * amount via a 12-key pad, one description field, "who" chips (Just me + real groups, equal-split
+ * only), Save, then a success screen. Verified before rewriting that this form was create-only —
+ * group expense edits go through `EditGroupExpenseModal.tsx`, personal edits through
+ * `ExpensesScreen.tsx`'s own inline modal — so nothing is lost for *editing*; only the *creation*
+ * flow's power-user controls (multi-payer, itemized splits, currency override, explicit category
+ * picker, custom date) are gone, the same trade-off already accepted for the web app's own Quick
+ * Capture. Category is still set — via the existing debounced `categorizeExpense()` call, just
+ * with no visible picker, matching the mock (which has no category UI either).
+ */
 import React, { useState, useRef, useCallback, createContext, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
-  Dimensions, Pressable, Platform,
+  Dimensions, Pressable,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { addExpense, categorizeExpense } from '../api/expenses';
-import {
-  listGroups, getGroupDetail, addGroupExpense, addGroupExpenseWithItems, GroupSummary, ApiError,
-  PayerSummaryItem, GroupExpenseItemEntry
-} from '../api/groups';
-import { CATEGORY_GROUPS, MAIN_CATEGORIES } from '../constants/categories';
+import { listGroups, getGroupDetail, addGroupExpense, GroupSummary, ApiError } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
-import CustomButton from '../components/CustomButton';
 import { showToast } from '../components/Toast';
-import SplitEditor, { SplitEntry as SplitEditorEntry, SplitType } from '../components/SplitEditor';
-import PayerPicker from '../components/PayerPicker';
-import ItemSplitBoard from '../components/ItemSplitBoard';
 import { notifyExpenseChanged } from '../utils/expenseEvents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -30,8 +41,18 @@ function todayMMDDYYYY(): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
+function fmt(n: number): string {
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const GROUP_TYPE_EMOJI: Record<string, string> = { other: '👥', trip: '✈️', home: '🏠', couple: '💑' };
+
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
+
 export interface AddExpenseContextType {
-  openAddExpense: () => void;
+  /** `initialGroupId` pre-selects that group's "who" chip on open — used by GroupDetailScreen's
+   * own "+ Add expense" button so Quick Capture opens already scoped to that group. */
+  openAddExpense: (initialGroupId?: string) => void;
   closeAddExpense: () => void;
 }
 
@@ -44,200 +65,156 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [visible, setVisible] = useState(false);
-  // Sheet starts fully off screen at the bottom
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
-  // Form state
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [mainCategory, setMainCategory] = useState(MAIN_CATEGORIES[0]);
-  const [subcategory, setSubcategory] = useState(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
-  const [date, setDate] = useState(todayMMDDYYYY());
-  const [loading, setLoading] = useState(false);
-  const [categorizing, setCategorizing] = useState(false);
+  const [stage, setStage] = useState<'entry' | 'saved'>('entry');
+  const [amt, setAmt] = useState('');
+  const [desc, setDesc] = useState('');
+  const [who, setWho] = useState('me');
   const [merchantName, setMerchantName] = useState('');
-  const [userPickedMerchant, setUserPickedMerchant] = useState(false);
+  const [mainCategory, setMainCategory] = useState('');
+  const [subcategory, setSubcategory] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [savedAmt, setSavedAmt] = useState(0);
+  const [savedLine, setSavedLine] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Group-mode state (TS-GRP-109 / TS-GRP-117)
-  const [scope, setScope] = useState<'personal' | 'group'>('personal');
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  // TS-GRP-131: currency this expense was paid in, if different from the
-  // group's own currency. Empty/blank means "same as group".
-  const [groupCurrency, setGroupCurrency] = useState('');
-
-
-  const [payers, setPayers] = useState<PayerSummaryItem[]>([]);
-  const [payersValid, setPayersValid] = useState(false);
-  
-  const [splitType, setSplitType] = useState<SplitType>('equal');
-  const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
-  
-  // Note: mobile doesn't currently hook up draft receipt parsing UI for items in Phase 1 AddExpenseScreen,
-  // but if we were to receive a draft with items, we'd populate this:
-  const [groupItems, setGroupItems] = useState<GroupExpenseItemEntry[]>([]);
-  const [groupItemsValid, setGroupItemsValid] = useState(true); // default true if empty
 
   const { accessToken, userEmail } = useAuth();
   const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
 
-  const openAddExpense = useCallback(() => {
+  const resetForm = (initialWho: string) => {
+    setStage('entry');
+    setAmt('');
+    setDesc('');
+    setMerchantName('');
+    setMainCategory('');
+    setSubcategory('');
+    setWho(initialWho);
+  };
+
+  const openAddExpense = useCallback((initialGroupId?: string) => {
+    resetForm(initialGroupId ?? 'me');
     setVisible(true);
-    // Animate simultaneously: slide sheet up + fade backdrop
     Animated.parallel([
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 65,
-        friction: 11,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
+      Animated.timing(backdropOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
     ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const closeAddExpense = useCallback(() => {
     Animated.parallel([
-      Animated.timing(translateY, {
-        toValue: SCREEN_H,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setVisible(false);
-      resetForm();
-    });
+      Animated.timing(translateY, { toValue: SCREEN_H, duration: 300, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start(() => setVisible(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const resetForm = () => {
-    setDescription('');
-    setAmount('');
-    setMerchantName('');
-    setUserPickedMerchant(false);
-    setDate(todayMMDDYYYY());
-    setMainCategory(MAIN_CATEGORIES[0]);
-    setSubcategory(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
-    setScope('personal');
-    setSelectedGroupId(null);
-    setPayers([]);
-    setPayersValid(false);
-    setSplitType('equal');
-    setSplitEntries([]);
-    setGroupItems([]);
-  };
-
-  const handleDescriptionChange = useCallback((text: string) => {
-    setDescription(text);
+  const handleDescChange = useCallback((text: string) => {
+    setDesc(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (text.trim().length >= 3) {
       debounceRef.current = setTimeout(async () => {
         try {
-          setCategorizing(true);
           const result = await categorizeExpense(text.trim());
-          const mc = result.main_category || '';
-          const sub = result.subcategory || '';
-          if (mc && CATEGORY_GROUPS[mc]) {
-            setMainCategory(mc);
-            setSubcategory(CATEGORY_GROUPS[mc].includes(sub) ? sub : CATEGORY_GROUPS[mc][0]);
-          }
-          if (!userPickedMerchant && result.merchant_name) setMerchantName(result.merchant_name);
-        } catch { }
-        finally { setCategorizing(false); }
+          if (result.main_category) setMainCategory(result.main_category);
+          if (result.subcategory) setSubcategory(result.subcategory);
+          if (result.merchant_name) setMerchantName(result.merchant_name);
+        } catch { /* best-effort — falls back to defaults at save time */ }
       }, 800);
     }
-  }, [userPickedMerchant]);
+  }, []);
 
-  const handleSubmit = async () => {
-    if (!description.trim()) {
-      showToast({ message: 'Please enter a description', type: 'warning' });
-      return;
-    }
-    if (!amount.trim() || isNaN(parseFloat(amount))) {
-      showToast({ message: 'Please enter a valid amount', type: 'warning' });
-      return;
-    }
-    if (!accessToken || !userEmail) return;
+  const capPress = (k: string) => {
+    setAmt((prev) => {
+      if (k === '⌫') return prev.slice(0, -1);
+      if (k === '.') return prev.includes('.') ? prev : (prev || '0') + '.';
+      const dec = prev.split('.')[1];
+      if (dec && dec.length >= 2) return prev;
+      if (prev.replace('.', '').length >= 7) return prev;
+      return prev + k;
+    });
+  };
 
-    // ── Group expense path ──────────────────────────────────────────────────
-    if (scope === 'group') {
-      if (!selectedGroupId) {
-        showToast({ message: 'Please select a group', type: 'warning' });
-        return;
-      }
-      if (!payersValid) {
-        showToast({ message: 'Payers total does not match expense amount', type: 'warning' });
-        return;
-      }
-      if (groupItems.length > 0 && !groupItemsValid) {
-        showToast({ message: 'Item split is incomplete or invalid', type: 'warning' });
-        return;
-      }
-      setLoading(true);
-      try {
-        if (groupItems.length > 0) {
-          await addGroupExpenseWithItems(selectedGroupId, {
-            date,
-            description,
-            category: subcategory,
-            amount: parseFloat(amount),
-            merchant_name: merchantName || undefined,
-            payers,
-            items: groupItems,
-            currency: groupCurrency.trim() ? groupCurrency.trim().toUpperCase() : undefined,
-          });
-        } else {
-          await addGroupExpense(selectedGroupId, {
-            date,
-            description,
-            category: subcategory,
-            amount: parseFloat(amount),
-            merchant_name: merchantName || undefined,
-            payers,
-            split: {
-              type: splitType,
-              entries: splitEntries,
-            },
-            currency: groupCurrency.trim() ? groupCurrency.trim().toUpperCase() : undefined,
-          });
-        }
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast({ message: 'Group expense added', type: 'success' });
-        notifyExpenseChanged();
-        closeAddExpense();
-      } catch (error: any) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        showToast({ message: error.message || 'Failed to save', type: 'error' });
-      } finally {
-        setLoading(false);
-      }
-      return;
-    }
+  const handleScan = () => {
+    // Real receipt-scan/OCR wiring is a separate, bounded feature (expo-image-picker is an
+    // installed-but-unused dependency that could support it) — deliberately out of scope here,
+    // consistent with the earlier decision not to build it as part of matching the v3 design.
+    showToast({ message: 'Receipt scanning coming soon', type: 'info' });
+  };
 
-    // ── Personal expense path (unchanged) ──────────────────────────────────
+  // Same query key useQuickLogBar.ts uses for its group list — shared cache, no duplicate fetch.
+  const { data: groupsData } = useQuery({
+    queryKey: ['groups', false],
+    queryFn: () => listGroups(false),
+    retry: (count, err) => (err instanceof ApiError && err.status === 404 ? false : count < 1),
+    staleTime: 60_000,
+    enabled: !!accessToken,
+  });
+  const groupsEnabled = Array.isArray(groupsData);
+  const myGroups: GroupSummary[] = groupsData ?? [];
+
+  const numAmount = parseFloat(amt || '0') || 0;
+  const isGroup = who !== 'me';
+  const selectedGroup = myGroups.find((g) => g.group_id === who);
+  const shareAmount = isGroup && selectedGroup ? numAmount / Math.max(selectedGroup.member_count, 1) : numAmount;
+  const capReady = numAmount > 0 && desc.trim().length > 0;
+  const amtDisplay = amt ? '$' + amt : '$0.00';
+
+  const handleSave = async () => {
+    if (!capReady || !accessToken || !userEmail || loading) return;
     setLoading(true);
     try {
-      await addExpense({
-        description,
-        cost: parseFloat(amount),
-        category: subcategory,
-        sub_category: subcategory,
-        date,
-        user_id: userEmail,
-        merchant_name: merchantName || undefined,
-      }, accessToken);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast({ message: 'Expense saved', type: 'success' });
-      notifyExpenseChanged();
-      closeAddExpense();
+      if (!isGroup) {
+        await addExpense(
+          {
+            description: desc.trim(),
+            cost: numAmount,
+            category: mainCategory || 'Other',
+            sub_category: subcategory || 'General',
+            date: todayMMDDYYYY(),
+            user_id: userEmail,
+            merchant_name: merchantName || undefined,
+          },
+          accessToken
+        );
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        notifyExpenseChanged();
+        setSavedAmt(numAmount);
+        setSavedLine('Logged to your personal ledger.');
+      } else {
+        const detail = await getGroupDetail(who);
+        const myMember = detail.members.find((m) => m.user_email === userEmail);
+        if (!myMember) {
+          throw new Error("You don't appear to be an active member of that group.");
+        }
+        const share = numAmount / Math.max(detail.members.length, 1);
+        await addGroupExpense(who, {
+          date: todayMMDDYYYY(),
+          description: desc.trim(),
+          category: mainCategory || 'Other',
+          amount: numAmount,
+          merchant_name: merchantName || undefined,
+          payers: [{ member_id: myMember.member_id, amount_paid: numAmount }],
+          split: { type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) },
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        notifyExpenseChanged();
+        // GroupsScreen/PeopleList/GroupDetailScreen aren't subscribed to notifyExpenseChanged and
+        // the app's QueryClient has refetchOnWindowFocus: false — same invalidation set
+        // useQuickLogBar.ts's group-save path already uses.
+        qc.invalidateQueries({ queryKey: ['group-expenses', who] });
+        qc.invalidateQueries({ queryKey: ['group-balances', who] });
+        qc.invalidateQueries({ queryKey: ['groups'] });
+        qc.invalidateQueries({ queryKey: ['friend-balances'] });
+        setSavedAmt(numAmount);
+        setSavedLine(
+          `Logged to ${detail.name} — your share ${fmt(share)} joins your personal total automatically.`
+        );
+      }
+      setStage('saved');
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast({ message: error.message || 'Failed to save', type: 'error' });
@@ -246,290 +223,137 @@ export default function AddExpenseProvider({ children }: { children: React.React
     }
   };
 
-  // Fetch groups for the Personal/Group toggle (feature-flag aware).
-  // NOTE: queryFn must be wrapped, not passed as a bare `listGroups` reference —
-  // react-query calls queryFn(context), and since `context` is a truthy object,
-  // passing listGroups directly would make `includeArchived` always truthy,
-  // silently pulling in archived groups here.
-  const { data: groupsData } = useQuery({
-    queryKey: ['groups'],
-    queryFn: () => listGroups(),
-    retry: (count, err) => {
-      if (err instanceof ApiError && err.status === 404) return false;
-      return count < 1;
-    },
-    staleTime: 60_000,
-  });
-  // GROUPS_ENABLED is effectively true if the query succeeded (even empty list)
-  const groupsEnabled = Array.isArray(groupsData);
-  const myGroups: GroupSummary[] = groupsData ?? [];
-
-  // `GroupSummary` (from listGroups) never carries `.members` — fetch the full
-  // detail for the selected group so PayerPicker/SplitEditor/ItemSplitBoard
-  // get real members instead of always rendering empty (a pre-existing bug:
-  // the old code read `.members` off GroupSummary and silently got undefined
-  // everywhere, so the payer/split member_id was always '').
-  const { data: selectedGroupDetail } = useQuery({
-    queryKey: ['group-detail-for-add-expense', selectedGroupId],
-    queryFn: () => getGroupDetail(selectedGroupId as string),
-    enabled: !!selectedGroupId,
-  });
-  const selectedGroupMembers = selectedGroupDetail?.members || [];
-
-  React.useEffect(() => {
-    if (!selectedGroupDetail) return;
-    const me = selectedGroupDetail.members.find((m) => m.user_email === userEmail);
-    setPayers([{ member_id: me?.member_id || selectedGroupDetail.members[0]?.member_id || '', amount_paid: numAmount }]);
-    setSplitEntries(selectedGroupDetail.members.map((m) => ({ member_id: m.member_id })));
-    setSplitType('equal');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGroupDetail]);
-
-  const currentSubs = CATEGORY_GROUPS[mainCategory] || [];
-  // Sheet height: 88% of screen, minimum so content fits
-  const SHEET_H = SCREEN_H * 0.88;
-
-  const numAmount = parseFloat(amount) || 0;
+  const handleAgain = () => resetForm('me');
 
   return (
     <AddExpenseContext.Provider value={{ openAddExpense, closeAddExpense }}>
       {children}
 
-      <Modal
-        transparent
-        visible={visible}
-        animationType="none"
-        onRequestClose={closeAddExpense}
-        statusBarTranslucent
-      >
-        {/* Full-screen container — FLEX layout avoids KeyboardAvoidingView issues */}
+      <Modal transparent visible={visible} animationType="none" onRequestClose={closeAddExpense} statusBarTranslucent>
         <View style={styles.modalRoot}>
-
-          {/* ── Tappable backdrop ── */}
           <Pressable style={StyleSheet.absoluteFill} onPress={closeAddExpense}>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: 'rgba(0,0,0,0.52)' }]} />
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: 'rgba(24,24,27,0.4)' }]} />
           </Pressable>
 
-          {/* ── The Sheet — absolutely pinned to the bottom ── */}
           <Animated.View
             style={[
               styles.sheet,
-              {
-                height: SHEET_H,
-                bottom: 0,
-                paddingBottom: Math.max(insets.bottom, 20),
-                transform: [{ translateY }],
-              },
+              { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY }] },
             ]}
           >
-            {/* Drag pill */}
-            <View style={styles.dragPillWrap}>
-              <View style={styles.dragPill} />
-            </View>
-
-            {/* iOS-style sheet header: Cancel | Title | (space) */}
-            <View style={styles.sheetHeader}>
-              <TouchableOpacity
-                onPress={closeAddExpense}
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                activeOpacity={0.6}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <Text style={styles.sheetTitle}>New Expense</Text>
-              {/* Right spacer to keep title centered */}
-              <Text style={[styles.cancelText, { opacity: 0 }]}>Cancel</Text>
-            </View>
-
-            {/* ── Scrollable body ── */}
-            <ScrollView
-              contentContainerStyle={styles.body}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              keyboardDismissMode="on-drag"
-            >
-              {/* Amount hero */}
-              <View style={styles.amountRow}>
-                <Text style={styles.dollarSign}>$</Text>
-                <RNTextInput
-                  style={styles.amountField}
-                  value={amount}
-                  onChangeText={setAmount}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={theme.colors.textQuaternary}
-                  selectionColor={theme.colors.primary}
-                  autoFocus
-                />
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View style={styles.dragPillWrap}>
+                <View style={styles.dragPill} />
               </View>
 
-              {/* Inset-grouped form (iOS Settings style) */}
-              <View style={styles.fieldGroup}>
-                <RNTextInput
-                  style={styles.fieldInput}
-                  placeholder="What did you spend on?"
-                  placeholderTextColor={theme.colors.textQuaternary}
-                  value={description}
-                  onChangeText={handleDescriptionChange}
-                  selectionColor={theme.colors.primary}
-                  returnKeyType="next"
-                />
-                <View style={styles.fieldDivider} />
-                <RNTextInput
-                  style={styles.fieldInput}
-                  placeholder="Merchant name (optional)"
-                  placeholderTextColor={theme.colors.textQuaternary}
-                  value={merchantName}
-                  onChangeText={(t) => { setMerchantName(t); setUserPickedMerchant(true); }}
-                  selectionColor={theme.colors.primary}
-                  returnKeyType="next"
-                />
-                <View style={styles.fieldDivider} />
-                <RNTextInput
-                  style={styles.fieldInput}
-                  placeholder="Date — MM/DD/YYYY"
-                  placeholderTextColor={theme.colors.textQuaternary}
-                  value={date}
-                  onChangeText={setDate}
-                  selectionColor={theme.colors.primary}
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
+              {stage === 'entry' ? (
+                <ScrollView
+                  contentContainerStyle={styles.body}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                  keyboardDismissMode="on-drag"
+                >
+                  <View style={styles.entryHeader}>
+                    <Text style={styles.entryTitle}>New expense</Text>
+                    <View style={styles.headerActions}>
+                      <TouchableOpacity style={styles.scanBtn} onPress={handleScan} activeOpacity={0.7}>
+                        <Text style={styles.scanBtnText}>📷 Scan</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={closeAddExpense} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Text style={styles.closeX}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
 
-              {/* ── Personal / Group toggle (hidden when GROUPS_ENABLED=false) ── */}
-              {groupsEnabled && myGroups.length > 0 && (
-                <View style={styles.scopeToggle}>
-                  {(['personal', 'group'] as const).map((s) => (
-                    <TouchableOpacity
-                      key={s}
-                      style={[styles.scopeBtn, scope === s && styles.scopeBtnActive]}
-                      onPress={() => setScope(s)}
-                    >
-                      <Text style={[styles.scopeLabel, scope === s && styles.scopeLabelActive]}>
-                        {s === 'personal' ? '👤 Personal' : '👥 Group'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+                  <View style={styles.amountDisplayWrap}>
+                    <Text style={styles.amountDisplay}>{amtDisplay}</Text>
+                  </View>
 
-              {/* Group picker (shown only in group mode) */}
-              {scope === 'group' && (
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.sectionLabel}>GROUP</Text>
-                  {myGroups.map((g) => (
-                    <TouchableOpacity
-                      key={g.group_id}
-                      style={[styles.groupRow, selectedGroupId === g.group_id && styles.groupRowActive]}
-                      onPress={() => {
-                        // Default payer/split entries are set by the
-                        // selectedGroupDetail effect once its query resolves.
-                        setSelectedGroupId(g.group_id);
-                      }}
-                    >
-                      <Text style={styles.groupRowLabel}>{g.name}</Text>
-                      {selectedGroupId === g.group_id && (
-                        <Text style={{ color: theme.colors.primary }}>✓</Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-              
-              {/* TS-GRP-131: currency this expense was paid in, if different from
-                  the group's own currency (e.g. paid in INR, group tracks USD). */}
-              {scope === 'group' && selectedGroupId && (
-                <View style={styles.fieldGroup}>
                   <RNTextInput
-                    style={styles.fieldInput}
-                    placeholder="Currency (leave blank if same as group)"
+                    style={styles.descInput}
+                    placeholder="Description (AI suggests from merchant)"
                     placeholderTextColor={theme.colors.textQuaternary}
-                    value={groupCurrency}
-                    onChangeText={(t) => setGroupCurrency(t.toUpperCase())}
-                    autoCapitalize="characters"
-                    maxLength={10}
-                  />
-                </View>
-              )}
-
-              {/* Split Editor / Item Split / Payer Picker for Group Mode */}
-              {scope === 'group' && selectedGroupId && (
-                <>
-                  <PayerPicker
-                    amount={numAmount}
-                    members={selectedGroupMembers}
-                    payers={payers}
-                    onChange={setPayers}
-                    onValidityChange={setPayersValid}
+                    value={desc}
+                    onChangeText={handleDescChange}
+                    selectionColor={theme.colors.primary}
                   />
 
-                  {groupItems.length > 0 ? (
-                    <ItemSplitBoard
-                      items={groupItems}
-                      members={selectedGroupMembers}
-                      onChange={setGroupItems}
-                      onValidityChange={setGroupItemsValid}
-                      groupId={selectedGroupId}
-                    />
-                  ) : (
-                    <SplitEditor
-                      totalAmount={numAmount}
-                      members={selectedGroupMembers}
-                      value={{ type: splitType, entries: splitEntries }}
-                      onChange={(val) => {
-                        setSplitType(val.type);
-                        setSplitEntries(val.entries);
-                      }}
-                    />
+                  {groupsEnabled && myGroups.length > 0 && (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.whoRow}
+                    >
+                      <TouchableOpacity
+                        style={[styles.whoChip, who === 'me' && styles.whoChipActive]}
+                        onPress={() => setWho('me')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.whoChipText, who === 'me' && styles.whoChipTextActive]}>Just me</Text>
+                      </TouchableOpacity>
+                      {myGroups.map((g) => (
+                        <TouchableOpacity
+                          key={g.group_id}
+                          style={[styles.whoChip, who === g.group_id && styles.whoChipActive]}
+                          onPress={() => setWho(g.group_id)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.whoChipText, who === g.group_id && styles.whoChipTextActive]}>
+                            {GROUP_TYPE_EMOJI[g.group_type] ?? '👥'} {g.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
                   )}
-                </>
-              )}
 
-              {categorizing && (
-                <View style={styles.aiRow}>
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                  <Text style={styles.aiText}>AI is detecting category…</Text>
+                  {isGroup && selectedGroup && (
+                    <View style={styles.splitPreview}>
+                      <Text style={styles.splitPreviewText}>
+                        Split equally · {selectedGroup.member_count} people · your share{' '}
+                        <Text style={styles.splitPreviewShare}>{fmt(shareAmount)}</Text>
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.keypad}>
+                    {KEYS.map((k) => (
+                      <TouchableOpacity key={k} style={styles.key} onPress={() => capPress(k)} activeOpacity={0.6}>
+                        <Text style={styles.keyLabel}>{k}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.saveBtn, !capReady && styles.saveBtnDisabled]}
+                    onPress={handleSave}
+                    disabled={!capReady || loading}
+                    activeOpacity={0.85}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.saveBtnText}>{isGroup ? 'Save & split' : 'Save'}</Text>
+                    )}
+                  </TouchableOpacity>
+                </ScrollView>
+              ) : (
+                <View style={styles.savedWrap}>
+                  <View style={styles.savedCheck}>
+                    <Text style={styles.savedCheckText}>✓</Text>
+                  </View>
+                  <Text style={styles.savedAmount}>{fmt(savedAmt)}</Text>
+                  <Text style={styles.savedLine}>{savedLine}</Text>
+                  <View style={styles.savedActions}>
+                    <TouchableOpacity style={styles.savedSecondaryBtn} onPress={handleAgain} activeOpacity={0.8}>
+                      <Text style={styles.savedSecondaryText}>Log another</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.savedPrimaryBtn} onPress={closeAddExpense} activeOpacity={0.8}>
+                      <Text style={styles.savedPrimaryText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
-
-              {/* Category chips */}
-              <Text style={styles.sectionLabel}>CATEGORY</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                {MAIN_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.chip, mainCategory === cat && styles.chipOn]}
-                    onPress={() => { setMainCategory(cat); setSubcategory(CATEGORY_GROUPS[cat]?.[0] || ''); }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.chipLabel, mainCategory === cat && styles.chipLabelOn]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              <Text style={styles.sectionLabel}>SUBCATEGORY</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                {currentSubs.map((sub) => (
-                  <TouchableOpacity
-                    key={sub}
-                    style={[styles.chip, subcategory === sub && styles.chipOn]}
-                    onPress={() => setSubcategory(sub)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.chipLabel, subcategory === sub && styles.chipLabelOn]}>{sub}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-
-              {/* Save Button */}
-              <View style={styles.saveBtn}>
-                <CustomButton
-                  title="Save Expense"
-                  onPress={handleSubmit}
-                  loading={loading}
-                />
-              </View>
-            </ScrollView>
+            </Pressable>
           </Animated.View>
         </View>
       </Modal>
@@ -537,222 +361,96 @@ export default function AddExpenseProvider({ children }: { children: React.React
   );
 }
 
-const createStyles = (theme: AppTheme) => StyleSheet.create({
-  modalRoot: {
-    flex: 1,
-    justifyContent: 'flex-end',  // Sheet anchors to bottom
-  },
+const createStyles = (theme: AppTheme) =>
+  StyleSheet.create({
+    modalRoot: { flex: 1, justifyContent: 'flex-end' },
+    // No `position: 'absolute'` / fixed height here (that was inherited from the old rich
+    // form, which genuinely needed ~88% of the screen) — this sheet is much shorter now, so it
+    // sits in normal flex flow, sized to its own content and anchored to the bottom purely via
+    // `modalRoot`'s `justifyContent: 'flex-end'`. A fixed-height absolute box regardless of
+    // content was the bug behind "opens from near the top with empty space at the bottom".
+    sheet: {
+      maxHeight: '85%',
+      backgroundColor: theme.colors.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.12,
+      shadowRadius: 20,
+      elevation: 24,
+    },
+    dragPillWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
+    dragPill: { width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.borderLight },
 
-  // Sheet
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 24,
-  },
+    body: { paddingHorizontal: 18, paddingBottom: 24 },
 
-  dragPillWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
-  dragPill: {
-    width: 36,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: theme.colors.borderLight,
-  },
+    entryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+    entryTitle: { fontFamily: 'Inter-Bold', fontSize: 16, color: theme.colors.text },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    scanBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 999,
+      paddingHorizontal: 12, paddingVertical: 6,
+    },
+    scanBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: theme.colors.text },
+    closeX: { color: theme.colors.textTertiary, fontSize: 16, paddingHorizontal: 6, paddingVertical: 2 },
 
-  // iOS sheet header
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.borderLight,
-  },
-  cancelText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 17,
-    color: theme.colors.primary,
-  },
-  sheetTitle: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 17,
-    color: theme.colors.text,
-  },
+    amountDisplayWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
+    amountDisplay: {
+      fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 42, color: theme.colors.text,
+      letterSpacing: -0.5, minHeight: 52,
+    },
 
-  body: {
-    paddingBottom: 24,
-  },
+    descInput: {
+      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter-Regular', fontSize: 13.5,
+      color: theme.colors.text, marginTop: 8,
+    },
 
-  // Giant amount input
-  amountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 20,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-  },
-  dollarSign: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 36,
-    color: theme.colors.textTertiary,
-    marginRight: 4,
-    marginTop: 6,
-  },
-  amountField: {
-    fontFamily: 'Inter-Black',
-    fontSize: 52,
-    color: theme.colors.text,
-    letterSpacing: -1,
-    minWidth: 80,
-    textAlign: 'left',
-  },
+    whoRow: { gap: 6, marginTop: 10, paddingRight: 4 },
+    whoChip: {
+      paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999,
+      borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
+    },
+    whoChipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+    whoChipText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.text },
+    whoChipTextActive: { color: '#FFFFFF' },
 
-  // Settings-style inset grouped form
-  fieldGroup: {
-    marginHorizontal: 20,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  fieldInput: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 17,
-    color: theme.colors.text,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    backgroundColor: theme.colors.surface,
-    minHeight: 52,
-  },
-  fieldDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.borderLight,
-    marginLeft: 16,
-  },
+    splitPreview: {
+      marginTop: 8, borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 9,
+    },
+    splitPreviewText: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary },
+    splitPreviewShare: { fontFamily: 'Inter-Bold', color: theme.colors.text },
 
-  // AI hint
-  aiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: theme.colors.primarySurface,
-    padding: 12,
-    borderRadius: 10,
-  },
-  aiText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: theme.colors.primary,
-  },
+    keypad: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+    key: {
+      width: '31.5%', height: 46, borderRadius: 10, backgroundColor: theme.colors.surfaceSecondary,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    keyLabel: { fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 20, color: theme.colors.text },
 
-  // Section label
-  sectionLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 12,
-    color: theme.colors.textTertiary,
-    letterSpacing: 0.5,
-    paddingHorizontal: 20,
-    marginBottom: 10,
-    marginTop: 4,
-  },
+    saveBtn: {
+      marginTop: 12, height: 48, borderRadius: 12, backgroundColor: theme.colors.primary,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    saveBtnDisabled: { backgroundColor: theme.colors.border },
+    saveBtnText: { fontFamily: 'Inter-Bold', fontSize: 15, color: '#FFFFFF' },
 
-  // Chips
-  chips: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    gap: 8,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 50,
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.borderLight,
-    marginRight: 0,
-  },
-  chipOn: {
-    backgroundColor: theme.colors.primary,
-    borderColor: theme.colors.primary,
-  },
-  chipLabel: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 15,
-    color: theme.colors.textSecondary,
-  },
-  chipLabelOn: {
-    color: '#FFFFFF',
-    fontFamily: 'Inter-SemiBold',
-  },
-
-  saveBtn: {
-    marginHorizontal: 20,
-    marginTop: 12,
-  },
-
-  // Personal/Group scope toggle
-  scopeToggle: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: theme.colors.surfaceSecondary,
-    borderRadius: 10,
-    padding: 3,
-    gap: 4,
-  },
-  scopeBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  scopeBtnActive: {
-    backgroundColor: theme.colors.background,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  scopeLabel: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  scopeLabelActive: { color: theme.colors.primary },
-
-  // Group picker rows
-  groupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.colors.borderLight,
-  },
-  groupRowActive: {
-    backgroundColor: `${theme.colors.primary}12`,
-  },
-  groupRowLabel: {
-    flex: 1,
-    fontFamily: 'Inter-Regular',
-    fontSize: 16,
-    color: theme.colors.text,
-  },
-});
+    savedWrap: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 32, paddingHorizontal: 24 },
+    savedCheck: {
+      width: 56, height: 56, borderRadius: 999, backgroundColor: theme.colors.successSurface,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    savedCheckText: { color: theme.colors.success, fontSize: 26, fontFamily: 'Inter-Bold' },
+    savedAmount: { fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 26, color: theme.colors.text },
+    savedLine: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 19 },
+    savedActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
+    savedSecondaryBtn: {
+      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10,
+    },
+    savedSecondaryText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.text },
+    savedPrimaryBtn: { backgroundColor: theme.colors.text, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 },
+    savedPrimaryText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.background },
+  });

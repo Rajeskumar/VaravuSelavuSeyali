@@ -97,6 +97,7 @@ function AuthStack() {
 
 const DummyScreen = () => null;
 
+// 5 bottom tabs: Home, Expenses, Analysis, Groups, AI Analyst.
 function MainTabs() {
   const { openDrawer } = useDrawer();
   const { theme, isDark } = useAppTheme();
@@ -134,8 +135,6 @@ function MainTabs() {
             else if (route.name === 'Expenses') iconName = focused ? 'wallet' : 'wallet-outline';
             else if (route.name === 'GroupsTab') iconName = focused ? 'people' : 'people-outline';
             else if (route.name === 'Analysis') iconName = focused ? 'pie-chart' : 'pie-chart-outline';
-            // Sparkle, not a chat bubble — matches the web header's Ask AI icon change; a
-            // generic chat-bubble icon didn't read as "AI" specifically.
             else if (route.name === 'AI Analyst') iconName = focused ? 'sparkles' : 'sparkles-outline';
             return <Ionicons name={iconName as any} size={size} color={color} />;
           },
@@ -227,12 +226,12 @@ const createTabStyles = (theme: AppTheme) => StyleSheet.create({
 // ─── iOS-style Slide-in Drawer ────────────────────────────────────────────────
 const DRAWER_W = Dimensions.get('window').width * 0.80;
 
+// Profile/AI Analyst/Recurring removed per explicit request: Profile is reachable via the Home
+// avatar icon now, AI Analyst is a bottom tab again, and Recurring is a sub-tab of Expenses.
 const DRAWER_ITEMS: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; screen: string }[] = [
   { key: 'home',            label: 'Home',             icon: 'home',           screen: 'Dashboard'       },
-  { key: 'profile',         label: 'Profile',          icon: 'person-circle',  screen: 'Profile'         },
   { key: 'itemInsights',    label: 'Item Insights',    icon: 'pricetag',       screen: 'ItemInsights'    },
   { key: 'merchantInsights',label: 'Merchant Insights',icon: 'storefront',     screen: 'MerchantInsights'},
-  { key: 'recurring',       label: 'Recurring',        icon: 'sync-circle',    screen: 'Recurring'       },
   { key: 'about',           label: 'About',            icon: 'information-circle', screen: 'About'      },
   { key: 'feature',         label: 'Feature Request',  icon: 'bulb',           screen: 'FeatureRequest'  },
   { key: 'contact',         label: 'Contact Us',       icon: 'mail',           screen: 'ContactUs'       },

@@ -6,7 +6,7 @@
  *
  * Navigation: tap a group → GroupDetailScreen
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   listGroups,
@@ -36,8 +36,9 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import SegmentedTabs from '../components/SegmentedTabs';
-import FriendBalancesWidget from '../components/FriendBalancesWidget';
+import PeopleList from '../components/PeopleList';
 import { showToast } from '../components/Toast';
+import { onExpenseChanged } from '../utils/expenseEvents';
 
 const GROUP_TYPE_OPTIONS = ['other', 'trip', 'home', 'couple'] as const;
 type GroupTypeOption = typeof GROUP_TYPE_OPTIONS[number];
@@ -54,13 +55,34 @@ export default function GroupsScreen() {
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const qc = useQueryClient();
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<GroupTypeOption>('other');
 
+  // TrackSpense v3: "Groups | People" top-level toggle — People is a first-class promotion of
+  // what used to be the small embedded FriendBalancesWidget card (now retired).
+  const [topTab, setTopTab] = useState<'groups' | 'people'>('groups');
   const [tabIndex, setTabIndex] = useState(0);
+
+  // Dashboard's "Net with people" tap navigates here with `{ initialTab: 'people' }` (see
+  // HomeScreen.tsx) — same pattern AIAnalystScreen already uses for `initialQuery`.
+  useEffect(() => {
+    if (route.params?.initialTab === 'people') setTopTab('people');
+  }, [route.params?.initialTab]);
+
+  // General-purpose fix (not specific to any one entry point): any expense change anywhere
+  // (Add Expense sheet, type-to-log, AI chat) previously left this screen's group balances and
+  // People's friend balances stale until a manual pull-to-refresh, since neither query was
+  // subscribed to this event and the app's QueryClient has refetchOnWindowFocus: false.
+  useEffect(() => {
+    return onExpenseChanged(() => {
+      qc.invalidateQueries({ queryKey: ['groups'] });
+      qc.invalidateQueries({ queryKey: ['friend-balances'] });
+    });
+  }, [qc]);
 
   const includeArchived = tabIndex === 1;
   const { data, isLoading, isRefetching, error, refetch } = useQuery({
@@ -138,19 +160,12 @@ export default function GroupsScreen() {
           </Text>
         </View>
         <View style={styles.cardRight}>
-          <Text style={[styles.balanceAmount, { color: balanceColor }]}>
-            {item.my_balance > 0
+          <Text style={[styles.balanceAmount, { color: item.my_balance === 0 ? theme.colors.textTertiary : balanceColor }]}>
+            {item.my_balance === 0
+              ? 'settled'
+              : item.my_balance > 0
               ? `+$${item.my_balance.toFixed(2)}`
-              : item.my_balance < 0
-              ? `-$${Math.abs(item.my_balance).toFixed(2)}`
-              : '$0.00'}
-          </Text>
-          <Text style={styles.balanceLabel}>
-            {item.my_balance > 0
-              ? 'you are owed'
-              : item.my_balance < 0
-              ? 'you owe'
-              : 'settled'}
+              : `-$${Math.abs(item.my_balance).toFixed(2)}`}
           </Text>
         </View>
         <Ionicons
@@ -164,11 +179,38 @@ export default function GroupsScreen() {
 
   return (
     <ScreenWrapper>
+      <View style={styles.headerRow}>
+        <Text style={styles.heading}>{topTab === 'groups' ? 'Groups' : 'People'}</Text>
+        {topTab === 'groups' && (
+          <TouchableOpacity style={styles.addBtn} onPress={() => setShowCreate(true)}>
+            <Ionicons name="add" size={20} color="#FFF" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* TrackSpense v3: Groups / People — Active/Archived only applies to Groups (archiving
+          isn't a people concept), so it nests one level down, inside the groups branch below. */}
+      <View style={styles.topTabsRow}>
+        <SegmentedTabs<'groups' | 'people'>
+          value={topTab}
+          onChange={setTopTab}
+          options={[
+            { value: 'groups', label: 'Groups' },
+            { value: 'people', label: 'People' },
+          ]}
+        />
+      </View>
+
+      {topTab === 'people' ? (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}>
+          <PeopleList />
+        </ScrollView>
+      ) : (
       <FlatList
         data={groups}
         keyExtractor={(item) => item.group_id}
         renderItem={renderItem}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100, paddingTop: insets.top }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -177,27 +219,16 @@ export default function GroupsScreen() {
           />
         }
         ListHeaderComponent={
-          <>
-            <View style={styles.headerRow}>
-              <Text style={styles.heading}>Groups</Text>
-              <TouchableOpacity style={styles.addBtn} onPress={() => setShowCreate(true)}>
-                <Ionicons name="add" size={20} color="#FFF" />
-              </TouchableOpacity>
-            </View>
-            
-            {tabIndex === 0 && <FriendBalancesWidget />}
-
-            <View style={styles.tabsRow}>
-              <SegmentedTabs
-                value={tabIndex === 0 ? 'active' : 'archived'}
-                onChange={(v) => setTabIndex(v === 'active' ? 0 : 1)}
-                options={[
-                  { value: 'active', label: 'Active' },
-                  { value: 'archived', label: 'Archived' },
-                ]}
-              />
-            </View>
-          </>
+          <View style={styles.tabsRow}>
+            <SegmentedTabs
+              value={tabIndex === 0 ? 'active' : 'archived'}
+              onChange={(v) => setTabIndex(v === 'active' ? 0 : 1)}
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'archived', label: 'Archived' },
+              ]}
+            />
+          </View>
         }
         ListEmptyComponent={
           isLoading ? (
@@ -209,22 +240,24 @@ export default function GroupsScreen() {
                 {tabIndex === 0 ? 'No active groups' : 'No archived groups'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                {tabIndex === 0 
+                {tabIndex === 0
                   ? 'Create a group to split expenses with friends'
                   : 'Archived groups will appear here'}
               </Text>
-              {tabIndex === 0 && (
-                <TouchableOpacity
-                  style={styles.createBtn}
-                  onPress={() => setShowCreate(true)}
-                >
-                  <Text style={styles.createBtnText}>Create Group</Text>
-                </TouchableOpacity>
-              )}
             </View>
           )
         }
+        // TrackSpense v3 Mobile mock's dashed "＋ New group" row at the bottom of the list
+        // (only for Active — archiving/creating from the Archived view doesn't apply).
+        ListFooterComponent={
+          tabIndex === 0 && !isLoading ? (
+            <TouchableOpacity style={styles.newGroupRow} onPress={() => setShowCreate(true)} activeOpacity={0.7}>
+              <Text style={styles.newGroupText}>＋ New group</Text>
+            </TouchableOpacity>
+          ) : null
+        }
       />
+      )}
 
       {/* Create Group Modal */}
       <Modal
@@ -310,10 +343,15 @@ const createStyles = (theme: AppTheme) =>
       marginHorizontal: 20,
       marginBottom: 16,
     },
+    topTabsRow: {
+      marginHorizontal: 20,
+      marginBottom: 4,
+    },
     listContent: { flexGrow: 1 },
     heading: {
-      fontFamily: 'Inter-Bold',
-      fontSize: 28,
+      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontSize: 22,
+      letterSpacing: -0.3,
       color: theme.colors.text,
     },
     addBtn: {
@@ -380,13 +418,18 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 2,
     },
     cardRight: { alignItems: 'flex-end', marginRight: 8 },
-    balanceAmount: { fontFamily: 'Inter-Bold', fontSize: 15 },
-    balanceLabel: {
-      fontFamily: 'Inter-Regular',
-      fontSize: 11,
-      color: theme.colors.textTertiary,
-      marginTop: 1,
+    balanceAmount: { fontFamily: 'Inter-Bold', fontSize: 13, fontVariant: ['tabular-nums'] },
+    newGroupRow: {
+      marginHorizontal: 16,
+      marginTop: 10,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: theme.colors.border,
+      borderRadius: 14,
+      paddingVertical: 13,
+      alignItems: 'center',
     },
+    newGroupText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.primary },
     // Create modal
     modalBackdrop: {
       flex: 1,

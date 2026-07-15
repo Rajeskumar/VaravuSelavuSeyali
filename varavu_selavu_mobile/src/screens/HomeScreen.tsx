@@ -8,20 +8,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getAnalysis, AnalysisResponse } from '../api/analysis';
-import { getChangeInsights, ChangeInsight } from '../api/analytics';
-import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
 import { checkGroupsEnabled, listAllMyGroupExpenses, UnifiedGroupExpenseRow } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, directionalColor } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import CategoryDonutChart from '../components/CategoryDonutChart';
-import CategoryRankedList from '../components/CategoryRankedList';
-import TrendLineChart from '../components/TrendLineChart';
-import WhatChangedTeaser from '../components/WhatChangedTeaser';
-import DueSoonStrip from '../components/DueSoonStrip';
 import CustomButton from '../components/CustomButton';
+import SegmentedTabs from '../components/SegmentedTabs';
+import TypeToLogBar from '../components/TypeToLogBar';
 import { showToast } from '../components/Toast';
 import { onExpenseChanged } from '../utils/expenseEvents';
+import { computeIPaidTotal, computeNetWithPeople, AnalysisGroupSummary } from '../utils/dashboardTotals';
 import { AddExpenseContext } from './AddExpenseScreen';
 
 // ─── Category icon map ───────────────────────────────────────────────────────
@@ -46,156 +42,170 @@ function getCategoryColor(category: string): string {
   return categoryColors[category?.toLowerCase().trim()] || '#636E72';
 }
 
-function getTimeOfDay(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-export interface MomDelta {
-  amount: number;
-  percent: number;
-}
-
-/** Prominent "Today" card style hero */
-function HeroCard({ yearlyTotal, monthlyTotal, momDelta }: { yearlyTotal: number; monthlyTotal: number; momDelta?: MomDelta | null }) {
+/** TrackSpense v3 Mobile mock's hero card — spend total + lens + Net with people only, nothing
+ * else (no secondary stats row, no month-over-month delta line — the mock has neither). */
+function HeroCard({
+  monthlyTotal,
+  showLens,
+  lens,
+  onLensChange,
+  netWithPeople,
+  onNetWithPeoplePress,
+}: {
+  monthlyTotal: number;
+  /** TrackSpense v3: lens toggle + "Net with people" only render when the user has at least
+   * one active group (mirrors web's `hasGroups` gate on `TrueTotalHero.tsx`). */
+  showLens: boolean;
+  lens: 'share' | 'paid';
+  onLensChange: (lens: 'share' | 'paid') => void;
+  netWithPeople: number;
+  onNetWithPeoplePress: () => void;
+}) {
   const { theme } = useAppTheme();
   const heroStyles = useMemo(() => createHeroStyles(theme), [theme]);
-  const currentMonth = new Date().toLocaleString('default', { month: 'long' });
   return (
-    <LinearGradient
-      colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={heroStyles.card}
-    >
-      {/* Top row */}
-      <View style={heroStyles.topRow}>
-        <Text style={heroStyles.eyebrow}>TOTAL SPENT THIS MONTH</Text>
-        <View style={heroStyles.badge}>
-          <Text style={heroStyles.badgeText}>{currentMonth} {new Date().getFullYear()}</Text>
+    <View style={heroStyles.card}>
+      {/* TrackSpense v3 Mobile mock's hero is a flat white/hairline-bordered card (matches the
+          rest of the Slate system), not the pre-v3 LinearGradient treatment this used to have —
+          every child below is styled dark-on-white now instead of white-on-gradient. */}
+      {showLens && (
+        <View style={heroStyles.lensWrap}>
+          <SegmentedTabs<'share' | 'paid'>
+            value={lens}
+            onChange={onLensChange}
+            options={[{ value: 'share', label: 'My expenses' }, { value: 'paid', label: 'I paid' }]}
+          />
         </View>
-      </View>
-
-      {/* Big number */}
-      <Text style={[heroStyles.amount, !momDelta && heroStyles.amountNoDelta]}>{formatCurrency(monthlyTotal)}</Text>
-
-      {/* Month-over-month delta (TS-DES-112) — omitted entirely when there's no prior-month
-          data to compare against (e.g. a brand-new user's first month). White text matches this
-          card's existing on-gradient convention (eyebrow/badge/stat labels); the up/down glyph
-          carries the direction rather than color, since jade-on-jade would be unreadable. */}
-      {momDelta && (
-        <Text style={heroStyles.momDelta}>
-          {momDelta.amount > 0 ? '▲' : '▼'} {momDelta.amount > 0 ? '+' : ''}{momDelta.percent.toFixed(0)}% vs last month
-        </Text>
       )}
 
-      {/* Divider line */}
-      <View style={heroStyles.divider} />
+      <Text style={heroStyles.spendLabel}>Spent this month — your true total</Text>
+      <Text style={heroStyles.amount}>{formatCurrency(monthlyTotal)}</Text>
 
-      {/* Bottom stats row */}
-      <View style={heroStyles.statsRow}>
-        <View style={heroStyles.statBlock}>
-          <Text style={heroStyles.statLabel}>Year to Date</Text>
-          <Text style={heroStyles.statValue}>{formatCurrency(yearlyTotal)}</Text>
-        </View>
-        <View style={heroStyles.statDivider} />
-        <View style={heroStyles.statBlock}>
-          <Text style={heroStyles.statLabel}>Monthly Avg</Text>
-          <Text style={heroStyles.statValue}>
-            {formatCurrency(yearlyTotal / Math.max(new Date().getMonth() + 1, 1))}
-          </Text>
-        </View>
-      </View>
-    </LinearGradient>
+      {/* Net with people — tapping jumps to the Groups tab's People sub-tab. */}
+      {showLens && (
+        <TouchableOpacity style={heroStyles.netRow} onPress={onNetWithPeoplePress} activeOpacity={0.7}>
+          <View>
+            <Text style={heroStyles.netLabel}>Net with people</Text>
+            <Text
+              style={[
+                heroStyles.netAmount,
+                { color: netWithPeople === 0 ? theme.colors.textTertiary : directionalColor(theme, netWithPeople) },
+              ]}
+            >
+              {netWithPeople === 0 ? '$0.00' : `${netWithPeople > 0 ? '+' : '−'}${formatCurrency(Math.abs(netWithPeople))}`}
+            </Text>
+          </View>
+          <Text style={heroStyles.netArrow}>→</Text>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
 const createHeroStyles = (theme: AppTheme) => StyleSheet.create({
   card: {
     marginHorizontal: 20,
-    marginBottom: 28,
+    marginBottom: 12,
     backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.xxl,
-    padding: 24,
-    ...theme.shadows.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.borderLight,
+    padding: 18,
   },
-  topRow: {
+  lensWrap: {
+    alignSelf: 'flex-start',
+    marginBottom: 14,
+  },
+  spendLabel: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: theme.colors.textTertiary,
+  },
+  amount: {
+    fontFamily: 'SpaceGrotesk-SemiBold',
+    fontSize: 38,
+    color: theme.colors.text,
+    letterSpacing: -0.5,
+    marginTop: 2,
+  },
+  netRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.colors.borderLight,
+    marginTop: 14,
+    paddingTop: 12,
   },
-  eyebrow: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.8)',
-    letterSpacing: 0.8,
-  },
-  badge: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  badgeText: {
+  netLabel: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 12,
-    color: '#FFFFFF',
+    color: theme.colors.textTertiary,
   },
-  amount: {
-    fontFamily: 'Inter-Black',
-    fontSize: 42,
-    color: '#FFFFFF',
-    letterSpacing: -1.5,
-    marginBottom: 6,
+  netAmount: {
+    fontFamily: 'SpaceGrotesk-SemiBold',
+    fontSize: 24,
+    letterSpacing: -0.3,
+    marginTop: 2,
   },
-  amountNoDelta: {
-    marginBottom: 20,
-  },
-  momDelta: {
+  netArrow: {
     fontFamily: 'Inter-SemiBold',
     fontSize: 13,
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: 20,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginBottom: 20,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statBlock: { flex: 1 },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 32,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 20,
-  },
-  statLabel: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 20,
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
+    color: theme.colors.primary,
   },
 });
 
-/** Standard section header with optional "See All" */
+/** TrackSpense v3 Mobile mock's "My Groups" chips row — one row per active group with its net,
+ * tapping navigates straight to that group's detail screen. Directly below the hero, using
+ * `group_summaries` already fetched for the hero itself (no extra API call). */
+function GroupChipsRow({ groupSummaries, onPress }: { groupSummaries: AnalysisGroupSummary[]; onPress: (groupId: string) => void }) {
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createGroupChipsStyles(theme), [theme]);
+  if (groupSummaries.length === 0) return null;
+  return (
+    <View style={styles.wrap}>
+      {groupSummaries.map((g) => (
+        <TouchableOpacity key={g.group_id} style={styles.chip} onPress={() => onPress(g.group_id)} activeOpacity={0.7}>
+          <Text style={styles.chipName} numberOfLines={1}>{g.name}</Text>
+          <Text
+            style={[
+              styles.chipNet,
+              { color: g.my_balance === 0 ? theme.colors.textTertiary : directionalColor(theme, g.my_balance) },
+            ]}
+          >
+            {g.my_balance === 0 ? 'settled' : `${g.my_balance > 0 ? '+' : '−'}${formatCurrency(Math.abs(g.my_balance))}`}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const createGroupChipsStyles = (theme: AppTheme) => StyleSheet.create({
+  wrap: { marginHorizontal: 20, marginBottom: 16, gap: 8 },
+  chip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.colors.borderLight,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  chipName: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text, flex: 1, marginRight: 8 },
+  chipNet: { fontFamily: 'Inter-Bold', fontSize: 13 },
+});
+
+/** TrackSpense v3 Mobile mock's compact "RECENT ⋯ See all ›" section header — the only section
+ * header the mock has on Home, so this no longer needs to be a generic large-title component
+ * (it was previously shared with the now-removed "Analytics" section below). */
 function SectionHeader({
   title,
   onSeeAll,
@@ -207,10 +217,10 @@ function SectionHeader({
   const sectionStyles = useMemo(() => createSectionStyles(theme), [theme]);
   return (
     <View style={sectionStyles.row}>
-      <Text style={sectionStyles.title}>{title}</Text>
+      <Text style={sectionStyles.title}>{title.toUpperCase()}</Text>
       {onSeeAll && (
         <TouchableOpacity onPress={onSeeAll} activeOpacity={0.6}>
-          <Text style={sectionStyles.seeAll}>See All</Text>
+          <Text style={sectionStyles.seeAll}>See all ›</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -221,81 +231,20 @@ const createSectionStyles = (theme: AppTheme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   title: {
     fontFamily: 'Inter-Bold',
-    fontSize: 22,
-    color: theme.colors.text,
-    letterSpacing: -0.3,
+    fontSize: 11,
+    color: theme.colors.textTertiary,
+    letterSpacing: 0.8,
   },
   seeAll: {
     fontFamily: 'Inter-Regular',
-    fontSize: 17,
-    color: theme.colors.primary,
-  },
-});
-
-/** Quick action pill buttons */
-function QuickActions({ navigation }: { navigation: any }) {
-  const { theme } = useAppTheme();
-  const qaStyles = useMemo(() => createQaStyles(theme), [theme]);
-  const actions = [
-    { icon: '🛒', label: 'Items', screen: 'ItemInsights', color: theme.colors.primarySurface },
-    { icon: '🏪', label: 'Merchants', screen: 'MerchantInsights', color: theme.colors.successSurface },
-    { icon: '📊', label: 'Stats', screen: 'Analysis', color: theme.colors.errorSurface },
-  ];
-
-  return (
-    <View style={qaStyles.row}>
-      {actions.map((action) => (
-        <TouchableOpacity
-          key={action.label}
-          style={qaStyles.pill}
-          onPress={() => navigation.navigate(action.screen)}
-          activeOpacity={0.75}
-        >
-          <View style={[qaStyles.iconWrap, { backgroundColor: action.color }]}>
-            <Text style={qaStyles.icon}>{action.icon}</Text>
-          </View>
-          <Text style={qaStyles.label}>{action.label}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
-const createQaStyles = (theme: AppTheme) => StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: 20,
-    marginBottom: 32,
-    gap: 12,
-  },
-  pill: {
-    flex: 1,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.lg,
-    paddingVertical: 16,
-    alignItems: 'center',
-    ...theme.shadows.sm,
-  },
-  iconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  icon: { fontSize: 22 },
-  label: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 13,
-    color: theme.colors.text,
+    fontSize: 12,
+    color: theme.colors.textTertiary,
   },
 });
 
@@ -382,29 +331,12 @@ export default function HomeScreen() {
   const queryClient = useQueryClient();
   const now = useMemo(() => new Date(), []);
   const [refreshing, setRefreshing] = useState(false);
+  const [lens, setLens] = useState<'share' | 'paid'>('share');
   const { openAddExpense } = useContext(AddExpenseContext);
   
-  const { data: yearlyData, isLoading: loadingYear } = useQuery({
-    queryKey: ['analysis', userEmail, now.getFullYear(), 'combined'],
-    queryFn: () => getAnalysis(accessToken!, userEmail!, { year: now.getFullYear(), scope: 'combined' }),
-    enabled: !!accessToken && !!userEmail,
-  });
-
   const { data: monthlyData, isLoading: loadingMonth, refetch: refetchMonth } = useQuery({
     queryKey: ['analysis', userEmail, now.getFullYear(), now.getMonth() + 1, 'combined'],
     queryFn: () => getAnalysis(accessToken!, userEmail!, { year: now.getFullYear(), month: now.getMonth() + 1, scope: 'combined' }),
-    enabled: !!accessToken && !!userEmail,
-  });
-
-  const { data: changeInsights, isLoading: loadingInsights } = useQuery({
-    queryKey: ['insights', userEmail, now.getFullYear(), now.getMonth() + 1],
-    queryFn: () => getChangeInsights(userEmail!, { year: now.getFullYear(), month: now.getMonth() + 1 }).catch(() => []),
-    enabled: !!accessToken && !!userEmail,
-  });
-
-  const { data: recurringTemplates, isLoading: loadingTemplates } = useQuery({
-    queryKey: ['recurringTemplates', userEmail],
-    queryFn: () => listRecurringTemplates().catch(() => []),
     enabled: !!accessToken && !!userEmail,
   });
 
@@ -419,14 +351,12 @@ export default function HomeScreen() {
     enabled: !!accessToken && !!userEmail && !!groupsEnabled,
   });
 
-  const loading = loadingYear || loadingMonth || loadingInsights || loadingTemplates;
+  const loading = loadingMonth;
 
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['analysis'] }),
-      queryClient.invalidateQueries({ queryKey: ['insights'] }),
-      queryClient.invalidateQueries({ queryKey: ['recurringTemplates'] }),
       queryClient.invalidateQueries({ queryKey: ['groupExpenses'] }),
     ]);
     setRefreshing(false);
@@ -435,36 +365,9 @@ export default function HomeScreen() {
   useEffect(() => {
     return onExpenseChanged(() => {
       queryClient.invalidateQueries({ queryKey: ['analysis'] });
-      queryClient.invalidateQueries({ queryKey: ['insights'] });
       queryClient.invalidateQueries({ queryKey: ['groupExpenses'] });
     });
   }, [queryClient]);
-
-  // TS-DES-112: month-over-month delta from the year-wide fetch's own `monthly_trend`, which
-  // already spans every month of the year (no separate trend-only fetch needed, unlike web).
-  const momDelta = useMemo(() => {
-    const trend = yearlyData?.monthly_trend;
-    if (!trend) return null;
-    const now = new Date();
-    const thisKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const prevKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
-    const thisTotal = trend.find((m) => m.month === thisKey)?.total;
-    const prevTotal = trend.find((m) => m.month === prevKey)?.total;
-    if (thisTotal == null || prevTotal == null || prevTotal <= 0) return null;
-    return { amount: thisTotal - prevTotal, percent: ((thisTotal - prevTotal) / prevTotal) * 100 };
-  }, [yearlyData]);
-
-  const donutData = useMemo(() => {
-    if (!monthlyData?.category_totals) return [];
-    return monthlyData.category_totals.map((ct) => {
-      const details = monthlyData.category_expense_details?.[ct.category] || [];
-      const subMap: Record<string, number> = {};
-      details.forEach((d) => { subMap[d.category || 'Other'] = (subMap[d.category || 'Other'] || 0) + d.cost; });
-      const subcategories = Object.entries(subMap).map(([name, total]) => ({ name, total }));
-      return { category: ct.category, total: ct.total, subcategories: subcategories.length > 1 ? subcategories : undefined };
-    });
-  }, [monthlyData]);
 
   const recentExpenses = useMemo(() => {
     const personalRecent = Object.values(monthlyData?.category_expense_details || {}).flat();
@@ -480,8 +383,21 @@ export default function HomeScreen() {
       .slice(0, 6);
   }, [monthlyData, groupExpenses]);
 
-  const yearlyTotal = yearlyData?.total_expenses || 0;
-  const monthlyTotal = monthlyData?.total_expenses || 0;
+  // TrackSpense v3: under scope=combined, `total_expenses` is already personal + every group's
+  // my_share (see backend AnalysisService._merge_legs) — i.e. it's already the "My expenses"
+  // lens total, no client-side re-sum needed. Only "I paid" needs a client-side compute, since
+  // the backend doesn't precompute that combination.
+  const groupSummaries: AnalysisGroupSummary[] = monthlyData?.group_summaries ?? [];
+  const hasGroups = !!groupsEnabled && groupSummaries.length > 0;
+  const monthlyTotal = lens === 'paid'
+    ? computeIPaidTotal(monthlyData?.spend_breakdown?.personal ?? 0, groupSummaries)
+    : (monthlyData?.total_expenses || 0);
+  const netWithPeople = computeNetWithPeople(groupSummaries);
+
+  // TrackSpense v3 Mobile mock's greeting: a period eyebrow ("July 2026") + "Hi, {name}" —
+  // replaces the pre-v3 time-of-day "Good evening, testlocaluser" format.
+  const monthYearLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const firstName = userEmail?.split('@')[0] || 'there';
 
   return (
     <LinearGradient colors={theme.gradients.surface} style={styles.root}>
@@ -493,16 +409,23 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
         }
       >
-        {/* ── Personalized Greeting Header ─────────────────── */}
+        {/* ── Greeting Header ────────────────────────────────── */}
         <View style={styles.pageHeader}>
           <View>
-            <Text style={styles.greetingSmall}>{getTimeOfDay()},</Text>
-            <Text style={styles.greetingName}>{userEmail?.split('@')[0] || 'there'}</Text>
+            <Text style={styles.greetingEyebrow}>{monthYearLabel.toUpperCase()}</Text>
+            <Text style={styles.greetingName}>Hi, {firstName}</Text>
           </View>
-          <TouchableOpacity style={styles.avatarBtn} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={styles.avatarBtn}
+            activeOpacity={0.75}
+            onPress={() => navigation.navigate('Profile')}
+          >
             <Text style={styles.avatarText}>{userEmail?.charAt(0).toUpperCase() || '?'}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* ── Type to log (TrackSpense v3) ──────────────────── */}
+        <TypeToLogBar />
 
         {/* ── Hero Card ─────────────────────────────────────── */}
         {loading ? (
@@ -510,15 +433,18 @@ export default function HomeScreen() {
             <ActivityIndicator color={theme.colors.primary} />
           </View>
         ) : (
-          <HeroCard yearlyTotal={yearlyTotal} monthlyTotal={monthlyTotal} momDelta={momDelta} />
+          <HeroCard
+            monthlyTotal={monthlyTotal}
+            showLens={hasGroups}
+            lens={lens}
+            onLensChange={setLens}
+            netWithPeople={netWithPeople}
+            onNetWithPeoplePress={() => navigation.navigate('GroupsTab', { initialTab: 'people' })}
+          />
         )}
 
-        {/* ── What Changed / Due Soon (TS-DES-112) ──────────── */}
-        <WhatChangedTeaser insights={changeInsights || []} onPress={() => navigation.navigate('Analysis')} />
-        <DueSoonStrip templates={recurringTemplates || []} onPress={() => navigation.navigate('Recurring')} />
-
-        {/* ── Quick Actions ─────────────────────────────────── */}
-        <QuickActions navigation={navigation} />
+        {/* ── My Groups (TrackSpense v3) ────────────────────── */}
+        <GroupChipsRow groupSummaries={groupSummaries} onPress={(groupId) => navigation.navigate('GroupDetail', { groupId })} />
 
         {/* ── Recent Activity ───────────────────────────────── */}
         <SectionHeader
@@ -549,19 +475,6 @@ export default function HomeScreen() {
             ))}
           </View>
         )}
-
-        {/* ── Analytics ─────────────────────────────────────── */}
-        {/* TS-DES-105: ranked list leads (Design Spec §4.3's "demote the donut" direction); the
-            donut renders as a small secondary ornament in the same card, not the primary visual. */}
-        <View style={styles.analyticsSpacer} />
-        <SectionHeader title="Analytics" />
-        <View style={styles.chartPad}>
-          <CategoryRankedList data={monthlyData?.category_totals || []} title="Monthly Breakdown" />
-          <View style={styles.donutOrnamentRow}>
-            <CategoryDonutChart data={donutData} title="At a glance" compact />
-          </View>
-          <TrendLineChart title="6-Month Trend" />
-        </View>
       </ScrollView>
     </LinearGradient>
   );
@@ -579,19 +492,20 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 16,
   },
-  greetingSmall: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 17,
+  greetingEyebrow: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 11,
+    letterSpacing: 0.7,
     color: theme.colors.textTertiary,
     marginBottom: 2,
   },
   greetingName: {
-    fontFamily: 'Inter-Black',
-    fontSize: 34,
+    fontFamily: 'SpaceGrotesk-SemiBold',
+    fontSize: 22,
     color: theme.colors.text,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
     textTransform: 'capitalize',
   },
   avatarBtn: {
@@ -637,7 +551,4 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   emptyIcon: { fontSize: 44, marginBottom: 14 },
   emptyTitle: { fontFamily: 'Inter-SemiBold', fontSize: 17, color: theme.colors.text, marginBottom: 6 },
   emptySubtitle: { fontFamily: 'Inter-Regular', fontSize: 15, color: theme.colors.textTertiary },
-  analyticsSpacer: { height: 24 },
-  chartPad: { paddingHorizontal: 20 },
-  donutOrnamentRow: { alignItems: 'flex-start' },
 });
