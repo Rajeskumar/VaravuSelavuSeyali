@@ -14,6 +14,7 @@ import { apiFetch } from '../api/apiFetch';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import SegmentedTabs from '../components/SegmentedTabs';
+import { notifyExpenseChanged } from '../utils/expenseEvents';
 
 const SUGGESTED_PROMPTS = [
     "What were my top spending categories?",
@@ -150,6 +151,16 @@ export default function AIAnalystScreen() {
                 scope: 'This month · My Expenses', // Placeholder for intent context
             };
             setMessages((prev) => [...prev, assistantMsg]);
+            // TrackSpense v3: the AI Analyst can now create expenses (create_expense/
+            // create_group_expense tools live behind this same endpoint on the backend), but
+            // this screen never called any local mutation whose onSuccess would signal other
+            // screens to refetch — so a chat-created expense could silently go stale everywhere
+            // else. Fired after every response (cheap — it's an invalidation, not a forced
+            // refetch of unmounted screens) rather than trying to parse creation intent out of
+            // the assistant's free-text reply. HomeScreen/ExpensesScreen/AnalysisScreen are
+            // subscribed directly; GroupsScreen's own onExpenseChanged subscription (added
+            // alongside the People tab) covers ['groups']/['friend-balances'] in turn.
+            notifyExpenseChanged();
         } catch (error: any) {
             const errorMsg: DisplayMessage = {
                 id: (Date.now() + 1).toString(),

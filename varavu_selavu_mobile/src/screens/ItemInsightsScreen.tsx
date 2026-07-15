@@ -313,7 +313,7 @@ export default function ItemInsightsScreen() {
           <Ionicons name="receipt-outline" size={48} color={theme.colors.textTertiary} />
           <Text style={styles.emptyText}>No item insights yet</Text>
           <Text style={styles.emptySubtext}>Upload a receipt to unlock item-level insights.</Text>
-           <TouchableOpacity style={styles.ctaButton} onPress={openAddExpense}>
+           <TouchableOpacity style={styles.ctaButton} onPress={() => openAddExpense()}>
               <Text style={styles.ctaButtonText}>Add Receipt Expense</Text>
            </TouchableOpacity>
         </View>

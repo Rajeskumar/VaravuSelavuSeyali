@@ -327,7 +327,7 @@ export default function MerchantInsightsScreen() {
           <Ionicons name="storefront-outline" size={48} color={theme.colors.textTertiary} />
           <Text style={styles.emptyText}>No merchant data found</Text>
           <Text style={styles.emptySubtext}>Add merchant names to your expenses to improve merchant insights.</Text>
-           <TouchableOpacity style={styles.ctaButton} onPress={openAddExpense}>
+           <TouchableOpacity style={styles.ctaButton} onPress={() => openAddExpense()}>
               <Text style={styles.ctaButtonText}>Add an Expense</Text>
            </TouchableOpacity>
         </View>

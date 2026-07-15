@@ -7,7 +7,7 @@
  * Scope note (TS-GRP-109): Stats and Activity tabs are listed in §12.2 as
  * optional for Phase 1 — omitted here, to be added in a follow-up.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useContext } from 'react';
 import {
   View,
   Text,
@@ -46,9 +46,11 @@ import SettleUpSheet from '../components/SettleUpSheet';
 import GroupSettingsSheet from '../components/GroupSettingsSheet';
 import ActivityList from '../components/ActivityList';
 import ExpenseDetailSheet from '../components/ExpenseDetailSheet';
-import ExpenseCard from '../components/ExpenseCard';
 import EditGroupExpenseModal from '../components/EditGroupExpenseModal';
 import { showToast } from '../components/Toast';
+import { formatCurrency } from '../utils/currencyMath';
+import { memberColor, initialsFromName } from '../components/BalanceRow';
+import { AddExpenseContext } from './AddExpenseScreen';
 
 type Tab = 'expenses' | 'balances' | 'activity';
 
@@ -67,6 +69,7 @@ export default function GroupDetailScreen() {
   const route = useRoute<any>();
   const { userEmail } = useAuth();
   const qc = useQueryClient();
+  const { openAddExpense } = useContext(AddExpenseContext);
 
   const groupId: string = route.params?.groupId ?? '';
 
@@ -127,10 +130,55 @@ export default function GroupDetailScreen() {
 
   const myMember = members.find((m) => m.user_email === userEmail);
   const myBalance = balances.find((b) => b.member_id === myMember?.member_id)?.net ?? 0;
+  // TrackSpense v3 Mobile mock's balance display: a small uppercase label + a big centered
+  // figure (✓ glyph when settled, matching `gdBalLabel`/`gdBal`), not a left-aligned banner
+  // sentence.
   const balanceColor =
-    myBalance > 0 ? (theme.colors.success ?? '#34C759') : myBalance < 0 ? theme.colors.error : theme.colors.textSecondary;
-  const balanceLabel =
-    myBalance > 0 ? `You're owed $${myBalance.toFixed(2)}` : myBalance < 0 ? `You owe $${Math.abs(myBalance).toFixed(2)}` : "You're all settled up";
+    myBalance > 0 ? theme.colors.success : myBalance < 0 ? theme.colors.error : theme.colors.textSecondary;
+  const balanceLabel = myBalance === 0 ? "You're all settled up" : myBalance > 0 ? "You're owed" : 'You owe';
+  const balanceFigure = myBalance === 0 ? '✓' : formatCurrency(Math.abs(myBalance));
+
+  // Moved above the early-return loading/not-found guards below (was previously defined further
+  // down, after those guards) so the new auto-open effect right below it — which must run
+  // unconditionally on every render per the Rules of Hooks — can reference it.
+  const handleSettleUp = (balance: MemberBalance) => {
+    if (!myMember) return;
+    if (balance.net < 0 && balance.member_id !== myMember.member_id) {
+      setSettleFrom(myMember.member_id);
+      setSettleTo(balance.member_id);
+      setSettleSuggested(Math.abs(balance.net));
+    } else {
+      setSettleFrom(balance.member_id);
+      setSettleTo(myMember.member_id);
+      setSettleSuggested(Math.abs(balance.net));
+    }
+    setSettleUpVisible(true);
+  };
+
+  // TrackSpense v3 People tab: `PeopleList` can't call `handleSettleUp` directly (it only has
+  // FriendBalanceDTO's counterparty_email/display_name, not a member_id), so it navigates here
+  // with `settleCounterpartyEmail`/`settleCounterpartyName` route params instead and this effect
+  // resolves the matching member once data has loaded, then reuses the existing settle-up
+  // mechanism unchanged. Matches by email first (reliable — both are real account emails);
+  // falls back to display-name for placeholder (no-email) members. One-shot via the ref guard so
+  // re-renders (e.g. from a subsequent balances refetch) don't re-open the sheet after the user
+  // has already closed it.
+  const hasAutoOpenedSettleRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoOpenedSettleRef.current) return;
+    const targetEmail = route.params?.settleCounterpartyEmail;
+    const targetName = route.params?.settleCounterpartyName;
+    if (!targetEmail && !targetName) return;
+    if (!members.length || !balances.length || !myMember) return;
+    const targetMember = members.find(
+      (m) => (targetEmail && m.user_email === targetEmail) || (!targetEmail && m.display_name === targetName)
+    );
+    const targetBalance = targetMember && balances.find((b) => b.member_id === targetMember.member_id);
+    if (targetBalance) {
+      hasAutoOpenedSettleRef.current = true;
+      handleSettleUp(targetBalance);
+    }
+  }, [members, balances, myMember, route.params?.settleCounterpartyEmail, route.params?.settleCounterpartyName]);
 
   const handleAddMember = async () => {
     setInviteLoading(true);
@@ -150,9 +198,11 @@ export default function GroupDetailScreen() {
 
   React.useEffect(() => {
     if (detail?.name) {
-      const emoji = GROUP_TYPE_EMOJI[detail.group_type] ?? '👥';
+      // TrackSpense v3 Mobile mock's own header row (emoji/name/members/avatars) now lives in
+      // the screen body, matching the mock — the native title stays blank rather than
+      // duplicating it in the small nav bar.
       navigation.setOptions({
-        headerTitle: `${emoji} ${detail.name}`,
+        headerTitle: '',
         headerLeft: () => (
           <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginLeft: 8 }}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
@@ -210,41 +260,34 @@ export default function GroupDetailScreen() {
     ]);
   };
 
+  // TrackSpense v3 Mobile mock's flat expense row (desc/meta left, total + "your share $X"
+  // right) — replaces the heavier icon-badge `ExpenseCard` treatment. Tap opens the existing
+  // detail sheet (which has its own delete action + comments/history); a small trailing edit
+  // icon keeps direct access to `EditGroupExpenseModal`, since the detail sheet has no edit
+  // entry point of its own.
   const renderExpense = ({ item }: { item: GroupExpenseRow }) => {
     const payerNames = item.payer_summary
       .map((p) => members.find((m) => m.member_id === p.member_id)?.display_name ?? '?')
       .join(', ');
-
     return (
-      <ExpenseCard
-        description={item.description}
-        category={item.category}
-        cost={item.cost}
-        date={item.date}
-        merchantName={item.merchant_name}
-        paidByNames={payerNames}
-        myShare={item.my_share}
-        currency={item.currency}
-        groupCurrency={detail?.currency}
-        onPress={() => setSelectedExpense(item)}
-        onEdit={() => handleEditExpense(item)}
-        onDelete={() => handleDeleteExpense(item.row_id)}
-      />
+      <TouchableOpacity style={styles.expenseRow} onPress={() => setSelectedExpense(item)} activeOpacity={0.7}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.expenseDesc} numberOfLines={1}>{item.description}</Text>
+          <Text style={styles.expenseMeta} numberOfLines={1}>{item.date} · paid by {payerNames}</Text>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={styles.expenseTotal}>{formatCurrency(item.cost)}</Text>
+          <Text style={styles.expenseShareText}>your share {formatCurrency(item.my_share)}</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => handleEditExpense(item)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.expenseEditBtn}
+        >
+          <Ionicons name="pencil-outline" size={15} color={theme.colors.textTertiary} />
+        </TouchableOpacity>
+      </TouchableOpacity>
     );
-  };
-
-  const handleSettleUp = (balance: MemberBalance) => {
-    if (!myMember) return;
-    if (balance.net < 0 && balance.member_id !== myMember.member_id) {
-      setSettleFrom(myMember.member_id);
-      setSettleTo(balance.member_id);
-      setSettleSuggested(Math.abs(balance.net));
-    } else {
-      setSettleFrom(balance.member_id);
-      setSettleTo(myMember.member_id);
-      setSettleSuggested(Math.abs(balance.net));
-    }
-    setSettleUpVisible(true);
   };
 
   const renderBalance = ({ item }: { item: MemberBalance }) => (
@@ -278,9 +321,45 @@ export default function GroupDetailScreen() {
         </View>
       )}
 
-      <View style={styles.balanceBanner}>
-        <Text style={styles.balanceBannerLabel}>Your balance in this group</Text>
-        <Text style={[styles.balanceBannerAmount, { color: balanceColor }]}>{balanceLabel}</Text>
+      {/* TrackSpense v3 Mobile mock's header row: emoji box + name + member count + an
+          overlapping avatar stack — previously tucked into the tiny native header title. */}
+      <View style={styles.headerRow}>
+        <View style={styles.headerEmojiBox}>
+          <Text style={styles.headerEmoji}>{GROUP_TYPE_EMOJI[detail.group_type] ?? '👥'}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerName} numberOfLines={1}>{detail.name}</Text>
+          <Text style={styles.headerMembers}>{members.length} member{members.length === 1 ? '' : 's'}</Text>
+        </View>
+        <View style={{ flexDirection: 'row' }}>
+          {members.slice(0, 4).map((m, i) => (
+            <View
+              key={m.member_id}
+              style={[styles.avatarStack, { backgroundColor: memberColor(m.member_id), marginLeft: i === 0 ? 0 : -8 }]}
+            >
+              <Text style={styles.avatarStackText}>{initialsFromName(m.display_name)}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.balanceCenter}>
+        <Text style={styles.balanceCenterLabel}>{balanceLabel.toUpperCase()}</Text>
+        <Text style={[styles.balanceCenterFigure, { color: balanceColor }]}>{balanceFigure}</Text>
+      </View>
+
+      {/* TrackSpense v3 Mobile mock's action row — today this is the only way to open Quick
+          Capture pre-scoped to a specific group. "Settle up" deliberately doesn't mirror the
+          mock's own choice (navigating away to the global People tab, losing this group's
+          context) — it switches to this screen's own Balances tab instead, where the real
+          Settle Up FAB already lives. */}
+      <View style={styles.actionRow}>
+        <TouchableOpacity style={styles.addExpenseBtn} onPress={() => openAddExpense(groupId)} activeOpacity={0.85}>
+          <Text style={styles.addExpenseBtnText}>＋ Add expense</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.settleUpLinkBtn} onPress={() => setActiveTab('balances')} activeOpacity={0.85}>
+          <Text style={styles.settleUpLinkText}>Settle up →</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.tabBar}>
@@ -296,13 +375,15 @@ export default function GroupDetailScreen() {
       </View>
 
       {activeTab === 'expenses' && (
-        <FlatList
-          data={expenses}
-          keyExtractor={(item) => item.row_id}
-          renderItem={renderExpense}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          refreshControl={<RefreshControl refreshing={expensesRefetching} onRefresh={refetchExpenses} tintColor={theme.colors.primary} />}
-        />
+        <View style={styles.expensesCard}>
+          <FlatList
+            data={expenses}
+            keyExtractor={(item) => item.row_id}
+            renderItem={renderExpense}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+            refreshControl={<RefreshControl refreshing={expensesRefetching} onRefresh={refetchExpenses} tintColor={theme.colors.primary} />}
+          />
+        </View>
       )}
 
       {activeTab === 'balances' && (
@@ -463,53 +544,82 @@ const createStyles = (theme: AppTheme) =>
       fontFamily: 'Inter-Medium',
       textAlign: 'center',
     },
-    balanceBanner: {
-      marginHorizontal: 16,
-      marginTop: 12,
-      padding: 16,
-      borderRadius: 16,
-      backgroundColor: theme.colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.borderLight,
+    headerRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      marginHorizontal: 18, marginTop: 10,
     },
-    balanceBannerLabel: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 },
-    balanceBannerAmount: { fontFamily: 'Inter-Bold', fontSize: 20 },
+    headerEmojiBox: {
+      width: 44, height: 44, borderRadius: 14,
+      backgroundColor: theme.colors.primarySurface,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    headerEmoji: { fontSize: 22 },
+    headerName: { fontFamily: 'Inter-Bold', fontSize: 17, color: theme.colors.text },
+    headerMembers: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 1 },
+    avatarStack: {
+      width: 30, height: 30, borderRadius: 999,
+      alignItems: 'center', justifyContent: 'center',
+      borderWidth: 2, borderColor: theme.colors.background,
+    },
+    avatarStackText: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#FFFFFF' },
+    balanceCenter: { alignItems: 'center', paddingTop: 20, paddingBottom: 4 },
+    balanceCenterLabel: {
+      fontFamily: 'Inter-Bold', fontSize: 11, letterSpacing: 0.8,
+      color: theme.colors.textTertiary,
+    },
+    balanceCenterFigure: {
+      fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 36, marginTop: 4,
+    },
+    actionRow: {
+      flexDirection: 'row', justifyContent: 'center', gap: 8,
+      marginTop: 10, marginBottom: 4, paddingHorizontal: 16,
+    },
+    addExpenseBtn: {
+      backgroundColor: theme.colors.primary, borderRadius: 999,
+      paddingHorizontal: 18, paddingVertical: 10,
+    },
+    addExpenseBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#FFFFFF' },
+    settleUpLinkBtn: {
+      borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
+      borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10,
+    },
+    settleUpLinkText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.primary },
     // SegmentedTabs supplies its own background/padding/pill chrome — this wrapper now only
     // owns the outer margin (was duplicating the same pill background+padding a second time
     // around the old inline TouchableOpacity tab row).
     tabBar: { margin: 16 },
-    expenseCard: {
+    expensesCard: {
+      flex: 1,
+      marginHorizontal: 16,
+      backgroundColor: theme.colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.borderLight,
+      borderRadius: 14,
+      overflow: 'hidden',
+    },
+    expenseRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 16,
+      gap: 10,
+      paddingHorizontal: 14,
       paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.borderLight,
     },
-    expenseIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 10,
-      backgroundColor: theme.colors.surfaceSecondary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-    },
-    expenseLeft: { flex: 1 },
-    expenseDesc: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.text },
+    expenseDesc: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text },
     expenseMeta: {
       fontFamily: 'Inter-Regular',
-      fontSize: 12,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
+      fontSize: 11.5,
+      color: theme.colors.textTertiary,
+      marginTop: 1,
     },
-    expenseShare: {
+    expenseShareText: {
       fontFamily: 'Inter-Regular',
-      fontSize: 12,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
-      textAlign: 'right',
+      fontSize: 10.5,
+      color: theme.colors.textTertiary,
+      marginTop: 1,
     },
+    expenseEditBtn: { padding: 4, marginLeft: 2 },
     sectionTitle: {
       fontFamily: 'Inter-SemiBold',
       fontSize: 18,
@@ -554,8 +664,7 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 14,
       color: theme.colors.text,
     },
-    expenseRight: { alignItems: 'flex-end' },
-    expenseTotal: { fontFamily: 'Inter-Bold', fontSize: 15, color: theme.colors.text },
+    expenseTotal: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text },
     settleBtn: {
       position: 'absolute',
       backgroundColor: theme.colors.primary,
