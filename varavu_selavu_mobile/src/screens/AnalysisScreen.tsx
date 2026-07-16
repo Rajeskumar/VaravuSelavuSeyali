@@ -47,6 +47,11 @@ export default function AnalysisScreen() {
     const [tab, setTab] = useState<AnalysisTab>('overview');
     const [includeGroups, setIncludeGroups] = useState(true);
     const scope = includeGroups ? 'combined' : 'personal';
+    // TrackSpense v3 Mobile mock's category drill-down (`anCat`/`anHasCat`): tapping a category
+    // in the "WHERE IT WENT" legend swaps the overview content in place for that category's own
+    // transaction list, with a "‹ Categories" link back — was missing entirely (legend rows
+    // weren't tappable at all).
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
     const now = useMemo(() => new Date(), []);
     const year = now.getFullYear();
@@ -129,7 +134,7 @@ export default function AnalysisScreen() {
                 <View style={styles.tabsRow}>
                     <SegmentedTabs<AnalysisTab>
                         value={tab}
-                        onChange={setTab}
+                        onChange={(t) => { setTab(t); setSelectedCategory(null); }}
                         options={[
                             { value: 'overview', label: 'Overview' },
                             { value: 'items', label: 'Items' },
@@ -151,6 +156,45 @@ export default function AnalysisScreen() {
                             <Text style={styles.emptySubtitle}>Add an expense to see category breakdowns and trends.</Text>
                             <CustomButton title="Add an Expense" onPress={() => openAddExpense()} fullWidth={false} style={{ marginTop: 4 }} />
                         </View>
+                    ) : selectedCategory ? (
+                        (() => {
+                            const catSegment = segments.find((s) => s.category === selectedCategory);
+                            const catTxns = data?.category_expense_details?.[selectedCategory] ?? [];
+                            return (
+                                <View style={styles.section}>
+                                    <TouchableOpacity onPress={() => setSelectedCategory(null)} activeOpacity={0.6} style={styles.catBackLink}>
+                                        <Text style={styles.catBackText}>‹ Categories</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.catHeaderCard}>
+                                        <Text style={[styles.catHeaderDot, { color: catSegment?.color ?? theme.colors.textTertiary }]}>●</Text>
+                                        <View style={{ flex: 1, minWidth: 0 }}>
+                                            <Text style={styles.catHeaderName} numberOfLines={1}>{selectedCategory}</Text>
+                                            <Text style={styles.catHeaderSub}>
+                                                {catTxns.length} transaction{catTxns.length === 1 ? '' : 's'} · {(catSegment?.pct ?? 0).toFixed(0)}% of {monthLabel.charAt(0) + monthLabel.slice(1).toLowerCase()}
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.catHeaderTotal}>{formatCurrency(catSegment?.total ?? 0)}</Text>
+                                    </View>
+                                    {catTxns.length === 0 ? (
+                                        <View style={styles.emptyCard}>
+                                            <Text style={styles.emptySubtitle}>No transactions found.</Text>
+                                        </View>
+                                    ) : (
+                                        <View style={[styles.changesCard, { marginTop: 10 }]}>
+                                            {catTxns.map((t, i) => (
+                                                <View key={`${t.date}-${i}`} style={[styles.changeRow, i === catTxns.length - 1 && styles.rowLast]}>
+                                                    <View style={{ flex: 1, minWidth: 0 }}>
+                                                        <Text style={styles.changeName} numberOfLines={1}>{t.description}</Text>
+                                                        <Text style={styles.changeWhy} numberOfLines={1}>{t.date}</Text>
+                                                    </View>
+                                                    <Text style={styles.changeAmount}>{formatCurrency(t.cost)}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    )}
+                                </View>
+                            );
+                        })()
                     ) : (
                         <>
                             <View style={styles.card}>
@@ -162,10 +206,10 @@ export default function AnalysisScreen() {
                                 </View>
                                 <View style={styles.legend}>
                                     {segments.map((s) => (
-                                        <View key={s.category} style={styles.legendItem}>
+                                        <TouchableOpacity key={s.category} style={styles.legendItem} onPress={() => setSelectedCategory(s.category)} activeOpacity={0.6}>
                                             <Text style={[styles.legendDot, { color: s.color }]}>●</Text>
                                             <Text style={styles.legendText}>{s.category} {s.pct.toFixed(0)}%</Text>
-                                        </View>
+                                        </TouchableOpacity>
                                     ))}
                                 </View>
                                 {groupsEnabled && (
@@ -319,6 +363,18 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     toggleLabel: { fontFamily: 'Inter-Regular', fontSize: 12.5, color: theme.colors.textSecondary },
     section: { marginTop: 12, marginHorizontal: 18 },
+    catBackLink: { alignSelf: 'flex-start', paddingVertical: 2 },
+    catBackText: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.primary },
+    catHeaderCard: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        backgroundColor: theme.colors.surface,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight,
+        borderRadius: 14, padding: 16, marginTop: 8,
+    },
+    catHeaderDot: { fontSize: 14 },
+    catHeaderName: { fontFamily: 'Inter-Bold', fontSize: 15, color: theme.colors.text },
+    catHeaderSub: { fontFamily: 'Inter-Regular', fontSize: 11.5, color: theme.colors.textTertiary, marginTop: 2 },
+    catHeaderTotal: { fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 22, color: theme.colors.text },
     sectionLabel: { fontFamily: 'Inter-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary, marginBottom: 6 },
     tabIntro: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textTertiary, lineHeight: 17, marginBottom: 8 },
     changeAmount: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text },

@@ -1,7 +1,7 @@
 # Orientation Report — Reconcile Design System vs. Current Implementation
 
 > **Read-only pass.** No code was modified to produce this report. Sources read, in order:
-> 1. `docs/features/TrackSpense_Groups_Product_Spec.md` (file exists under `docs/features/`, not `docs/feature/`)
+> 1. `docs/features/groups/TrackSpense_Groups_Product_Spec.md` (file exists under `docs/features/`, not `docs/feature/`)
 > 2. `docs/design/TrackSpense_UX_Design_Spec.md` (the "Reconcile" design language)
 > 3. `docs/design/TrackSpense_UX_Audit_and_Redesign.md`
 > 4. `docs/design/prototypes/ExpenseFeed.jsx`, `docs/design/prototypes/SettleUp.jsx` (no `.reference` suffix on disk)

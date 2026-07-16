@@ -40,6 +40,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
+import { categoryPalette } from '../utils/chartTheme';
 import SegmentedTabs from '../components/SegmentedTabs';
 import BalanceRow from '../components/BalanceRow';
 import SettleUpSheet from '../components/SettleUpSheet';
@@ -125,6 +126,21 @@ export default function GroupDetailScreen() {
   const members: MemberDTO[] = detail?.members ?? [];
   const expenses: GroupExpenseRow[] = expenseData?.items ?? [];
   const balances: MemberBalance[] = balanceData?.members ?? [];
+
+  // TrackSpense v3 Mobile mock's "GROUP SPEND BY CATEGORY" card (`gdCats`) — a stacked bar +
+  // tappable legend above the expense list, filtering it down to one category at a time. Was
+  // missing entirely.
+  const [catFilter, setCatFilter] = useState<string | null>(null);
+  const palette = categoryPalette(theme);
+  const categoryAgg = React.useMemo(() => {
+    const totals: Record<string, number> = {};
+    expenses.forEach((e) => { totals[e.category] = (totals[e.category] || 0) + e.cost; });
+    const sum = Object.values(totals).reduce((s, v) => s + v, 0) || 1;
+    return Object.entries(totals)
+      .sort((a, b) => b[1] - a[1])
+      .map(([category, total], i) => ({ category, total, pct: (total / sum) * 100, color: palette[i % palette.length] }));
+  }, [expenses, palette]);
+  const filteredExpenses = catFilter ? expenses.filter((e) => e.category === catFilter) : expenses;
 
   const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name ?? 'Unknown';
 
@@ -375,15 +391,53 @@ export default function GroupDetailScreen() {
       </View>
 
       {activeTab === 'expenses' && (
-        <View style={styles.expensesCard}>
-          <FlatList
-            data={expenses}
-            keyExtractor={(item) => item.row_id}
-            renderItem={renderExpense}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-            refreshControl={<RefreshControl refreshing={expensesRefetching} onRefresh={refetchExpenses} tintColor={theme.colors.primary} />}
-          />
-        </View>
+        <>
+          {categoryAgg.length > 0 && (
+            <View style={styles.catCard}>
+              <Text style={styles.catCardLabel}>GROUP SPEND BY CATEGORY</Text>
+              <View style={styles.catBar}>
+                {categoryAgg.map((c) => (
+                  <View key={c.category} style={{ width: `${c.pct}%`, backgroundColor: c.color }} />
+                ))}
+              </View>
+              <View style={{ marginTop: 4 }}>
+                {categoryAgg.map((c) => {
+                  const active = catFilter === c.category;
+                  return (
+                    <TouchableOpacity
+                      key={c.category}
+                      style={[styles.catRow, active && styles.catRowActive]}
+                      onPress={() => setCatFilter(active ? null : c.category)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.catDot, { color: c.color }]}>●</Text>
+                      <Text style={styles.catName} numberOfLines={1}>{c.category}</Text>
+                      <Text style={styles.catPct}>{c.pct.toFixed(0)}%</Text>
+                      <Text style={styles.catAmount}>{formatCurrency(c.total)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {catFilter && (
+                <View style={styles.catFilterRow}>
+                  <Text style={styles.catFilterText}>Showing {catFilter} only</Text>
+                  <TouchableOpacity onPress={() => setCatFilter(null)}>
+                    <Text style={styles.catFilterClear}>· clear</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+          <View style={styles.expensesCard}>
+            <FlatList
+              data={filteredExpenses}
+              keyExtractor={(item) => item.row_id}
+              renderItem={renderExpense}
+              contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+              refreshControl={<RefreshControl refreshing={expensesRefetching} onRefresh={refetchExpenses} tintColor={theme.colors.primary} />}
+            />
+          </View>
+        </>
       )}
 
       {activeTab === 'balances' && (
@@ -588,6 +642,34 @@ const createStyles = (theme: AppTheme) =>
     // owns the outer margin (was duplicating the same pill background+padding a second time
     // around the old inline TouchableOpacity tab row).
     tabBar: { margin: 16 },
+    catCard: {
+      marginHorizontal: 16,
+      marginBottom: 12,
+      backgroundColor: theme.colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.borderLight,
+      borderRadius: 14,
+      padding: 16,
+    },
+    catCardLabel: { fontFamily: 'Inter-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary },
+    catBar: {
+      flexDirection: 'row', height: 12, borderRadius: 999, overflow: 'hidden',
+      marginTop: 12, backgroundColor: theme.colors.surfaceSecondary,
+    },
+    catRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      paddingVertical: 9, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10,
+    },
+    catRowActive: { backgroundColor: theme.colors.primarySurface },
+    catDot: { fontSize: 12 },
+    catName: { flex: 1, fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.text },
+    catPct: { fontFamily: 'Inter-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
+    catAmount: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.text, width: 70, textAlign: 'right' },
+    catFilterRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8,
+    },
+    catFilterText: { fontFamily: 'Inter-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
+    catFilterClear: { fontFamily: 'Inter-SemiBold', fontSize: 11.5, color: theme.colors.primary },
     expensesCard: {
       flex: 1,
       marginHorizontal: 16,

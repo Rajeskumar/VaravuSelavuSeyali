@@ -28,7 +28,7 @@
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#007AFF"
+        "backgroundColor": "#E8E8F5"
       },
       "package": "com.anonymous.varavuselavumobile",
       "intentFilters": [

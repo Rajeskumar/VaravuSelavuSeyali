@@ -9,7 +9,7 @@ redesign follows it and re-skins/restructures the app, including the Groups UI i
 - [`../TrackSpense_UX_Audit_and_Redesign.md`](../TrackSpense_UX_Audit_and_Redesign.md) — the audit + ranked backlog
 - [`../ORIENTATION_REPORT.md`](../ORIENTATION_REPORT.md) — the delta against the current codebase
 
-**`docs/features/TrackSpense_Groups_Product_Spec.md` is explicitly out of scope for this ticket set.**
+**`docs/features/groups/TrackSpense_Groups_Product_Spec.md` is explicitly out of scope for this ticket set.**
 Its §11.2/§17.1 "dashboard layout unchanged" language describes the Groups initiative's own scope
 only, decided before this redesign existed. It does not govern `TS-DES-1xx` and is not referenced,
 reconciled against, or edited by any ticket below.

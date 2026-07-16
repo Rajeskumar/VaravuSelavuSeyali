@@ -25,7 +25,9 @@ export default function PayerPicker({
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
-  const activeMembers = members.filter((m) => m.status === 'active');
+  // See the matching comment in SplitEditor.tsx — `'active'`-only permanently excluded
+  // placeholder (invited, no-email) members, which can never become `'active'`.
+  const activeMembers = members.filter((m) => m.status !== 'left');
   const selectedIds = React.useMemo(() => new Set(payers.map((p) => p.member_id)), [payers]);
   
   const totalEntered = payers.reduce((sum, p) => sum + p.amount_paid, 0);

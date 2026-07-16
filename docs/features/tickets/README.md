@@ -1,7 +1,7 @@
 # TrackSpense Groups — Phase 1 Implementation Tickets
 
 Tickets for **Phase 1 (MVP "Split the Bill")** of the Groups / Shared-Expenses feature.
-Source spec: [`../TrackSpense_Groups_Product_Spec.md`](../TrackSpense_Groups_Product_Spec.md) (v0.9.2, reconciled against the live codebase).
+Source spec: [`../TrackSpense_Groups_Product_Spec.md`](../groups/TrackSpense_Groups_Product_Spec.md) (v0.9.2, reconciled against the live codebase).
 
 Every ticket below is grounded in the **actual repo structure**, not the spec's illustrative DDL/paths:
 

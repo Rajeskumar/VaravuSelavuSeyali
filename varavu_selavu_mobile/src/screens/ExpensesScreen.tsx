@@ -12,12 +12,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
 import { listGroups, getGroupDetail, moveExpenseToGroup, listAllMyGroupExpenses, UnifiedGroupExpenseRow, GroupSummary, ApiError } from '../api/groups';
-import { listRecurringTemplates, RecurringTemplateDTO } from '../api/recurring';
+import { listRecurringTemplates, upsertRecurringTemplate, executeRecurringNow, RecurringTemplateDTO, UpsertRecurringPayload } from '../api/recurring';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
@@ -39,6 +39,19 @@ const categoryDotColors: Record<string, string> = {
 
 function dotColorFor(category: string): string {
     return categoryDotColors[category?.toLowerCase().trim()] || '#A1A1AA';
+}
+
+/** Mock's `r.ran`/"Logged today" pill — derived from `last_processed_iso` (persists across
+ * app restarts) rather than session-only local state. */
+function ranToday(template: RecurringTemplateDTO): boolean {
+    if (!template.last_processed_iso) return false;
+    const today = new Date();
+    const processed = new Date(template.last_processed_iso);
+    return (
+        processed.getFullYear() === today.getFullYear() &&
+        processed.getMonth() === today.getMonth() &&
+        processed.getDate() === today.getDate()
+    );
 }
 
 type Tab = 'transactions' | 'recurring';
@@ -75,6 +88,11 @@ export default function ExpensesScreen() {
     const [editSubcategory, setEditSubcategory] = useState(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
     const [editDate, setEditDate] = useState('');
     const [editMerchantName, setEditMerchantName] = useState('');
+
+    // TrackSpense v3 Mobile mock's recurring row expand/edit/run-now (`r.expanded`/`r.editing`) —
+    // was previously a flat, non-interactive row.
+    const [recOpenId, setRecOpenId] = useState<string | null>(null);
+    const [recEdit, setRecEdit] = useState<{ id: string; description: string; category: string; day_of_month: string; default_cost: string } | null>(null);
 
     // TS-GRP-121: Move-to-group modal state
     const [moveModalVisible, setMoveModalVisible] = useState(false);
@@ -298,6 +316,45 @@ export default function ExpensesScreen() {
         [recurringTemplates]
     );
 
+    const saveRecurringEditMut = useMutation({
+        mutationFn: (payload: UpsertRecurringPayload) => upsertRecurringTemplate(payload),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['recurringTemplates'] });
+            setRecEdit(null);
+        },
+        onError: () => showToast({ message: 'Failed to save template', type: 'error' }),
+    });
+
+    const runRecurringMut = useMutation({
+        mutationFn: (templateId: string) => executeRecurringNow(templateId),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['recurringTemplates'] });
+            fetchExpenses(true);
+            qc.invalidateQueries({ queryKey: ['groupExpenses'] });
+            showToast({ message: 'Logged today', type: 'success' });
+        },
+        onError: () => showToast({ message: 'Failed to run template', type: 'error' }),
+    });
+
+    const openRecurringEdit = (t: RecurringTemplateDTO) => {
+        setRecEdit({ id: t.id, description: t.description, category: t.category, day_of_month: String(t.day_of_month), default_cost: t.default_cost.toFixed(2) });
+    };
+
+    const saveRecurringEdit = (t: RecurringTemplateDTO) => {
+        if (!recEdit) return;
+        const day = Math.max(1, Math.min(31, parseInt(recEdit.day_of_month, 10) || t.day_of_month));
+        const cost = parseFloat(recEdit.default_cost) || 0;
+        if (!recEdit.description.trim() || cost <= 0) return;
+        saveRecurringEditMut.mutate({
+            description: recEdit.description.trim(),
+            category: recEdit.category,
+            day_of_month: day,
+            default_cost: cost,
+            start_date_iso: t.start_date_iso,
+            status: t.status || 'Active',
+        });
+    };
+
     return (
         <LinearGradient colors={theme.gradients.surface} style={styles.container}>
             <View style={styles.header}>
@@ -359,20 +416,114 @@ export default function ExpensesScreen() {
                     </View>
                 ) : (
                     <View style={styles.dayCard}>
-                        {recurringRows.map((r, i) => (
-                            <View key={r.id} style={[styles.row, i === recurringRows.length - 1 && styles.recurringRowLast]}>
-                                <View style={{ flex: 1, minWidth: 0 }}>
-                                    <Text style={styles.rowDesc} numberOfLines={1}>{r.description}</Text>
-                                    <Text style={styles.rowMeta} numberOfLines={1}>{r.category} · day {r.day_of_month}</Text>
+                        {recurringRows.map((r, i) => {
+                            const expanded = recOpenId === r.id;
+                            const editing = expanded && recEdit?.id === r.id;
+                            const ran = ranToday(r);
+                            return (
+                                <View key={r.id} style={i === recurringRows.length - 1 && styles.recurringRowLast}>
+                                    <TouchableOpacity
+                                        style={styles.row}
+                                        activeOpacity={0.7}
+                                        onPress={() => { setRecOpenId(expanded ? null : r.id); setRecEdit(null); }}
+                                    >
+                                        <View style={{ flex: 1, minWidth: 0 }}>
+                                            <Text style={styles.rowDesc} numberOfLines={1}>{r.description}</Text>
+                                            <Text style={styles.rowMeta} numberOfLines={1}>{r.category} · day {r.day_of_month}</Text>
+                                        </View>
+                                        <View style={[styles.pill, ran ? styles.pillRan : r.isDue ? styles.pillDue : styles.pillActive]}>
+                                            <Text style={[styles.pillText, ran ? styles.pillTextRan : r.isDue ? styles.pillTextDue : styles.pillTextActive]}>
+                                                {ran ? 'logged today' : r.isDue ? `due ${r.day_of_month}th` : 'active'}
+                                            </Text>
+                                        </View>
+                                        <Text style={styles.recurringAmount}>{formatCurrency(r.default_cost)}</Text>
+                                        <Text style={styles.recurringChevron}>{expanded ? '▾' : '▸'}</Text>
+                                    </TouchableOpacity>
+
+                                    {expanded && (
+                                        <View style={styles.recurringExpand}>
+                                            {editing ? (
+                                                <>
+                                                    <Text style={styles.pickerLabel}>NAME</Text>
+                                                    <CustomInput
+                                                        value={recEdit!.description}
+                                                        onChangeText={(v) => setRecEdit((s) => (s ? { ...s, description: v } : s))}
+                                                        containerStyle={{ marginBottom: 10 }}
+                                                    />
+                                                    <View style={styles.rowFields}>
+                                                        <View style={styles.halfField}>
+                                                            <Text style={styles.pickerLabel}>AMOUNT</Text>
+                                                            <CustomInput
+                                                                value={recEdit!.default_cost}
+                                                                onChangeText={(v) => setRecEdit((s) => (s ? { ...s, default_cost: v } : s))}
+                                                                keyboardType="decimal-pad"
+                                                                containerStyle={{ marginBottom: 10 }}
+                                                            />
+                                                        </View>
+                                                        <View style={styles.halfField}>
+                                                            <Text style={styles.pickerLabel}>DAY</Text>
+                                                            <CustomInput
+                                                                value={recEdit!.day_of_month}
+                                                                onChangeText={(v) => setRecEdit((s) => (s ? { ...s, day_of_month: v } : s))}
+                                                                keyboardType="number-pad"
+                                                                containerStyle={{ marginBottom: 10 }}
+                                                            />
+                                                        </View>
+                                                    </View>
+                                                    <Text style={styles.pickerLabel}>CATEGORY</Text>
+                                                    <View style={[styles.pickerContent, { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }]}>
+                                                        {MAIN_CATEGORIES.map((mc) => (
+                                                            <TouchableOpacity
+                                                                key={mc}
+                                                                style={[styles.pickerChip, recEdit!.category === mc && styles.pickerChipActive]}
+                                                                onPress={() => setRecEdit((s) => (s ? { ...s, category: mc } : s))}
+                                                                activeOpacity={0.7}
+                                                            >
+                                                                <Text style={[styles.pickerChipText, recEdit!.category === mc && styles.pickerChipTextActive]}>{mc}</Text>
+                                                            </TouchableOpacity>
+                                                        ))}
+                                                    </View>
+                                                    <View style={styles.recurringEditActions}>
+                                                        <CustomButton
+                                                            title={saveRecurringEditMut.isPending ? 'Saving…' : 'Save changes'}
+                                                            onPress={() => saveRecurringEdit(r)}
+                                                            disabled={saveRecurringEditMut.isPending}
+                                                            fullWidth={false}
+                                                            style={{ flex: 1 }}
+                                                        />
+                                                        <CustomButton
+                                                            title="Cancel"
+                                                            variant="ghost"
+                                                            onPress={() => setRecEdit(null)}
+                                                            fullWidth={false}
+                                                            style={{ flex: 1 }}
+                                                        />
+                                                    </View>
+                                                </>
+                                            ) : (
+                                                <View style={styles.recurringActionsRow}>
+                                                    {ran ? (
+                                                        <Text style={styles.recurringRanText}>✓ Logged today</Text>
+                                                    ) : (
+                                                        <TouchableOpacity
+                                                            style={styles.recurringRunBtn}
+                                                            onPress={() => runRecurringMut.mutate(r.id)}
+                                                            disabled={runRecurringMut.isPending}
+                                                            activeOpacity={0.8}
+                                                        >
+                                                            <Text style={styles.recurringRunBtnText}>▶ Run now</Text>
+                                                        </TouchableOpacity>
+                                                    )}
+                                                    <TouchableOpacity style={styles.recurringEditBtn} onPress={() => openRecurringEdit(r)} activeOpacity={0.8}>
+                                                        <Text style={styles.recurringEditBtnText}>✎ Edit</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            )}
+                                        </View>
+                                    )}
                                 </View>
-                                <View style={[styles.pill, r.isDue ? styles.pillDue : styles.pillActive]}>
-                                    <Text style={[styles.pillText, r.isDue ? styles.pillTextDue : styles.pillTextActive]}>
-                                        {r.isDue ? `due ${r.day_of_month}th` : 'active'}
-                                    </Text>
-                                </View>
-                                <Text style={styles.recurringAmount}>{formatCurrency(r.default_cost)}</Text>
-                            </View>
-                        ))}
+                            );
+                        })}
                         <View style={styles.recurringFooter}>
                             <Text style={styles.recurringFooterLabel}>Active recurring total</Text>
                             <Text style={styles.recurringFooterAmount}>{formatCurrency(activeRecurringTotal)}/mo</Text>
@@ -576,7 +727,29 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     pillText: { fontFamily: 'Inter-Bold', fontSize: 10.5 },
     pillTextDue: { color: theme.colors.warning },
     pillTextActive: { color: theme.colors.textTertiary },
+    pillRan: { backgroundColor: theme.colors.successSurface },
+    pillTextRan: { color: theme.colors.success },
     recurringAmount: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text, width: 62, textAlign: 'right' },
+    recurringChevron: { color: theme.colors.textTertiary, fontSize: 12, marginLeft: 8 },
+    recurringExpand: {
+        backgroundColor: theme.colors.surfaceSecondary,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: theme.colors.borderLight,
+        paddingHorizontal: 14, paddingVertical: 12,
+    },
+    recurringActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    recurringRanText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.success, paddingVertical: 8 },
+    recurringRunBtn: {
+        backgroundColor: theme.colors.primary, borderRadius: 999,
+        paddingHorizontal: 14, paddingVertical: 8,
+    },
+    recurringRunBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: '#fff' },
+    recurringEditBtn: {
+        borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
+        borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8,
+    },
+    recurringEditBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.primary },
+    recurringEditActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
     recurringFooter: {
         flexDirection: 'row', justifyContent: 'space-between',
         paddingHorizontal: 14, paddingVertical: 11,
@@ -633,6 +806,8 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,
         marginBottom: 6, marginLeft: 4, marginTop: 4,
     },
+    rowFields: { flexDirection: 'row', gap: 12 },
+    halfField: { flex: 1 },
     pickerScroll: {
         marginBottom: 12,
     },

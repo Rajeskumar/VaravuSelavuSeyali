@@ -57,7 +57,7 @@ This is the area with the most nuance. The core pre-calculation pipeline is genu
 
 Two docs proposed competing designs for the analytics/AI layer:
 - [AI Financial Analyst Feature.md](features/AI%20Financial%20Analyst%20Feature.md) — an ambitious "Medallion architecture" with `Vendors`/`Purchases`/`Canonical_Products`/`Purchase_Line_Items` tables, vector-embedding entity resolution, and a Text-to-SQL agent.
-- [item-level-ai-analyst.md](features/item-level-ai-analyst.md) — a simpler, more concrete plan using `item_insights`/`item_price_history`/`merchant_insights`/`merchant_aggregates` tables with keyword-based RAG.
+- [item-level-ai-analyst.md](features/ai_analyst/item-level-ai-analyst.md) — a simpler, more concrete plan using `item_insights`/`item_price_history`/`merchant_insights`/`merchant_aggregates` tables with keyword-based RAG.
 
 **What was actually built:** the schema from the *second* doc (simpler, pragmatic — good call). But the chat engine itself went a third way: `chat_service.py` implements a **LangGraph ReAct tool-calling agent** with, as of 2026-07-14, five tools — three read-only (`get_expense_summary`, `get_item_insights`, `get_merchant_insights`) and two write (`create_expense`, `create_group_expense`) — that the LLM calls as needed. This is not the RAG-style pre-filtered context injection either doc proposed, nor the Text-to-SQL agent from the ambitious doc — a reasonable middle ground, but it means **TS-ANL-005's "intent routing" requirement was effectively superseded by a different architecture** rather than implemented as specified — worth deciding whether to formally update TS-ANL-005 to describe the tool-calling design instead of chasing the original spec.
 

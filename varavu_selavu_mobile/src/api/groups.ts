@@ -56,7 +56,12 @@ export async function updateGroup(
   groupId: string,
   payload: { name?: string; group_type?: string; cover?: string; simplify_debts?: boolean; default_split?: any }
 ): Promise<GroupDetail> {
-  const res = await apiFetch(`/api/v1/groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) });
+  // Same missing-header bug as updateGroupExpense below — see its comment.
+  const res = await apiFetch(`/api/v1/groups/${groupId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
   return handleResponse<GroupDetail>(res);
 }
 
@@ -64,12 +69,19 @@ export async function updateGroupExpense(
   groupId: string,
   expenseId: string,
   payload: AddGroupExpensePayload
-): Promise<GroupDetail> {
+): Promise<GroupExpenseRow> {
+  // Missing `Content-Type: application/json` (present on every sibling call in this file, e.g.
+  // addGroupExpense below) meant a plain-string fetch body defaults to `text/plain` — FastAPI
+  // then received the JSON as a raw string instead of a parsed object and rejected every save
+  // with a 422 "Input should be a valid dictionary" error. Also fixes the response shape: the
+  // backend returns `{success, expense}` (`GroupExpenseCreatedResponse`), not a bare `GroupDetail`.
   const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}`, {
     method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  return handleResponse<GroupDetail>(res);
+  const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
+  return data.expense;
 }
 
 export async function deleteGroupExpense(groupId: string, expenseId: string): Promise<void> {
@@ -110,6 +122,11 @@ export interface PayerSummaryItem {
   amount_paid: number;
 }
 
+export interface ExpenseSplitItem {
+  member_id: string;
+  share: number;
+}
+
 export interface GroupExpenseRow {
   row_id: string;
   date: string;
@@ -119,6 +136,9 @@ export interface GroupExpenseRow {
   merchant_name?: string | null;
   my_share: number;
   payer_summary: PayerSummaryItem[];
+  // Every member's actual current dollar share — lets Edit reconstruct the real current split
+  // instead of resetting to an equal-split guess (matches the web app's `GroupExpenseRow`).
+  splits: ExpenseSplitItem[];
   currency?: string | null;
   fx_rate_to_group_currency?: number | null;
 }

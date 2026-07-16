@@ -47,10 +47,12 @@ const formatCurrency = (amount: number) =>
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** TrackSpense v3 Mobile mock's hero card — spend total + lens + Net with people only, nothing
- * else (no secondary stats row, no month-over-month delta line — the mock has neither). */
+/** TrackSpense v3 Mobile mock's hero card — spend total + lens + "personal + group shares"/"I
+ * paid" sub-line + Net with people, nothing else (no month-over-month delta line — the mock has
+ * none). */
 function HeroCard({
   monthlyTotal,
+  personalTotal,
   showLens,
   lens,
   onLensChange,
@@ -58,6 +60,9 @@ function HeroCard({
   onNetWithPeoplePress,
 }: {
   monthlyTotal: number;
+  /** `spend_breakdown.personal` — feeds the "$X personal + group shares" sub-line, mirroring
+   * the mock's `dbSpendSub` for the "share" lens. */
+  personalTotal: number;
   /** TrackSpense v3: lens toggle + "Net with people" only render when the user has at least
    * one active group (mirrors web's `hasGroups` gate on `TrueTotalHero.tsx`). */
   showLens: boolean;
@@ -68,6 +73,12 @@ function HeroCard({
 }) {
   const { theme } = useAppTheme();
   const heroStyles = useMemo(() => createHeroStyles(theme), [theme]);
+  // Mock's `dbSpendLabel`/`dbSpendSub`: the label and the line under the amount both flip with
+  // the lens, not just the number itself.
+  const spendLabel = lens === 'paid' ? 'Money out of pocket this month' : 'Spent this month — your true total';
+  const spendSub = lens === 'paid'
+    ? 'includes money fronted for others'
+    : `${formatCurrency(personalTotal)} personal + group shares`;
   return (
     <View style={heroStyles.card}>
       {/* TrackSpense v3 Mobile mock's hero is a flat white/hairline-bordered card (matches the
@@ -83,8 +94,9 @@ function HeroCard({
         </View>
       )}
 
-      <Text style={heroStyles.spendLabel}>Spent this month — your true total</Text>
+      <Text style={heroStyles.spendLabel}>{spendLabel}</Text>
       <Text style={heroStyles.amount}>{formatCurrency(monthlyTotal)}</Text>
+      {showLens && <Text style={heroStyles.spendSub}>{spendSub}</Text>}
 
       {/* Net with people — tapping jumps to the Groups tab's People sub-tab. */}
       {showLens && (
@@ -131,6 +143,12 @@ const createHeroStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 38,
     color: theme.colors.text,
     letterSpacing: -0.5,
+    marginTop: 2,
+  },
+  spendSub: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: theme.colors.textTertiary,
     marginTop: 2,
   },
   netRow: {
@@ -435,6 +453,7 @@ export default function HomeScreen() {
         ) : (
           <HeroCard
             monthlyTotal={monthlyTotal}
+            personalTotal={monthlyData?.spend_breakdown?.personal ?? 0}
             showLens={hasGroups}
             lens={lens}
             onLensChange={setLens}

@@ -132,7 +132,7 @@ const HomePage: React.FC = () => {
           }}
         >
           <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: motionTokens.slow, ease: motionTokens.easing }}>
-            <Box
+            {/* <Box
               sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -149,7 +149,7 @@ const HomePage: React.FC = () => {
               }}
             >
               NEW · TRACKSPENSE V3
-            </Box>
+            </Box> */}
 
             <Typography
               component="h1"
@@ -210,7 +210,7 @@ const HomePage: React.FC = () => {
               >
                 <SegmentedTabs
                   value="share"
-                  onChange={() => {}}
+                  onChange={() => { }}
                   size="small"
                   ariaLabel="My expenses or I paid (illustrative)"
                   options={[{ value: 'share', label: 'My expenses' }, { value: 'paid', label: 'I paid' }]}

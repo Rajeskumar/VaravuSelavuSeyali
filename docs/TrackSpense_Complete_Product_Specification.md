@@ -1140,7 +1140,7 @@ Or let SQLAlchemy create tables automatically (the ORM models define the schema)
 - Discretionary micro-habit detection
 - Proactive, dynamic chat prompt suggestions
 - Granular tax categorization for freelancers
-- Real Budgets + savings-goals backend (currently a localStorage-only stub — see [trackspense_feedback.md](features/trackspense_feedback.md) Priority 2)
+- Real Budgets + savings-goals backend (currently a localStorage-only stub — see [trackspense_feedback.md](features/feedback/trackspense_feedback.md) Priority 2)
 
 For full detail, evidence, and recommended build order on every item above, see **[docs/FEATURE_STATUS.md](FEATURE_STATUS.md)**.
 

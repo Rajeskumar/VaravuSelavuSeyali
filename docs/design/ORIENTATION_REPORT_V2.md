@@ -88,7 +88,7 @@ not inside the 5-tab `Tab.Navigator`).
 **Still holds, narrowed but not resolved.** The original flag was: `AnalysisResponse.category_totals`/
 `category_expense_details` are flat single numbers with no per-category `my_share`/`i_paid`/`group_total`
 split — only the *headline* level (`group_summaries`, confirmed present with exactly those three fields
-in `docs/features/TrackSpense_Groups_Product_Spec.md:542`) has that granularity today. Dropping the
+in `docs/features/groups/TrackSpense_Groups_Product_Spec.md:542`) has that granularity today. Dropping the
 third lens (`Group Total`) does **not** remove this dependency — `My Expenses` and `I Paid` still each
 need their own per-category number, which is the same missing data shape, just needing two fields
 instead of three. No evidence this landed: grep across `FEATURE_STATUS.md` and the Groups Product Spec

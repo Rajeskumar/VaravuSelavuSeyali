@@ -9,6 +9,7 @@ import CustomButton from '../components/CustomButton';
 import CustomInput from '../components/CustomInput';
 import { showToast } from '../components/Toast';
 import API_BASE_URL from '../api/apiconfig';
+import BrandMark from '../components/BrandMark';
 
 /**
  * Rebuilt to match the web app's post-Slate LoginPage: a flat canvas + single centered card,
@@ -52,7 +53,7 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.brandRow}>
           <View style={styles.brandMark}>
-            <Text style={styles.brandMarkText}>T</Text>
+            <BrandMark size={18} color="#FFFFFF" />
           </View>
           <Text style={styles.brandName}>TrackSpense</Text>
         </View>

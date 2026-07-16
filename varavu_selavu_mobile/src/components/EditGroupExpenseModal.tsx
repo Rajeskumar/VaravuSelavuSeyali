@@ -43,6 +43,13 @@ export default function EditGroupExpenseModal({
   const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Seeded from `expense.splits` (each member's actual current dollar share, as an 'exact'
+  // split) so editing starts from what's really on the expense instead of resetting to an
+  // equal-split guess — matches the web app's `ExpenseDetailDialog.tsx` `startEdit`. Keyed only
+  // on `visible`/the expense identity, not on `members`/`expense` by reference — those are
+  // React Query results that can get a new array/object reference on any background refetch
+  // while this modal is open (any mutation elsewhere in the group can invalidate `group-detail`),
+  // which was silently wiping whatever the user had just typed.
   useEffect(() => {
     if (visible && expense) {
       setDescription(expense.description);
@@ -53,18 +60,12 @@ export default function EditGroupExpenseModal({
       setDate(expense.date);
       setMerchantName(expense.merchant_name || '');
       setCurrency(expense.currency || '');
-      setPayers(expense.payer_summary || []);
-      
-      // Need to fetch full detail to edit split if we want, but since expense row doesn't contain split,
-      // we might just default to equal split of all members if we can't fetch it, OR we have to make an API call to get the specific expense split.
-      // Wait, in mobile, we don't have getGroupExpense API readily available. 
-      // Let's just set the split to Equal for all members by default, or better yet, we can skip editing the split in the simple modal.
-      // Actually, if we just submit the payload with the basic details, will the backend preserve the split? No, AddGroupExpensePayload requires split.
-      // Let's just default to equal split across all members for now, or if it's too complex, let's just make sure it's valid.
-      setSplitType('equal');
-      setSplitEntries(members.map(m => ({ member_id: m.member_id })));
+      setPayers(expense.payer_summary.map((p) => ({ ...p })));
+      setSplitType('exact');
+      setSplitEntries(expense.splits.map((s) => ({ member_id: s.member_id, value: s.share })));
     }
-  }, [visible, expense, members]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, expense?.row_id]);
 
   const handleSave = async () => {
     if (!expense) return;

@@ -21,11 +21,12 @@ import React, { useState, useRef, useCallback, createContext, useMemo } from 're
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
-  Dimensions, Pressable,
+  Dimensions, Pressable, Switch,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { addExpense, categorizeExpense } from '../api/expenses';
 import { listGroups, getGroupDetail, addGroupExpense, GroupSummary, ApiError } from '../api/groups';
+import { upsertRecurringTemplate } from '../api/recurring';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { showToast } from '../components/Toast';
@@ -39,6 +40,13 @@ const { height: SCREEN_H } = Dimensions.get('window');
 function todayMMDDYYYY(): string {
   const d = new Date();
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+/** "1st"/"2nd"/"3rd"/"4th" — matches the mock's "Repeats monthly on the 15th." copy. */
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 function fmt(n: number): string {
@@ -75,6 +83,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [merchantName, setMerchantName] = useState('');
   const [mainCategory, setMainCategory] = useState('');
   const [subcategory, setSubcategory] = useState('');
+  const [recurring, setRecurring] = useState(false);
   const [loading, setLoading] = useState(false);
   const [savedAmt, setSavedAmt] = useState(0);
   const [savedLine, setSavedLine] = useState('');
@@ -91,6 +100,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setMerchantName('');
     setMainCategory('');
     setSubcategory('');
+    setRecurring(false);
     setWho(initialWho);
   };
 
@@ -166,6 +176,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const handleSave = async () => {
     if (!capReady || !accessToken || !userEmail || loading) return;
     setLoading(true);
+    const today = new Date();
+    const recurringLine = recurring ? ` Repeats monthly on the ${ordinal(today.getDate())}.` : '';
     try {
       if (!isGroup) {
         await addExpense(
@@ -182,8 +194,21 @@ export default function AddExpenseProvider({ children }: { children: React.React
         );
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notifyExpenseChanged();
+        if (recurring) {
+          // Best-effort: the expense itself already saved, so a template failure here shouldn't
+          // surface as a save error — just skip the "Repeats monthly" line.
+          try {
+            await upsertRecurringTemplate({
+              description: desc.trim(),
+              category: mainCategory || 'Other',
+              day_of_month: today.getDate(),
+              default_cost: numAmount,
+              status: 'Active',
+            });
+          } catch { /* non-fatal */ }
+        }
         setSavedAmt(numAmount);
-        setSavedLine('Logged to your personal ledger.');
+        setSavedLine(`Logged to your personal ledger.${recurringLine}`);
       } else {
         const detail = await getGroupDetail(who);
         const myMember = detail.members.find((m) => m.user_email === userEmail);
@@ -209,9 +234,22 @@ export default function AddExpenseProvider({ children }: { children: React.React
         qc.invalidateQueries({ queryKey: ['group-balances', who] });
         qc.invalidateQueries({ queryKey: ['groups'] });
         qc.invalidateQueries({ queryKey: ['friend-balances'] });
+        if (recurring) {
+          try {
+            await upsertRecurringTemplate({
+              description: desc.trim(),
+              category: mainCategory || 'Other',
+              day_of_month: today.getDate(),
+              default_cost: numAmount,
+              status: 'Active',
+              group_id: who,
+              split_config: { type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) },
+            });
+          } catch { /* non-fatal */ }
+        }
         setSavedAmt(numAmount);
         setSavedLine(
-          `Logged to ${detail.name} — your share ${fmt(share)} joins your personal total automatically.`
+          `Logged to ${detail.name} — your share ${fmt(share)} joins your personal total automatically.${recurringLine}`
         );
       }
       setStage('saved');
@@ -314,6 +352,16 @@ export default function AddExpenseProvider({ children }: { children: React.React
                       </Text>
                     </View>
                   )}
+
+                  <View style={styles.recurringRow}>
+                    <Text style={styles.recurringRowText}>🔁 Repeat monthly on the {ordinal(new Date().getDate())}</Text>
+                    <Switch
+                      value={recurring}
+                      onValueChange={setRecurring}
+                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                      thumbColor="#fff"
+                    />
+                  </View>
 
                   <View style={styles.keypad}>
                     {KEYS.map((k) => (
@@ -423,6 +471,13 @@ const createStyles = (theme: AppTheme) =>
     },
     splitPreviewText: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary },
     splitPreviewShare: { fontFamily: 'Inter-Bold', color: theme.colors.text },
+
+    recurringRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 9, marginTop: 8,
+    },
+    recurringRowText: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary },
 
     keypad: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
     key: {

@@ -118,7 +118,13 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
-  const activeMembers = members.filter((m) => m.status === 'active');
+  // `'active'`-only excluded placeholder members permanently — the backend sets a member's
+  // status to `'invited'` (not `'active'`) whenever they were added without an email, and there's
+  // no path for that to ever change since they have no account to log into and "accept" with.
+  // Splitting with people who haven't signed up is a core use case, so only `'left'` (someone who
+  // actually left the group) should be excluded — matches the web app's `SplitEditor.tsx`, which
+  // doesn't filter by status at all.
+  const activeMembers = members.filter((m) => m.status !== 'left');
   const allTypes: SplitType[] = allowedTypes || ['equal', 'exact', 'percentage', 'shares', 'adjustment'];
 
   const typeLabels: Record<SplitType, string> = {

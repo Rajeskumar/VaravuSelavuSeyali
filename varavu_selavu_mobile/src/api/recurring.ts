@@ -20,6 +20,10 @@ export interface UpsertRecurringPayload {
     default_cost: number;
     start_date_iso?: string;
     status?: string;
+    /** Scopes the template to a group — `execute_now` then creates a split group expense
+     * (equal split across `split_config.entries`) instead of a personal one. */
+    group_id?: string | null;
+    split_config?: { type: string; entries: { member_id: string }[] } | null;
 }
 
 export interface DueOccurrenceDTO {

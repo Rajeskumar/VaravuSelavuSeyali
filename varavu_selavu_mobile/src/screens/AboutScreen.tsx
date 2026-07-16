@@ -4,6 +4,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
+import BrandMark from '../components/BrandMark';
 
 export default function AboutScreen() {
     const { theme } = useAppTheme();
@@ -13,7 +14,7 @@ export default function AboutScreen() {
             {/* App Identity */}
             <View style={styles.hero}>
                 <View style={styles.iconCircle}>
-                    <Text style={styles.iconEmoji}>💰</Text>
+                    <BrandMark size={44} />
                 </View>
                 <Text style={styles.appName}>TrackSpense</Text>
                 <Text style={styles.tagline}>Smart Expense Tracking</Text>
