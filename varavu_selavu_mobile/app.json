@@ -28,7 +28,7 @@
       "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#E8E8F5"
+        "backgroundColor": "#D6DCF0"
       },
       "package": "com.anonymous.varavuselavumobile",
       "intentFilters": [
@@ -50,7 +50,15 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TrackSpense uses your photos to scan a receipt.",
+          "cameraPermission": "TrackSpense uses your camera to scan a receipt.",
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

@@ -187,10 +187,16 @@ export interface PayerSummaryItem {
 export interface GroupExpenseItemEntry {
   line_no: number;
   item_name: string;
+  normalized_name?: string | null;
   line_total: number;
   quantity?: number | null;
   unit_price?: number | null;
   category_name?: string | null;
+  // Per-item fields server-side, but resolve_itemized_split pools and prorates them across
+  // every assigned member regardless of which item carries them — matches web's
+  // GroupExpenseItemEntry (varavu_selavu_ui/src/api/groups.ts).
+  tax?: number | null;
+  discount?: number | null;
   member_ratios: Record<string, number>;
 }
 

@@ -21,15 +21,23 @@ import React, { useState, useRef, useCallback, createContext, useMemo } from 're
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
-  Dimensions, Pressable, Switch,
+  Dimensions, Pressable, Switch, Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../context/AuthContext';
-import { addExpense, categorizeExpense } from '../api/expenses';
-import { listGroups, getGroupDetail, addGroupExpense, GroupSummary, ApiError } from '../api/groups';
+import { addExpense, addExpenseWithItems, categorizeExpense, uploadReceipt } from '../api/expenses';
+import {
+  listGroups, getGroupDetail, addGroupExpense, addGroupExpenseWithItems,
+  GroupSummary, GroupDetail, GroupExpenseItemEntry, PayerSummaryItem, ApiError,
+} from '../api/groups';
 import { upsertRecurringTemplate } from '../api/recurring';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { showToast } from '../components/Toast';
+import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
+import PaidBySplitSummary from '../components/PaidBySplitSummary';
+import { SplitEditorValue, computeSplitValid } from '../components/SplitEditor';
+import { computePayersValid } from '../components/PayerPicker';
 import { notifyExpenseChanged } from '../utils/expenseEvents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -85,6 +93,20 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [subcategory, setSubcategory] = useState('');
   const [recurring, setRecurring] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+  const [scannedTax, setScannedTax] = useState(0);
+  const [scannedDiscount, setScannedDiscount] = useState(0);
+  const [scannedPurchasedAt, setScannedPurchasedAt] = useState<string | null>(null);
+  const [scannedFingerprint, setScannedFingerprint] = useState<string | null>(null);
+  const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
+  const [payers, setPayers] = useState<PayerSummaryItem[]>([]);
+  const [splitValue, setSplitValue] = useState<SplitEditorValue>({ type: 'equal', entries: [] });
+  // Tracks whether the user has explicitly saved a change out of PaidBySplitSummary's payer or
+  // split picker — while false, payers/splitValue auto-track the live amount/group so the fast
+  // "just me, split equally" default needs no interaction; once true, amount edits stop
+  // silently rewriting a customized payer/split (see the effects below).
+  const [customized, setCustomized] = useState(false);
   const [savedAmt, setSavedAmt] = useState(0);
   const [savedLine, setSavedLine] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -102,6 +124,15 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setSubcategory('');
     setRecurring(false);
     setWho(initialWho);
+    setScannedItems([]);
+    setScannedTax(0);
+    setScannedDiscount(0);
+    setScannedPurchasedAt(null);
+    setScannedFingerprint(null);
+    setGroupDetail(null);
+    setPayers([]);
+    setSplitValue({ type: 'equal', entries: [] });
+    setCustomized(false);
   };
 
   const openAddExpense = useCallback((initialGroupId?: string) => {
@@ -148,11 +179,77 @@ export default function AddExpenseProvider({ children }: { children: React.React
     });
   };
 
+  // Applies a parsed receipt (personal `/ingest/receipt/parse` header + items) onto the
+  // Quick Capture form fields — mirrors the web app's QuickCaptureSheet onAutoParse handler.
+  const applyParseResult = (res: any) => {
+    const hdr = res.header || {};
+    if (hdr.amount) setAmt(String(Number(hdr.amount)));
+    const merchant = hdr.merchant_name || hdr.merchant || '';
+    const description = hdr.description || (merchant ? `Receipt from ${merchant}` : '');
+    if (description) setDesc(description);
+    if (merchant) setMerchantName(merchant);
+    if (hdr.main_category_name) setMainCategory(hdr.main_category_name);
+    if (hdr.category_name) setSubcategory(hdr.category_name);
+    setScannedTax(Number(hdr.tax) || 0);
+    setScannedDiscount(Number(hdr.discount) || 0);
+    setScannedPurchasedAt(hdr.purchased_at || null);
+    setScannedFingerprint(res.fingerprint || null);
+    // The itemized save path only supports an equal split (member_ratios per item, no
+    // percentage/exact/shares/adjustment analog) — if the user had already customized to a
+    // weighted split before scanning, drop back to equal over the same participants rather
+    // than silently ignoring their weights at save time.
+    setSplitValue((v) => (v.type === 'equal' ? v : { type: 'equal', entries: v.entries }));
+    setScannedItems(
+      (res.items || []).map((it: any, idx: number) => ({
+        line_no: idx + 1,
+        item_name: it.item_name || it.normalized_name || 'Item',
+        line_total: Number(it.line_total) || 0,
+        quantity: it.quantity != null ? Number(it.quantity) : null,
+        unit_price: it.unit_price != null ? Number(it.unit_price) : null,
+        normalized_name: it.normalized_name,
+      }))
+    );
+  };
+
+  const parseReceiptUri = async (uri: string) => {
+    setScanning(true);
+    try {
+      const res = await uploadReceipt(uri, accessToken || '');
+      applyParseResult(res);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast({ message: error.message || 'Failed to parse receipt', type: 'error' });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const pickReceipt = async (source: 'camera' | 'library') => {
+    try {
+      const permission = source === 'camera'
+        ? await ImagePicker.requestCameraPermissionsAsync()
+        : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        showToast({ message: 'Permission needed to scan a receipt', type: 'error' });
+        return;
+      }
+      const result = source === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
+      if (result.canceled || !result.assets?.[0]) return;
+      await parseReceiptUri(result.assets[0].uri);
+    } catch {
+      showToast({ message: 'Failed to open camera or photo library', type: 'error' });
+    }
+  };
+
   const handleScan = () => {
-    // Real receipt-scan/OCR wiring is a separate, bounded feature (expo-image-picker is an
-    // installed-but-unused dependency that could support it) — deliberately out of scope here,
-    // consistent with the earlier decision not to build it as part of matching the v3 design.
-    showToast({ message: 'Receipt scanning coming soon', type: 'info' });
+    Alert.alert('Scan receipt', undefined, [
+      { text: 'Take Photo', onPress: () => pickReceipt('camera') },
+      { text: 'Choose from Library', onPress: () => pickReceipt('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   // Same query key useQuickLogBar.ts uses for its group list — shared cache, no duplicate fetch.
@@ -169,9 +266,58 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const numAmount = parseFloat(amt || '0') || 0;
   const isGroup = who !== 'me';
   const selectedGroup = myGroups.find((g) => g.group_id === who);
-  const shareAmount = isGroup && selectedGroup ? numAmount / Math.max(selectedGroup.member_count, 1) : numAmount;
-  const capReady = numAmount > 0 && desc.trim().length > 0;
+  const myMemberId = groupDetail?.members.find((m) => m.user_email === userEmail)?.member_id;
+
+  // Fetches the full member list (GroupSummary only has member_count) and resets payers/split
+  // to "just me, split equally among everyone" whenever the selected group changes, or the
+  // sheet is reopened against the same group — a fresh default every time, since a prior
+  // session's customization may reference members no longer in the group (or just shouldn't
+  // silently carry over).
+  React.useEffect(() => {
+    if (!visible || !selectedGroup) {
+      setGroupDetail(null);
+      setPayers([]);
+      setSplitValue({ type: 'equal', entries: [] });
+      setCustomized(false);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const detail = await getGroupDetail(selectedGroup.group_id);
+        if (!mounted) return;
+        setGroupDetail(detail);
+        const mine = detail.members.find((m) => m.user_email === userEmail);
+        setPayers(mine ? [{ member_id: mine.member_id, amount_paid: numAmount }] : []);
+        setSplitValue({ type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) });
+        setCustomized(false);
+      } catch {
+        if (mounted) setGroupDetail(null);
+      }
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, selectedGroup?.group_id]);
+
+  // Keeps the default single "just me" payer's amount tracking the keypad total. Only while
+  // unpicked — once the user has saved a change out of the payer/split picker (`customized`),
+  // amount edits stop silently rewriting it; a stale split just shows as invalid (see
+  // payersValid/splitValid below) until the user reopens the picker to fix it.
+  React.useEffect(() => {
+    if (customized) return;
+    setPayers((prev) => (prev.length === 1 ? [{ ...prev[0], amount_paid: numAmount }] : prev));
+  }, [numAmount, customized]);
+
+  const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, numAmount));
+  const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, numAmount));
+  const capReady = numAmount > 0 && desc.trim().length > 0 && payersValid && splitValid;
   const amtDisplay = amt ? '$' + amt : '$0.00';
+
+  // Items with a blank name (a row the user cleared rather than deleted) are dropped rather
+  // than sent to the itemized endpoints, which require a non-empty item_name. Hoisted out of
+  // handleSave so the split-type restriction below (PaidBySplitSummary's allowedSplitTypes)
+  // can see it too.
+  const itemsToSave = scannedItems.filter((it) => it.item_name.trim() !== '');
 
   const handleSave = async () => {
     if (!capReady || !accessToken || !userEmail || loading) return;
@@ -179,7 +325,33 @@ export default function AddExpenseProvider({ children }: { children: React.React
     const today = new Date();
     const recurringLine = recurring ? ` Repeats monthly on the ${ordinal(today.getDate())}.` : '';
     try {
-      if (!isGroup) {
+      if (!isGroup && itemsToSave.length > 0) {
+        const header = {
+          merchant_name: merchantName || undefined,
+          purchased_at: scannedPurchasedAt || new Date().toISOString(),
+          amount: numAmount,
+          tax: scannedTax || 0,
+          tip: 0,
+          discount: scannedDiscount || 0,
+          description: desc.trim(),
+          main_category_name: mainCategory || 'Other',
+          category_name: subcategory || 'General',
+          fingerprint: scannedFingerprint || '',
+        };
+        const items = itemsToSave.map((it, idx) => ({
+          line_no: idx + 1,
+          item_name: it.item_name,
+          normalized_name: it.normalized_name,
+          quantity: it.quantity ?? null,
+          unit_price: it.unit_price ?? null,
+          line_total: it.line_total,
+        }));
+        await addExpenseWithItems({ user_email: userEmail, header, items });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        notifyExpenseChanged();
+        setSavedAmt(numAmount);
+        setSavedLine(`Logged to your personal ledger.${recurringLine}`);
+      } else if (!isGroup) {
         await addExpense(
           {
             description: desc.trim(),
@@ -215,16 +387,56 @@ export default function AddExpenseProvider({ children }: { children: React.React
         if (!myMember) {
           throw new Error("You don't appear to be an active member of that group.");
         }
-        const share = numAmount / Math.max(detail.members.length, 1);
-        await addGroupExpense(who, {
-          date: todayMMDDYYYY(),
-          description: desc.trim(),
-          category: mainCategory || 'Other',
-          amount: numAmount,
-          merchant_name: merchantName || undefined,
-          payers: [{ member_id: myMember.member_id, amount_paid: numAmount }],
-          split: { type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) },
-        });
+        // `payers`/`splitValue` reflect PaidBySplitSummary's live state — either the
+        // auto-tracked "just me, split equally" default or the user's customization; capReady
+        // already required a loaded groupDetail plus both computeXValid checks to pass before
+        // Save was even enabled, so both are guaranteed populated and valid here.
+        let myShare: number;
+        if (itemsToSave.length > 0) {
+          // No per-item person-assignment UI here (that's ItemSplitBoard.tsx's job, reachable
+          // only from the full editor) and no whole-expense `split` concept either — split
+          // every item equally across the chosen participant subset so the line items
+          // themselves are preserved instead of silently dropped, while still letting
+          // PaidBySplitSummary's participant-subset editing apply.
+          const participantIds = splitValue.entries.map((e) => e.member_id);
+          const ratio = participantIds.length > 0 ? 1 / participantIds.length : 1;
+          const memberRatios = Object.fromEntries(participantIds.map((id) => [id, ratio]));
+          const items: GroupExpenseItemEntry[] = itemsToSave.map((it, idx) => ({
+            line_no: idx + 1,
+            item_name: it.item_name,
+            normalized_name: it.normalized_name,
+            quantity: it.quantity ?? null,
+            unit_price: it.unit_price ?? null,
+            line_total: it.line_total,
+            member_ratios: memberRatios,
+            // tax/discount are per-item fields server-side but resolve_itemized_split pools
+            // and prorates them across every assigned member regardless of which item carries
+            // them — attaching the header-level scan values to just the first item is
+            // equivalent to a true header-level tax/discount.
+            ...(idx === 0 ? { tax: scannedTax || 0, discount: scannedDiscount || 0 } : {}),
+          }));
+          const row = await addGroupExpenseWithItems(who, {
+            date: todayMMDDYYYY(),
+            description: desc.trim(),
+            category: mainCategory || 'Other',
+            amount: numAmount,
+            merchant_name: merchantName || undefined,
+            payers,
+            items,
+          });
+          myShare = row.my_share;
+        } else {
+          const row = await addGroupExpense(who, {
+            date: todayMMDDYYYY(),
+            description: desc.trim(),
+            category: mainCategory || 'Other',
+            amount: numAmount,
+            merchant_name: merchantName || undefined,
+            payers,
+            split: splitValue,
+          });
+          myShare = row.my_share;
+        }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notifyExpenseChanged();
         // GroupsScreen/PeopleList/GroupDetailScreen aren't subscribed to notifyExpenseChanged and
@@ -249,7 +461,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
         }
         setSavedAmt(numAmount);
         setSavedLine(
-          `Logged to ${detail.name} — your share ${fmt(share)} joins your personal total automatically.${recurringLine}`
+          `Logged to ${detail.name} — your share ${fmt(myShare)} joins your personal total automatically.${recurringLine}`
         );
       }
       setStage('saved');
@@ -294,8 +506,12 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   <View style={styles.entryHeader}>
                     <Text style={styles.entryTitle}>New expense</Text>
                     <View style={styles.headerActions}>
-                      <TouchableOpacity style={styles.scanBtn} onPress={handleScan} activeOpacity={0.7}>
-                        <Text style={styles.scanBtnText}>📷 Scan</Text>
+                      <TouchableOpacity style={styles.scanBtn} onPress={handleScan} activeOpacity={0.7} disabled={scanning}>
+                        {scanning ? (
+                          <ActivityIndicator size="small" color={theme.colors.text} />
+                        ) : (
+                          <Text style={styles.scanBtnText}>📷 Scan</Text>
+                        )}
                       </TouchableOpacity>
                       <TouchableOpacity onPress={closeAddExpense} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                         <Text style={styles.closeX}>✕</Text>
@@ -344,12 +560,31 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     </ScrollView>
                   )}
 
-                  {isGroup && selectedGroup && (
+                  {scannedItems.length > 0 && (
+                    <ScannedItemsCard
+                      theme={theme}
+                      items={scannedItems}
+                      onChange={setScannedItems}
+                      merchant={merchantName}
+                      tax={scannedTax}
+                      discount={scannedDiscount}
+                      currentAmount={numAmount}
+                    />
+                  )}
+
+                  {isGroup && selectedGroup && groupDetail && (
                     <View style={styles.splitPreview}>
-                      <Text style={styles.splitPreviewText}>
-                        Split equally · {selectedGroup.member_count} people · your share{' '}
-                        <Text style={styles.splitPreviewShare}>{fmt(shareAmount)}</Text>
-                      </Text>
+                      <PaidBySplitSummary
+                        amount={numAmount}
+                        members={groupDetail.members}
+                        myMemberId={myMemberId}
+                        payers={payers}
+                        onPayersChange={setPayers}
+                        splitValue={splitValue}
+                        onSplitChange={setSplitValue}
+                        allowedSplitTypes={itemsToSave.length > 0 ? ['equal'] : undefined}
+                        onCustomized={() => setCustomized(true)}
+                      />
                     </View>
                   )}
 
@@ -469,8 +704,6 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 8, borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
       paddingHorizontal: 12, paddingVertical: 9,
     },
-    splitPreviewText: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary },
-    splitPreviewShare: { fontFamily: 'Inter-Bold', color: theme.colors.text },
 
     recurringRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

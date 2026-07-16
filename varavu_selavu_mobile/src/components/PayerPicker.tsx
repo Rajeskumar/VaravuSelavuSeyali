@@ -15,6 +15,14 @@ interface Props {
 
 const TOLERANCE = 0.01;
 
+/** Usable without mounting the component (mirrors web's PayerPicker.tsx export) — lets a
+ * parent gate its own Save button on the currently-staged payers before the picker is even
+ * open. */
+export function computePayersValid(payers: PayerSummaryItem[], amount: number): boolean {
+  const totalEntered = payers.reduce((sum, p) => sum + p.amount_paid, 0);
+  return Math.abs(totalEntered - amount) < TOLERANCE;
+}
+
 export default function PayerPicker({
   amount,
   members,
@@ -31,7 +39,7 @@ export default function PayerPicker({
   const selectedIds = React.useMemo(() => new Set(payers.map((p) => p.member_id)), [payers]);
   
   const totalEntered = payers.reduce((sum, p) => sum + p.amount_paid, 0);
-  const isValid = Math.abs(totalEntered - amount) < TOLERANCE;
+  const isValid = computePayersValid(payers, amount);
 
   React.useEffect(() => {
     onValidityChange?.(isValid);

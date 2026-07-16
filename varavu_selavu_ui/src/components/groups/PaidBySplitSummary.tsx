@@ -12,7 +12,7 @@ import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { MemberDTO, PayerSummaryItem } from '../../api/groups';
 import PayerPicker from './PayerPicker';
-import SplitEditor, { SplitEditorValue } from './SplitEditor';
+import SplitEditor, { SplitEditorValue, SplitType } from './SplitEditor';
 
 interface Props {
   amount: number;
@@ -24,6 +24,15 @@ interface Props {
   splitValue: SplitEditorValue;
   onSplitChange: (value: SplitEditorValue) => void;
   onSplitValidityChange?: (valid: boolean) => void;
+  /** Restricts the split picker's type tabs — e.g. Quick Capture's itemized-receipt path only
+   * supports an equal split (member_ratios per line item has no percentage/exact/shares/
+   * adjustment analog), so it passes ['equal'] to keep this same summary/picker reusable there
+   * instead of needing a second UI just for that case. Defaults to all 5 types (unchanged
+   * behavior for existing callers like ExpenseDetailDialog). */
+  allowedTypes?: SplitType[];
+  /** Fired after either picker's own Save commits a change — lets the parent flip a single
+   * shared "customized" flag without this component needing to know that concept exists. */
+  onCustomized?: () => void;
 }
 
 function payerLabel(payers: PayerSummaryItem[], members: MemberDTO[], myMemberId?: string): string {
@@ -69,6 +78,8 @@ const PaidBySplitSummary: React.FC<Props> = ({
   splitValue,
   onSplitChange,
   onSplitValidityChange,
+  allowedTypes,
+  onCustomized,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -95,6 +106,7 @@ const PaidBySplitSummary: React.FC<Props> = ({
       onSplitChange(localSplit);
       onSplitValidityChange?.(localSplitValid);
     }
+    onCustomized?.();
     setPickerType(null);
   };
 
@@ -167,7 +179,14 @@ const PaidBySplitSummary: React.FC<Props> = ({
             <PayerPicker amount={amount} members={members} payers={localPayers} onChange={setLocalPayers} onValidityChange={setLocalPayersValid} />
           )}
           {pickerType === 'split' && (
-            <SplitEditor amount={amount} members={members} value={localSplit} onChange={setLocalSplit} onValidityChange={setLocalSplitValid} />
+            <SplitEditor
+              amount={amount}
+              members={members}
+              value={localSplit}
+              onChange={setLocalSplit}
+              onValidityChange={setLocalSplitValid}
+              allowedTypes={allowedTypes}
+            />
           )}
         </DialogContent>
         <DialogActions>

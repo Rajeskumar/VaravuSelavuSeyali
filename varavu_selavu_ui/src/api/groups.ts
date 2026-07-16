@@ -244,11 +244,7 @@ export interface GroupExpenseWithItemsPayload {
   currency?: string;
 }
 
-export interface GroupExpenseWithItemsResponse {
-  expense_id: string;
-  item_ids: string[];
-  my_share: number;
-}
+export interface GroupExpenseWithItemsResponse extends GroupExpenseRow {}
 
 export interface GroupExpensePayload {
   date: string; // MM/DD/YYYY
@@ -312,7 +308,12 @@ export async function createGroupExpenseWithItems(
     body: JSON.stringify(payload),
   });
   if (!res.ok) await throwApiError(res, 'Failed to add itemized group expense');
-  return res.json();
+  // Mirrors createGroupExpense's response shape ({success, expense: GroupExpenseRow}) — the
+  // itemized route returns the same GroupExpenseCreatedResponse, not the item_ids/my_share
+  // shape this used to (incorrectly) declare, which went unnoticed because nothing called
+  // this endpoint until QuickCaptureSheet's scanned-items save path did.
+  const body = await res.json();
+  return body.expense;
 }
 
 export async function listGroupExpenses(

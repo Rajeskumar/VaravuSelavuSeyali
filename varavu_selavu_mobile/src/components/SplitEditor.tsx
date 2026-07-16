@@ -1,9 +1,7 @@
 /**
- * SplitEditor.tsx — Phase 1: equal-only split selector.
- *
- * Phase 1 constraint: only "equal" split is surfaced. The component is
- * architected to accept `allowedTypes` so Phase 2 can unlock percentage/exact
- * splits without changing GroupDetailScreen or AddExpenseScreen.
+ * SplitEditor.tsx — full equal/exact/percentage/shares/adjustment split selector, gated per
+ * call site via `allowedTypes` (e.g. Quick Capture's itemized-receipt path only supports
+ * 'equal' — member_ratios per line item has no percentage/exact/shares/adjustment analog).
  */
 import React from 'react';
 import { View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity, TextInput } from 'react-native';
@@ -112,6 +110,29 @@ export function previewAdjustmentSplit(entries: SplitEntry[], amount: number): n
   
   const equalShares = computeEqualShares(entries.map(() => ({} as any)), baseAmount);
   return equalShares.map((base, i) => Math.round((base + (entries[i].value || 0)) * 100) / 100);
+}
+
+/**
+ * Pure validity check, usable without mounting the component — lets a parent (e.g. the new
+ * PaidBySplitSummary.tsx) gate its own Save button on the currently-staged split. At least as
+ * strict as the component's own inline isValid computation below (which this mirrors), plus a
+ * participant-count requirement for equal/shares/adjustment that the inline version leaves to
+ * a separate, non-blocking "Select at least one member" warning (matches the web app's
+ * PayerPicker/SplitEditor.tsx computeSplitValid convention of actually gating on that).
+ */
+export function computeSplitValid(value: SplitEditorValue, totalAmount: number): boolean {
+  if (
+    (value.type === 'equal' || value.type === 'shares' || value.type === 'adjustment') &&
+    value.entries.length === 0
+  ) {
+    return false;
+  }
+  const sum = value.entries.reduce((acc, e) => acc + (e.value || 0), 0);
+  if (value.type === 'percentage') return Math.abs(sum - 100) <= 0.01;
+  if (value.type === 'exact') return Math.abs(sum - totalAmount) <= 0.01;
+  if (value.type === 'shares') return sum > 0;
+  if (value.type === 'adjustment') return Math.abs(sum) <= 0.01;
+  return true; // equal
 }
 
 export default function SplitEditor({ members, value, onChange, totalAmount, allowedTypes }: Props) {

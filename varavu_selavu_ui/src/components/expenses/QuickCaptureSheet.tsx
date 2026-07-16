@@ -16,10 +16,14 @@ import { typeScale, tabularNums } from '../../theme';
 import { CATEGORY_GROUPS, findMainCategory } from './AddExpenseForm';
 import { formatMoney } from './ExpenseFeed';
 import { suggestCategory } from '../../api/expenses';
-import { listGroups, GroupSummary } from '../../api/groups';
+import { listGroups, getGroup, GroupSummary, GroupDetailResponse, PayerSummaryItem } from '../../api/groups';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
 import { useLogExpense } from '../../hooks/useLogExpense';
 import { useReceiptScan } from '../../hooks/useReceiptScan';
+import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
+import PaidBySplitSummary from '../groups/PaidBySplitSummary';
+import { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
+import { computePayersValid } from '../groups/PayerPicker';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 /** CATEGORY_GROUPS.Other includes 'General' — used when suggestCategory can't classify. */
@@ -57,7 +61,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const { enabled: groupsEnabled } = useGroupsEnabled();
-  const { logPersonal, logToGroup } = useLogExpense();
+  const { logPersonal, logToGroup, logPersonalWithItems, logToGroupWithItems } = useLogExpense();
 
   const [stage, setStage] = React.useState<'entry' | 'saved'>('entry');
   const [amount, setAmount] = React.useState('');
@@ -66,6 +70,19 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [scannedCategory, setScannedCategory] = React.useState<string | null>(null);
   const [scannedMerchant, setScannedMerchant] = React.useState<string | null>(null);
+  const [scannedItems, setScannedItems] = React.useState<ScannedItem[]>([]);
+  const [scannedTax, setScannedTax] = React.useState(0);
+  const [scannedDiscount, setScannedDiscount] = React.useState(0);
+  const [scannedPurchasedAt, setScannedPurchasedAt] = React.useState<string | null>(null);
+  const [scannedFingerprint, setScannedFingerprint] = React.useState<string | null>(null);
+  const [groupDetail, setGroupDetail] = React.useState<GroupDetailResponse | null>(null);
+  const [payers, setPayers] = React.useState<PayerSummaryItem[]>([]);
+  const [splitValue, setSplitValue] = React.useState<SplitEditorValue>({ type: 'equal', entries: [] });
+  // Tracks whether the user has explicitly saved a change out of PaidBySplitSummary's payer or
+  // split picker — while false, payers/splitValue auto-track the live amount/group so the fast
+  // "just me, split equally" default needs no interaction; once true, amount edits stop
+  // silently rewriting a customized payer/split (see the effects below).
+  const [customized, setCustomized] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [savedAmount, setSavedAmount] = React.useState(0);
@@ -82,6 +99,25 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       if (hdr.category_name && CATEGORY_GROUPS[hdr.main_category_name]?.includes(hdr.category_name)) {
         setScannedCategory(hdr.category_name);
       }
+      setScannedTax(Number(hdr.tax) || 0);
+      setScannedDiscount(Number(hdr.discount) || 0);
+      setScannedPurchasedAt(hdr.purchased_at || null);
+      setScannedFingerprint(res.fingerprint || null);
+      // The itemized save path only supports an equal split (member_ratios per item, no
+      // percentage/exact/shares/adjustment analog) — if the user had already customized to a
+      // weighted split before scanning, drop back to equal over the same participants rather
+      // than silently ignoring their weights at save time.
+      setSplitValue((v) => (v.type === 'equal' ? v : { type: 'equal', entries: v.entries }));
+      setScannedItems(
+        (res.items || []).map((it: any, idx: number) => ({
+          line_no: idx + 1,
+          item_name: it.item_name || it.normalized_name || 'Item',
+          line_total: Number(it.line_total) || 0,
+          quantity: it.quantity != null ? Number(it.quantity) : null,
+          unit_price: it.unit_price != null ? Number(it.unit_price) : null,
+          normalized_name: it.normalized_name,
+        }))
+      );
     },
   });
 
@@ -92,6 +128,15 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setWho(initialGroupId || 'me');
     setScannedCategory(null);
     setScannedMerchant(null);
+    setScannedItems([]);
+    setScannedTax(0);
+    setScannedDiscount(0);
+    setScannedPurchasedAt(null);
+    setScannedFingerprint(null);
+    setGroupDetail(null);
+    setPayers([]);
+    setSplitValue({ type: 'equal', entries: [] });
+    setCustomized(false);
     setError(null);
     scan.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,9 +163,52 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   const amountNum = parseFloat(amount || '0') || 0;
   const selectedGroup = who !== 'me' ? groups.find((g) => g.group_id === who) : undefined;
-  const memberCount = selectedGroup?.member_count ?? 1;
-  const shareNum = selectedGroup ? amountNum / memberCount : amountNum;
-  const ready = amountNum > 0 && description.trim() !== '' && !saving;
+  const myEmail = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
+  const myMemberId = groupDetail?.members.find((m) => m.user_email === myEmail)?.member_id;
+
+  // Fetches the full member list (GroupSummary only has member_count) and resets payers/split
+  // to "just me, split equally among everyone" whenever the selected group changes, or the
+  // sheet is reopened against the same group — a fresh default every time, since a prior
+  // session's customization may reference members no longer in the group (or just shouldn't
+  // silently carry over).
+  React.useEffect(() => {
+    if (!open || !selectedGroup) {
+      setGroupDetail(null);
+      setPayers([]);
+      setSplitValue({ type: 'equal', entries: [] });
+      setCustomized(false);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const detail = await getGroup(selectedGroup.group_id);
+        if (!mounted) return;
+        setGroupDetail(detail);
+        const mine = detail.members.find((m) => m.user_email === myEmail);
+        setPayers(mine ? [{ member_id: mine.member_id, amount_paid: amountNum }] : []);
+        setSplitValue({ type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) });
+        setCustomized(false);
+      } catch {
+        if (mounted) setGroupDetail(null);
+      }
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, selectedGroup?.group_id]);
+
+  // Keeps the default single "just me" payer's amount tracking the keypad total. Only while
+  // unpicked — once the user has saved a change out of the payer/split picker (`customized`),
+  // amount edits stop silently rewriting it; a stale split just shows as invalid (see
+  // payersValid/splitValid below) until the user reopens the picker to fix it.
+  React.useEffect(() => {
+    if (customized) return;
+    setPayers((prev) => (prev.length === 1 ? [{ ...prev[0], amount_paid: amountNum }] : prev));
+  }, [amountNum, customized]);
+
+  const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, amountNum));
+  const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, amountNum));
+  const ready = amountNum > 0 && description.trim() !== '' && !saving && payersValid && splitValid;
   const categoryPreview = scannedCategory ? `${findMainCategory(scannedCategory)} · ${scannedCategory}` : 'AI suggests on save';
 
   const resolveCategory = async (): Promise<string> => {
@@ -134,6 +222,10 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     return FALLBACK_CATEGORY;
   };
 
+  // Items with a blank name (user cleared a row rather than deleting it) are dropped
+  // rather than sent to the itemized endpoints, which require a non-empty item_name.
+  const itemsToSave = scannedItems.filter((it) => it.item_name.trim() !== '');
+
   const handleSave = async () => {
     if (!ready) return;
     setSaving(true);
@@ -141,13 +233,40 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     try {
       const category = await resolveCategory();
       if (selectedGroup) {
-        const { myShare } = await logToGroup(selectedGroup.group_id, {
+        const { myShare } = itemsToSave.length > 0
+          ? await logToGroupWithItems(selectedGroup.group_id, {
+              description: description.trim(),
+              category,
+              amount: amountNum,
+              merchantName: scannedMerchant || undefined,
+              items: itemsToSave,
+              tax: scannedTax,
+              discount: scannedDiscount,
+              payers,
+              participantMemberIds: splitValue.entries.map((e) => e.member_id),
+            })
+          : await logToGroup(selectedGroup.group_id, {
+              description: description.trim(),
+              category,
+              amount: amountNum,
+              merchantName: scannedMerchant || undefined,
+              payers,
+              split: splitValue,
+            });
+        setSavedLine(`Logged to ${selectedGroup.name} — your share ${formatMoney(myShare)} joins your personal total automatically.`);
+      } else if (itemsToSave.length > 0) {
+        await logPersonalWithItems({
           description: description.trim(),
           category,
           amount: amountNum,
           merchantName: scannedMerchant || undefined,
+          items: itemsToSave,
+          tax: scannedTax,
+          discount: scannedDiscount,
+          purchasedAtIso: scannedPurchasedAt || undefined,
+          fingerprint: scannedFingerprint || undefined,
         });
-        setSavedLine(`Logged to ${selectedGroup.name} — your share ${formatMoney(myShare)} joins your personal total automatically.`);
+        setSavedLine('Logged to your personal ledger.');
       } else {
         await logPersonal({
           description: description.trim(),
@@ -206,14 +325,19 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     </Box>
   );
 
-  const splitPreview = selectedGroup && (
+  const splitPreview = selectedGroup && groupDetail && (
     <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.25, px: 1.5, py: 1 }}>
-      <Typography variant="caption" color="text.secondary">
-        Split equally · {memberCount} people · your share{' '}
-        <Box component="span" sx={{ color: 'text.primary', fontWeight: 700, ...tabularNums }}>
-          {formatMoney(shareNum)}
-        </Box>
-      </Typography>
+      <PaidBySplitSummary
+        amount={amountNum}
+        members={groupDetail.members}
+        myMemberId={myMemberId}
+        payers={payers}
+        onPayersChange={setPayers}
+        splitValue={splitValue}
+        onSplitChange={setSplitValue}
+        allowedTypes={itemsToSave.length > 0 ? ['equal'] : undefined}
+        onCustomized={() => setCustomized(true)}
+      />
     </Box>
   );
 
@@ -333,6 +457,17 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               </Box>
             </Box>
 
+            {scannedItems.length > 0 && (
+              <ScannedItemsCard
+                items={scannedItems}
+                onChange={setScannedItems}
+                merchant={scannedMerchant}
+                tax={scannedTax}
+                discount={scannedDiscount}
+                currentAmount={amountNum}
+              />
+            )}
+
             <Typography variant="caption" sx={{ ...typeScale.label, color: 'text.secondary', display: 'block', mt: 2 }}>
               Who was this with?
             </Typography>
@@ -403,6 +538,17 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
             onChange={(e) => setDescription(e.target.value)}
             sx={{ mt: 1 }}
           />
+
+          {scannedItems.length > 0 && (
+            <ScannedItemsCard
+              items={scannedItems}
+              onChange={setScannedItems}
+              merchant={scannedMerchant}
+              tax={scannedTax}
+              discount={scannedDiscount}
+              currentAmount={amountNum}
+            />
+          )}
 
           {whoChips}
           {splitPreview}
