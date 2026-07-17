@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     ANALYSIS_CACHE_TTL_SEC: int = 60
 
     # PostgreSQL Toggles
-    DATABASE_URL: str = "postgresql://postgres:AMCUOn3fk1d0qEBu@db.eebwjvoqxurihrmugmti.supabase.co:5432/postgres"
+    DATABASE_URL: str = ""
 
     # OCR / receipts
     OCR_ENGINE: str = "gemini"
