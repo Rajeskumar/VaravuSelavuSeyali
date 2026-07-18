@@ -42,7 +42,7 @@ test('shows expenses and opens Quick Capture', async () => {
     ],
     next_offset: undefined,
   });
-  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false });
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   expect(screen.getByText('Coffee')).toBeInTheDocument();
@@ -61,7 +61,7 @@ test('deletes an expense', async () => {
     next_offset: undefined,
   });
   const delSpy = jest.spyOn(api, 'deleteExpense').mockResolvedValue();
-  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false });
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   // The feed row's delete affordance opens the existing confirm dialog rather
@@ -85,7 +85,7 @@ test('regression: with groups disabled (404), no scope filter renders and person
     ],
     next_offset: undefined,
   });
-  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false });
   renderPage();
   await waitFor(() => screen.getByText('Coffee'));
   expect(screen.queryByRole('button', { name: 'Groups' })).not.toBeInTheDocument();
@@ -99,7 +99,7 @@ test('scope filter switches the queried data and shows the group badge column', 
     ],
     next_offset: undefined,
   });
-  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true, entity_resolution_enabled: false });
   jest.spyOn(groupsApi, 'listGroups').mockResolvedValue([
     { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 0, status: 'active', archived_at: null, deleted_at: null },
   ]);

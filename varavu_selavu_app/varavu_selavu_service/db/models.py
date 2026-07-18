@@ -37,7 +37,10 @@ class Expense(Base):
     fx_rate_to_group_currency = Column(Numeric(12, 6), nullable=True)
     purchased_at = Column(DateTime(timezone=True), index=True)
     merchant_name = Column(String(255))
-    merchant_id = Column(String(255))
+    # TS-ENT-106: canonical merchant this expense resolved to (NULL until the
+    # resolution pipeline links it). merchant_name remains the raw as-entered
+    # string, kept forever for audit/dedup — see docs/features/smart_entity.
+    merchant_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.canonical_merchants.id", ondelete="SET NULL"), nullable=True)
     category_id = Column(String(100), nullable=False)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String(10), default="USD")
@@ -98,6 +101,10 @@ class ItemInsight(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
     normalized_name = Column(String(255), nullable=False, index=True)
+    # TS-ANL-201: dual-write column, populated alongside normalized_name going
+    # forward (see InsightsAggregationService) — no read path uses this yet.
+    # See docs/features/smart_entity for the cutover plan.
+    canonical_item_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.canonical_items.id", ondelete="CASCADE"), nullable=True, index=True)
     avg_unit_price = Column(Numeric(12, 2))
     min_price = Column(Numeric(12, 2))
     max_price = Column(Numeric(12, 2))
@@ -128,6 +135,9 @@ class MerchantInsight(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
     merchant_name = Column(String(255), nullable=False, index=True)
+    # TS-ANL-201: dual-write column, populated alongside merchant_name going
+    # forward (see InsightsAggregationService) — no read path uses this yet.
+    canonical_merchant_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.canonical_merchants.id", ondelete="CASCADE"), nullable=True, index=True)
     total_spent = Column(Numeric(12, 2), default=0)
     transaction_count = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -313,6 +323,62 @@ class ExpenseComment(Base):
     body = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     edited_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class CanonicalMerchant(Base):
+    """TS-ENT-101: one master record per real merchant. `user_email` NULL means a
+    global/curated (seed dictionary) row, shared read-only across all users —
+    otherwise it's scoped to the one user who created it (spec §17.1)."""
+    __tablename__ = "canonical_merchants"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=True, index=True)
+    canonical_name = Column(String(255), nullable=False)
+    display_name = Column(String(255), nullable=False)
+    default_category_id = Column(String(100))
+    is_global = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class CanonicalItem(Base):
+    """TS-ENT-101: one master record per real product, store-agnostic."""
+    __tablename__ = "canonical_items"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=True, index=True)
+    canonical_name = Column(String(255), nullable=False)
+    display_name = Column(String(255), nullable=False)
+    brand = Column(String(255))
+    default_category_id = Column(String(100))
+    unit_type = Column(String(50))
+    is_global = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class EntityAlias(Base):
+    """TS-ENT-101: every raw variant that maps to a canonical entity — the
+    Resolution Pipeline's memory (spec §6.2 tier 2). `entity_id` is a logical FK
+    (no DB constraint) to canonical_merchants.id or canonical_items.id depending
+    on `entity_type`, since a single FK column can't target two tables."""
+    __tablename__ = "entity_aliases"
+    __table_args__ = (
+        UniqueConstraint("user_email", "entity_type", "raw_key", name="uq_entity_aliases_user_type_rawkey"),
+        {"schema": "trackspense"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=True, index=True)
+    entity_type = Column(String(20), nullable=False)  # 'merchant' | 'item'
+    entity_id = Column(UUID(as_uuid=True), nullable=False)
+    raw_key = Column(String(255), nullable=False)
+    source = Column(String(30), nullable=False)  # 'seed' | 'user_confirm' | 'auto_high' | 'rule' | 'llm' | 'backfill'
+    confidence = Column(Numeric(4, 3))
+    confirmed = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class FxRate(Base):

@@ -38,6 +38,9 @@ done
 echo "Setting up schema..."
 # Create schema
 docker exec -i "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME" -c "CREATE SCHEMA IF NOT EXISTS trackspense;" > /dev/null
+# TS-ENT-101: pg_trgm powers the entity-resolution trigram matcher and its
+# E2E tests — Base.metadata.create_all() below creates tables, not extensions.
+docker exec -i "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" > /dev/null
 
 # Apply models translation for initial tables
 # Run from varavu_selavu_app directory with PYTHONPATH=.

@@ -1,4 +1,14 @@
-import React, { useState, useMemo } from 'react';
+/**
+ * FeedbackScreen.tsx — merged replacement for the old separate
+ * FeatureRequestScreen.tsx ('feature_request') and ContactUsScreen.tsx
+ * ('contact_us') drawer items. form_type is unrestricted free text
+ * server-side (see SendEmailRequest/email_service.py), so introducing a
+ * third 'bug_report' value for "Something's wrong" needs no backend change —
+ * it just gives the inbox an accurate [BUG REPORT] subject line instead of
+ * lumping it under contact_us. Mirrors the web app's FeedbackDialog.tsx
+ * (same type options, same field set).
+ */
+import React, { useMemo, useState } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity,
     ActivityIndicator, Alert,
@@ -8,37 +18,65 @@ import { AppTheme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
+import SegmentedTabs from '../components/SegmentedTabs';
 import { sendEmail } from '../api/email';
 
-export default function ContactUsScreen() {
+type FeedbackType = 'feature_request' | 'bug_report' | 'contact_us';
+
+const TYPE_OPTIONS: { value: FeedbackType; label: string }[] = [
+    { value: 'feature_request', label: 'Idea' },
+    { value: 'bug_report', label: "Something's wrong" },
+    { value: 'contact_us', label: 'Question' },
+];
+
+const SUBJECT_PLACEHOLDER: Record<FeedbackType, string> = {
+    feature_request: "What's your idea?",
+    bug_report: 'What went wrong?',
+    contact_us: "What's this about?",
+};
+
+const MESSAGE_PLACEHOLDER: Record<FeedbackType, string> = {
+    feature_request: 'Describe your feature idea in detail...',
+    bug_report: 'What happened, and what did you expect instead?',
+    contact_us: 'How can we help?',
+};
+
+const SUBJECT_FALLBACK: Record<FeedbackType, string> = {
+    feature_request: 'Feature Request',
+    bug_report: 'Bug Report',
+    contact_us: 'Contact form message',
+};
+
+export default function FeedbackScreen() {
     const { userEmail } = useAuth();
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
+    const [type, setType] = useState<FeedbackType>('feature_request');
     const [name, setName] = useState('');
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
 
     const handleSubmit = async () => {
-        if (!name.trim() || !subject.trim() || !message.trim()) {
-            Alert.alert('Required', 'Please fill in all fields.');
+        if (!message.trim()) {
+            Alert.alert('Required', 'Please describe what\'s on your mind.');
             return;
         }
         setSending(true);
         try {
             await sendEmail({
-                formType: 'contact_us',
+                formType: type,
                 userEmail: userEmail || 'anonymous',
-                subject: subject,
+                subject: subject.trim() || `${SUBJECT_FALLBACK[type]}${name ? ` from ${name}` : ''}`,
                 messageBody: message,
-                name: name,
+                name: name || undefined,
             });
-            Alert.alert('Sent! ✉️', 'Your message has been sent. We\'ll get back to you soon.');
+            Alert.alert('Thank you! 🎉', 'Your message has been sent — we\'ll reply by email soon.');
             setName('');
             setSubject('');
             setMessage('');
         } catch (error) {
-            Alert.alert('Error', 'Failed to send message. Please try again later.');
+            Alert.alert('Error', 'Failed to submit. Please try again later.');
         } finally {
             setSending(false);
         }
@@ -48,15 +86,19 @@ export default function ContactUsScreen() {
         <ScreenWrapper scroll>
             {/* Header */}
             <View style={styles.hero}>
-                <Text style={styles.heroEmoji}>✉️</Text>
-                <Text style={styles.heroTitle}>Contact Us</Text>
+                <Text style={styles.heroEmoji}>💬</Text>
+                <Text style={styles.heroTitle}>Feedback</Text>
                 <Text style={styles.heroSubtitle}>
-                    Have a question or need help? Drop us a message.
+                    An idea, a bug, or a question — we'd love to hear it.
                 </Text>
             </View>
 
+            <View style={styles.typeSelectorWrap}>
+                <SegmentedTabs<FeedbackType> value={type} onChange={setType} options={TYPE_OPTIONS} />
+            </View>
+
             <Card>
-                <Text style={styles.fieldLabel}>Your Name *</Text>
+                <Text style={styles.fieldLabel}>Your Name (optional)</Text>
                 <TextInput
                     style={styles.input}
                     value={name}
@@ -65,12 +107,12 @@ export default function ContactUsScreen() {
                     placeholderTextColor={theme.colors.textTertiary}
                 />
 
-                <Text style={styles.fieldLabel}>Subject *</Text>
+                <Text style={styles.fieldLabel}>Subject (optional)</Text>
                 <TextInput
                     style={styles.input}
                     value={subject}
                     onChangeText={setSubject}
-                    placeholder="What's this about?"
+                    placeholder={SUBJECT_PLACEHOLDER[type]}
                     placeholderTextColor={theme.colors.textTertiary}
                 />
 
@@ -79,7 +121,7 @@ export default function ContactUsScreen() {
                     style={[styles.input, styles.textArea]}
                     value={message}
                     onChangeText={setMessage}
-                    placeholder="Type your message here..."
+                    placeholder={MESSAGE_PLACEHOLDER[type]}
                     placeholderTextColor={theme.colors.textTertiary}
                     multiline
                     numberOfLines={5}
@@ -95,7 +137,7 @@ export default function ContactUsScreen() {
                     {sending ? (
                         <ActivityIndicator size="small" color="#fff" />
                     ) : (
-                        <Text style={styles.submitBtnText}>Send Message</Text>
+                        <Text style={styles.submitBtnText}>Send</Text>
                     )}
                 </TouchableOpacity>
             </Card>
@@ -112,6 +154,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     heroEmoji: { fontSize: 48, marginBottom: 12 },
     heroTitle: { fontSize: 24, fontWeight: '800', color: theme.colors.text, letterSpacing: -0.3 },
     heroSubtitle: { fontSize: 14, color: theme.colors.textSecondary, marginTop: 6, textAlign: 'center', paddingHorizontal: 20 },
+    typeSelectorWrap: { alignItems: 'center', marginBottom: 16 },
     fieldLabel: {
         fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,
         textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,

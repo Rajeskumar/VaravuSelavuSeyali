@@ -31,6 +31,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const isArchived = group.status === 'archived';
   const [simplifyDebts, setSimplifyDebts] = useState(group.simplify_debts);
 
   const defaultSplitVal: SplitEditorValue = group.default_split || { type: 'equal', entries: [] };
@@ -94,11 +95,27 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
         <View style={[styles.sheet, { backgroundColor: theme.colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.pill} />
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>Group Settings</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.title, { color: theme.colors.text }]}>Group Settings</Text>
+              {isArchived && (
+                <View style={[styles.archivedPill, { borderColor: theme.colors.warning }]}>
+                  <Text style={[styles.archivedPillText, { color: theme.colors.warning }]}>Archived</Text>
+                </View>
+              )}
+            </View>
             <Pressable onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
             </Pressable>
           </View>
+
+          {isArchived && (
+            <View style={[styles.archivedNote, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}>
+              <Text style={[styles.archivedNoteText, { color: theme.colors.warning }]}>
+                Simplify Debts and Default Split are locked while this group is archived.
+                Unarchive below to edit them again.
+              </Text>
+            </View>
+          )}
 
           <View style={styles.section}>
             <View style={styles.row}>
@@ -111,6 +128,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
               <Switch
                 value={simplifyDebts}
                 onValueChange={setSimplifyDebts}
+                disabled={isArchived}
                 trackColor={{ false: '#d1d1d6', true: theme.colors.primary }}
                 thumbColor="#fff"
               />
@@ -158,7 +176,10 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
             <Text style={[styles.sectionDesc, { color: theme.colors.textSecondary }]}>
               Set a default split rule for all new expenses.
             </Text>
-            <View style={styles.splitEditorContainer}>
+            <View
+              style={[styles.splitEditorContainer, isArchived && { opacity: 0.5 }]}
+              pointerEvents={isArchived ? 'none' : 'auto'}
+            >
               <SplitEditor
                 totalAmount={100}
                 members={group.members}
@@ -261,7 +282,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
           <CustomButton
             title={saving ? 'Saving...' : 'Save Settings'}
             onPress={handleSave}
-            disabled={saving}
+            disabled={saving || isArchived}
             style={styles.saveBtn}
           />
         </View>
@@ -311,6 +332,27 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     padding: 4,
+  },
+  archivedPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  archivedPillText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 10,
+  },
+  archivedNote: {
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 20,
+  },
+  archivedNoteText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12.5,
+    lineHeight: 18,
   },
   section: {
     marginBottom: 20,

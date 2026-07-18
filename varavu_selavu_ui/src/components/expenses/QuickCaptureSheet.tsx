@@ -17,10 +17,13 @@ import { CATEGORY_GROUPS, findMainCategory } from './AddExpenseForm';
 import { formatMoney } from './ExpenseFeed';
 import { suggestCategory } from '../../api/expenses';
 import { listGroups, getGroup, GroupSummary, GroupDetailResponse, PayerSummaryItem } from '../../api/groups';
+import { suggestMerchants } from '../../api/entityResolution';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
+import { useEntityResolutionEnabled } from '../../hooks/useEntityResolutionEnabled';
 import { useLogExpense } from '../../hooks/useLogExpense';
 import { useReceiptScan } from '../../hooks/useReceiptScan';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
+import EntityAutocomplete from './EntityAutocomplete';
 import PaidBySplitSummary from '../groups/PaidBySplitSummary';
 import { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
 import { computePayersValid } from '../groups/PayerPicker';
@@ -61,7 +64,12 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const { enabled: groupsEnabled } = useGroupsEnabled();
+  const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
   const { logPersonal, logToGroup, logPersonalWithItems, logToGroupWithItems } = useLogExpense();
+  const fetchMerchantSuggestions = React.useCallback(
+    (q: string) => (entityResolutionEnabled ? suggestMerchants(q) : Promise.resolve([])),
+    [entityResolutionEnabled]
+  );
 
   const [stage, setStage] = React.useState<'entry' | 'saved'>('entry');
   const [amount, setAmount] = React.useState('');
@@ -448,6 +456,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               sx={{ mt: 1 }}
             />
 
+            <EntityAutocomplete
+              value={scannedMerchant || ''}
+              onValueChange={(v) => setScannedMerchant(v || null)}
+              fetchSuggestions={fetchMerchantSuggestions}
+              textFieldProps={{ fullWidth: true, size: 'small', placeholder: 'Merchant (optional)', sx: { mt: 1 } }}
+            />
+
             <Box sx={{ display: 'flex', gap: 1, mt: 1.25 }}>
               <Box sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: 999, px: 1.5, py: 0.5, fontSize: 12, fontWeight: 600 }}>
                 {categoryPreview} ✨
@@ -537,6 +552,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             sx={{ mt: 1 }}
+          />
+
+          <EntityAutocomplete
+            value={scannedMerchant || ''}
+            onValueChange={(v) => setScannedMerchant(v || null)}
+            fetchSuggestions={fetchMerchantSuggestions}
+            textFieldProps={{ fullWidth: true, size: 'small', placeholder: 'Merchant (optional)', sx: { mt: 1 } }}
           />
 
           {scannedItems.length > 0 && (

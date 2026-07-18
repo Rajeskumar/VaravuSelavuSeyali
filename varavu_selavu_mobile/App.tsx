@@ -43,8 +43,7 @@ import AnalysisScreen from './src/screens/AnalysisScreen';
 import AIAnalystScreen from './src/screens/AIAnalystScreen';
 import RecurringExpensesScreen from './src/screens/RecurringExpensesScreen';
 import AboutScreen from './src/screens/AboutScreen';
-import FeatureRequestScreen from './src/screens/FeatureRequestScreen';
-import ContactUsScreen from './src/screens/ContactUsScreen';
+import FeedbackScreen from './src/screens/FeedbackScreen';
 import ItemInsightsScreen from './src/screens/ItemInsightsScreen';
 import MerchantInsightsScreen from './src/screens/MerchantInsightsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -233,8 +232,7 @@ const DRAWER_ITEMS: { key: string; label: string; icon: keyof typeof Ionicons.gl
   { key: 'itemInsights',    label: 'Item Insights',    icon: 'pricetag',       screen: 'ItemInsights'    },
   { key: 'merchantInsights',label: 'Merchant Insights',icon: 'storefront',     screen: 'MerchantInsights'},
   { key: 'about',           label: 'About',            icon: 'information-circle', screen: 'About'      },
-  { key: 'feature',         label: 'Feature Request',  icon: 'bulb',           screen: 'FeatureRequest'  },
-  { key: 'contact',         label: 'Contact Us',       icon: 'mail',           screen: 'ContactUs'       },
+  { key: 'feedback',        label: 'Feedback',         icon: 'chatbubble-ellipses', screen: 'Feedback'  },
 ];
 
 function CustomDrawer({ visible, onClose, onNavigate }: {
@@ -405,8 +403,7 @@ function AppShell() {
         <Stack.Screen name="ItemInsights"     component={ItemInsightsScreen}       options={{ headerShown: true, headerTitle: 'Item Insights',      headerBackTitle: '' }} />
         <Stack.Screen name="MerchantInsights" component={MerchantInsightsScreen}   options={{ headerShown: true, headerTitle: 'Merchant Insights',  headerBackTitle: '' }} />
         <Stack.Screen name="About"            component={AboutScreen}              options={{ headerShown: true, headerTitle: 'About',              headerBackTitle: '' }} />
-        <Stack.Screen name="FeatureRequest"   component={FeatureRequestScreen}     options={{ headerShown: true, headerTitle: 'Feature Request',    headerBackTitle: '' }} />
-        <Stack.Screen name="ContactUs"        component={ContactUsScreen}          options={{ headerShown: true, headerTitle: 'Contact',            headerBackTitle: '' }} />
+        <Stack.Screen name="Feedback"         component={FeedbackScreen}           options={{ headerShown: true, headerTitle: 'Feedback',           headerBackTitle: '' }} />
         {/* ── Groups (TS-GRP-109) ── */}
         <Stack.Screen name="Groups"           component={GroupsScreen}             options={{ headerShown: false }} />
         <Stack.Screen name="GroupDetail"      component={GroupDetailScreen}        options={{ headerShown: true, headerBackTitle: '' }} />

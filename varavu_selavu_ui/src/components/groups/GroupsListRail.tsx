@@ -4,6 +4,7 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
+import Chip from '@mui/material/Chip';
 import AddIcon from '@mui/icons-material/Add';
 import { useTheme } from '@mui/material/styles';
 import GroupAvatar from './GroupAvatar';
@@ -102,9 +103,14 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
             >
               <GroupAvatar seed={g.group_id} groupType={g.group_type} size={36} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                  {g.name}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                    {g.name}
+                  </Typography>
+                  {g.status === 'archived' && (
+                    <Chip label="Archived" size="small" color="warning" variant="outlined" sx={{ height: 18, fontSize: '0.625rem' }} />
+                  )}
+                </Box>
                 <Typography variant="caption" sx={{ color: balanceColor, ...tabularNums }} noWrap>
                   {balanceLabel}
                 </Typography>

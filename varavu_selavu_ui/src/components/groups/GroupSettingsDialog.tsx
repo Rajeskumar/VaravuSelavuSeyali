@@ -12,6 +12,8 @@ import {
   Divider,
   TextField,
   MenuItem,
+  Chip,
+  Alert,
 } from '@mui/material';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import { GroupDetailResponse, ApiError } from '../../api/groups';
@@ -44,6 +46,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
   setToast,
 }) => {
   const queryClient = useQueryClient();
+  const isArchived = group.status === 'archived';
   const [simplifyDebts, setSimplifyDebts] = useState(group.simplify_debts);
   const [currency, setCurrency] = useState(group.currency);
 
@@ -110,20 +113,30 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Group Settings</DialogTitle>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        Group Settings
+        {isArchived && <Chip label="Archived" size="small" color="warning" variant="outlined" />}
+      </DialogTitle>
       <DialogContent dividers>
         {error && (
           <Typography color="error" gutterBottom>
             {error}
           </Typography>
         )}
-        
+
+        {isArchived && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Currency, Simplify Debts, and Default Split are locked while this group is archived.
+            Unarchive below to edit them again.
+          </Alert>
+        )}
+
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" gutterBottom>Currency</Typography>
           <Typography variant="body2" color="text.secondary" gutterBottom>
             One currency for the whole group — every expense is recorded in this currency.
           </Typography>
-          <TextField select size="small" value={currency} onChange={(e) => setCurrency(e.target.value)} sx={{ minWidth: 140, mt: 1 }}>
+          <TextField select size="small" value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={isArchived} sx={{ minWidth: 140, mt: 1 }}>
             {CURRENCIES.map((c) => (
               <MenuItem key={c} value={c}>
                 {c}
@@ -144,6 +157,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
               <Switch
                 checked={simplifyDebts}
                 onChange={(e) => setSimplifyDebts(e.target.checked)}
+                disabled={isArchived}
                 color="primary"
               />
             }
@@ -191,7 +205,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
             Set a default split rule for all new expenses in this group.
           </Typography>
           
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 2, pointerEvents: isArchived ? 'none' : 'auto', opacity: isArchived ? 0.5 : 1 }}>
             <SplitEditor
               amount={100} // Dummy amount for UI purposes
               members={group.members}
@@ -322,7 +336,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained" disabled={saving}>
+        <Button onClick={handleSave} variant="contained" disabled={saving || isArchived}>
           {saving ? 'Saving...' : 'Save'}
         </Button>
       </DialogActions>

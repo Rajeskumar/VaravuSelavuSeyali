@@ -40,11 +40,14 @@ import {
   ApiError,
 } from '../../api/groups';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
+import { useEntityResolutionEnabled } from '../../hooks/useEntityResolutionEnabled';
 import { useReceiptScan } from '../../hooks/useReceiptScan';
+import { suggestMerchants } from '../../api/entityResolution';
 import PayerPicker from '../groups/PayerPicker';
 import ItemSplitBoard from '../groups/ItemSplitBoard';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
+import EntityAutocomplete from './EntityAutocomplete';
 
 // Exported for reuse by the ExpenseFeed/ExpenseDetailSheet (TS-DES-102) — the
 // feed's category tint-dot mapping and the detail sheet's inline category
@@ -164,6 +167,11 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   // Personal/Group toggle (spec §10.1/§11.2) — only offered on fresh creates;
   // editing an existing (always-personal) expense never shows this.
   const { enabled: groupsEnabled } = useGroupsEnabled();
+  const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
+  const fetchMerchantSuggestions = React.useCallback(
+    (q: string) => (entityResolutionEnabled ? suggestMerchants(q) : Promise.resolve([])),
+    [entityResolutionEnabled]
+  );
   const [mode, setMode] = useState<'personal' | 'group'>('personal');
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState('');
@@ -625,26 +633,28 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 active={editingMerchant}
                 onActivate={() => setEditingMerchant(true)}
               >
-                <TextField
-                  fullWidth
-                  autoFocus
-                  size="small"
-                  label="Merchant / Store Name"
+                <EntityAutocomplete
                   value={merchantName}
-                  
-                  onChange={(e) => {
-                    setMerchantName(e.target.value);
+                  onValueChange={(v) => {
+                    setMerchantName(v);
                     setUserPickedMerchant(true);
                   }}
-                  onBlur={() => setEditingMerchant(false)}
-                  placeholder="e.g., Starbucks, Amazon, PG&E"
-                  InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    endAdornment: !userPickedMerchant && merchantName ? (
-                      <InputAdornment position="end">
-                        <span title="Auto-suggested" style={{ fontSize: 16 }}>✨</span>
-                      </InputAdornment>
-                    ) : undefined,
+                  fetchSuggestions={fetchMerchantSuggestions}
+                  textFieldProps={{
+                    fullWidth: true,
+                    autoFocus: true,
+                    size: 'small',
+                    label: 'Merchant / Store Name',
+                    onBlur: () => setEditingMerchant(false),
+                    placeholder: 'e.g., Starbucks, Amazon, PG&E',
+                    InputLabelProps: { shrink: true },
+                    InputProps: {
+                      endAdornment: !userPickedMerchant && merchantName ? (
+                        <InputAdornment position="end">
+                          <span title="Auto-suggested" style={{ fontSize: 16 }}>✨</span>
+                        </InputAdornment>
+                      ) : undefined,
+                    },
                   }}
                 />
               </CompactRow>

@@ -110,9 +110,12 @@ interface ExpenseRowProps {
   onEdit: (expense: FeedExpense) => void;
   onDelete: (expense: FeedExpense) => void;
   deleting: boolean;
+  /** Archived-group lockdown: hides the edit/delete row actions, keeping
+   * `onSelect` (view) usable so history stays browsable. */
+  readOnly?: boolean;
 }
 
-const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDelete, deleting }) => {
+const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDelete, deleting, readOnly }) => {
   const theme = useTheme();
   const dot = categoryTint(expense.mainCategory);
   const isDark = theme.palette.mode === 'dark';
@@ -185,44 +188,46 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
           </Typography>
         )}
       </Box>
-      <Box
-        className="expense-row-actions"
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          ml: 0.5,
-          opacity: 0,
-          pointerEvents: 'none',
-          transition: 'opacity 0.15s ease',
-          // Always visible on touch/coarse-pointer devices where hover doesn't apply.
-          '@media (hover: none)': { opacity: 1, pointerEvents: 'auto' },
-        }}
-      >
-        <IconButton
-          aria-label="edit"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(expense);
+      {!readOnly && (
+        <Box
+          className="expense-row-actions"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            ml: 0.5,
+            opacity: 0,
+            pointerEvents: 'none',
+            transition: 'opacity 0.15s ease',
+            // Always visible on touch/coarse-pointer devices where hover doesn't apply.
+            '@media (hover: none)': { opacity: 1, pointerEvents: 'auto' },
           }}
-          sx={rowActionHitSlopSx}
         >
-          <EditIcon fontSize="small" sx={{ color: isDark ? theme.palette.primary.light : theme.palette.primary.main }} />
-        </IconButton>
-        <IconButton
-          aria-label="delete"
-          size="small"
-          disabled={deleting}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(expense);
-          }}
-          sx={rowActionHitSlopSx}
-        >
-          {deleting ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" color="error" />}
-        </IconButton>
-      </Box>
+          <IconButton
+            aria-label="edit"
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(expense);
+            }}
+            sx={rowActionHitSlopSx}
+          >
+            <EditIcon fontSize="small" sx={{ color: isDark ? theme.palette.primary.light : theme.palette.primary.main }} />
+          </IconButton>
+          <IconButton
+            aria-label="delete"
+            size="small"
+            disabled={deleting}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(expense);
+            }}
+            sx={rowActionHitSlopSx}
+          >
+            {deleting ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" color="error" />}
+          </IconButton>
+        </Box>
+      )}
     </Box>
   );
 };
@@ -240,6 +245,9 @@ interface ExpenseFeedProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   loadingMore?: boolean;
+  /** Archived-group lockdown: hides edit/delete row actions across the whole
+   * feed, keeping viewing (`onSelect`) usable. */
+  readOnly?: boolean;
 }
 
 /**
@@ -261,6 +269,7 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
   onLoadMore,
   hasMore,
   loadingMore,
+  readOnly,
 }) => {
   const theme = useTheme();
   const groups = React.useMemo(() => groupByDay(expenses), [expenses]);
@@ -334,6 +343,7 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
               onEdit={onEdit}
               onDelete={onDelete}
               deleting={deletingKey === expense.key}
+              readOnly={readOnly}
             />
           ))}
         </Box>

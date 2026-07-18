@@ -3,6 +3,7 @@ import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
 import { useTheme } from '@mui/material/styles';
 import GroupAvatar from './GroupAvatar';
 import { GroupSummary } from '../../api/groups';
@@ -35,9 +36,14 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick }) => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75, mb: 1.75 }}>
           <GroupAvatar seed={group.group_id} groupType={group.group_type} size={52} />
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
-              {group.name}
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
+                {group.name}
+              </Typography>
+              {group.status === 'archived' && (
+                <Chip label="Archived" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: '0.6875rem' }} />
+              )}
+            </Box>
             <Typography variant="body2" color="text.secondary">
               {group.member_count} member{group.member_count === 1 ? '' : 's'}
             </Typography>

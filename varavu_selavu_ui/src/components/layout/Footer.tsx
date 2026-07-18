@@ -10,7 +10,8 @@ import { FOOTER_HEIGHT } from './layoutConstants';
  * the codebase before this ticket). Spans the full width of `MainLayout`'s content column at
  * every authenticated route. Terms/Privacy use the same external `REACT_APP_API_URL`-backed link
  * pattern `ProfilePage.tsx` already uses (those pages are backend-served, not client routes);
- * Help and Submit an idea are real client routes.
+ * Help is a real client route (/contact — logged-in users get a faster feedback path via the
+ * avatar menu's FeedbackDialog instead, so no "Submit an idea" link here anymore).
  */
 const Footer: React.FC = () => (
   <Box
@@ -57,9 +58,6 @@ const Footer: React.FC = () => (
       </Link>
       <Link component={RouterLink} to="/contact" variant="caption" color="text.secondary" underline="hover">
         Help
-      </Link>
-      <Link component={RouterLink} to="/account?tab=feedback" variant="caption" color="text.secondary" underline="hover">
-        Submit an idea
       </Link>
     </Box>
   </Box>

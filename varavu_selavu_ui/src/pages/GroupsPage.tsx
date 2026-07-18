@@ -150,6 +150,7 @@ const GroupsPage: React.FC = () => {
   const myMember = members.find((m) => m.user_email === myEmail);
   const myBalance = balancesQuery.data?.members.find((m) => m.member_id === myMember?.member_id)?.net ?? 0;
   const group = groupQuery.data;
+  const isArchived = group?.status === 'archived';
 
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   // --- Add member dialog ---
@@ -323,15 +324,25 @@ const GroupsPage: React.FC = () => {
                 </IconButton>
                 <GroupAvatar seed={group.group_id} groupType={group.group_type} size={40} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
-                    {group.name}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
+                      {group.name}
+                    </Typography>
+                    {isArchived && <Chip label="Archived" size="small" color="warning" variant="outlined" />}
+                  </Box>
                   <Typography variant="body2" color="text.secondary">
                     {members.length} member{members.length === 1 ? '' : 's'}
                   </Typography>
                 </Box>
                 <MemberAvatarStack members={members} />
-                <Button size="small" variant="outlined" startIcon={<PersonAddAlt1RoundedIcon />} onClick={() => setMemberDialogOpen(true)} sx={{ flexShrink: 0 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<PersonAddAlt1RoundedIcon />}
+                  onClick={() => setMemberDialogOpen(true)}
+                  disabled={isArchived}
+                  sx={{ flexShrink: 0 }}
+                >
                   Add Member
                 </Button>
                 <IconButton onClick={() => setSettingsOpen(true)} size="small">
@@ -339,9 +350,10 @@ const GroupsPage: React.FC = () => {
                 </IconButton>
               </Box>
 
-              {group.status === 'archived' && (
+              {isArchived && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                  This group is archived. You cannot add new expenses or members.
+                  This group is archived — you can still view its history, but adding or editing
+                  anything is locked. Unarchive from Settings to make changes.
                 </Alert>
               )}
 
@@ -380,11 +392,11 @@ const GroupsPage: React.FC = () => {
                   ]}
                 />
                 {tab === 'expenses' ? (
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => openQuickCapture(groupId)} disabled={members.length === 0}>
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={() => openQuickCapture(groupId)} disabled={members.length === 0 || isArchived}>
                     Add Expense
                   </Button>
                 ) : (
-                  <Button variant="contained" onClick={() => setSettleOpen(true)} disabled={members.length < 2}>
+                  <Button variant="contained" onClick={() => setSettleOpen(true)} disabled={members.length < 2 || isArchived}>
                     Settle Up
                   </Button>
                 )}
@@ -396,6 +408,7 @@ const GroupsPage: React.FC = () => {
                     expenses={groupFeedExpenses}
                     loading={expensesQuery.isLoading}
                     emptyMessage="No group expenses yet."
+                    readOnly={isArchived}
                     onSelect={(feedRow) => {
                       const row = resolveGroupExpense(feedRow);
                       if (row) {
@@ -537,6 +550,7 @@ const GroupsPage: React.FC = () => {
           myMemberId={myMember?.member_id}
           groupCurrency={group?.currency || 'USD'}
           initialMode={expenseDialogMode}
+          readOnly={isArchived}
           setToast={setToast}
           onSettled={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });

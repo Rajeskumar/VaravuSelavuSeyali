@@ -35,6 +35,9 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { showToast } from '../components/Toast';
 import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
+import TypeaheadInput from '../components/TypeaheadInput';
+import { suggestMerchants } from '../api/entityResolution';
+import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 import PaidBySplitSummary from '../components/PaidBySplitSummary';
 import { SplitEditorValue, computeSplitValid } from '../components/SplitEditor';
 import { computePayersValid } from '../components/PayerPicker';
@@ -114,6 +117,11 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const { accessToken, userEmail } = useAuth();
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
+  const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
+  const fetchMerchantSuggestions = useCallback(
+    (q: string) => (entityResolutionEnabled ? suggestMerchants(q) : Promise.resolve([])),
+    [entityResolutionEnabled]
+  );
 
   const resetForm = (initialWho: string) => {
     setStage('entry');
@@ -532,6 +540,16 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     selectionColor={theme.colors.primary}
                   />
 
+                  <TypeaheadInput
+                    theme={theme}
+                    value={merchantName}
+                    onChangeValue={setMerchantName}
+                    fetchSuggestions={fetchMerchantSuggestions}
+                    placeholder="Merchant (optional)"
+                    containerStyle={styles.merchantInputWrap}
+                    inputStyle={styles.merchantInput}
+                  />
+
                   {groupsEnabled && myGroups.length > 0 && (
                     <ScrollView
                       horizontal
@@ -689,6 +707,13 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
       paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter-Regular', fontSize: 13.5,
       color: theme.colors.text, marginTop: 8,
+    },
+
+    merchantInputWrap: { marginTop: 8 },
+    merchantInput: {
+      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter-Regular', fontSize: 13.5,
+      color: theme.colors.text,
     },
 
     whoRow: { gap: 6, marginTop: 10, paddingRight: 4 },

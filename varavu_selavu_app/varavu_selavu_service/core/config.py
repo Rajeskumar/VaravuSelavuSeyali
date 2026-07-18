@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     ANALYSIS_CACHE_TTL_SEC: int = 60
 
     # PostgreSQL Toggles
-    DATABASE_URL: str = "postgresql://postgres:AMCUOn3fk1d0qEBu@db.eebwjvoqxurihrmugmti.supabase.co:5432/postgres"
+    DATABASE_URL: str = ""
 
     # OCR / receipts
     OCR_ENGINE: str = "gemini"
@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     # group-related is reachable until explicitly enabled (spec §13.4).
     GROUPS_ENABLED: bool = False
     PUBLIC_APP_URL: str = "http://localhost:3000"
+
+    # Smart Entity Resolution (TS-ENT series) — same staged-rollout pattern as
+    # GROUPS_ENABLED. See docs/features/smart_entity/TrackSpense_Smart_Entity_Resolution_Spec.md.
+    ENTITY_RESOLUTION_ENABLED: bool = False
 
     # Push notifications (TS-GRP-110) — Expo Push Service, no FCM/APNs plumbing needed.
     EXPO_PUSH_URL: str = "https://exp.host/--/api/v2/push/send"
