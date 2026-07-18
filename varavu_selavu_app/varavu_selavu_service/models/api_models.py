@@ -95,6 +95,9 @@ class FeatureFlagsResponse(BaseModel):
     # Client-visible flag surface (TS-GRP-111) — lets web/mobile hide Groups nav,
     # filters, and toggles without relying on a 404 probe against /groups.
     groups_enabled: bool
+    # TS-ENT-105: same pattern, for the merchant/item typeahead + resolution
+    # endpoints — lets web/mobile hide the typeahead UI without a 404 probe.
+    entity_resolution_enabled: bool
 
 
 class DashboardResponse(BaseModel):
@@ -670,4 +673,72 @@ class SplitSuggestionDTO(BaseModel):
 
 class SplitSuggestionResponse(BaseModel):
     suggestions: List[SplitSuggestionDTO]
+
+
+# ---------------------- Smart Entity Resolution (TS-ENT-1xx) ---------------------- #
+# docs/features/smart_entity/TrackSpense_Smart_Entity_Resolution_Spec.md §10
+
+class EntitySuggestionDTO(BaseModel):
+    id: str
+    display_name: str
+    score: float
+    category_id: Optional[str] = None
+
+
+class SuggestResponse(BaseModel):
+    suggestions: List[EntitySuggestionDTO]
+
+
+class ResolveRequest(BaseModel):
+    raw: str
+    brand: Optional[str] = None  # items only; ignored for merchants
+
+
+class CanonicalRefDTO(BaseModel):
+    id: str
+    display_name: str
+    category_id: Optional[str] = None
+
+
+class ResolveCandidateDTO(BaseModel):
+    id: str
+    display_name: str
+    score: float
+    category_id: Optional[str] = None
+
+
+class ResolveResponse(BaseModel):
+    status: str  # "linked" | "suggested" | "new"
+    canonical: Optional[CanonicalRefDTO] = None
+    candidates: List[ResolveCandidateDTO] = []
+
+
+class CreateCanonicalMerchantRequest(BaseModel):
+    display_name: str
+    default_category_id: Optional[str] = None
+
+
+class CreateCanonicalItemRequest(BaseModel):
+    display_name: str
+    brand: Optional[str] = None
+    default_category_id: Optional[str] = None
+    unit_type: Optional[str] = None
+
+
+class CanonicalMerchantDTO(BaseModel):
+    id: str
+    canonical_name: str
+    display_name: str
+    default_category_id: Optional[str] = None
+    is_global: bool
+
+
+class CanonicalItemDTO(BaseModel):
+    id: str
+    canonical_name: str
+    display_name: str
+    brand: Optional[str] = None
+    default_category_id: Optional[str] = None
+    unit_type: Optional[str] = None
+    is_global: bool
 

@@ -8,6 +8,7 @@ import Tooltip from '@mui/material/Tooltip';
 interface Props {
   email: string;
   onProfile: () => void;
+  onFeedback: () => void;
   onLogout: () => void;
 }
 
@@ -19,7 +20,7 @@ function getInitials(email: string): string {
   return name[0]?.toUpperCase() || 'U';
 }
 
-const UserMenu: React.FC<Props> = ({ email, onProfile, onLogout }) => {
+const UserMenu: React.FC<Props> = ({ email, onProfile, onFeedback, onLogout }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const handleOpen = (event: React.MouseEvent<HTMLElement>) => setAnchorEl(event.currentTarget);
@@ -69,6 +70,7 @@ const UserMenu: React.FC<Props> = ({ email, onProfile, onLogout }) => {
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
         <MenuItem onClick={onProfile}>Profile</MenuItem>
+        <MenuItem onClick={onFeedback}>Feedback</MenuItem>
         <MenuItem onClick={onLogout}>Logout</MenuItem>
       </Menu>
     </>

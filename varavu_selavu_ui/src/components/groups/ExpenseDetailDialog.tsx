@@ -53,6 +53,10 @@ interface Props {
   groupCurrency?: string;
   /** 'edit' opens straight into the edit form (the row's edit icon) instead of the view. */
   initialMode?: 'view' | 'edit';
+  /** Archived-group lockdown: hides the edit entry point, delete button,
+   * settle-my-share action, and comment mutation controls — history stays
+   * fully viewable, nothing here can change the archived group's data. */
+  readOnly?: boolean;
   onSettled?: () => void;
   onDeleted?: () => void;
   onUpdated?: () => void;
@@ -81,6 +85,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
   myMemberId,
   groupCurrency,
   initialMode = 'view',
+  readOnly,
   onSettled,
   onDeleted,
   onUpdated,
@@ -237,14 +242,14 @@ const ExpenseDetailDialog: React.FC<Props> = ({
     }
   };
 
-  const canSettle = !!myMemberId && expense.my_share > 0 && !expense.payer_summary.some((p) => p.member_id === myMemberId);
+  const canSettle = !readOnly && !!myMemberId && expense.my_share > 0 && !expense.payer_summary.some((p) => p.member_id === myMemberId);
   const nameFor = (memberId: string) => members.find((m) => m.member_id === memberId)?.display_name || 'Someone';
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth={editing ? 'xs' : 'sm'}>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
         {editing ? 'Edit Expense' : expense.description}
-        {!editing && (
+        {!editing && !readOnly && (
           <IconButton size="small" onClick={startEdit} aria-label="Edit expense">
             <EditRoundedIcon fontSize="small" />
           </IconButton>
@@ -363,7 +368,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
                         {new Date(c.created_at).toLocaleString()}
                       </Typography>
                     </Box>
-                    {c.author_display_name && myEmail && (
+                    {c.author_display_name && myEmail && !readOnly && (
                       <IconButton size="small" onClick={() => handleDeleteComment(c.id)} aria-label="Delete comment">
                         <DeleteOutlineRoundedIcon fontSize="small" />
                       </IconButton>
@@ -372,21 +377,23 @@ const ExpenseDetailDialog: React.FC<Props> = ({
                 ))}
               </Box>
             )}
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="Add a comment..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handlePostComment();
-                }}
-              />
-              <IconButton onClick={handlePostComment} disabled={posting || !newComment.trim()} aria-label="Post comment">
-                <SendRoundedIcon />
-              </IconButton>
-            </Box>
+            {!readOnly && (
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Add a comment..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handlePostComment();
+                  }}
+                />
+                <IconButton onClick={handlePostComment} disabled={posting || !newComment.trim()} aria-label="Post comment">
+                  <SendRoundedIcon />
+                </IconButton>
+              </Box>
+            )}
 
             <Divider sx={{ my: 1.5 }} />
 
@@ -431,7 +438,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
       {!editing && (
         <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
           <Box>
-            {!confirmingDelete ? (
+            {readOnly ? null : !confirmingDelete ? (
               <Button variant="text" color="error" onClick={() => setConfirmingDelete(true)} disabled={deleting || settling}>
                 Delete expense
               </Button>

@@ -9,6 +9,9 @@ import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import { typeScale, tabularNums } from '../../theme';
 import { formatMoney } from './ExpenseFeed';
+import { suggestItems } from '../../api/entityResolution';
+import { useEntityResolutionEnabled } from '../../hooks/useEntityResolutionEnabled';
+import EntityAutocomplete from './EntityAutocomplete';
 
 export interface ScannedItem {
   line_no: number;
@@ -89,6 +92,11 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
   currentAmount,
 }) => {
   const [expanded, setExpanded] = React.useState(true);
+  const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
+  const fetchItemSuggestions = React.useCallback(
+    (q: string) => (entityResolutionEnabled ? suggestItems(q) : Promise.resolve([])),
+    [entityResolutionEnabled]
+  );
 
   const subtotal = items.reduce((s, it) => s + (Number(it.line_total) || 0), 0);
   const computedTotal = subtotal + tax - discount;
@@ -135,12 +143,18 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
           <Box sx={{ maxHeight: 190, overflowY: 'auto', pr: 0.5 }}>
             {items.map((item) => (
               <Box key={item.line_no} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5 }}>
-                <InputBase
-                  value={item.item_name}
-                  onChange={(e) => updateItem(item.line_no, { item_name: e.target.value })}
-                  placeholder="Item name"
-                  sx={{ flex: 1, fontSize: 13.5, minWidth: 0 }}
-                />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <EntityAutocomplete
+                    value={item.item_name}
+                    onValueChange={(v) => updateItem(item.line_no, { item_name: v })}
+                    fetchSuggestions={fetchItemSuggestions}
+                    textFieldProps={{
+                      variant: 'standard',
+                      placeholder: 'Item name',
+                      InputProps: { disableUnderline: true, sx: { fontSize: 13.5 } },
+                    }}
+                  />
+                </Box>
                 <ItemPriceField
                   value={item.line_total}
                   onCommit={(n) => updateItem(item.line_no, { line_total: n })}

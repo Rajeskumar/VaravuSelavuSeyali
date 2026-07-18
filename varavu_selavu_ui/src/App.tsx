@@ -21,6 +21,7 @@ import MainLayout from './components/layout/MainLayout';
 import Button from '@mui/material/Button';
 import LoginIcon from '@mui/icons-material/Login';
 import UserMenu from './components/layout/UserMenu';
+import FeedbackDialog from './components/layout/FeedbackDialog';
 import AccountPage from './pages/AccountPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AskPage from './pages/AskPage';
@@ -31,7 +32,6 @@ import { useQuickLogBar } from './hooks/useQuickLogBar';
 import WillLogPreview from './components/common/WillLogPreview';
 import { logout as apiLogout } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
-import FeatureRequestPage from './pages/FeatureRequestPage';
 import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
 import JoinGroupPage from './pages/JoinGroupPage';
@@ -73,6 +73,7 @@ const MerchantInsightsRedirect: React.FC = () => {
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = React.useState<string | null>(() => localStorage.getItem('vs_user'));
+  const [feedbackOpen, setFeedbackOpen] = React.useState(false);
   const { isDark, toggleMode } = useThemeMode();
   const { openQuickCapture } = useQuickCapture();
   const { openAsk } = useAsk();
@@ -201,6 +202,7 @@ const AppContent: React.FC = () => {
             <UserMenu
               email={user}
               onProfile={() => navigate('/account')}
+              onFeedback={() => setFeedbackOpen(true)}
               onLogout={handleLogout}
             />
           ) : (
@@ -241,10 +243,9 @@ const AppContent: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        {/* Public (unauthenticated marketing footer links here — HomePage.tsx). The nav-visible,
-            logged-in path to the same content is now /account?tab=feedback (below); both serve
-            the same FeatureRequestPage component, so there's nothing to keep in sync. */}
-        <Route path="/feature-request" element={<FeatureRequestPage />} />
+        {/* Public: logged-out visitors' only path to support — /email/send itself has no auth
+            requirement either. Logged-in users get a faster path via the avatar menu's Feedback
+            dialog (FeedbackDialog, opened from UserMenu) instead of this page. */}
         <Route path="/contact" element={<ContactPage />} />
         {/* Public: must be reachable pre-login (deep link from an invite email/text); resumes after auth via LoginPage. */}
         <Route path="/groups/join/:token" element={<JoinGroupPage />} />
@@ -270,6 +271,7 @@ const AppContent: React.FC = () => {
       </Routes>
       {/* Recurring expenses prompt appears after login */}
       {user && <RecurringPrompt />}
+      {user && <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />}
     </>
   );
 };

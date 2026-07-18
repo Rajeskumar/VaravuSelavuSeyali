@@ -42,6 +42,9 @@ interface Props {
   expense: GroupExpenseRow | null;
   members: MemberDTO[];
   myMemberId?: string;
+  /** Archived-group lockdown: hides Delete Expense, settle-my-share, and
+   * comment mutation controls — history/comments stay viewable. */
+  readOnly?: boolean;
   onSettled?: () => void;
   onDeleted?: () => void;
 }
@@ -59,7 +62,7 @@ function formatFieldValue(field: string, value: any): string {
   return String(value);
 }
 
-export default function ExpenseDetailSheet({ visible, onClose, groupId, expense, members, myMemberId, onSettled, onDeleted }: Props) {
+export default function ExpenseDetailSheet({ visible, onClose, groupId, expense, members, myMemberId, readOnly, onSettled, onDeleted }: Props) {
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
 
@@ -148,7 +151,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
     }
   };
 
-  const canSettle = !!myMemberId && expense.my_share > 0 && !expense.payer_summary.some((p) => p.member_id === myMemberId);
+  const canSettle = !readOnly && !!myMemberId && expense.my_share > 0 && !expense.payer_summary.some((p) => p.member_id === myMemberId);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -213,26 +216,30 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
                       {new Date(item.created_at).toLocaleString()}
                     </Text>
                   </View>
-                  <Pressable onPress={() => handleDeleteComment(item.id)} hitSlop={8}>
-                    <Ionicons name="trash-outline" size={16} color={theme.colors.textSecondary} />
-                  </Pressable>
+                  {!readOnly && (
+                    <Pressable onPress={() => handleDeleteComment(item.id)} hitSlop={8}>
+                      <Ionicons name="trash-outline" size={16} color={theme.colors.textSecondary} />
+                    </Pressable>
+                  )}
                 </View>
               )}
             />
           )}
-          <View style={styles.commentInputRow}>
-            <TextInput
-              style={[styles.commentInput, { color: theme.colors.text, backgroundColor: theme.colors.surfaceSecondary }]}
-              placeholder="Add a comment..."
-              placeholderTextColor={theme.colors.textTertiary}
-              value={newComment}
-              onChangeText={setNewComment}
-              onSubmitEditing={handlePostComment}
-            />
-            <Pressable onPress={handlePostComment} disabled={posting || !newComment.trim()} hitSlop={8}>
-              <Ionicons name="send" size={20} color={theme.colors.primary} />
-            </Pressable>
-          </View>
+          {!readOnly && (
+            <View style={styles.commentInputRow}>
+              <TextInput
+                style={[styles.commentInput, { color: theme.colors.text, backgroundColor: theme.colors.surfaceSecondary }]}
+                placeholder="Add a comment..."
+                placeholderTextColor={theme.colors.textTertiary}
+                value={newComment}
+                onChangeText={setNewComment}
+                onSubmitEditing={handlePostComment}
+              />
+              <Pressable onPress={handlePostComment} disabled={posting || !newComment.trim()} hitSlop={8}>
+                <Ionicons name="send" size={20} color={theme.colors.primary} />
+              </Pressable>
+            </View>
+          )}
 
           <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
 
@@ -267,31 +274,33 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
             )
           )}
 
-          {!confirmDelete ? (
-            <CustomButton
-              title="Delete Expense"
-              onPress={() => setConfirmDelete(true)}
-              variant="danger"
-              style={{ marginTop: 24 }}
-              disabled={deleting || settling}
-            />
-          ) : (
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+          {!readOnly && (
+            !confirmDelete ? (
               <CustomButton
-                title={deleting ? "Deleting..." : "Confirm Delete"}
-                onPress={handleDeleteExpense}
+                title="Delete Expense"
+                onPress={() => setConfirmDelete(true)}
                 variant="danger"
-                style={{ flex: 1 }}
-                disabled={deleting}
+                style={{ marginTop: 24 }}
+                disabled={deleting || settling}
               />
-              <CustomButton
-                title="Cancel"
-                onPress={() => setConfirmDelete(false)}
-                variant="outline"
-                style={{ flex: 1 }}
-                disabled={deleting}
-              />
-            </View>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+                <CustomButton
+                  title={deleting ? "Deleting..." : "Confirm Delete"}
+                  onPress={handleDeleteExpense}
+                  variant="danger"
+                  style={{ flex: 1 }}
+                  disabled={deleting}
+                />
+                <CustomButton
+                  title="Cancel"
+                  onPress={() => setConfirmDelete(false)}
+                  variant="outline"
+                  style={{ flex: 1 }}
+                  disabled={deleting}
+                />
+              </View>
+            )
           )}
         </View>
       </KeyboardAvoidingView>

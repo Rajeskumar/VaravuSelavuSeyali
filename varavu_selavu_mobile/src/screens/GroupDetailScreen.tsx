@@ -249,6 +249,7 @@ export default function GroupDetailScreen() {
     );
   }
 
+  const isArchived = detail.status === 'archived';
 
   const handleEditExpense = (expense: GroupExpenseRow) => {
     setEditingExpense(expense);
@@ -295,13 +296,15 @@ export default function GroupDetailScreen() {
           <Text style={styles.expenseTotal}>{formatCurrency(item.cost)}</Text>
           <Text style={styles.expenseShareText}>your share {formatCurrency(item.my_share)}</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => handleEditExpense(item)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={styles.expenseEditBtn}
-        >
-          <Ionicons name="pencil-outline" size={15} color={theme.colors.textTertiary} />
-        </TouchableOpacity>
+        {!isArchived && (
+          <TouchableOpacity
+            onPress={() => handleEditExpense(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.expenseEditBtn}
+          >
+            <Ionicons name="pencil-outline" size={15} color={theme.colors.textTertiary} />
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     );
   };
@@ -309,11 +312,11 @@ export default function GroupDetailScreen() {
   const renderBalance = ({ item }: { item: MemberBalance }) => (
     <TouchableOpacity
       onPress={() => {
-        if (item.net !== 0) {
+        if (item.net !== 0 && !isArchived) {
           handleSettleUp(item);
         }
       }}
-      activeOpacity={item.net !== 0 ? 0.7 : 1}
+      activeOpacity={item.net !== 0 && !isArchived ? 0.7 : 1}
     >
       <BalanceRow balance={item} isCurrentUser={item.member_id === myMember?.member_id} />
     </TouchableOpacity>
@@ -321,10 +324,11 @@ export default function GroupDetailScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: 0 }]}>
-      {detail.status === 'archived' && (
+      {isArchived && (
         <View style={[styles.banner, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}>
           <Text style={[styles.bannerText, { color: theme.colors.warning }]}>
-            This group is archived. You cannot add new expenses or members.
+            This group is archived — you can still view its history, but adding or editing
+            anything is locked. Unarchive from Settings to make changes.
           </Text>
         </View>
       )}
@@ -344,7 +348,14 @@ export default function GroupDetailScreen() {
           <Text style={styles.headerEmoji}>{GROUP_TYPE_EMOJI[detail.group_type] ?? '👥'}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerName} numberOfLines={1}>{detail.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.headerName} numberOfLines={1}>{detail.name}</Text>
+            {isArchived && (
+              <View style={[styles.archivedPill, { borderColor: theme.colors.warning }]}>
+                <Text style={[styles.archivedPillText, { color: theme.colors.warning }]}>Archived</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.headerMembers}>{members.length} member{members.length === 1 ? '' : 's'}</Text>
         </View>
         <View style={{ flexDirection: 'row' }}>
@@ -370,9 +381,17 @@ export default function GroupDetailScreen() {
           context) — it switches to this screen's own Balances tab instead, where the real
           Settle Up FAB already lives. */}
       <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.addExpenseBtn} onPress={() => openAddExpense(groupId)} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={[styles.addExpenseBtn, isArchived && styles.actionBtnDisabled]}
+          onPress={() => !isArchived && openAddExpense(groupId)}
+          disabled={isArchived}
+          activeOpacity={0.85}
+        >
           <Text style={styles.addExpenseBtnText}>＋ Add expense</Text>
         </TouchableOpacity>
+        {/* Pure navigation to the Balances tab (same destination as tapping the segmented tab
+            below) — stays enabled even when archived so browsing balances/history isn't
+            blocked; only the actual "Settle Up" mutating action inside that tab is disabled. */}
         <TouchableOpacity style={styles.settleUpLinkBtn} onPress={() => setActiveTab('balances')} activeOpacity={0.85}>
           <Text style={styles.settleUpLinkText}>Settle up →</Text>
         </TouchableOpacity>
@@ -477,17 +496,19 @@ export default function GroupDetailScreen() {
             )}
           />
           {/* Settle Up FAB */}
-          <TouchableOpacity
-            style={[styles.settleBtn, { bottom: insets.bottom + 16 }]}
-            onPress={() => {
-              setSettleFrom(null);
-              setSettleTo(null);
-              setSettleSuggested(0);
-              setSettleUpVisible(true);
-            }}
-          >
-            <Text style={styles.settleBtnText}>Settle Up</Text>
-          </TouchableOpacity>
+          {!isArchived && (
+            <TouchableOpacity
+              style={[styles.settleBtn, { bottom: insets.bottom + 16 }]}
+              onPress={() => {
+                setSettleFrom(null);
+                setSettleTo(null);
+                setSettleSuggested(0);
+                setSettleUpVisible(true);
+              }}
+            >
+              <Text style={styles.settleBtnText}>Settle Up</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -517,6 +538,7 @@ export default function GroupDetailScreen() {
         expense={selectedExpense}
         members={members}
         myMemberId={myMember?.member_id}
+        readOnly={isArchived}
         onSettled={() => {
           qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
           qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
@@ -610,6 +632,11 @@ const createStyles = (theme: AppTheme) =>
     headerEmoji: { fontSize: 22 },
     headerName: { fontFamily: 'Inter-Bold', fontSize: 17, color: theme.colors.text },
     headerMembers: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 1 },
+    archivedPill: {
+      borderWidth: 1, borderRadius: 999,
+      paddingHorizontal: 8, paddingVertical: 2,
+    },
+    archivedPillText: { fontFamily: 'Inter-SemiBold', fontSize: 10 },
     avatarStack: {
       width: 30, height: 30, borderRadius: 999,
       alignItems: 'center', justifyContent: 'center',
@@ -633,6 +660,7 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: 18, paddingVertical: 10,
     },
     addExpenseBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#FFFFFF' },
+    actionBtnDisabled: { opacity: 0.4 },
     settleUpLinkBtn: {
       borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
       borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10,

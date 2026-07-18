@@ -49,6 +49,7 @@ from varavu_selavu_service.api.groups_routes import (
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.balance_service import BalanceService
 from varavu_selavu_service.api.devices_routes import router as devices_router
+from varavu_selavu_service.api.entity_resolution_routes import router as entity_resolution_router
 from varavu_selavu_service.models.api_models import (
     RecurringTemplateDTO,
     UpsertRecurringTemplateRequest,
@@ -73,6 +74,7 @@ router.include_router(groups_router)
 router.include_router(friends_router)
 router.include_router(group_conversion_router)
 router.include_router(devices_router)
+router.include_router(entity_resolution_router)
 
 # Dependency providers
 def get_expense_service(db: Session = Depends(get_db)) -> ExpenseService:
@@ -120,7 +122,11 @@ def get_config():
     # Reads Settings() fresh (not the module-level `settings` singleton) so it
     # reflects the same runtime-toggleable value groups_routes.require_groups_enabled
     # checks — no auth required, this is non-sensitive app config, not user data.
-    return {"groups_enabled": Settings().GROUPS_ENABLED}
+    settings_now = Settings()
+    return {
+        "groups_enabled": settings_now.GROUPS_ENABLED,
+        "entity_resolution_enabled": settings_now.ENTITY_RESOLUTION_ENABLED,
+    }
 
 
 @router.post(

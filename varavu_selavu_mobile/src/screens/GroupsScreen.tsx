@@ -152,9 +152,16 @@ export default function GroupsScreen() {
           <Text style={styles.cardEmoji}>{emoji}</Text>
         </View>
         <View style={styles.cardBody}>
-          <Text style={styles.cardName} numberOfLines={1}>
-            {item.name}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.cardName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            {item.status === 'archived' && (
+              <View style={[styles.archivedPill, { borderColor: theme.colors.warning }]}>
+                <Text style={[styles.archivedPillText, { color: theme.colors.warning }]}>Archived</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.cardMeta}>
             {item.member_count} member{item.member_count !== 1 ? 's' : ''}
           </Text>
@@ -416,6 +423,16 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 13,
       color: theme.colors.textSecondary,
       marginTop: 2,
+    },
+    archivedPill: {
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 7,
+      paddingVertical: 1,
+    },
+    archivedPillText: {
+      fontFamily: 'Inter-SemiBold',
+      fontSize: 9,
     },
     cardRight: { alignItems: 'flex-end', marginRight: 8 },
     balanceAmount: { fontFamily: 'Inter-Bold', fontSize: 13, fontVariant: ['tabular-nums'] },

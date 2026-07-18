@@ -1,6 +1,9 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { AppTheme } from '../theme';
+import TypeaheadInput from './TypeaheadInput';
+import { suggestItems } from '../api/entityResolution';
+import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 
 export interface ScannedItem {
   line_no: number;
@@ -90,6 +93,11 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
 }) => {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [expanded, setExpanded] = useState(true);
+  const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
+  const fetchItemSuggestions = useCallback(
+    (q: string) => (entityResolutionEnabled ? suggestItems(q) : Promise.resolve([])),
+    [entityResolutionEnabled]
+  );
 
   const subtotal = items.reduce((s, it) => s + (Number(it.line_total) || 0), 0);
   const computedTotal = subtotal + tax - discount;
@@ -125,12 +133,14 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
           <ScrollView style={styles.itemsScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {items.map((item) => (
               <View key={item.line_no} style={styles.itemRow}>
-                <TextInput
-                  style={styles.itemNameInput}
+                <TypeaheadInput
+                  theme={theme}
                   value={item.item_name}
-                  onChangeText={(t) => updateItem(item.line_no, { item_name: t })}
+                  onChangeValue={(t) => updateItem(item.line_no, { item_name: t })}
+                  fetchSuggestions={fetchItemSuggestions}
                   placeholder="Item name"
-                  placeholderTextColor={theme.colors.textQuaternary}
+                  containerStyle={styles.itemNameInputWrap}
+                  inputStyle={styles.itemNameInput}
                 />
                 <View style={styles.priceWrap}>
                   <Text style={styles.dollarSign}>$</Text>
@@ -208,8 +218,8 @@ const createStyles = (theme: AppTheme) =>
     body: { paddingHorizontal: 12, paddingVertical: 10 },
     itemsScroll: { maxHeight: 170 },
     itemRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5 },
+    itemNameInputWrap: { flex: 1 },
     itemNameInput: {
-      flex: 1,
       fontFamily: 'Inter-Regular',
       fontSize: 13,
       color: theme.colors.text,

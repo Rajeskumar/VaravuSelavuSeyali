@@ -22,6 +22,7 @@ from varavu_selavu_service.db.models import (
     MerchantInsight,
     MerchantAggregate,
 )
+from varavu_selavu_service.services.entity_resolution_service import EntityResolutionService
 
 logger = logging.getLogger("varavu_selavu.insights_aggregation")
 
@@ -31,6 +32,12 @@ class InsightsAggregationService:
 
     def __init__(self, db: Session):
         self.db = db
+        # Dual-write only (TS-ENT-1xx foundation phase, spec §14.2): every
+        # insight write also resolves the raw name and sets the new
+        # canonical_*_id FK column alongside the existing string key. No read
+        # path uses these columns yet — that cutover is a later, separate
+        # change, gated on the reconciliation check passing.
+        self._resolver = EntityResolutionService(db)
 
     # ------------------------------------------------------------------
     # Public entry points
@@ -335,6 +342,8 @@ class InsightsAggregationService:
             if unit_price > float(insight.max_price or 0):
                 insight.max_price = Decimal(str(unit_price))
 
+        self._dual_write_canonical_item(insight, normalized_name, user_email)
+
         # Append to price history
         history = ItemPriceHistory(
             id=uuid.uuid4(),
@@ -387,6 +396,8 @@ class InsightsAggregationService:
             insight.total_spent = Decimal(str(float(insight.total_spent or 0) + amount))
             insight.transaction_count = (insight.transaction_count or 0) + count_delta
 
+        self._dual_write_canonical_merchant(insight, merchant_name, user_email)
+
         # Update monthly aggregate
         dt = purchased_at or datetime.utcnow()
         agg = (
@@ -412,3 +423,34 @@ class InsightsAggregationService:
         else:
             agg.total_spent = Decimal(str(float(agg.total_spent or 0) + amount))
             agg.transaction_count = (agg.transaction_count or 0) + count_delta
+
+    # ------------------------------------------------------------------
+    # Dual-write helpers (TS-ENT-1xx, spec §14.2)
+    # ------------------------------------------------------------------
+
+    def _dual_write_canonical_item(self, insight: ItemInsight, normalized_name: str, user_email: str) -> None:
+        try:
+            result = self._resolver.resolve(normalized_name, "item", user_email)
+        except Exception:
+            # Never let entity resolution break an insight write — the
+            # string-keyed side (still the only side any read path uses) must
+            # always succeed regardless of this best-effort FK population.
+            logger.exception(
+                "Entity resolution failed for item '%s' (user=%s); leaving canonical_item_id unset",
+                normalized_name, user_email,
+            )
+            return
+        if result.canonical is not None:
+            insight.canonical_item_id = uuid.UUID(result.canonical.id)
+
+    def _dual_write_canonical_merchant(self, insight: MerchantInsight, merchant_name: str, user_email: str) -> None:
+        try:
+            result = self._resolver.resolve(merchant_name, "merchant", user_email)
+        except Exception:
+            logger.exception(
+                "Entity resolution failed for merchant '%s' (user=%s); leaving canonical_merchant_id unset",
+                merchant_name, user_email,
+            )
+            return
+        if result.canonical is not None:
+            insight.canonical_merchant_id = uuid.UUID(result.canonical.id)

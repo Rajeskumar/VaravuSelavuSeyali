@@ -24,7 +24,6 @@ class PostgresRepo:
                 "user_email": expense.user_email,
                 "purchased_at": expense.purchased_at,
                 "merchant_name": expense.merchant_name,
-                "merchant_id": expense.merchant_id,
                 "category_id": expense.category_id,
                 "amount": float(expense.amount) if expense.amount else 0.0,
                 "currency": expense.currency,
@@ -45,8 +44,7 @@ class PostgresRepo:
         email = header.get("user_email")
         purchased_at = header.get("purchased_at")
         merchant_name = header.get("merchant_name")
-        merchant_id = header.get("merchant_id")
-        
+
         cat_id = header.get("category_name") or header.get("category_id") or "Uncategorized"
         
         amount = header.get("amount", 0.0)
@@ -75,7 +73,6 @@ class PostgresRepo:
             user_email=email,
             purchased_at=purchased_at,
             merchant_name=merchant_name,
-            merchant_id=merchant_id,
             category_id=cat_id,
             amount=amount,
             currency=currency,

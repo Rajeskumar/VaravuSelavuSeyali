@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     GROUPS_ENABLED: bool = False
     PUBLIC_APP_URL: str = "http://localhost:3000"
 
+    # Smart Entity Resolution (TS-ENT series) — same staged-rollout pattern as
+    # GROUPS_ENABLED. See docs/features/smart_entity/TrackSpense_Smart_Entity_Resolution_Spec.md.
+    ENTITY_RESOLUTION_ENABLED: bool = False
+
     # Push notifications (TS-GRP-110) — Expo Push Service, no FCM/APNs plumbing needed.
     EXPO_PUSH_URL: str = "https://exp.host/--/api/v2/push/send"
     EXPO_ACCESS_TOKEN: str = ""

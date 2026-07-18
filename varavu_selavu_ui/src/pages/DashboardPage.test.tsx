@@ -45,7 +45,7 @@ afterEach(() => {
 
 test('renders combined totals from the analysis payload', async () => {
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
-  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false });
   renderPage();
   // TS-DES-111: must fetch the current month specifically, not the whole year —
   // this is the exact assertion that would have caught the original bug (the
@@ -59,7 +59,7 @@ test('renders combined totals from the analysis payload', async () => {
 
 test('shows My Groups widget and the combined-totals explainer toast on first visit', async () => {
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
-  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true, entity_resolution_enabled: false });
   jest.spyOn(groupsApi, 'listGroups').mockResolvedValue([
     { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 12.5, status: 'active', archived_at: null, deleted_at: null },
   ]);
@@ -71,7 +71,7 @@ test('shows My Groups widget and the combined-totals explainer toast on first vi
 
 test('regression: with no groups (404), dashboard renders without the My Groups widget or toast', async () => {
   jest.spyOn(analysisApi, 'getAnalysis').mockResolvedValue(combinedPayload);
-  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false });
   renderPage();
   await waitFor(() => expect(screen.getAllByText('$500.00').length).toBeGreaterThan(0));
   expect(screen.queryByText('Apartment 4B')).not.toBeInTheDocument();
