@@ -24,6 +24,7 @@ import { useLogExpense } from '../../hooks/useLogExpense';
 import { useReceiptScan } from '../../hooks/useReceiptScan';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
 import EntityAutocomplete from './EntityAutocomplete';
+import CategoryPickerField from './CategoryPickerField';
 import PaidBySplitSummary from '../groups/PaidBySplitSummary';
 import { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
 import { computePayersValid } from '../groups/PayerPicker';
@@ -52,10 +53,15 @@ interface QuickCaptureSheetProps {
 /**
  * FAB / "+ New expense" target (TrackSpense v3 design) — the one fast expense-entry surface
  * across the app, replacing AddExpenseForm as a *creation* entry point everywhere (it stays for
- * editing — see ExpensesPage.tsx's row Edit-icon flow, untouched by this component). No category
- * picker: category comes from a scanned receipt when present, otherwise the existing
- * suggestCategory() call on save, falling back to a generic category so the payload is always
- * valid without asking the user to pick one here.
+ * editing — see ExpensesPage.tsx's row Edit-icon flow, untouched by this component).
+ *
+ * Category and merchant are both AI-suggested as the user types the description (debounced,
+ * mirroring AddExpenseScreen's mobile equivalent) and surfaced live via CategoryPickerField / the
+ * merchant EntityAutocomplete — previously these were silently resolved only at save time
+ * (category) or not resolved into the persisted expense at all (merchant, from suggestCategory's
+ * own response), so nothing the AI decided was ever visible or editable before it was persisted.
+ * `userPickedCategory`/`userPickedMerchant` stop the debounce from clobbering a receipt scan's
+ * values or the user's own manual pick once either has happened.
  *
  * Mobile renders a bottom sheet with a numeric keypad; desktop (`md`+) renders a centered dialog
  * with a plain amount field, per the two design mocks — same state/save logic underneath.
@@ -78,6 +84,10 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [scannedCategory, setScannedCategory] = React.useState<string | null>(null);
   const [scannedMerchant, setScannedMerchant] = React.useState<string | null>(null);
+  // Set once a value came from a receipt scan or the user's own edit — stops the debounced
+  // auto-suggest effect below from overwriting either with a lower-confidence guess afterward.
+  const [userPickedCategory, setUserPickedCategory] = React.useState(false);
+  const [userPickedMerchant, setUserPickedMerchant] = React.useState(false);
   const [scannedItems, setScannedItems] = React.useState<ScannedItem[]>([]);
   const [scannedTax, setScannedTax] = React.useState(0);
   const [scannedDiscount, setScannedDiscount] = React.useState(0);
@@ -103,9 +113,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       const merchant = hdr.merchant_name || hdr.merchant || '';
       const desc = hdr.description || (merchant ? `Receipt from ${merchant}` : '');
       if (desc) setDescription(desc);
-      if (merchant) setScannedMerchant(merchant);
+      if (merchant) {
+        setScannedMerchant(merchant);
+        setUserPickedMerchant(true);
+      }
       if (hdr.category_name && CATEGORY_GROUPS[hdr.main_category_name]?.includes(hdr.category_name)) {
         setScannedCategory(hdr.category_name);
+        setUserPickedCategory(true);
       }
       setScannedTax(Number(hdr.tax) || 0);
       setScannedDiscount(Number(hdr.discount) || 0);
@@ -136,6 +150,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setWho(initialGroupId || 'me');
     setScannedCategory(null);
     setScannedMerchant(null);
+    setUserPickedCategory(false);
+    setUserPickedMerchant(false);
     setScannedItems([]);
     setScannedTax(0);
     setScannedDiscount(0);
@@ -154,6 +170,32 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     if (open) reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Debounced AI category/merchant suggestion as the user types — mirrors AddExpenseScreen's
+  // mobile equivalent. Never overwrites a value that came from a receipt scan or the user's own
+  // edit (userPickedCategory/userPickedMerchant), and never fires while a receipt scan is being
+  // parsed (its onAutoParse result should win outright).
+  React.useEffect(() => {
+    if (!open || scan.parsing || scan.converting) return;
+    if (userPickedCategory && userPickedMerchant) return;
+    const desc = description.trim();
+    if (desc.length < 3) return;
+    const timer = setTimeout(() => {
+      suggestCategory(desc)
+        .then((res) => {
+          if (!userPickedCategory && res.subcategory && CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) {
+            setScannedCategory(res.subcategory);
+          }
+          if (!userPickedMerchant && res.merchant_name) {
+            setScannedMerchant(res.merchant_name);
+          }
+        })
+        .catch(() => {
+          /* keep whatever's shown; resolveCategory() still falls back at save time */
+        });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [open, description, userPickedCategory, userPickedMerchant, scan.parsing, scan.converting]);
 
   React.useEffect(() => {
     if (!open || !groupsEnabled) return;
@@ -217,7 +259,6 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, amountNum));
   const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, amountNum));
   const ready = amountNum > 0 && description.trim() !== '' && !saving && payersValid && splitValid;
-  const categoryPreview = scannedCategory ? `${findMainCategory(scannedCategory)} · ${scannedCategory}` : 'AI suggests on save';
 
   const resolveCategory = async (): Promise<string> => {
     if (scannedCategory) return scannedCategory;
@@ -458,18 +499,24 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
             <EntityAutocomplete
               value={scannedMerchant || ''}
-              onValueChange={(v) => setScannedMerchant(v || null)}
+              onValueChange={(v) => {
+                setScannedMerchant(v || null);
+                setUserPickedMerchant(true);
+              }}
               fetchSuggestions={fetchMerchantSuggestions}
               textFieldProps={{ fullWidth: true, size: 'small', placeholder: 'Merchant (optional)', sx: { mt: 1 } }}
             />
 
-            <Box sx={{ display: 'flex', gap: 1, mt: 1.25 }}>
-              <Box sx={{ bgcolor: 'primary.main', color: 'primary.contrastText', borderRadius: 999, px: 1.5, py: 0.5, fontSize: 12, fontWeight: 600 }}>
-                {categoryPreview} ✨
-              </Box>
-              <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 999, px: 1.5, py: 0.5, fontSize: 12, fontWeight: 600, color: 'text.secondary' }}>
-                Today
-              </Box>
+            <Box sx={{ mt: 1.25 }}>
+              <CategoryPickerField
+                mainCategory={scannedCategory ? findMainCategory(scannedCategory) : ''}
+                subcategory={scannedCategory || ''}
+                onChange={(_main, sub) => {
+                  setScannedCategory(sub);
+                  setUserPickedCategory(true);
+                }}
+                label="Category ✨"
+              />
             </Box>
 
             {scannedItems.length > 0 && (
@@ -556,10 +603,25 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
           <EntityAutocomplete
             value={scannedMerchant || ''}
-            onValueChange={(v) => setScannedMerchant(v || null)}
+            onValueChange={(v) => {
+              setScannedMerchant(v || null);
+              setUserPickedMerchant(true);
+            }}
             fetchSuggestions={fetchMerchantSuggestions}
             textFieldProps={{ fullWidth: true, size: 'small', placeholder: 'Merchant (optional)', sx: { mt: 1 } }}
           />
+
+          <Box sx={{ mt: 1 }}>
+            <CategoryPickerField
+              mainCategory={scannedCategory ? findMainCategory(scannedCategory) : ''}
+              subcategory={scannedCategory || ''}
+              onChange={(_main, sub) => {
+                setScannedCategory(sub);
+                setUserPickedCategory(true);
+              }}
+              label="Category ✨"
+            />
+          </Box>
 
           {scannedItems.length > 0 && (
             <ScannedItemsCard

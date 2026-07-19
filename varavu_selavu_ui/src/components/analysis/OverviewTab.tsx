@@ -17,7 +17,7 @@ import { TrendNavigator } from './TrendNavigator';
 import { WhatChangedRail } from './WhatChangedRail';
 import { CategorySpectrum } from './CategorySpectrum';
 import { AskSheet } from './AskSheet';
-import CategoryTreemap from './CategoryTreemap';
+import MoneyFlowSankey from './MoneyFlowSankey';
 
 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -109,7 +109,7 @@ const OverviewTab: React.FC = () => {
   };
 
   const isYearMode = periodMode === 'year';
-  // The active period's data — CategorySpectrum/CategoryTreemap/the empty-state check all read
+  // The active period's data — CategorySpectrum/MoneyFlowSankey/the empty-state check all read
   // from whichever of these is "the period" right now, so the year toggle only has to swap one
   // reference rather than thread a condition through every consumer.
   const periodData = isYearMode ? yearData : monthData;
@@ -161,7 +161,7 @@ const OverviewTab: React.FC = () => {
         />
 
         <Box sx={{ mt: 4, mb: 4 }}>
-          <CategoryTreemap
+          <MoneyFlowSankey
             totalExpenses={periodData.total_expenses}
             categoryTotals={periodData.category_totals}
             details={periodData.category_expense_details || {}}
