@@ -14,8 +14,11 @@
  * `ExpensesScreen.tsx`'s own inline modal — so nothing is lost for *editing*; only the *creation*
  * flow's power-user controls (multi-payer, itemized splits, currency override, explicit category
  * picker, custom date) are gone, the same trade-off already accepted for the web app's own Quick
- * Capture. Category is still set — via the existing debounced `categorizeExpense()` call, just
- * with no visible picker, matching the mock (which has no category UI either).
+ * Capture. Category (and merchant) are AI-suggested via the existing debounced
+ * `categorizeExpense()` call and now surfaced live via CategoryPickerField / the merchant
+ * TypeaheadInput — previously these were silently resolved but never shown or editable before
+ * being persisted. `userPickedCategory`/`userPickedMerchant` stop the debounce from clobbering a
+ * receipt scan's values or the user's own manual pick once either has happened.
  */
 import React, { useState, useRef, useCallback, createContext, useMemo } from 'react';
 import {
@@ -36,6 +39,7 @@ import { AppTheme } from '../theme';
 import { showToast } from '../components/Toast';
 import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
 import TypeaheadInput from '../components/TypeaheadInput';
+import CategoryPickerField from '../components/CategoryPickerField';
 import { suggestMerchants } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 import PaidBySplitSummary from '../components/PaidBySplitSummary';
@@ -94,6 +98,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [merchantName, setMerchantName] = useState('');
   const [mainCategory, setMainCategory] = useState('');
   const [subcategory, setSubcategory] = useState('');
+  // Set once a value came from a receipt scan or the user's own edit — stops the debounced
+  // auto-suggest in handleDescChange from overwriting either with a lower-confidence guess after.
+  const [userPickedCategory, setUserPickedCategory] = useState(false);
+  const [userPickedMerchant, setUserPickedMerchant] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -130,6 +138,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setMerchantName('');
     setMainCategory('');
     setSubcategory('');
+    setUserPickedCategory(false);
+    setUserPickedMerchant(false);
     setRecurring(false);
     setWho(initialWho);
     setScannedItems([]);
@@ -168,13 +178,15 @@ export default function AddExpenseProvider({ children }: { children: React.React
       debounceRef.current = setTimeout(async () => {
         try {
           const result = await categorizeExpense(text.trim());
-          if (result.main_category) setMainCategory(result.main_category);
-          if (result.subcategory) setSubcategory(result.subcategory);
-          if (result.merchant_name) setMerchantName(result.merchant_name);
+          if (!userPickedCategory) {
+            if (result.main_category) setMainCategory(result.main_category);
+            if (result.subcategory) setSubcategory(result.subcategory);
+          }
+          if (!userPickedMerchant && result.merchant_name) setMerchantName(result.merchant_name);
         } catch { /* best-effort — falls back to defaults at save time */ }
       }, 800);
     }
-  }, []);
+  }, [userPickedCategory, userPickedMerchant]);
 
   const capPress = (k: string) => {
     setAmt((prev) => {
@@ -195,9 +207,15 @@ export default function AddExpenseProvider({ children }: { children: React.React
     const merchant = hdr.merchant_name || hdr.merchant || '';
     const description = hdr.description || (merchant ? `Receipt from ${merchant}` : '');
     if (description) setDesc(description);
-    if (merchant) setMerchantName(merchant);
+    if (merchant) {
+      setMerchantName(merchant);
+      setUserPickedMerchant(true);
+    }
     if (hdr.main_category_name) setMainCategory(hdr.main_category_name);
-    if (hdr.category_name) setSubcategory(hdr.category_name);
+    if (hdr.category_name) {
+      setSubcategory(hdr.category_name);
+      setUserPickedCategory(true);
+    }
     setScannedTax(Number(hdr.tax) || 0);
     setScannedDiscount(Number(hdr.discount) || 0);
     setScannedPurchasedAt(hdr.purchased_at || null);
@@ -543,11 +561,27 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   <TypeaheadInput
                     theme={theme}
                     value={merchantName}
-                    onChangeValue={setMerchantName}
+                    onChangeValue={(v) => {
+                      setMerchantName(v);
+                      setUserPickedMerchant(true);
+                    }}
                     fetchSuggestions={fetchMerchantSuggestions}
                     placeholder="Merchant (optional)"
                     containerStyle={styles.merchantInputWrap}
                     inputStyle={styles.merchantInput}
+                  />
+
+                  <CategoryPickerField
+                    theme={theme}
+                    mainCategory={mainCategory}
+                    subcategory={subcategory}
+                    onChange={(main, sub) => {
+                      setMainCategory(main);
+                      setSubcategory(sub);
+                      setUserPickedCategory(true);
+                    }}
+                    label="Category ✨"
+                    containerStyle={styles.categoryFieldWrap}
                   />
 
                   {groupsEnabled && myGroups.length > 0 && (
@@ -715,6 +749,8 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter-Regular', fontSize: 13.5,
       color: theme.colors.text,
     },
+
+    categoryFieldWrap: { marginTop: 8 },
 
     whoRow: { gap: 6, marginTop: 10, paddingRight: 4 },
     whoChip: {
