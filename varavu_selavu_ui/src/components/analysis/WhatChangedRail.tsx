@@ -39,7 +39,7 @@ export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, 
   if (insights.length === 0) {
     return (
       <Box sx={{ px: 2, pb: 2 }}>
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 12, color: 'text.secondary' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 12, color: 'text.secondary' }}>
           No significant changes detected for this period.
         </Typography>
       </Box>
@@ -85,11 +85,11 @@ export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, 
               )
             )}
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontFamily: 'Inter', fontSize: 13, fontWeight: 600, color: 'text.primary', lineHeight: 1.3 }}>
+              <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, fontWeight: 600, color: 'text.primary', lineHeight: 1.3 }}>
                 {headline}
               </Typography>
               {sub && (
-                <Typography sx={{ fontFamily: 'Inter', fontSize: 11, color: 'text.secondary', mt: 0.25 }}>
+                <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 11, color: 'text.secondary', mt: 0.25 }}>
                   {sub}
                 </Typography>
               )}
@@ -99,7 +99,7 @@ export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, 
               onClick={() => onAsk(insight)}
               sx={{
                 flexShrink: 0,
-                fontFamily: 'Inter',
+                fontFamily: 'Instrument Sans',
                 fontSize: 12,
                 fontWeight: 600,
                 color: theme.palette.primary.main,

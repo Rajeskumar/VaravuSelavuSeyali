@@ -115,20 +115,20 @@ const createStyles = (theme: AppTheme) =>
       gap: 12,
     },
     loadingText: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 16,
       color: theme.colors.textSecondary,
       marginTop: 12,
     },
     icon: { fontSize: 64, textAlign: 'center' },
     title: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 24,
       color: theme.colors.text,
       textAlign: 'center',
     },
     subtitle: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 15,
       color: theme.colors.textSecondary,
       textAlign: 'center',
@@ -140,5 +140,5 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: 32,
       marginTop: 8,
     },
-    btnText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 16 },
+    btnText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
   });

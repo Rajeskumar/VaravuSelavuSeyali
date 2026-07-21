@@ -93,7 +93,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
       }}
     >
       <Box sx={{ px: 3, pt: 2, pb: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
           Ask
         </Typography>
         <IconButton onClick={onClose} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
@@ -115,7 +115,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
                 borderBottomLeftRadius: m.role === 'assistant' ? 1 : 3,
                 px: 2,
                 py: 1.5,
-                fontFamily: 'Inter',
+                fontFamily: 'Instrument Sans',
                 fontSize: 14,
                 lineHeight: 1.5,
                 whiteSpace: 'pre-wrap'
@@ -141,7 +141,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
               }}
             >
               <CircularProgress size={16} />
-              <Typography sx={{ fontFamily: 'Inter', fontSize: 14, color: 'text.secondary' }}>
+              <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 14, color: 'text.secondary' }}>
                 Thinking...
               </Typography>
             </Box>
@@ -161,7 +161,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 999,
-              fontFamily: 'Inter',
+              fontFamily: 'Instrument Sans',
               fontSize: 14,
               backgroundColor: 'background.paper',
             }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import { MemberDTO, GroupExpenseItemEntry, SplitSuggestionDTO, suggestItemAssignment } from '../api/groups';
 import { memberColor } from './BalanceRow';
 
@@ -207,14 +207,14 @@ const createStyles = (theme: AppTheme) =>
       marginBottom: 12,
     },
     itemName: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 16,
       color: theme.colors.text,
       flex: 1,
       marginRight: 8,
     },
     itemTotal: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 16,
       color: theme.colors.text,
     },
@@ -244,19 +244,20 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: 'center',
       marginRight: 6,
     },
+    // memberColor() avatar palette is fixed pastel in both modes — ink text always.
     avatarText: {
-      color: '#fff',
-      fontFamily: 'Inter-Bold',
+      color: inkOnPastel,
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 10,
     },
     memberChipText: {
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 13,
       color: theme.colors.textSecondary,
     },
     memberChipTextSelected: {
       color: theme.colors.text,
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
     },
     ratioSection: {
       marginTop: 12,
@@ -265,7 +266,7 @@ const createStyles = (theme: AppTheme) =>
       borderTopColor: theme.colors.borderLight,
     },
     ratioLabel: {
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 12,
       color: theme.colors.textTertiary,
       marginBottom: 8,
@@ -284,7 +285,7 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: 8,
     },
     ratioMemberName: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       color: theme.colors.text,
       marginRight: 8,
@@ -298,7 +299,7 @@ const createStyles = (theme: AppTheme) =>
       width: 48,
       height: 28,
       textAlign: 'center',
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 13,
       padding: 0,
       color: theme.colors.text,
@@ -312,20 +313,20 @@ const createStyles = (theme: AppTheme) =>
       marginBottom: 8,
     },
     suggestionChipText: {
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 12,
       color: theme.colors.primary,
     },
     errorText: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 12,
       color: theme.colors.error,
       marginTop: 8,
     },
     successText: {
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 13,
-      color: theme.colors.success || '#34C759',
+      color: theme.colors.success,
       textAlign: 'center',
       marginTop: 4,
     },

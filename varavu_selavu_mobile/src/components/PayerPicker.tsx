@@ -121,7 +121,7 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: { marginTop: 8, marginBottom: 8 },
     label: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 14,
       color: theme.colors.textSecondary,
       marginBottom: 8,
@@ -145,10 +145,10 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: 'center',
       marginRight: 10,
     },
-    avatarText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 14 },
+    avatarText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 14 },
     memberName: {
       flex: 1,
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 15,
       color: theme.colors.text,
     },
@@ -162,7 +162,7 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.background,
     },
     currencySymbol: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 14,
       color: theme.colors.textSecondary,
       marginRight: 4,
@@ -171,20 +171,20 @@ const createStyles = (theme: AppTheme) =>
       paddingVertical: 6,
       minWidth: 60,
       textAlign: 'right',
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 14,
       color: theme.colors.text,
     },
     warning: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       color: theme.colors.error,
       marginTop: 8,
     },
     success: {
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 13,
-      color: theme.colors.success || '#34C759',
+      color: theme.colors.success,
       marginTop: 8,
     },
   });

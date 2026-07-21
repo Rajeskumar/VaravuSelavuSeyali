@@ -1,58 +1,110 @@
 import { createTheme, PaletteMode, Theme } from '@mui/material/styles';
 
 /**
- * "Slate" — TrackSpense's Redesign v2 design language (docs/design/Redesign_Proposal_v2.md §1,
- * TS-DES-201). A neutral canvas/surface/border system with one indigo-slate brand accent and
- * dedicated, distinct semantic colors for positive/negative/caution. Unlike the prior "Reconcile"
- * palette (TS-DES-101), brand and semantic-positive are deliberately NOT the same hue here — a
- * user who can't distinguish hue (colorblind) could previously not tell "this is a branded
- * control" from "this number is good news" apart; `accent` and `positive` now carry those two
- * meanings separately. Hex values confirmed identical across every `docs/design/prototypes/v2/**`
- * reference file's own `colors`/`LIGHT`/`DARK` constant.
+ * "CerebroOS" design language — violet→cyan gradient brand, light + dark modes. The source
+ * Claude Design project only specified a dark canvas (ink bg, pastel violet/cyan accents); the
+ * light palette below is this app's own extension, built to the same brand hues but re-tuned for
+ * contrast on a white canvas (accents darkened via oklch lightness reduction, money-signal colors
+ * reused from the pre-CerebroOS "Slate" light values which were already contrast-checked against
+ * white). Follows the original Slate naming convention: bare key = light (default), `*Dark` = dark.
+ * Gradient/glow tokens are mode-independent — the gradient CTA is a self-contained brand chip
+ * (fixed violet→cyan fill + ink text) that reads the same regardless of page canvas, so it's not
+ * duplicated per mode. Gradient/box-shadow strings are kept as real CSS `oklch()` (native browser
+ * support); MUI's color manipulator and this file's `withAlpha()` only understand hex/rgb, so
+ * anywhere a token feeds palette.primary.main, a Chip tint, etc., use the `*Hex` variant.
  */
-export const slate = {
-  ink: '#18181B',
-  inkDark: '#FAFAFA', // dark-mode "ink" (primary text-on-dark) — matches prototypes' DARK.ink exactly
-  // Darkened one notch from the prototypes' literal #71717A (zinc-500): that value fails WCAG AA
-  // (4.19:1) against the Expenses sticky-header tint (#EFEFEA) and the segmented-tab pill
-  // background, both of which sit atop the canvas rather than pure white. #686870 clears 4.5:1
-  // against every secondary-text background in the app (4.79:1 on #EFEFEA, 5.52:1 on white) while
-  // reading as the same "muted gray" — dark mode's inkMutedDark was already comfortably passing
-  // (6.9–7.8:1) and is unchanged.
-  inkMuted: '#686870',
-  inkMutedDark: '#A1A1AA',
-  canvas: '#FAFAFA',
-  canvasDark: '#09090B',
-  surface: '#FFFFFF',
-  surfaceDark: '#18181B',
-  border: '#E4E4E7',
-  borderDark: '#27272A',
-  accent: '#3F3F9E',
-  accentDark: '#6D6DC7',
+export const cerebro = {
+  // Light mode
+  ink: '#FAFAFA',
+  textPrimary: '#101218',
+  textSecondary: '#5B6172',
+  textMuted: '#8B909E',
+  surfaceBg: '#FFFFFF',
+  surfaceBorder: 'rgba(0,0,0,0.08)',
+  surfaceBorderStrong: 'rgba(0,0,0,0.15)',
+  violetAccentHex: '#5E48C8',
+  cyanAccentHex: '#00787A',
   positive: '#15803D',
-  positiveDark: '#4ADE80',
   negative: '#B91C1C',
-  negativeDark: '#F87171',
   caution: '#B45309',
+
+  // Dark mode
+  inkDark: '#05060a',
+  textPrimaryDark: '#f0f1f5',
+  textSecondaryDark: '#9aa0af',
+  textMutedDark: '#6b7080',
+  surfaceBgDark: 'rgba(255,255,255,0.03)',
+  surfaceBorderDark: 'rgba(255,255,255,0.1)',
+  surfaceBorderStrongDark: 'rgba(255,255,255,0.15)',
+  violetAccentHexDark: '#9C93FF',
+  cyanAccentHexDark: '#00D2D3',
+  positiveDark: '#4ADE80',
+  negativeDark: '#F87171',
   cautionDark: '#FBBF24',
-  radius: { surface: 10, control: 8, pill: 999 },
+
+  // Mode-independent — brand gradient stops, glow, radii
+  violet: 'oklch(0.78 0.17 285)',
+  violetHex: '#AEA5FF',
+  violetAccent: 'oklch(0.72 0.16 285)',
+  cyan: 'oklch(0.82 0.14 195)',
+  cyanHex: '#00E0E0',
+  cyanAccent: 'oklch(0.78 0.14 195)',
+  glowShadow: '0 0 40px oklch(0.65 0.2 285 / 0.45)',
+  glowHex: '#8776FF',
+  surfaceTinted: 'linear-gradient(160deg, oklch(0.3 0.1 285 / 0.5), rgba(10,11,16,0.7))',
+  radius: { surface: 16, control: 12, pill: 999 },
+} as const;
+
+/** Resolves a mode-suffixed token pair — `cerebroTokens('dark').textPrimary` etc. — for call
+ * sites that need the flat hex/rgb value directly rather than going through MUI's `Theme`
+ * object (charts, inline SVG, non-MUI components). */
+export function cerebroTokens(mode: PaletteMode) {
+  const isDark = mode === 'dark';
+  return {
+    ink: isDark ? cerebro.inkDark : cerebro.ink,
+    textPrimary: isDark ? cerebro.textPrimaryDark : cerebro.textPrimary,
+    textSecondary: isDark ? cerebro.textSecondaryDark : cerebro.textSecondary,
+    textMuted: isDark ? cerebro.textMutedDark : cerebro.textMuted,
+    surfaceBg: isDark ? cerebro.surfaceBgDark : cerebro.surfaceBg,
+    surfaceBorder: isDark ? cerebro.surfaceBorderDark : cerebro.surfaceBorder,
+    surfaceBorderStrong: isDark ? cerebro.surfaceBorderStrongDark : cerebro.surfaceBorderStrong,
+    violetAccentHex: isDark ? cerebro.violetAccentHexDark : cerebro.violetAccentHex,
+    cyanAccentHex: isDark ? cerebro.cyanAccentHexDark : cerebro.cyanAccentHex,
+    positive: isDark ? cerebro.positiveDark : cerebro.positive,
+    negative: isDark ? cerebro.negativeDark : cerebro.negative,
+    caution: isDark ? cerebro.cautionDark : cerebro.caution,
+  };
+}
+
+/** Primary CTA: violet→cyan gradient fill + glow shadow. Ink text (not white) per the source design system's "Primary · gradient" spec — mode-independent, see file header. */
+export const gradientCta = {
+  backgroundImage: `linear-gradient(120deg, ${cerebro.violet}, ${cerebro.cyan})`,
+  color: cerebro.inkDark,
+  boxShadow: cerebro.glowShadow,
 } as const;
 
 /**
- * Back-compat shim: every pre-existing gradient consumer (App.tsx, HomePage.tsx, LoginPage.tsx,
- * GroupsPage.tsx) builds its own `linear-gradient(135deg, brand.gradientStart, brand.gradientEnd)`
- * inline. Both stops resolve to the same flat `accent` (brand's dedicated hue under Slate), so
- * every existing gradient call site renders as a flat brand-colored fill with zero call-site
- * changes — same shim strategy TS-DES-101 established, just repointed at the new brand hue.
+ * "Primary · light" button treatment — the design system's second filled button, meant to
+ * contrast against the gradient CTA. On the dark canvas that's a near-white fill (`#f0f1f5` bg +
+ * ink text, the source spec's literal values); a near-white fill on a white/light canvas would
+ * have no contrast, so light mode flips it to a near-ink fill + white text instead — same "the
+ * other solid button" role, adapted per canvas. Mode-aware function (not a static export) since
+ * the fill flips by mode.
  */
-export const brand = {
-  gradientStart: slate.accent,
-  gradientEnd: slate.accent,
-  gradientStartDark: slate.accentDark,
-  gradientEndDark: slate.accentDark,
-};
+export function primaryLightSx(mode: PaletteMode) {
+  const isDark = mode === 'dark';
+  const bg = isDark ? cerebro.textPrimaryDark : cerebro.textPrimary;
+  const fg = isDark ? cerebro.inkDark : cerebro.ink;
+  return {
+    color: fg,
+    backgroundColor: bg,
+    backgroundImage: 'none',
+    boxShadow: 'none',
+    '&:hover': { backgroundColor: bg, filter: isDark ? 'brightness(0.94)' : 'brightness(1.15)' },
+  } as const;
+}
 
-/** Restrained motion cadence (Design Spec §5, unchanged by the Slate pivot): 150ms fades/slides, no bounce. */
+/** Restrained motion cadence: 150ms fades/slides, no bounce. Scroll-reveal (see ScrollReveal.tsx) uses its own slower 0.8s/stagger cadence per the CerebroOS motion spec. */
 export const motion = {
   easing: [0.16, 1, 0.3, 1] as const,
   easingCss: 'cubic-bezier(0.16, 1, 0.3, 1)',
@@ -70,41 +122,41 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /**
- * Money-color policy (carried from Design Spec §2, values repointed to Slate): `ink` is the
- * default for every neutral amount. `positive`/`negative` are reserved for signed, directional
- * amounts (owed-to-you / you-owe, over/under budget) and must always be paired with a sign and a
- * word — never color alone (a11y floor). Components rendering a directional balance should call
- * this instead of reaching for `success`/`error` ad hoc, so the "ink unless directional" rule is
- * encoded once, not re-decided per component.
+ * Money-color policy: `text.primary` is the default for every neutral amount. `positive`/
+ * `negative` are reserved for signed, directional amounts (owed-to-you / you-owe, over/under
+ * budget) and must always be paired with a sign and a word — never color alone (a11y floor).
+ * CerebroOS's source design system doesn't define directional colors (it's a marketing
+ * template) — dark values reuse Slate's dark-mode values verbatim (already contrast-checked
+ * against a near-black canvas), light values reuse Slate's light-mode values likewise.
  */
 export function directionalColor(theme: Theme, net: number): string {
-  const isDark = theme.palette.mode === 'dark';
-  if (net > 0) return isDark ? slate.positiveDark : slate.positive;
-  if (net < 0) return isDark ? slate.negativeDark : slate.negative;
-  return theme.palette.text.secondary;
+  const t = cerebroTokens(theme.palette.mode);
+  if (net > 0) return t.positive;
+  if (net < 0) return t.negative;
+  return t.textSecondary;
 }
 
-const displayFontFamily = "'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif";
-const bodyFontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const displayFontFamily = "'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif";
+const bodyFontFamily = "'Instrument Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const monoFontFamily = "'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, monospace";
 
 /** Apply to any element rendering a money figure — enforces Design Spec §3's tabular-numeral rule. */
 export const tabularNums = { fontVariantNumeric: 'tabular-nums' } as const;
 
 /**
- * Numeral-first type roles (Design Spec §3), exported as reusable `sx` fragments rather than MUI
- * typography variants — components opt in explicitly (`sx={typeScale.amount}`) instead of every
- * `variant="h1"` silently picking up the display face. Unaffected by the Slate token swap — this
- * is layout/type policy, not color.
+ * Numeral-first type roles, exported as reusable `sx` fragments rather than MUI typography
+ * variants — components opt in explicitly (`sx={typeScale.amount}`) instead of every
+ * `variant="h1"` silently picking up the display face. `eyebrow` is net-new for CerebroOS:
+ * the mono uppercase section-label role used throughout the source design system
+ * ("01 / FEATURES", status badges).
  */
 export const typeScale = {
   displayHero: {
     fontFamily: displayFontFamily,
-    fontWeight: 600,
+    fontWeight: 700,
     fontSize: '3rem', // 48px, within the spec's 44–56px hero range
-    // 1.05 was tight enough that Space Grotesk's cap-height clipped at the top edge
-    // of its own line box in some renders (reported as "the total amount is cut off
-    // at the top"); 1.2 gives the glyph room without meaningfully loosening the look.
     lineHeight: 1.2,
+    letterSpacing: '-0.03em',
     ...tabularNums,
   },
   display: {
@@ -112,6 +164,7 @@ export const typeScale = {
     fontWeight: 600,
     fontSize: '2rem', // 32px
     lineHeight: 1.1,
+    letterSpacing: '-0.02em',
     ...tabularNums,
   },
   amount: {
@@ -127,35 +180,33 @@ export const typeScale = {
     letterSpacing: '0.06em',
     textTransform: 'uppercase',
   },
+  eyebrow: {
+    fontFamily: monoFontFamily,
+    fontWeight: 500,
+    fontSize: '0.75rem', // 12px
+    letterSpacing: '0.14em',
+    textTransform: 'uppercase',
+  },
 } as const;
 
-export function getTheme(mode: PaletteMode): Theme {
+export function getTheme(mode: PaletteMode = 'dark'): Theme {
   const isDark = mode === 'dark';
-
-  const primaryMain = isDark ? slate.accentDark : slate.accent;
-  const secondaryMain = isDark ? slate.canvas : slate.ink;
-  const hairlineColor = isDark ? slate.borderDark : slate.border;
-  const surfaceColor = isDark ? slate.surfaceDark : slate.surface;
-
-  const backgroundDefault = isDark ? slate.canvasDark : slate.canvas;
-  const backgroundPaper = surfaceColor;
-
-  const textPrimary = isDark ? slate.inkDark : slate.ink;
-  const textSecondary = isDark ? slate.inkMutedDark : slate.inkMuted;
+  const t = cerebroTokens(mode);
+  const primaryMain = t.violetAccentHex;
 
   return createTheme({
     palette: {
       mode,
       primary: { main: primaryMain },
-      secondary: { main: secondaryMain },
-      background: { default: backgroundDefault, paper: backgroundPaper },
-      success: { main: isDark ? slate.positiveDark : slate.positive },
-      error: { main: isDark ? slate.negativeDark : slate.negative },
-      warning: { main: isDark ? slate.cautionDark : slate.caution },
-      text: { primary: textPrimary, secondary: textSecondary },
-      divider: hairlineColor,
+      secondary: { main: t.cyanAccentHex },
+      background: { default: t.ink, paper: t.surfaceBg },
+      success: { main: t.positive },
+      error: { main: t.negative },
+      warning: { main: t.caution },
+      text: { primary: t.textPrimary, secondary: t.textSecondary },
+      divider: t.surfaceBorder,
     },
-    shape: { borderRadius: slate.radius.surface },
+    shape: { borderRadius: cerebro.radius.surface },
     typography: {
       fontFamily: bodyFontFamily,
       fontSize: 15,
@@ -177,23 +228,9 @@ export function getTheme(mode: PaletteMode): Theme {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          // Flat neutral canvas — no radial/linear wash. Slate spends its one signature
-          // color (accent) on interaction and state, not on ambient page decoration.
           body: {
-            backgroundColor: backgroundDefault,
+            backgroundColor: t.ink,
           },
-          // App-wide keyboard focus ring. Previously there was exactly one `:focus-visible` rule
-          // in the whole app (a single component class) and every MuiButton computed
-          // `outline: none` with no replacement ring, so keyboard users had no visible focus
-          // indicator on nav items, buttons, list rows, or tabs. One token-based rule here covers
-          // every interactive element instead of each component defining its own. `:focus-visible`
-          // (not `:focus`) so mouse/touch clicks don't show a ring, only keyboard/AT navigation.
-          // `!important` is required: MUI's own `.MuiButtonBase-root` base style sets
-          // `outline: 0` at the same specificity tier (one class vs. one pseudo-class) — without
-          // `!important`, whichever rule's <style> tag happens to be injected later wins the
-          // cascade, which verified to be MUI's own reset on ButtonBase-derived components
-          // (nav items, IconButtons, ToggleButtons), silently swallowing the ring on exactly the
-          // controls this fix exists for.
           '*:focus-visible': {
             outline: `2px solid ${primaryMain} !important`,
             outlineOffset: '2px !important',
@@ -203,17 +240,17 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiPaper: {
         styleOverrides: {
           root: {
-            backgroundColor: surfaceColor,
+            backgroundColor: t.surfaceBg,
             backgroundImage: 'none',
-            border: `1px solid ${hairlineColor}`,
+            border: `1px solid ${t.surfaceBorder}`,
           },
         },
       },
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: slate.radius.surface,
-            border: `1px solid ${hairlineColor}`,
+            borderRadius: cerebro.radius.surface,
+            border: `1px solid ${t.surfaceBorder}`,
             boxShadow: 'none',
             transition: `border-color ${motion.fast}s ${motion.easingCss}`,
           },
@@ -221,13 +258,9 @@ export function getTheme(mode: PaletteMode): Theme {
       },
       MuiButton: {
         styleOverrides: {
-          // Sleek/compact pass: MUI's own default sizing (large horizontal padding, a
-          // ~52px sizeLarge height) read as oversized against the rest of the Slate
-          // system's small type scale — buttons are now sized closer to the reference
-          // prototypes' ~34-40px controls at every size, not just the lens/chip controls.
           root: {
             textTransform: 'none',
-            borderRadius: slate.radius.control,
+            borderRadius: cerebro.radius.control,
             paddingLeft: 14,
             paddingRight: 14,
             paddingTop: 6,
@@ -241,15 +274,25 @@ export function getTheme(mode: PaletteMode): Theme {
             '&:active': { transform: 'scale(0.98)' },
           },
           containedPrimary: {
-            backgroundColor: primaryMain,
-            backgroundImage: 'none',
-            '&:hover': { backgroundColor: primaryMain, filter: 'brightness(1.08)' },
+            ...gradientCta,
+            backgroundColor: 'transparent',
+            '&:hover': { ...gradientCta, filter: 'brightness(1.08)' },
             // Primary CTAs (Add Expense, Create Group, Settle Up, …) are the controls tapped most
             // often — the default 34px root height fell short of the 44×44 touch-target minimum.
-            // Scoped to containedPrimary (not the base `root`) so secondary/tertiary buttons and
-            // explicit `size="small"` primary buttons keep the compact sizing the rest of the
-            // "sleek/compact pass" intentionally uses.
             minHeight: 44,
+          },
+          outlined: {
+            borderColor: t.surfaceBorderStrong,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+            color: t.textPrimary,
+            '&:hover': {
+              borderColor: t.surfaceBorderStrong,
+              backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)',
+            },
+          },
+          text: {
+            color: t.textSecondary,
+            '&:hover': { color: t.textPrimary, backgroundColor: 'transparent' },
           },
           sizeSmall: {
             minHeight: 28,
@@ -264,45 +307,56 @@ export function getTheme(mode: PaletteMode): Theme {
             fontSize: '0.875rem',
             // Large/CTA buttons read as pill, matching the reference prototypes; ordinary
             // default-size buttons stay at the control radius.
-            borderRadius: slate.radius.pill,
+            borderRadius: cerebro.radius.pill,
+          },
+        },
+      },
+      MuiFab: {
+        styleOverrides: {
+          primary: {
+            ...gradientCta,
+            backgroundColor: 'transparent',
+            '&:hover': { ...gradientCta, filter: 'brightness(1.08)' },
           },
         },
       },
       MuiOutlinedInput: {
         styleOverrides: {
-          root: { borderRadius: slate.radius.control },
+          root: { borderRadius: cerebro.radius.control },
         },
       },
       MuiFilledInput: {
         styleOverrides: {
-          root: { borderRadius: slate.radius.control },
+          root: { borderRadius: cerebro.radius.control },
         },
       },
       MuiAppBar: {
         styleOverrides: {
           root: {
-            background: surfaceColor,
-            color: textPrimary,
+            background: t.surfaceBg,
+            backgroundImage: 'none',
+            color: t.textPrimary,
             boxShadow: 'none',
-            borderBottom: `1px solid ${hairlineColor}`,
+            borderBottom: `1px solid ${t.surfaceBorder}`,
           },
         },
       },
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            background: surfaceColor,
-            color: textPrimary,
-            borderRight: `1px solid ${hairlineColor}`,
+            background: t.ink,
+            backgroundImage: 'none',
+            color: t.textPrimary,
+            borderRight: `1px solid ${t.surfaceBorder}`,
           },
         },
       },
       MuiChip: {
         styleOverrides: {
           root: {
-            borderRadius: slate.radius.pill,
+            borderRadius: cerebro.radius.pill,
             '&.MuiChip-filledPrimary': {
-              backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
+              backgroundColor: withAlpha(primaryMain, isDark ? 0.2 : 0.12),
               color: primaryMain,
             },
           },
@@ -311,11 +365,11 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiLinearProgress: {
         styleOverrides: {
           root: {
-            borderRadius: slate.radius.pill,
-            backgroundColor: isDark ? withAlpha(primaryMain, 0.2) : withAlpha(primaryMain, 0.1),
+            borderRadius: cerebro.radius.pill,
+            backgroundColor: withAlpha(primaryMain, isDark ? 0.2 : 0.12),
           },
           bar: {
-            borderRadius: slate.radius.pill,
+            borderRadius: cerebro.radius.pill,
             backgroundColor: primaryMain,
             backgroundImage: 'none',
           },
@@ -324,15 +378,15 @@ export function getTheme(mode: PaletteMode): Theme {
       MuiListItemButton: {
         styleOverrides: {
           root: {
-            borderRadius: slate.radius.control,
+            borderRadius: cerebro.radius.control,
             transition: `background-color ${motion.fast}s ${motion.easingCss}`,
             '&.Mui-selected': {
-              backgroundColor: isDark ? withAlpha(primaryMain, 0.18) : withAlpha(primaryMain, 0.08),
+              backgroundColor: withAlpha(primaryMain, isDark ? 0.18 : 0.1),
               '& .MuiListItemIcon-root, & .MuiListItemText-primary': {
                 color: primaryMain,
               },
               '&:hover': {
-                backgroundColor: isDark ? withAlpha(primaryMain, 0.26) : withAlpha(primaryMain, 0.12),
+                backgroundColor: withAlpha(primaryMain, isDark ? 0.26 : 0.16),
               },
             },
           },
@@ -346,44 +400,31 @@ export function getTheme(mode: PaletteMode): Theme {
  * Flat "hairline card" treatment — surface background + 1px hairline border, no blur/gradient/
  * tint, no shadow. Elevation is reserved for real sheets/dialogs (which keep MUI's default
  * elevation shadow scale, untouched above); ordinary cards use hairline + flat surface instead.
- * Function name kept from the pre-Reconcile "glass card" treatment so existing call sites
- * (Dashboard/Analysis/AI-Analyst/Groups/Login/Home cards) don't need edits.
+ * Function name kept from the pre-CerebroOS "glass card" treatment so existing call sites don't
+ * need edits.
  */
 export function glassCardSx(theme: Theme) {
-  const isDark = theme.palette.mode === 'dark';
+  const t = cerebroTokens(theme.palette.mode);
   return {
-    backgroundColor: isDark ? slate.surfaceDark : slate.surface,
+    backgroundColor: t.surfaceBg,
     backgroundImage: 'none',
-    border: `1px solid ${isDark ? slate.borderDark : slate.border}`,
+    border: `1px solid ${t.surfaceBorder}`,
     boxShadow: 'none',
-    borderRadius: slate.radius.surface / 8, // sx shorthand: theme.spacing(1) = 8px by default
+    borderRadius: cerebro.radius.surface / 8, // sx shorthand: theme.spacing(1) = 8px by default
   } as const;
 }
 
-/**
- * Convenience flat-token export for non-MUI-Theme consumers (inline SVG, chart restyling —
- * TS-DES-105/208). `ceremony` has no dedicated Slate hue (unlike Reconcile's gold) — repointed at
- * `caution` (an amber, still visually distinct from `primary`/`negative`) purely so existing
- * consumers (`chartTheme.ts`'s `categoryPalette`) keep compiling with zero call-site changes;
- * TS-DES-208 owns deciding whether chart series should keep using this key at all.
- */
-export function gradientTokens(mode: PaletteMode) {
-  return mode === 'dark'
-    ? {
-        primary: slate.accentDark,
-        positive: slate.positiveDark,
-        negative: slate.negativeDark,
-        ceremony: slate.cautionDark,
-        surfaceSecondary: '#232326',
-      }
-    : {
-        primary: slate.accent,
-        positive: slate.positive,
-        negative: slate.negative,
-        ceremony: slate.caution,
-        surfaceSecondary: '#F5F5F7',
-      };
+/** Convenience flat-token export for non-MUI-Theme consumers (chart restyling — chartTheme.ts). */
+export function gradientTokens(mode: PaletteMode = 'dark') {
+  const t = cerebroTokens(mode);
+  return {
+    primary: t.violetAccentHex,
+    positive: t.positive,
+    negative: t.negative,
+    ceremony: t.caution,
+    surfaceSecondary: mode === 'dark' ? '#14151C' : '#F1F1F5',
+  };
 }
 
-const theme = getTheme('light');
+const theme = getTheme('dark');
 export default theme;

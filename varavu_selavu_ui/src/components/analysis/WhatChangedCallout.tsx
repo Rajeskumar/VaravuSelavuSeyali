@@ -20,7 +20,7 @@ export const WhatChangedCallout: React.FC<WhatChangedCalloutProps> = ({ message 
         gap: 1.5,
       }}
     >
-      <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.primary', lineHeight: 1.5, fontWeight: 500 }}>
+      <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.primary', lineHeight: 1.5, fontWeight: 500 }}>
         {message}
       </Typography>
     </Box>

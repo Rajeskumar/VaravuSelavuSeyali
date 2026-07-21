@@ -7,8 +7,9 @@ import {
     TextStyle,
     StyleProp,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import AnimatedPressable from './AnimatedPressable';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'tinted';
@@ -68,10 +69,18 @@ export default function CustomButton({
             disabled={isDisabled}
             style={buttonStyles}
         >
+            {variant === 'primary' && (
+                <LinearGradient
+                    colors={theme.gradients.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={StyleSheet.absoluteFillObject}
+                />
+            )}
             {loading ? (
                 <ActivityIndicator
                     size="small"
-                    color={variant === 'primary' || variant === 'danger' ? '#fff' : theme.colors.primary}
+                    color={variant === 'primary' ? inkOnPastel : variant === 'danger' ? theme.colors.textInverse : theme.colors.primary}
                 />
             ) : (
                 <>
@@ -112,8 +121,8 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
 
 const createVariantStyles = (theme: AppTheme): Record<ButtonVariant, ViewStyle> => ({
     primary: {
-        backgroundColor: theme.colors.primary,
-        ...theme.shadows.sm,
+        overflow: 'hidden',
+        ...theme.shadows.fab,
     },
     tinted: {
         backgroundColor: theme.colors.primarySurface,
@@ -134,11 +143,14 @@ const createVariantStyles = (theme: AppTheme): Record<ButtonVariant, ViewStyle> 
     },
 });
 
+// `primary`'s fill is the mode-independent pastel gradient — always wants ink, not the
+// mode-aware `textInverse` (which would go white-on-pastel in light mode, ~2.6:1, failing AA).
+// `danger`'s fill (`colors.error`) is mode-aware itself, so `textInverse` correctly flips with it.
 const createVariantTextStyles = (theme: AppTheme): Record<ButtonVariant, TextStyle> => ({
-    primary: { color: '#FFFFFF' },
+    primary: { color: inkOnPastel },
     tinted: { color: theme.colors.primary },
     secondary: { color: theme.colors.text },
     outline: { color: theme.colors.primary },
-    danger: { color: '#FFFFFF' },
+    danger: { color: theme.colors.textInverse },
     ghost: { color: theme.colors.primary },
 });

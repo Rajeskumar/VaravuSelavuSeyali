@@ -168,7 +168,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         borderBottomColor: theme.colors.borderLight,
     },
     headerTitle: {
-        fontFamily: 'Inter-Bold',
+        fontFamily: 'InstrumentSans-Bold',
         fontSize: 18,
         color: theme.colors.text,
     },
@@ -211,7 +211,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         borderBottomLeftRadius: 4,
     },
     messageText: {
-        fontFamily: 'Inter-Regular',
+        fontFamily: 'InstrumentSans-Regular',
         fontSize: 15,
         lineHeight: 22,
     },
@@ -238,7 +238,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         borderRadius: 24,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        fontFamily: 'Inter-Regular',
+        fontFamily: 'InstrumentSans-Regular',
         fontSize: 15,
         color: theme.colors.text,
     },

@@ -28,10 +28,13 @@ const categoryEmojis: Record<string, string> = {
   investment: '📈', other: '📋',
 };
 
+// CerebroOS-era ramp: 12 evenly-spaced oklch hues at matched lightness/chroma (a cohesive wheel,
+// not a grab-bag of unrelated saturated colors like the old set), skipping the one hue that
+// landed too close to `theme.colors.error`'s negative-red.
 const categoryColors: Record<string, string> = {
-  food: '#FF6B6B', groceries: '#4ECDC4', transport: '#45B7D1', entertainment: '#A29BFE',
-  shopping: '#FFA07A', health: '#55EFC4', utilities: '#FFEAA7', rent: '#74B9FF',
-  travel: '#FD79A8', education: '#6C5CE7', subscription: '#00B894', other: '#636E72',
+  food: '#F99262', groceries: '#E4A339', transport: '#00CCCC', entertainment: '#D294EE',
+  shopping: '#EF8BC5', health: '#89C566', utilities: '#71B4FF', rent: '#A8A3FF',
+  travel: '#1BC3F3', education: '#BFB53B', subscription: '#40CD9B', other: '#9AA0AF',
 };
 
 function getCategoryEmoji(category: string): string {
@@ -39,7 +42,7 @@ function getCategoryEmoji(category: string): string {
 }
 
 function getCategoryColor(category: string): string {
-  return categoryColors[category?.toLowerCase().trim()] || '#636E72';
+  return categoryColors[category?.toLowerCase().trim()] || '#9AA0AF';
 }
 
 const formatCurrency = (amount: number) =>
@@ -134,19 +137,19 @@ const createHeroStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 14,
   },
   spendLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 12,
     color: theme.colors.textTertiary,
   },
   amount: {
-    fontFamily: 'SpaceGrotesk-SemiBold',
+    fontFamily: 'BricolageGrotesque-SemiBold',
     fontSize: 38,
     color: theme.colors.text,
     letterSpacing: -0.5,
     marginTop: 2,
   },
   spendSub: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 12,
     color: theme.colors.textTertiary,
     marginTop: 2,
@@ -161,18 +164,18 @@ const createHeroStyles = (theme: AppTheme) => StyleSheet.create({
     paddingTop: 12,
   },
   netLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 12,
     color: theme.colors.textTertiary,
   },
   netAmount: {
-    fontFamily: 'SpaceGrotesk-SemiBold',
+    fontFamily: 'BricolageGrotesque-SemiBold',
     fontSize: 24,
     letterSpacing: -0.3,
     marginTop: 2,
   },
   netArrow: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 13,
     color: theme.colors.primary,
   },
@@ -217,8 +220,8 @@ const createGroupChipsStyles = (theme: AppTheme) => StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
-  chipName: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text, flex: 1, marginRight: 8 },
-  chipNet: { fontFamily: 'Inter-Bold', fontSize: 13 },
+  chipName: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text, flex: 1, marginRight: 8 },
+  chipNet: { fontFamily: 'InstrumentSans-Bold', fontSize: 13 },
 });
 
 /** TrackSpense v3 Mobile mock's compact "RECENT ⋯ See all ›" section header — the only section
@@ -254,13 +257,13 @@ const createSectionStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 11,
     color: theme.colors.textTertiary,
     letterSpacing: 0.8,
   },
   seeAll: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 12,
     color: theme.colors.textTertiary,
   },
@@ -315,18 +318,18 @@ const createRowStyles = (theme: AppTheme) => StyleSheet.create({
   iconText: { fontSize: 20 },
   info: { flex: 1, marginRight: 8 },
   title: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 16,
     color: theme.colors.text,
     marginBottom: 3,
   },
   subtitle: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 13,
     color: theme.colors.textTertiary,
   },
   amount: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 16,
     color: theme.colors.text,
     letterSpacing: -0.3,
@@ -514,14 +517,14 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 16,
   },
   greetingEyebrow: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 11,
     letterSpacing: 0.7,
     color: theme.colors.textTertiary,
     marginBottom: 2,
   },
   greetingName: {
-    fontFamily: 'SpaceGrotesk-SemiBold',
+    fontFamily: 'BricolageGrotesque-SemiBold',
     fontSize: 22,
     color: theme.colors.text,
     letterSpacing: -0.3,
@@ -537,9 +540,9 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     ...theme.shadows.sm,
   },
   avatarText: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 18,
-    color: '#fff',
+    color: theme.colors.textInverse,
   },
   loadingCard: {
     marginHorizontal: 20,
@@ -568,6 +571,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     ...theme.shadows.xs,
   },
   emptyIcon: { fontSize: 44, marginBottom: 14 },
-  emptyTitle: { fontFamily: 'Inter-SemiBold', fontSize: 17, color: theme.colors.text, marginBottom: 6 },
-  emptySubtitle: { fontFamily: 'Inter-Regular', fontSize: 15, color: theme.colors.textTertiary },
+  emptyTitle: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 17, color: theme.colors.text, marginBottom: 6 },
+  emptySubtitle: { fontFamily: 'InstrumentSans-Regular', fontSize: 15, color: theme.colors.textTertiary },
 });

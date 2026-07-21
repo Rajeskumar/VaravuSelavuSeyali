@@ -236,6 +236,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     confirmButtonText: {
         fontFamily: theme.typography.fontFamily.semiBold,
         fontSize: 16,
-        color: '#FFFFFF',
+        color: theme.colors.textInverse,
     },
 });

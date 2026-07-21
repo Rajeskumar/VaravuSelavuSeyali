@@ -126,7 +126,7 @@ const OverviewTab: React.FC = () => {
 
   const whatChangedSection = (
     <Box sx={{ pt: 1, pb: 2 }}>
-      <Typography sx={{ mb: 1.5, fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
+      <Typography sx={{ mb: 1.5, fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
         WHAT CHANGED
       </Typography>
       <WhatChangedRail
@@ -174,7 +174,7 @@ const OverviewTab: React.FC = () => {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary' }}>
+          <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary' }}>
             {isYearMode ? year : `${monthNames[month - 1]} ${year}`}
           </Typography>
           <IconButton size="small" onClick={handleYearMonthClick} sx={{ p: 0.25, color: 'text.secondary' }}>
@@ -203,7 +203,7 @@ const OverviewTab: React.FC = () => {
               component doc comment above for why this is a different question from that one). */}
           <FormControlLabel
             control={<Switch size="small" checked={includeGroups} onChange={(e) => setIncludeGroups(e.target.checked)} />}
-            label={<Typography sx={{ fontFamily: 'Inter', fontSize: 12.5, color: 'text.secondary' }}>Include group shares</Typography>}
+            label={<Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 12.5, color: 'text.secondary' }}>Include group shares</Typography>}
             sx={{ mr: 0 }}
           />
 

@@ -229,7 +229,7 @@ const RecurringTab: React.FC = () => {
           <Box sx={{ width: 40, height: 4, bgcolor: 'divider', borderRadius: 2, mx: 'auto', mb: 3 }} />
 
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-            <Typography sx={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
+            <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
               {editing ? 'Edit Template' : 'Add Template'}
             </Typography>
             <IconButton onClick={() => setFormOpen(false)} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
@@ -287,7 +287,7 @@ const RecurringTab: React.FC = () => {
 
       {/* Delete Confirm Dialog */}
       <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
-        <DialogTitle sx={{ fontFamily: 'Inter', fontWeight: 700 }}>Delete template?</DialogTitle>
+        <DialogTitle sx={{ fontFamily: 'Instrument Sans', fontWeight: 700 }}>Delete template?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
             This will stop future prompts for this recurring expense.

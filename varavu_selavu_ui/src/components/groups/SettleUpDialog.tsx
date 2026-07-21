@@ -14,7 +14,7 @@ import TaskAltRoundedIcon from '@mui/icons-material/TaskAltRounded';
 import { useTheme } from '@mui/material/styles';
 import { createSettlement, ApiError, MemberBalance, BalanceTransfer } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
-import { withAlpha, slate, typeScale, tabularNums } from '../../theme';
+import { withAlpha, typeScale, tabularNums } from '../../theme';
 import { venmoLink, paypalMeLink, upiLink } from '../../utils/paymentDeepLinks';
 
 interface SettleUpDialogProps {
@@ -59,7 +59,6 @@ function useCountDown() {
 
 const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members, transfers = [], myMemberId, onClose, onSuccess }) => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
   const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name || '';
   const [fromMemberId, setFromMemberId] = React.useState('');
   const [toMemberId, setToMemberId] = React.useState('');
@@ -179,10 +178,10 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
   };
 
   const hasPair = !!(fromMemberId && toMemberId && fromMemberId !== toMemberId);
-  const heroColor = isDark ? slate.positiveDark : slate.positive;
-  // "Done" celebration reuses the brand accent (Slate has no dedicated ceremony hue), same
+  const heroColor = theme.palette.success.main;
+  // "Done" celebration reuses the brand accent (CerebroOS has no dedicated ceremony hue), same
   // policy as TrueTotalHero's RECONCILED badge.
-  const doneColor = isDark ? slate.accentDark : slate.accent;
+  const doneColor = theme.palette.primary.main;
   const canGoBack = !manualMode && myTransfers.length > 0 && stage === 'review';
 
   return (
@@ -299,7 +298,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                   p: 2,
                   mb: 2.5,
                   borderRadius: 1,
-                  backgroundColor: withAlpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.12 : 0.06),
+                  backgroundColor: withAlpha(theme.palette.primary.main, 0.12),
                   opacity: stage === 'settling' ? 0.6 : 1,
                   transition: 'opacity 0.3s ease-out',
                 }}

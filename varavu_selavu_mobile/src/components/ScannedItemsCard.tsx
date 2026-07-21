@@ -206,9 +206,9 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.surfaceSecondary,
     },
     headerIcon: { fontSize: 14 },
-    headerText: { flex: 1, fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.text },
+    headerText: { flex: 1, fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.text },
     headerAmount: {
-      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontFamily: 'BricolageGrotesque-SemiBold',
       fontSize: 13,
       color: theme.colors.textSecondary,
       fontVariant: ['tabular-nums'],
@@ -220,17 +220,17 @@ const createStyles = (theme: AppTheme) =>
     itemRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5 },
     itemNameInputWrap: { flex: 1 },
     itemNameInput: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       color: theme.colors.text,
       paddingVertical: 2,
     },
     priceWrap: { flexDirection: 'row', alignItems: 'center' },
-    dollarSign: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textSecondary, marginRight: 1 },
+    dollarSign: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textSecondary, marginRight: 1 },
     itemPriceInput: {
       width: 56,
       textAlign: 'right',
-      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontFamily: 'BricolageGrotesque-SemiBold',
       fontSize: 13,
       color: theme.colors.text,
       fontVariant: ['tabular-nums'],
@@ -239,19 +239,19 @@ const createStyles = (theme: AppTheme) =>
     removeX: { color: theme.colors.textTertiary, fontSize: 13, paddingHorizontal: 4 },
 
     addItemRow: { paddingVertical: 6 },
-    addItemText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.primary },
+    addItemText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.primary },
 
     summaryBlock: { marginTop: 4, gap: 2 },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    summaryLabel: { fontFamily: 'Inter-Regular', fontSize: 11.5, color: theme.colors.textSecondary },
+    summaryLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textSecondary },
     summaryValue: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 11.5,
       color: theme.colors.textSecondary,
       fontVariant: ['tabular-nums'],
     },
 
-    reconcileText: { marginTop: 6, textAlign: 'right', fontFamily: 'Inter-Regular', fontSize: 11.5 },
+    reconcileText: { marginTop: 6, textAlign: 'right', fontFamily: 'InstrumentSans-Regular', fontSize: 11.5 },
   });
 
 export default ScannedItemsCard;

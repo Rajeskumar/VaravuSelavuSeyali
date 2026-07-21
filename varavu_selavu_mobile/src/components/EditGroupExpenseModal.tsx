@@ -218,7 +218,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,
   },
   pickerChipTextActive: {
-    color: '#FFFFFF',
+    color: theme.colors.textInverse,
   },
   section: {
     marginTop: 24,

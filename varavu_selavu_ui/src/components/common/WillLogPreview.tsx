@@ -29,8 +29,8 @@ const WillLogPreview: React.FC<WillLogPreviewProps> = ({ parsed, memberCount, su
     <Box
       sx={
         isStrip
-          ? { display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 1, bgcolor: (t) => (t.palette.mode === 'dark' ? 'action.hover' : 'primary.50'), borderBottom: '1px solid', borderColor: 'divider' }
-          : { mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25, bgcolor: (t) => (t.palette.mode === 'dark' ? 'action.hover' : 'primary.50') }
+          ? { display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 1, bgcolor: 'action.hover', borderBottom: '1px solid', borderColor: 'divider' }
+          : { mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.25, bgcolor: 'action.hover' }
       }
     >
       <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 700, letterSpacing: '0.05em', flexShrink: 0 }}>

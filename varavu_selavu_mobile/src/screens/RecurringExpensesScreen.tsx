@@ -400,7 +400,7 @@ export default function RecurringExpensesScreen() {
                                 activeOpacity={0.7}
                             >
                                 {saving ? (
-                                    <ActivityIndicator size="small" color="#fff" />
+                                    <ActivityIndicator size="small" color={theme.colors.textInverse} />
                                 ) : (
                                     <Text style={styles.saveBtnText}>Save Template</Text>
                                 )}
@@ -466,7 +466,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         backgroundColor: theme.colors.primary, paddingVertical: 10, paddingHorizontal: 18,
         borderRadius: 20, ...theme.shadows.colored,
     },
-    addBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    addBtnText: { color: theme.colors.textInverse, fontWeight: '700', fontSize: 14 },
     body: { paddingHorizontal: 20 },
     monthSection: { marginBottom: 8 },
     monthLabel: {
@@ -506,7 +506,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         marginTop: 20, backgroundColor: theme.colors.primary,
         paddingVertical: 12, paddingHorizontal: 24, borderRadius: 20,
     },
-    emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    emptyBtnText: { color: theme.colors.textInverse, fontWeight: '700', fontSize: 15 },
     // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
     modalContent: {
@@ -521,7 +521,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,
     },
     input: {
-        backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 16,
+        backgroundColor: theme.colors.surfaceSecondary, borderRadius: 12, paddingHorizontal: 16,
         paddingVertical: 14, marginBottom: 16, borderWidth: 1.5,
         borderColor: theme.colors.border, fontSize: 16, color: theme.colors.text, minHeight: 48,
     },
@@ -532,7 +532,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         alignItems: 'center', marginTop: 8, ...theme.shadows.colored,
     },
     saveBtnDisabled: { opacity: 0.6 },
-    saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    saveBtnText: { color: theme.colors.textInverse, fontSize: 16, fontWeight: '700' },
     // Execute modal
     execDesc: { fontSize: 14, color: theme.colors.textSecondary, marginBottom: 16, lineHeight: 20 },
     execActions: { flexDirection: 'row', gap: 12, marginTop: 8 },

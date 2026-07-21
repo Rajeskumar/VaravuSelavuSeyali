@@ -4,7 +4,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import { useTheme } from '@mui/material/styles';
-import { slate, typeScale, tabularNums } from '../../theme';
+import { cerebro, typeScale, tabularNums } from '../../theme';
 import { GroupSummary } from '../../api/groups';
 import { AnalysisGroupSummary } from '../../api/analysis';
 
@@ -48,9 +48,8 @@ interface Props {
 const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
   const navigate = useNavigate();
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
-  const positiveColor = isDark ? slate.positiveDark : slate.positive;
-  const negativeColor = isDark ? slate.negativeDark : slate.negative;
+  const positiveColor = theme.palette.success.main;
+  const negativeColor = theme.palette.error.main;
   const merged = mergeGroups(groups, groupSummaries);
 
   if (merged.length === 0) return null;
@@ -72,7 +71,7 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
               backgroundColor: 'background.paper',
               border: '1px solid',
               borderColor: 'divider',
-              borderRadius: `${slate.radius.surface}px`,
+              borderRadius: `${cerebro.radius.surface}px`,
               p: 1.5,
               cursor: 'pointer',
             }}

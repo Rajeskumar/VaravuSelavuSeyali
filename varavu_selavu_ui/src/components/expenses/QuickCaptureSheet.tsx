@@ -478,7 +478,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 inputProps={{
                   style: {
                     textAlign: 'center',
-                    fontFamily: "'Space Grotesk', sans-serif",
+                    fontFamily: "'Bricolage Grotesque', sans-serif",
                     fontWeight: 600,
                     fontSize: 44,
                     ...tabularNums,
@@ -649,7 +649,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontFamily: "'Bricolage Grotesque', sans-serif",
                   fontSize: 20,
                   fontWeight: 600,
                   cursor: 'pointer',

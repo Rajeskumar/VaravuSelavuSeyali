@@ -23,7 +23,12 @@ export default function AnimatedPressable({ style, scaleTo = motion.pressScale, 
 
   // Pressable carries the caller's layout style (flex sizing, padding, touch
   // target) exactly as a plain TouchableOpacity would; the inner Animated.View
-  // only applies the press-scale transform to its content.
+  // only applies the press-scale transform to its content. It's stretched to
+  // fill (`width: '100%'`, row+centered) rather than left shrink-wrapped to its
+  // content — shrink-wrap made an absolutely-positioned fill (e.g. CustomButton's
+  // gradient) size itself to this wrapper instead of the full button, only
+  // painting a patch behind the label; the row/center rules keep multi-child
+  // content (icon + label) laid out the same as before the wrapper was widened.
   return (
     <Pressable
       style={style}
@@ -37,7 +42,14 @@ export default function AnimatedPressable({ style, scaleTo = motion.pressScale, 
       }}
       {...rest}
     >
-      <Animated.View style={animatedStyle}>{children}</Animated.View>
+      <Animated.View
+        style={[
+          { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+          animatedStyle,
+        ]}
+      >
+        {children}
+      </Animated.View>
     </Pressable>
   );
 }

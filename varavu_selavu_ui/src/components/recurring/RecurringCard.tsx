@@ -76,7 +76,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
       </Box>
 
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5, pr: 4 }}>
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 15, fontWeight: 600, color: 'text.primary' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 15, fontWeight: 600, color: 'text.primary' }}>
           {item.description}
         </Typography>
         <Typography
@@ -92,7 +92,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
       </Box>
       
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary' }}>
           {item.category}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -105,7 +105,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
                 setTimeout(() => setJustRun(false), 2000);
               }}
               sx={{
-                fontFamily: 'Inter', fontSize: 11, fontWeight: 600,
+                fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 600,
                 color: justRun ? 'success.main' : 'text.primary',
                 border: `1px solid ${justRun ? theme.palette.success.main : theme.palette.divider}`,
                 backgroundColor: justRun ? `${theme.palette.success.main}14` : 'background.paper',
@@ -121,7 +121,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
             <Typography
               component="span"
               sx={{
-                fontFamily: 'Inter',
+                fontFamily: 'Instrument Sans',
                 fontSize: 11,
                 fontWeight: 600,
                 color: 'success.main',
@@ -136,7 +136,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
             <Typography
               component="span"
               sx={{
-                fontFamily: 'Inter',
+                fontFamily: 'Instrument Sans',
                 fontSize: 11,
                 fontWeight: 600,
                 color: 'text.secondary',
@@ -161,7 +161,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
           borderTop: `1px solid ${theme.palette.divider}`
         }}
       >
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary' }}>
           Charges on the {ordinal(item.day_of_month)}
         </Typography>
         <Switch

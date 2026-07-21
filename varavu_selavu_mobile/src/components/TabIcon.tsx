@@ -45,7 +45,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     label: {
         fontSize: 10,
-        fontFamily: 'Inter-Medium',
+        fontFamily: 'InstrumentSans-Medium',
         color: theme.colors.textTertiary,
         marginTop: 3,
         opacity: 0,  // hidden when not focused
@@ -53,6 +53,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     labelFocused: {
         opacity: 1,
         color: theme.colors.primary,
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: 'InstrumentSans-SemiBold',
     },
 });

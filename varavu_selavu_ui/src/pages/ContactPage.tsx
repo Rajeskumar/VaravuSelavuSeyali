@@ -64,7 +64,7 @@ const ContactPage: React.FC = () => {
             borderRadius: 4,
             border: '1px solid',
             borderColor: 'divider',
-            boxShadow: '0 10px 40px -10px rgba(0,0,0,0.08)',
+            boxShadow: (t) => (t.palette.mode === 'dark' ? 'none' : '0 10px 40px -10px rgba(0,0,0,0.08)'),
           }}
         >
           {success && (

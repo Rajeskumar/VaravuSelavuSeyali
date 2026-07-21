@@ -137,7 +137,7 @@ export default function GroupsScreen() {
     const emoji = GROUP_TYPE_EMOJI[item.group_type as GroupTypeOption] ?? '👥';
     const balanceColor =
       item.my_balance > 0
-        ? theme.colors.success ?? '#34C759'
+        ? theme.colors.success
         : item.my_balance < 0
         ? theme.colors.error
         : theme.colors.textTertiary;
@@ -190,7 +190,7 @@ export default function GroupsScreen() {
         <Text style={styles.heading}>{topTab === 'groups' ? 'Groups' : 'People'}</Text>
         {topTab === 'groups' && (
           <TouchableOpacity style={styles.addBtn} onPress={() => setShowCreate(true)}>
-            <Ionicons name="add" size={20} color="#FFF" />
+            <Ionicons name="add" size={20} color={theme.colors.textInverse} />
           </TouchableOpacity>
         )}
       </View>
@@ -323,7 +323,7 @@ export default function GroupsScreen() {
                 disabled={!newName.trim() || createMut.isPending}
               >
                 {createMut.isPending ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={theme.colors.textInverse} />
                 ) : (
                   <Text style={styles.createBtnText}>Create</Text>
                 )}
@@ -356,7 +356,7 @@ const createStyles = (theme: AppTheme) =>
     },
     listContent: { flexGrow: 1 },
     heading: {
-      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontFamily: 'BricolageGrotesque-SemiBold',
       fontSize: 22,
       letterSpacing: -0.3,
       color: theme.colors.text,
@@ -378,13 +378,13 @@ const createStyles = (theme: AppTheme) =>
     },
     emptyIcon: { fontSize: 64, marginBottom: 16 },
     emptyTitle: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 20,
       color: theme.colors.text,
       textAlign: 'center',
     },
     emptySubtitle: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 15,
       color: theme.colors.textSecondary,
       textAlign: 'center',
@@ -414,12 +414,12 @@ const createStyles = (theme: AppTheme) =>
     cardEmoji: { fontSize: 22 },
     cardBody: { flex: 1 },
     cardName: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 16,
       color: theme.colors.text,
     },
     cardMeta: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       color: theme.colors.textSecondary,
       marginTop: 2,
@@ -431,11 +431,11 @@ const createStyles = (theme: AppTheme) =>
       paddingVertical: 1,
     },
     archivedPillText: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 9,
     },
     cardRight: { alignItems: 'flex-end', marginRight: 8 },
-    balanceAmount: { fontFamily: 'Inter-Bold', fontSize: 13, fontVariant: ['tabular-nums'] },
+    balanceAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 13, fontVariant: ['tabular-nums'] },
     newGroupRow: {
       marginHorizontal: 16,
       marginTop: 10,
@@ -446,7 +446,7 @@ const createStyles = (theme: AppTheme) =>
       paddingVertical: 13,
       alignItems: 'center',
     },
-    newGroupText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.primary },
+    newGroupText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.primary },
     // Create modal
     modalBackdrop: {
       flex: 1,
@@ -469,7 +469,7 @@ const createStyles = (theme: AppTheme) =>
       marginBottom: 8,
     },
     modalTitle: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 20,
       color: theme.colors.text,
       textAlign: 'center',
@@ -479,12 +479,12 @@ const createStyles = (theme: AppTheme) =>
       borderRadius: 12,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 16,
       color: theme.colors.text,
     },
     typeLabel: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 14,
       color: theme.colors.textSecondary,
     },
@@ -503,13 +503,13 @@ const createStyles = (theme: AppTheme) =>
     },
     typeEmoji: { fontSize: 22, marginBottom: 4 },
     typeBtnLabel: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 12,
       color: theme.colors.textSecondary,
     },
     typeBtnLabelActive: {
       color: theme.colors.primary,
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
     },
     createBtn: {
       backgroundColor: theme.colors.primary,
@@ -518,5 +518,5 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'center',
     },
     createBtnDisabled: { opacity: 0.5 },
-    createBtnText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 16 },
+    createBtnText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
   });

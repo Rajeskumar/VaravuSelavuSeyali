@@ -232,7 +232,7 @@ const MerchantsTab: React.FC = () => {
                     }}
                   >
                     <Box sx={{ minWidth: 0, flex: 1, mr: 2 }}>
-                      <Typography sx={{ fontFamily: 'Inter', fontSize: 14, color: 'text.primary', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 14, color: 'text.primary', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {item.item_name}
                       </Typography>
                       <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>

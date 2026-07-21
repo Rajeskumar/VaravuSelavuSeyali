@@ -665,7 +665,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     activeOpacity={0.85}
                   >
                     {loading ? (
-                      <ActivityIndicator color="#fff" />
+                      <ActivityIndicator color={theme.colors.textInverse} />
                     ) : (
                       <Text style={styles.saveBtnText}>{isGroup ? 'Save & split' : 'Save'}</Text>
                     )}
@@ -721,32 +721,32 @@ const createStyles = (theme: AppTheme) =>
     body: { paddingHorizontal: 18, paddingBottom: 24 },
 
     entryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-    entryTitle: { fontFamily: 'Inter-Bold', fontSize: 16, color: theme.colors.text },
+    entryTitle: { fontFamily: 'InstrumentSans-Bold', fontSize: 16, color: theme.colors.text },
     headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     scanBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 6,
       borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 999,
       paddingHorizontal: 12, paddingVertical: 6,
     },
-    scanBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 12, color: theme.colors.text },
+    scanBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12, color: theme.colors.text },
     closeX: { color: theme.colors.textTertiary, fontSize: 16, paddingHorizontal: 6, paddingVertical: 2 },
 
     amountDisplayWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
     amountDisplay: {
-      fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 42, color: theme.colors.text,
+      fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 42, color: theme.colors.text,
       letterSpacing: -0.5, minHeight: 52,
     },
 
     descInput: {
       borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
-      paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter-Regular', fontSize: 13.5,
+      paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'InstrumentSans-Regular', fontSize: 13.5,
       color: theme.colors.text, marginTop: 8,
     },
 
     merchantInputWrap: { marginTop: 8 },
     merchantInput: {
       borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
-      paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'Inter-Regular', fontSize: 13.5,
+      paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'InstrumentSans-Regular', fontSize: 13.5,
       color: theme.colors.text,
     },
 
@@ -758,8 +758,8 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
     },
     whoChipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-    whoChipText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.text },
-    whoChipTextActive: { color: '#FFFFFF' },
+    whoChipText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.text },
+    whoChipTextActive: { color: theme.colors.textInverse },
 
     splitPreview: {
       marginTop: 8, borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
@@ -771,35 +771,35 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
       paddingHorizontal: 12, paddingVertical: 9, marginTop: 8,
     },
-    recurringRowText: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary },
+    recurringRowText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textSecondary },
 
     keypad: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
     key: {
       width: '31.5%', height: 46, borderRadius: 10, backgroundColor: theme.colors.surfaceSecondary,
       alignItems: 'center', justifyContent: 'center',
     },
-    keyLabel: { fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 20, color: theme.colors.text },
+    keyLabel: { fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 20, color: theme.colors.text },
 
     saveBtn: {
       marginTop: 12, height: 48, borderRadius: 12, backgroundColor: theme.colors.primary,
       alignItems: 'center', justifyContent: 'center',
     },
     saveBtnDisabled: { backgroundColor: theme.colors.border },
-    saveBtnText: { fontFamily: 'Inter-Bold', fontSize: 15, color: '#FFFFFF' },
+    saveBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.textInverse },
 
     savedWrap: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 32, paddingHorizontal: 24 },
     savedCheck: {
       width: 56, height: 56, borderRadius: 999, backgroundColor: theme.colors.successSurface,
       alignItems: 'center', justifyContent: 'center',
     },
-    savedCheckText: { color: theme.colors.success, fontSize: 26, fontFamily: 'Inter-Bold' },
-    savedAmount: { fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 26, color: theme.colors.text },
-    savedLine: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 19 },
+    savedCheckText: { color: theme.colors.success, fontSize: 26, fontFamily: 'InstrumentSans-Bold' },
+    savedAmount: { fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 26, color: theme.colors.text },
+    savedLine: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 19 },
     savedActions: { flexDirection: 'row', gap: 8, marginTop: 6 },
     savedSecondaryBtn: {
       borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10,
     },
-    savedSecondaryText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.text },
+    savedSecondaryText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.text },
     savedPrimaryBtn: { backgroundColor: theme.colors.text, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10 },
-    savedPrimaryText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.background },
+    savedPrimaryText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.background },
   });

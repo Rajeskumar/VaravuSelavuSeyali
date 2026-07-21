@@ -1,27 +1,24 @@
 /**
- * Category -> tint-dot color mapping for the ExpenseFeed row (TS-DES-102).
+ * Category -> tint-dot color mapping for the ExpenseFeed row.
  *
- * No deterministic category-color table existed anywhere in the app before this
- * (confirmed by search — TopCategoriesChart/CategoryBreakdownSunburst assign
- * colors by array index/plotly colorway, not by category name, so they can't be
- * reused as-is). This table's keys match AddExpenseForm's `CATEGORY_GROUPS` main
- * categories and the hues from `docs/design/prototypes/ExpenseFeed.jsx` so the
- * dot color for e.g. "Food & Drink" is stable across the app and matches the
- * reference prototype. Unknown/legacy category strings fall back to a deterministic
- * hash so they still get a stable (if arbitrary) color instead of all collapsing
- * to one "other" gray.
+ * Deterministic category-color table, keyed to match AddExpenseForm's `CATEGORY_GROUPS` main
+ * categories so the dot color for e.g. "Food & Drink" is stable across the app. CerebroOS-era
+ * ramp: same violet/cyan-anchored hues as `dashboard/SpendSpectrum.tsx`'s `SPECTRUM_PALETTE`,
+ * for visual consistency between the dashboard's category spectrum and the expense feed's dots.
+ * Unknown/legacy category strings fall back to a deterministic hash so they still get a stable
+ * (if arbitrary) color instead of all collapsing to one "other" gray.
  */
 const CATEGORY_TINTS: Record<string, string> = {
-  Home: '#7E8CA3',
-  Transportation: '#5E9C8F',
-  'Food & Drink': '#C97B4D',
-  Entertainment: '#B98CC2',
-  Life: '#C77B9E',
-  Other: '#9AA0A6',
-  Utilities: '#A3A86B',
+  Home: '#9C93FF',
+  Transportation: '#5FD9B8',
+  'Food & Drink': '#F0975E',
+  Entertainment: '#E88CD8',
+  Life: '#B98BC9',
+  Other: '#9AA0AF',
+  Utilities: '#7DA6FF',
 };
 
-const FALLBACK_TINTS = ['#7E8CA3', '#5E9C8F', '#C97B4D', '#B98CC2', '#C77B9E', '#A3A86B', '#8C7BC9', '#4D9BC9'];
+const FALLBACK_TINTS = ['#9C93FF', '#00D2D3', '#7DA6FF', '#5FD9B8', '#E88CD8', '#F0975E', '#6E7FE0', '#B98BC9'];
 
 function hashString(s: string): number {
   let h = 0;

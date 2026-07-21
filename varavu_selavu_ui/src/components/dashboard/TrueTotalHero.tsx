@@ -4,7 +4,7 @@ import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
-import { slate, typeScale } from '../../theme';
+import { typeScale } from '../../theme';
 import { AnalysisGroupSummary, SpendBreakdown } from '../../api/analysis';
 import SegmentedTabs from '../common/SegmentedTabs';
 
@@ -72,12 +72,11 @@ interface Props {
 const TrueTotalHero: React.FC<Props> = ({ personalTotal, groupSummaries, groupsEnabled, periodLabel, momDelta, lens, onLensChange }) => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const isDark = theme.palette.mode === 'dark';
-  // "Ceremony" (RECONCILED badge) has no dedicated Slate hue — reuses the brand accent for a
+  // "Ceremony" (RECONCILED badge) has no dedicated CerebroOS hue — reuses the brand accent for a
   // distinct celebratory pop, since accent is otherwise reserved for interaction, not decoration.
-  const accentColor = isDark ? slate.accentDark : slate.accent;
-  const positiveColor = isDark ? slate.positiveDark : slate.positive;
-  const negativeColor = isDark ? slate.negativeDark : slate.negative;
+  const accentColor = theme.palette.primary.main;
+  const positiveColor = theme.palette.success.main;
+  const negativeColor = theme.palette.error.main;
 
   const total = lens === 'paid'
     ? computeIPaidTotal(personalTotal, groupSummaries)

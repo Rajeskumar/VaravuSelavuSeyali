@@ -3,6 +3,7 @@ import { View, ScrollView, StyleSheet, Platform, StatusBar, ViewStyle } from 're
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
+import AmbientBackground from './AmbientBackground';
 
 interface ScreenWrapperProps {
     children: React.ReactNode;
@@ -30,6 +31,7 @@ export default function ScreenWrapper({
     if (scroll) {
         return (
             <LinearGradient colors={theme.gradients.surface} style={containerStyle}>
+                <AmbientBackground />
                 <ScrollView
                     contentContainerStyle={[styles.content, { paddingBottom }, contentStyle]}
                     showsVerticalScrollIndicator={false}
@@ -43,6 +45,7 @@ export default function ScreenWrapper({
 
     return (
         <LinearGradient colors={theme.gradients.surface} style={[containerStyle, styles.content, contentStyle]}>
+            <AmbientBackground />
             {children}
         </LinearGradient>
     );

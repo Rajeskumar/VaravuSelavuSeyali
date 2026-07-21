@@ -1,16 +1,16 @@
 import { AppTheme, withAlpha } from '../theme';
 
 /**
- * TS-DES-105 — shared react-native-chart-kit restyling helpers, mirroring the web equivalent
+ * Shared react-native-chart-kit restyling helpers, mirroring the web equivalent
  * (`varavu_selavu_ui/src/utils/chartTheme.ts`). chart-kit doesn't expose real gridlines the way
  * Plotly does (only `propsForBackgroundLines`), so "hairline gridlines" here means using the
  * theme's hairline/border color at a thin stroke width rather than chart-kit's solid default.
  */
 
 /**
- * Categorical series palette for multi-category charts (donut/pie), anchored on jade (primary)
- * and ember (error), matching the web categoryPalette's "one signature color + disciplined
- * neutrals" policy rather than a rainbow of unrelated hues.
+ * Categorical series palette for multi-category charts (donut/pie), anchored on the CerebroOS
+ * violet accent (primary) and negative-red (error), matching the web categoryPalette's "one
+ * signature color + disciplined neutrals" policy rather than a rainbow of unrelated hues.
  *
  * Returned as plain hex (never pre-mixed with `withAlpha`'s `rgba(...)` output) so callers can
  * safely apply their own alpha pass on top (e.g. a lighter "subcategory" ring) without double-
@@ -36,7 +36,7 @@ export function categoryPalette(theme: AppTheme): string[] {
   ];
 }
 
-/** Shared chart-kit `chartConfig` fragment: Inter font, hairline gridlines, jade series color. */
+/** Shared chart-kit `chartConfig` fragment: Instrument Sans font, hairline gridlines, violet series color. */
 export function baseChartConfig(theme: AppTheme) {
   return {
     backgroundGradientFrom: theme.colors.surface,
@@ -50,7 +50,7 @@ export function baseChartConfig(theme: AppTheme) {
       strokeDasharray: '0',
     },
     propsForLabels: {
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 11,
     },
     propsForDots: {

@@ -136,7 +136,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
       line
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code style="background: rgba(0,0,0,0.05); padding: 2px 4px; border-radius: 4px;">$1</code>');
+        .replace(/`(.*?)`/g, `<code style="background: ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; padding: 2px 4px; border-radius: 4px;">$1</code>`);
 
     const flushTable = () => {
       if (table.length === 0) return;
@@ -145,7 +145,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
       rows.forEach((r, i) => {
         const cells = r.split('|').filter(Boolean).map(c => c.trim());
         const tag = i === 0 ? 'th' : 'td';
-        const bg = i === 0 ? 'rgba(0,0,0,0.04)' : 'transparent';
+        const bg = i === 0 ? (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)') : 'transparent';
         tableHtml += '<tr>' + cells.map(c => `<${tag} style="border: 1px solid ${theme.palette.divider}; padding: 8px; background: ${bg}; text-align: left;">${formatInline(c)}</${tag}>`).join('') + '</tr>';
       });
       tableHtml += '</table>';
@@ -206,7 +206,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
       <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
         {messages.length === 0 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Typography sx={{ fontFamily: 'Inter', fontSize: 14, color: 'text.secondary', lineHeight: 1.5 }}>
+            <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 14, color: 'text.secondary', lineHeight: 1.5 }}>
               Ask anything about your spending — I'll figure out the right period, and whether to
               include group expenses, from what you ask.
             </Typography>
@@ -217,7 +217,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
                   component="button"
                   onClick={() => handleChipClick(p)}
                   sx={{
-                    fontFamily: 'Inter',
+                    fontFamily: 'Instrument Sans',
                     fontSize: 14,
                     color: 'text.primary',
                     backgroundColor: 'background.paper',
@@ -253,7 +253,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
                 borderBottomLeftRadius: m.role === 'assistant' ? 1 : 3,
                 px: 2,
                 py: 1.5,
-                fontFamily: 'Inter',
+                fontFamily: 'Instrument Sans',
                 fontSize: 14,
                 lineHeight: 1.5,
                 whiteSpace: m.role === 'user' ? 'pre-wrap' : 'normal'
@@ -267,7 +267,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
             </Box>
             
             {m.role === 'assistant' && m.scope && (
-              <Typography sx={{ fontFamily: 'Inter', fontSize: 11, color: 'text.secondary', mt: 1, ml: 0.5 }}>
+              <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 11, color: 'text.secondary', mt: 1, ml: 0.5 }}>
                 Looked at: {m.scope}
               </Typography>
             )}
@@ -284,7 +284,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
                 borderBottomLeftRadius: 1,
                 px: 2,
                 py: 1.5,
-                fontFamily: 'Inter',
+                fontFamily: 'Instrument Sans',
                 fontSize: 14,
                 color: 'text.secondary'
               }}
@@ -296,7 +296,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
 
         {error && (
           <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Typography color="error" sx={{ fontFamily: 'Inter', fontSize: 13 }}>
+            <Typography color="error" sx={{ fontFamily: 'Instrument Sans', fontSize: 13 }}>
               {error}
             </Typography>
           </Box>
@@ -322,7 +322,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 999,
-              fontFamily: 'Inter',
+              fontFamily: 'Instrument Sans',
               fontSize: 14,
               backgroundColor: 'background.paper',
             }

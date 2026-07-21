@@ -158,7 +158,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
       <Pressable style={styles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
         <View style={[styles.sheet, { backgroundColor: theme.colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
-          <View style={styles.pill} />
+          <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>
               {expense.description}
@@ -209,8 +209,8 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
               renderItem={({ item }) => (
                 <View style={styles.commentRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.colors.text, fontFamily: 'Inter-Regular', fontSize: 14 }}>
-                      <Text style={{ fontFamily: 'Inter-SemiBold' }}>{item.author_display_name}</Text> {item.body}
+                    <Text style={{ color: theme.colors.text, fontFamily: 'InstrumentSans-Regular', fontSize: 14 }}>
+                      <Text style={{ fontFamily: 'InstrumentSans-SemiBold' }}>{item.author_display_name}</Text> {item.body}
                     </Text>
                     <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
                       {new Date(item.created_at).toLocaleString()}
@@ -254,7 +254,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
               <View style={{ marginTop: 8 }}>
                 {history.map((h, idx) => (
                   <View key={idx} style={{ marginBottom: 12 }}>
-                    <Text style={{ color: theme.colors.text, fontFamily: 'Inter-SemiBold', fontSize: 13 }}>
+                    <Text style={{ color: theme.colors.text, fontFamily: 'InstrumentSans-SemiBold', fontSize: 13 }}>
                       {h.actor_display_name}{' '}
                       {h.action === 'expense_created' ? 'created this expense' : h.action === 'expense_deleted' ? 'deleted this expense' : 'edited this expense'}
                     </Text>
@@ -318,17 +318,17 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     maxHeight: '85%',
   },
-  pill: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#ccc', alignSelf: 'center', marginBottom: 16 },
+  pill: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  title: { fontFamily: 'Inter-Bold', fontSize: 18, flex: 1, marginRight: 12 },
+  title: { fontFamily: 'InstrumentSans-Bold', fontSize: 18, flex: 1, marginRight: 12 },
   closeBtn: { padding: 4 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  metaText: { fontFamily: 'Inter-Regular', fontSize: 12, marginTop: 2 },
-  amountText: { fontFamily: 'Inter-Bold', fontSize: 18 },
+  metaText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, marginTop: 2 },
+  amountText: { fontFamily: 'InstrumentSans-Bold', fontSize: 18 },
   divider: { height: 1, marginVertical: 16 },
-  sectionTitle: { fontFamily: 'Inter-SemiBold', fontSize: 15 },
+  sectionTitle: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15 },
   commentRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
   commentInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  commentInput: { flex: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'Inter-Regular', fontSize: 14 },
+  commentInput: { flex: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontFamily: 'InstrumentSans-Regular', fontSize: 14 },
   historyToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 });

@@ -5,7 +5,7 @@ import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import { useTheme } from '@mui/material/styles';
-import { slate, tabularNums } from '../../theme';
+import { cerebro, tabularNums } from '../../theme';
 
 export interface Insight {
   headline: string;
@@ -27,8 +27,7 @@ interface Props {
  */
 const InsightOfTheDay: React.FC<Props> = ({ insight }) => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
-  const accentColor = isDark ? slate.accentDark : slate.accent;
+  const accentColor = theme.palette.primary.main;
   const [expanded, setExpanded] = React.useState(false);
 
   if (!insight) return null;
@@ -43,7 +42,7 @@ const InsightOfTheDay: React.FC<Props> = ({ insight }) => {
         backgroundColor: 'background.paper',
         border: '1px solid',
         borderColor: 'divider',
-        borderRadius: `${slate.radius.surface}px`,
+        borderRadius: `${cerebro.radius.surface}px`,
         p: 1.75,
         cursor: 'pointer',
         font: 'inherit',

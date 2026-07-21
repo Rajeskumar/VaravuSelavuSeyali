@@ -14,13 +14,13 @@ import { useSafeAreaInsets, SafeAreaProvider } from 'react-native-safe-area-cont
 
 import {
   useFonts,
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  Inter_900Black,
-} from '@expo-google-fonts/inter';
-import { SpaceGrotesk_600SemiBold } from '@expo-google-fonts/space-grotesk';
+  InstrumentSans_400Regular,
+  InstrumentSans_500Medium,
+  InstrumentSans_600SemiBold,
+  InstrumentSans_700Bold,
+} from '@expo-google-fonts/instrument-sans';
+import { BricolageGrotesque_600SemiBold } from '@expo-google-fonts/bricolage-grotesque';
+import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
 
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,7 +30,7 @@ import Animated, { ZoomIn, useSharedValue, useAnimatedStyle, withSpring } from '
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ThemeProvider, useAppTheme } from './src/context/ThemeContext';
-import { AppTheme, withAlpha, motion } from './src/theme';
+import { AppTheme, withAlpha, motion, inkOnPastel } from './src/theme';
 import ToastProvider from './src/components/Toast';
 import RecurringPrompt from './src/components/RecurringPrompt';
 import AnimatedPressable from './src/components/AnimatedPressable';
@@ -115,7 +115,7 @@ function MainTabs() {
             borderBottomWidth: 0,
           },
           headerTitleStyle: {
-            fontFamily: 'Inter-Bold',
+            fontFamily: 'InstrumentSans-Bold',
             fontSize: 18,
             color: theme.colors.text,
           },
@@ -177,14 +177,16 @@ function MainTabs() {
         />
       </Tab.Navigator>
       <TouchableOpacity
-        style={tabStyles.fab}
+        style={tabStyles.fabShadow}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           openAddExpense();
         }}
-        activeOpacity={0.8}
+        activeOpacity={0.85}
       >
-        <Ionicons name="add" size={32} color="#fff" />
+        <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={tabStyles.fab}>
+          <Ionicons name="add" size={32} color={inkOnPastel} />
+        </LinearGradient>
       </TouchableOpacity>
     </>
   );
@@ -202,22 +204,24 @@ const createTabStyles = (theme: AppTheme) => StyleSheet.create({
     ...theme.shadows.xs,
   },
   menuBtnIcon: { fontSize: 15, color: theme.colors.text },
-  fab: {
+  // Outer wrapper carries position + the CerebroOS glow shadow (theme.shadows.fab); the inner
+  // gradient fill (LinearGradient, App() render) can't carry shadowColor itself on Android
+  // (elevation ignores it), but keeping the split means iOS still gets the true glow.
+  fabShadow: {
     position: 'absolute',
     right: 20,
     bottom: Platform.OS === 'ios' ? 100 : 80, // Above the tab bar
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: theme.colors.primary,
+    zIndex: 999,
+    ...theme.shadows.fab,
+  },
+  fab: {
+    flex: 1,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
-    zIndex: 999,
   },
 
 });
@@ -326,15 +330,17 @@ const createDrawerStyles = (theme: AppTheme) => StyleSheet.create({
     backgroundColor: theme.colors.primary,
     alignItems: 'center', justifyContent: 'center',
   },
-  avatarText: { fontSize: 20, color: '#fff', fontFamily: 'Inter-Bold' },
-  appTitle: { fontFamily: 'Inter-Bold', fontSize: 17, color: theme.colors.text },
-  userEmail: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textTertiary, marginTop: 2 },
+  // avatarCircle's fill is the mode-aware `colors.primary` (pastel in dark, darker in light) —
+  // `textInverse` correctly flips alongside it.
+  avatarText: { fontSize: 20, color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold' },
+  appTitle: { fontFamily: 'InstrumentSans-Bold', fontSize: 17, color: theme.colors.text },
+  userEmail: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textTertiary, marginTop: 2 },
   closeBtn: {
     width: 30, height: 30, borderRadius: 15,
     backgroundColor: theme.colors.surfaceSecondary,
     alignItems: 'center', justifyContent: 'center',
   },
-  closeBtnText: { fontSize: 14, color: theme.colors.textSecondary, fontFamily: 'Inter-SemiBold' },
+  closeBtnText: { fontSize: 14, color: theme.colors.textSecondary, fontFamily: 'InstrumentSans-SemiBold' },
   menuSection: {
     margin: 16, backgroundColor: theme.colors.surface,
     borderRadius: theme.borderRadius.xl, overflow: 'hidden',
@@ -349,7 +355,7 @@ const createDrawerStyles = (theme: AppTheme) => StyleSheet.create({
     backgroundColor: theme.colors.surfaceSecondary,
     alignItems: 'center', justifyContent: 'center', marginRight: 14,
   },
-  menuLabel: { flex: 1, fontFamily: 'Inter-Regular', fontSize: 17, color: theme.colors.text },
+  menuLabel: { flex: 1, fontFamily: 'InstrumentSans-Regular', fontSize: 17, color: theme.colors.text },
   chevron: { fontSize: 18, color: theme.colors.textQuaternary },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.borderLight, marginLeft: 62 },
   footer: { paddingHorizontal: 16, marginTop: 'auto' },
@@ -357,7 +363,7 @@ const createDrawerStyles = (theme: AppTheme) => StyleSheet.create({
     alignItems: 'center', paddingVertical: 16,
     backgroundColor: theme.colors.errorSurface, borderRadius: theme.borderRadius.xl,
   },
-  signOutText: { fontFamily: 'Inter-SemiBold', fontSize: 17, color: theme.colors.error },
+  signOutText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 17, color: theme.colors.error },
 });
 
 // ─── App Shell ────────────────────────────────────────────────────────────────
@@ -394,8 +400,8 @@ function AppShell() {
         headerShown: false,
         headerTintColor: theme.colors.primary,
         headerStyle: { backgroundColor: theme.colors.background },
-        headerTitleStyle: { fontFamily: 'Inter-Bold', color: theme.colors.text },
-        headerBackTitleStyle: { fontFamily: 'Inter-Regular' },
+        headerTitleStyle: { fontFamily: 'InstrumentSans-Bold', color: theme.colors.text },
+        headerBackTitleStyle: { fontFamily: 'InstrumentSans-Regular' },
       }}>
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen name="Profile"          component={ProfileScreen}            options={{ headerShown: true, headerTitle: 'Profile',            headerBackTitle: '' }} />
@@ -481,14 +487,16 @@ function ThemedStatusBarAndNav() {
 // ─── App Entry ────────────────────────────────────────────────────────────────
 export default function App() {
   const [fontsLoaded] = useFonts({
-    'Inter-Regular':  Inter_400Regular,
-    'Inter-Medium':   Inter_500Medium,
-    'Inter-SemiBold': Inter_600SemiBold,
-    'Inter-Bold':     Inter_700Bold,
-    'Inter-Black':    Inter_900Black,
-    // Reconcile display face (docs/design/TrackSpense_UX_Design_Spec.md §3) — True Total / big
-    // balances only, per src/theme.ts's `displayHero`/`display` typography roles.
-    'SpaceGrotesk-SemiBold': SpaceGrotesk_600SemiBold,
+    'InstrumentSans-Regular':  InstrumentSans_400Regular,
+    'InstrumentSans-Medium':   InstrumentSans_500Medium,
+    'InstrumentSans-SemiBold': InstrumentSans_600SemiBold,
+    'InstrumentSans-Bold':     InstrumentSans_700Bold,
+    // CerebroOS display face — True Total / big balances only, per src/theme.ts's
+    // `displayHero`/`display` typography roles.
+    'BricolageGrotesque-SemiBold': BricolageGrotesque_600SemiBold,
+    // CerebroOS mono/eyebrow face — section labels and status badges.
+    'IBMPlexMono-Regular': IBMPlexMono_400Regular,
+    'IBMPlexMono-Medium':  IBMPlexMono_500Medium,
   });
 
   if (!fontsLoaded) {
@@ -514,23 +522,26 @@ export default function App() {
   );
 }
 
+// Outside ThemeProvider (ErrorBoundary wraps it), so this can't read useAppTheme() — hardcoded
+// to the CerebroOS ink palette directly rather than left on the old light fallback, which would
+// have flashed a jarring white screen on top of an otherwise all-dark app.
 const styles = StyleSheet.create({
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: '#05060A',
   },
   errorTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: '#e74c3c',
+    color: '#F87171',
   },
   errorText: {
     fontSize: 14,
-    color: '#7f8c8d',
+    color: '#9AA0AF',
     textAlign: 'center',
   },
 });

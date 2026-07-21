@@ -21,7 +21,7 @@ import { listExpenses } from '../api/expenses';
 import { listAllMyGroupExpenses, listGroups, UnifiedGroupExpenseRow, GroupSummary } from '../api/groups';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { onExpenseChanged } from '../utils/expenseEvents';
-import { slate, tabularNums } from '../theme';
+import { cerebro, tabularNums } from '../theme';
 
 const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
 const RECENT_FEED_LIMIT = 6;
@@ -372,7 +372,7 @@ const DashboardPage: React.FC = () => {
               backgroundColor: 'background.paper',
               border: '1px solid',
               borderColor: 'divider',
-              borderRadius: `${slate.radius.surface}px`,
+              borderRadius: `${cerebro.radius.surface}px`,
               overflow: 'hidden',
             }}
           >

@@ -9,7 +9,6 @@ import { useTheme } from '@mui/material/styles';
 import { getFriendBalances, getGroup, createSettlement, FriendBalanceDTO } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import { formatMoney } from '../expenses/ExpenseFeed';
-import { slate } from '../../theme';
 
 interface PeopleListProps {
   onToast?: (message: string, severity: 'success' | 'error') => void;
@@ -31,9 +30,8 @@ interface PeopleListProps {
 const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
   const theme = useTheme();
   const queryClient = useQueryClient();
-  const isDark = theme.palette.mode === 'dark';
-  const positiveColor = isDark ? slate.positiveDark : slate.positive;
-  const negativeColor = isDark ? slate.negativeDark : slate.negative;
+  const positiveColor = theme.palette.success.main;
+  const negativeColor = theme.palette.error.main;
   const myEmail = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
 
   const { data, isLoading } = useQuery({ queryKey: ['friend-balances'], queryFn: getFriendBalances });

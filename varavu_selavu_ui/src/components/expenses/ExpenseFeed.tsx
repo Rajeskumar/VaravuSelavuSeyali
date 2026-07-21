@@ -118,7 +118,6 @@ interface ExpenseRowProps {
 const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDelete, deleting, readOnly }) => {
   const theme = useTheme();
   const dot = categoryTint(expense.mainCategory);
-  const isDark = theme.palette.mode === 'dark';
 
   return (
     <Box
@@ -212,7 +211,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
             }}
             sx={rowActionHitSlopSx}
           >
-            <EditIcon fontSize="small" sx={{ color: isDark ? theme.palette.primary.light : theme.palette.primary.main }} />
+            <EditIcon fontSize="small" sx={{ color: theme.palette.primary.light }} />
           </IconButton>
           <IconButton
             aria-label="delete"
@@ -326,7 +325,7 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
               justifyContent: 'space-between',
               px: 2,
               py: 0.75,
-              backgroundColor: theme.palette.mode === 'dark' ? theme.palette.background.default : '#EFEFEA',
+              backgroundColor: theme.palette.background.default,
               borderBottom: `1px solid ${theme.palette.divider}`,
             }}
           >

@@ -106,7 +106,7 @@ const RecurringPrompt: React.FC = () => {
         <Box sx={{ width: 40, height: 4, bgcolor: 'divider', borderRadius: 2, mx: 'auto', mb: 3 }} />
         
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
-          <Typography sx={{ fontFamily: 'Inter', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
+          <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
             {due.length} recurring expense{due.length === 1 ? ' is' : 's are'} due
           </Typography>
           <IconButton onClick={() => setOpen(false)} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
@@ -114,7 +114,7 @@ const RecurringPrompt: React.FC = () => {
           </IconButton>
         </Box>
         
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary', mb: 3 }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary', mb: 3 }}>
           Confirm to log them, or dismiss and handle them later — this won't block the app.
         </Typography>
 
@@ -149,10 +149,10 @@ const RecurringPrompt: React.FC = () => {
                   sx={{ p: 0, '& .MuiSvgIcon-root': { fontSize: 20 } }}
                 />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontFamily: 'Inter', fontSize: 14, fontWeight: 600, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 14, fontWeight: 600, color: 'text.primary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {d.description}
                   </Typography>
-                  <Typography sx={{ fontFamily: 'Inter', fontSize: 12, color: 'text.secondary' }}>
+                  <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 12, color: 'text.secondary' }}>
                     {d.category} · {dateStr}
                   </Typography>
                 </Box>

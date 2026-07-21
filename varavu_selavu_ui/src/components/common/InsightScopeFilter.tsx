@@ -83,7 +83,7 @@ const InsightScopeFilter: React.FC<Props> = ({ value, onChange }) => {
     border: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
-    fontFamily: 'Inter',
+    fontFamily: 'Instrument Sans',
     fontSize: '0.75rem',
     fontWeight: 600,
     color: 'text.primary',

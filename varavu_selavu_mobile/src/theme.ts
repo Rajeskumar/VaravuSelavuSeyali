@@ -19,9 +19,10 @@ export interface ThemeColors {
   secondary: string;
   secondarySurface: string;
 
-  // Kept for back-compat with every existing `LinearGradient colors={[gradientStart, gradientEnd]}`
-  // call site (~10 screens) — see TS-DES-101/201. Slate has no gradient, so both stops resolve to
-  // the same flat accent and those call sites render as a flat fill with zero edits.
+  // Real 2-stop violet→cyan gradient, identical in both modes — the gradient CTA is a
+  // self-contained brand chip (fixed pastel fill + ink text, see CustomButton.tsx) that reads
+  // the same regardless of canvas, so it isn't duplicated per mode. Every existing
+  // `LinearGradient colors={[gradientStart, gradientEnd]}` call site renders it for free.
   gradientStart: string;
   gradientEnd: string;
 
@@ -34,6 +35,13 @@ export interface ThemeColors {
   textSecondary: string;
   textTertiary: string;
   textQuaternary: string;
+  /** Text/icon color for content sitting on a *flat* `primary`/`secondary`/`error`/`warning`
+   * fill (buttons, avatar circles, badges) — ink in dark mode (those fills are light pastels),
+   * flips to a light color in light mode once `primary`/etc. become darker/saturated there.
+   * NOT for content on the gradient CTA, which stays pastel in both modes and always wants ink
+   * — components using the gradient hardcode ink directly rather than reading this token. Also
+   * not for content on the fixed pastel `memberColor()`/avatar-palette fills (BalanceRow.tsx
+   * etc.), which likewise stay light in both modes and hardcode ink directly. */
   textInverse: string;
 
   success: string;
@@ -49,77 +57,82 @@ export interface ThemeColors {
   overlay: string;
 
   /**
-   * Ceremony accent — settle-up "all squared up" moment / reconciled tick. Slate has no
-   * dedicated ceremony hue (unlike Reconcile's gold); this now resolves to the brand accent for
-   * a distinct celebratory pop. Field name kept for zero call-site changes (TS-DES-201).
+   * Ceremony accent — settle-up "all squared up" moment / reconciled tick. Resolves to the
+   * brand accent, same policy as Slate. Field name kept for zero call-site changes.
    */
   gold: string;
 }
 
-// "Slate" (docs/design/Redesign_Proposal_v2.md §1, TS-DES-201): a neutral canvas/surface/border
-// system with one indigo-slate brand accent (`primary`) and dedicated, distinct semantic colors
-// for positive/negative/caution — unlike Reconcile, brand and semantic-positive are NOT the same
-// hue. Money is `text` (ink) by default; success/error carry directional meaning — see
-// `directionalColor()` below. Hex values confirmed against `docs/design/prototypes/v2/desktop/*.jsx`'s
-// shared `LIGHT`/`DARK` constants.
+/**
+ * "CerebroOS" (design system pulled from the Claude Design project) — violet→cyan gradient
+ * brand, light + dark modes. The source design only specified a dark canvas; the light palette
+ * is this app's own extension (same approach as the web app's theme.ts — see that file's header
+ * comment for the full rationale): `primary`/`secondary`/money-signal colors are darkened/
+ * saturated for contrast on a white canvas, since they're used as flat text/icon colors in
+ * dozens of places, not just fills. RN's color parser (`@react-native/normalize-colors`) has no
+ * oklch() support, so every accent is the pre-computed sRGB hex twin of the web theme's oklch
+ * value.
+ */
 const lightColors: ThemeColors = {
-  primary: '#3F3F9E',        // accent
-  primaryLight: '#5F5FB8',
-  primaryDark: '#33337E',
-  primarySurface: '#E8E8F5',
-  secondary: '#18181B',      // ink — neutral secondary action, not a second brand hue
-  secondarySurface: '#ECECEE',
+  primary: '#5E48C8',        // violet accent (light) — same computed value as web's cerebro.violetAccentHex
+  primaryLight: '#8571DB',
+  primaryDark: '#4A3898',
+  primarySurface: '#EDE9FB',
 
-  gradientStart: '#3F3F9E',
-  gradientEnd: '#3F3F9E',
+  secondary: '#00787A',      // cyan accent (light) — matches web's cerebro.cyanAccentHex
+  secondarySurface: '#DFF3F3',
 
-  background: '#FAFAFA',     // canvas
+  gradientStart: '#AEA5FF',  // violet — oklch(0.78 0.17 285), mode-independent
+  gradientEnd: '#00E0E0',    // cyan — oklch(0.82 0.14 195), mode-independent
+
+  background: '#FAFAFA',
   surface: '#FFFFFF',
-  surfaceSecondary: '#F5F5F7',
+  surfaceSecondary: 'rgba(0,0,0,0.04)',
   surfaceElevated: '#FFFFFF',
 
-  text: '#18181B',           // ink
-  textSecondary: '#71717A',  // ink-muted
-  textTertiary: '#8E8E93',
-  textQuaternary: '#C7C7CC',
+  text: '#101218',
+  textSecondary: '#5B6172',
+  textTertiary: '#8B909E',
+  textQuaternary: '#C4C8D1',
   textInverse: '#FFFFFF',
 
-  success: '#15803D',        // positive — distinct from brand accent, on purpose (a11y: hue alone no longer conflates "branded" with "good news")
-  successSurface: '#E3F5E9',
-  error: '#B91C1C',          // negative
-  errorSurface: '#FBEAEA',
-  warning: '#B45309',        // caution
-  warningSurface: '#F5ECDD',
+  success: '#15803D',
+  successSurface: '#DCFCE7',
+  error: '#B91C1C',
+  errorSurface: '#FEE2E2',
+  warning: '#B45309',
+  warningSurface: '#FEF3C7',
 
-  border: '#E4E4E7',
-  borderLight: '#ECECEF',    // hairline
+  border: 'rgba(0,0,0,0.15)',
+  borderLight: 'rgba(0,0,0,0.08)',
 
-  overlay: 'rgba(24,24,27,0.4)',
+  overlay: 'rgba(0,0,0,0.4)',
 
-  gold: '#3F3F9E',           // ceremony → brand accent (see ThemeColors.gold doc comment)
+  gold: '#5E48C8',
 };
 
 const darkColors: ThemeColors = {
-  primary: '#6D6DC7',        // accent, dark-mode lift for contrast
-  primaryLight: '#8A8AD4',
-  primaryDark: '#5B5BB0',
-  primarySurface: '#26264A',
-  secondary: '#FAFAFA',      // canvas — inverted neutral secondary action on dark backgrounds
-  secondarySurface: '#232326',
+  primary: '#9C93FF',        // violet accent (dark) — oklch(0.72 0.16 285)
+  primaryLight: '#B7B0FF',
+  primaryDark: '#7C72E8',
+  primarySurface: '#1C1830',
 
-  gradientStart: '#6D6DC7',
-  gradientEnd: '#6D6DC7',
+  secondary: '#00D2D3',      // cyan accent (dark) — oklch(0.78 0.14 195)
+  secondarySurface: '#0E2626',
 
-  background: '#09090B',     // canvas (dark) — Slate's dark-mode background
-  surface: '#18181B',
-  surfaceSecondary: '#232326',
-  surfaceElevated: '#18181B',
+  gradientStart: '#AEA5FF',  // violet — oklch(0.78 0.17 285)
+  gradientEnd: '#00E0E0',    // cyan — oklch(0.82 0.14 195)
 
-  text: '#FAFAFA',
-  textSecondary: '#A1A1AA',
-  textTertiary: '#8E8E93',
-  textQuaternary: '#48484A',
-  textInverse: '#18181B',
+  background: '#05060A',     // ink
+  surface: 'rgba(255,255,255,0.03)',
+  surfaceSecondary: 'rgba(255,255,255,0.06)',
+  surfaceElevated: '#0E0F16',
+
+  text: '#F0F1F5',
+  textSecondary: '#9AA0AF',
+  textTertiary: '#6B7080',
+  textQuaternary: '#4B4F5A',
+  textInverse: '#05060A',
 
   success: '#4ADE80',
   successSurface: '#0F2A1A',
@@ -128,15 +141,21 @@ const darkColors: ThemeColors = {
   warning: '#FBBF24',
   warningSurface: '#332818',
 
-  border: '#27272A',
-  borderLight: '#2E2E32',    // hairline (dark)
+  border: 'rgba(255,255,255,0.15)',
+  borderLight: 'rgba(255,255,255,0.1)',
 
-  overlay: 'rgba(0,0,0,0.6)',
+  overlay: 'rgba(0,0,0,0.65)',
 
-  gold: '#6D6DC7',           // ceremony → brand accent (dark)
+  gold: '#9C93FF',           // ceremony → brand accent
 };
 
-/** Spring/timing presets for react-native-reanimated — reused for the hero-count / settle-up count-to-zero moments (§5). */
+/** Fixed ink color for text/icons on the mode-independent pastel fills: the gradient CTA
+ * (`gradientStart`/`gradientEnd`) and the deterministic `memberColor()`-style avatar palettes
+ * (BalanceRow.tsx etc.) — both stay light pastel in either mode, so unlike `textInverse` (which
+ * flips with `primary`), content on these always wants ink. */
+export const inkOnPastel = '#05060A';
+
+/** Spring/timing presets for react-native-reanimated — reused for the hero-count / settle-up count-to-zero moments, and the Badge pulse. */
 export const motion = {
   spring: { damping: 18, stiffness: 220, mass: 0.9 },
   springBouncy: { damping: 12, stiffness: 260, mass: 0.9 },
@@ -152,115 +171,126 @@ export const spacing = {
   xxl: 48,
 };
 
-// Radius scale (unchanged by the Slate pivot — policy, not color): 10px surfaces / 8px controls / pill for lens+chips.
-// `full` stays a distinct, large numeric value reserved for pill-shaped CTA/lens/chip components
-// (e.g. CustomButton, matching the reference prototypes' full-width rounded-full primary actions)
-// rather than the general card/surface default.
+// CerebroOS radius scale: 12px controls, 16px surfaces, pill for lens/chips/badges.
 export const borderRadius = {
-  xs: 8,   // control
-  sm: 8,   // control
-  md: 10,  // surface
-  lg: 10,  // surface
-  xl: 10,  // surface
-  xxl: 12, // large surface (sheets) — one step up from the flat 10px card radius
+  xs: 12,  // control
+  sm: 12,  // control
+  md: 16,  // surface
+  lg: 16,  // surface
+  xl: 16,  // surface
+  xxl: 20, // large surface (sheets) — one step up from the 16px card radius
   full: 9999,
 };
 
 function buildTypography(colors: ThemeColors) {
   return {
     fontFamily: {
-      regular: 'Inter-Regular',
-      medium: 'Inter-Medium',
-      semiBold: 'Inter-SemiBold',
-      bold: 'Inter-Bold',
-      black: 'Inter-Black',
-      display: 'SpaceGrotesk-SemiBold', // Display face — hero numbers/section moments only
+      regular: 'InstrumentSans-Regular',
+      medium: 'InstrumentSans-Medium',
+      semiBold: 'InstrumentSans-SemiBold',
+      bold: 'InstrumentSans-Bold',
+      // Instrument Sans tops out at 700/Bold (no 900/Black cut) — reuse Bold for the one role
+      // (h1) that previously wanted an extra-heavy weight.
+      black: 'InstrumentSans-Bold',
+      display: 'BricolageGrotesque-SemiBold', // Display face — hero numbers/section moments only
+      mono: 'IBMPlexMono-Medium', // Eyebrow labels, status badges
+      monoRegular: 'IBMPlexMono-Regular',
     },
-    // True Total / big balance — Design Spec §3 `display-hero` (44–56px).
+    // True Total / big balance — display-hero (44–56px).
     displayHero: {
-      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontFamily: 'BricolageGrotesque-SemiBold',
       fontSize: 48,
       color: colors.text,
       fontVariant: ['tabular-nums'] as const,
     },
-    // Screen balances, big stats — §3 `display` (32px).
+    // Screen balances, big stats — display (32px).
     display: {
-      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontFamily: 'BricolageGrotesque-SemiBold',
       fontSize: 32,
       color: colors.text,
       fontVariant: ['tabular-nums'] as const,
     },
     h1: {
-      fontFamily: 'Inter-Black',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 34,
       color: colors.text,
       letterSpacing: -0.5,
     },
     h2: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 28,
       color: colors.text,
       letterSpacing: -0.3,
     },
     h3: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 22,
       color: colors.text,
       letterSpacing: -0.2,
     },
     body: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 17,
       color: colors.text,
     },
     bodyRegular: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 17,
       color: colors.text,
       lineHeight: 22,
     },
-    // Every list/row figure — §3 `amount` (16–18px, tabular-nums mandatory).
+    // Every list/row figure — `amount` (16–18px, tabular-nums mandatory).
     amount: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 17,
       color: colors.text,
       fontVariant: ['tabular-nums'] as const,
     },
     callout: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 16,
       color: colors.textSecondary,
     },
     subheadline: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 15,
       color: colors.textSecondary,
     },
     footnote: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       color: colors.textTertiary,
     },
     caption: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 12,
       color: colors.textTertiary,
     },
     label: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 13,
       color: colors.textTertiary,
       textTransform: 'uppercase' as const,
       letterSpacing: 0.5,
     },
+    // Net-new for CerebroOS: mono uppercase section-label/status-badge role ("01 / FEATURES",
+    // "LIVE"). 0.14em of a 12px face ≈ 1.7pt letter-spacing.
+    eyebrow: {
+      fontFamily: 'IBMPlexMono-Medium',
+      fontSize: 12,
+      color: colors.primary,
+      textTransform: 'uppercase' as const,
+      letterSpacing: 1.7,
+    },
   };
 }
 
 function buildShadows(mode: ThemeMode, colors: ThemeColors) {
-  // Elevation policy (unchanged by the Slate pivot): reserved for sheets only; everything else uses hairline + tint.
-  // Ordinary card/row tiers collapse to ~zero so `borderLight` (hairline) does the separation
-  // work instead; only real bottom-sheet/modal-equivalent surfaces keep a visible shadow.
-  const opacityScale = mode === 'dark' ? 0.5 : 1;
+  // Elevation policy: reserved for sheets only; everything else uses hairline + tint. Ordinary
+  // card/row tiers collapse to ~zero so `borderLight` (hairline) does the separation work
+  // instead; only real bottom-sheet/modal-equivalent surfaces and the primary-CTA glow keep a
+  // visible shadow.
+  const opacityScale = mode === 'dark' ? 1 : 0.6;
   return {
     xs: {
       shadowColor: '#000',
@@ -287,15 +317,20 @@ function buildShadows(mode: ThemeMode, colors: ThemeColors) {
     lg: {
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.1 * opacityScale,
+      shadowOpacity: 0.5 * opacityScale,
       shadowRadius: 20,
       elevation: 8,
     },
+    // Primary-CTA glow — CerebroOS's `0 0 40px oklch(0.65 0.2 285 / 0.45)`. RN shadows have no
+    // spread and Android's `elevation` ignores shadowColor entirely, so this reads correctly on
+    // iOS but will look flatter on Android — flagged as a known platform gap, not fixed here.
+    // Glow color is mode-independent (matches the gradient) — it's still visible, just softer,
+    // against a light canvas.
     fab: {
-      shadowColor: colors.primary,
+      shadowColor: '#8776FF', // glow — oklch(0.65 0.2 285)
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: mode === 'dark' ? 0.55 : 0.35,
-      shadowRadius: 16,
+      shadowOpacity: 0.55 * opacityScale,
+      shadowRadius: 20,
       elevation: 10,
     },
     nav: {
@@ -308,14 +343,14 @@ function buildShadows(mode: ThemeMode, colors: ThemeColors) {
     colored: {
       shadowColor: colors.primary,
       shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: mode === 'dark' ? 0.45 : 0.25,
+      shadowOpacity: 0.45 * opacityScale,
       shadowRadius: 16,
       elevation: 8,
     },
   };
 }
 
-export function buildTheme(mode: ThemeMode) {
+export function buildTheme(mode: ThemeMode = 'dark') {
   const colors = mode === 'dark' ? darkColors : lightColors;
   return {
     mode,
@@ -326,9 +361,11 @@ export function buildTheme(mode: ThemeMode) {
     shadows: buildShadows(mode, colors),
     gradients: {
       primary: [colors.gradientStart, colors.gradientEnd] as [string, string],
+      // Subtle canvas-depth gradient for the screen base (ScreenWrapper.tsx) — the violet/cyan
+      // "orbs" pop is layered on top via AmbientBackground.tsx, not baked into this base fill.
       surface: mode === 'dark'
-        ? ([colors.background, colors.surfaceSecondary] as [string, string])
-        : ([colors.background, colors.primarySurface] as [string, string]),
+        ? ([colors.background, colors.surfaceElevated] as [string, string])
+        : ([colors.background, '#F1F1F5'] as [string, string]),
     },
   };
 }
@@ -339,13 +376,13 @@ export const lightTheme = buildTheme('light');
 export const darkTheme = buildTheme('dark');
 
 // Static default kept for any file not yet migrated to useAppTheme().
-export const theme = lightTheme;
+export const theme = darkTheme;
 
 /**
- * Money-color policy (Design Spec §2): `text` (ink) is the default for every neutral amount.
- * `success`/`error` (jade/ember) are reserved for signed, directional amounts (owed-to-you /
- * you-owe) and must always be paired with a sign and a word — never color alone. Call this
- * instead of reaching for `colors.success`/`colors.error` ad hoc.
+ * Money-color policy: `text` (ink) is the default for every neutral amount. `success`/`error`
+ * are reserved for signed, directional amounts (owed-to-you / you-owe) and must always be paired
+ * with a sign and a word — never color alone. Call this instead of reaching for
+ * `colors.success`/`colors.error` ad hoc.
  */
 export function directionalColor(t: AppTheme, net: number): string {
   if (net > 0) return t.colors.success;
@@ -385,5 +422,5 @@ export function createGlobalStyles(t: AppTheme) {
   });
 }
 
-// Backward-compatible static export (light mode only — not dark-mode aware).
-export const globalStyles = createGlobalStyles(lightTheme);
+// Backward-compatible static export.
+export const globalStyles = createGlobalStyles(darkTheme);

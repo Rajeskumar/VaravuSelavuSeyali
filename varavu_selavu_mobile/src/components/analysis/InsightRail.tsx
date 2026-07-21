@@ -82,7 +82,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         marginBottom: 12,
     },
     headerTitle: {
-        fontFamily: 'Inter-Bold',
+        fontFamily: 'InstrumentSans-Bold',
         fontSize: 11,
         letterSpacing: 0.6,
         color: theme.colors.textSecondary,
@@ -106,7 +106,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         marginBottom: 16,
     },
     metricName: {
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: 'InstrumentSans-SemiBold',
         fontSize: 15,
         color: theme.colors.text,
         flex: 1,
@@ -121,7 +121,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         gap: 2,
     },
     badgeText: {
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: 'InstrumentSans-SemiBold',
         fontSize: 12,
     },
     cardBody: {
@@ -130,18 +130,18 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         marginBottom: 16,
     },
     valueLabel: {
-        fontFamily: 'Inter-Regular',
+        fontFamily: 'InstrumentSans-Regular',
         fontSize: 12,
         color: theme.colors.textTertiary,
         marginBottom: 4,
     },
     currentValue: {
-        fontFamily: 'SpaceGrotesk-SemiBold',
+        fontFamily: 'BricolageGrotesque-SemiBold',
         fontSize: 18,
         color: theme.colors.text,
     },
     previousValue: {
-        fontFamily: 'SpaceGrotesk-SemiBold',
+        fontFamily: 'BricolageGrotesque-SemiBold',
         fontSize: 18,
         color: theme.colors.textSecondary,
     },
@@ -157,7 +157,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         borderColor: theme.colors.borderLight,
     },
     askText: {
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: 'InstrumentSans-SemiBold',
         fontSize: 13,
         color: theme.colors.primary,
     },

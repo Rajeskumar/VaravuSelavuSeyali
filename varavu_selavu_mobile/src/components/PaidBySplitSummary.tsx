@@ -157,9 +157,9 @@ const PaidBySplitSummary: React.FC<Props> = ({
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: { paddingVertical: 2 },
-    summaryText: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textSecondary },
-    link: { fontFamily: 'Inter-Bold', color: theme.colors.primary, textDecorationLine: 'underline' },
-    perPerson: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 2 },
+    summaryText: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textSecondary },
+    link: { fontFamily: 'InstrumentSans-Bold', color: theme.colors.primary, textDecorationLine: 'underline' },
+    perPerson: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 2 },
 
     modalContainer: { flex: 1, backgroundColor: theme.colors.background },
     modalHeader: {
@@ -172,9 +172,9 @@ const createStyles = (theme: AppTheme) =>
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
     },
-    modalTitle: { fontFamily: 'Inter-Bold', fontSize: 18, color: theme.colors.text },
+    modalTitle: { fontFamily: 'InstrumentSans-Bold', fontSize: 18, color: theme.colors.text },
     closeBtn: { padding: 8 },
-    closeText: { color: theme.colors.primary, fontFamily: 'Inter-SemiBold', fontSize: 16 },
+    closeText: { color: theme.colors.primary, fontFamily: 'InstrumentSans-SemiBold', fontSize: 16 },
     modalScroll: { flex: 1 },
     modalContent: { padding: 20, paddingBottom: 40 },
     modalFooter: {
@@ -194,7 +194,7 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    cancelBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 15, color: theme.colors.text },
+    cancelBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
     saveBtn: {
       flex: 1,
       height: 46,
@@ -204,7 +204,7 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: 'center',
     },
     saveBtnDisabled: { backgroundColor: theme.colors.border },
-    saveBtnText: { fontFamily: 'Inter-Bold', fontSize: 15, color: '#FFFFFF' },
+    saveBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.textInverse },
   });
 
 export default PaidBySplitSummary;

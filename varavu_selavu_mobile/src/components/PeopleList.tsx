@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import { getFriendBalances, FriendBalanceDTO } from '../api/groups';
 import { memberColor, initialsFromName } from './BalanceRow';
 
@@ -74,9 +74,9 @@ export default function PeopleList() {
   return (
     <View style={[styles.list, { paddingBottom: insets.bottom + 100 }]}>
       <Text style={styles.summaryLine}>
-        <Text style={{ color: theme.colors.success, fontFamily: 'Inter-Bold' }}>${owedTotal.toFixed(2)}</Text>
+        <Text style={{ color: theme.colors.success, fontFamily: 'InstrumentSans-Bold' }}>${owedTotal.toFixed(2)}</Text>
         <Text style={styles.summaryMuted}> owed to you  ·  </Text>
-        <Text style={{ color: theme.colors.error, fontFamily: 'Inter-Bold' }}>${oweTotal.toFixed(2)}</Text>
+        <Text style={{ color: theme.colors.error, fontFamily: 'InstrumentSans-Bold' }}>${oweTotal.toFixed(2)}</Text>
         <Text style={styles.summaryMuted}> you owe</Text>
       </Text>
 
@@ -145,7 +145,7 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     list: { paddingTop: 4 },
     summaryLine: { marginHorizontal: 16, marginBottom: 10, fontSize: 12.5, fontVariant: ['tabular-nums'] },
-    summaryMuted: { color: theme.colors.textTertiary, fontFamily: 'Inter-Regular' },
+    summaryMuted: { color: theme.colors.textTertiary, fontFamily: 'InstrumentSans-Regular' },
     card: {
       backgroundColor: theme.colors.surface,
       marginHorizontal: 16,
@@ -161,12 +161,13 @@ const createStyles = (theme: AppTheme) =>
       padding: 14,
     },
     avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
-    avatarText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 14 },
+    // memberColor() avatar palette is fixed pastel in both modes — ink text always.
+    avatarText: { color: inkOnPastel, fontFamily: 'InstrumentSans-Bold', fontSize: 14 },
     info: { flex: 1 },
-    name: { fontFamily: 'Inter-SemiBold', fontSize: 16, color: theme.colors.text },
-    groupCount: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
-    netAmount: { fontFamily: 'Inter-Bold', fontSize: 15 },
-    chevron: { fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.textTertiary, marginLeft: 8 },
+    name: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 16, color: theme.colors.text },
+    groupCount: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 },
+    netAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 15 },
+    chevron: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textTertiary, marginLeft: 8 },
     settleBtn: {
       marginHorizontal: 14,
       marginTop: 10,
@@ -176,7 +177,7 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'center',
       backgroundColor: `${theme.colors.primary}18`,
     },
-    settleBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.primary },
+    settleBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.primary },
     subRows: {
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: theme.colors.borderLight,
@@ -189,17 +190,17 @@ const createStyles = (theme: AppTheme) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.borderLight,
     },
-    subRowName: { flex: 1, fontFamily: 'Inter-Regular', fontSize: 13, color: theme.colors.text },
-    subRowAmount: { fontFamily: 'Inter-SemiBold', fontSize: 13, marginRight: 10 },
+    subRowName: { flex: 1, fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.text },
+    subRowAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, marginRight: 10 },
     subSettleBtn: {
       paddingHorizontal: 10,
       paddingVertical: 5,
       borderRadius: 8,
       backgroundColor: `${theme.colors.primary}18`,
     },
-    subSettleBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 11, color: theme.colors.primary },
+    subSettleBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11, color: theme.colors.primary },
     emptyCenter: { alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingHorizontal: 32 },
     emptyIcon: { fontSize: 56, marginBottom: 14 },
-    emptyTitle: { fontFamily: 'Inter-Bold', fontSize: 18, color: theme.colors.text, textAlign: 'center' },
-    emptySubtitle: { fontFamily: 'Inter-Regular', fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 6 },
+    emptyTitle: { fontFamily: 'InstrumentSans-Bold', fontSize: 18, color: theme.colors.text, textAlign: 'center' },
+    emptySubtitle: { fontFamily: 'InstrumentSans-Regular', fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', marginTop: 6 },
   });

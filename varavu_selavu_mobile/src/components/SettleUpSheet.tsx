@@ -20,7 +20,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import { MemberDTO, MemberBalance, recordSettlement } from '../api/groups';
 import CustomButton from './CustomButton';
 import { showToast } from './Toast';
@@ -281,13 +281,13 @@ const createStyles = (theme: AppTheme) =>
       marginBottom: 12,
     },
     title: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 20,
       color: theme.colors.text,
       textAlign: 'center',
     },
     subtitle: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 15,
       color: theme.colors.textSecondary,
       textAlign: 'center',
@@ -301,7 +301,7 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 4,
     },
     heroLabel: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 13,
       color: theme.colors.textSecondary,
     },
@@ -311,12 +311,12 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 4,
     },
     heroAmount: {
-      fontFamily: 'SpaceGrotesk-SemiBold',
+      fontFamily: 'BricolageGrotesque-SemiBold',
       fontSize: 36,
       fontVariant: ['tabular-nums'],
     },
     doneSubtext: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 14,
       color: theme.colors.textSecondary,
       textAlign: 'center',
@@ -344,9 +344,10 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: 'center',
       marginBottom: 6,
     },
-    previewAvatarText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 16 },
+    // memberColor() avatar palette is fixed pastel in both modes — ink text always.
+    previewAvatarText: { color: inkOnPastel, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
     previewName: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 13,
       color: theme.colors.text,
     },
@@ -357,13 +358,13 @@ const createStyles = (theme: AppTheme) =>
       marginVertical: 8,
     },
     currencySymbol: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 32,
       color: theme.colors.text,
       marginRight: 4,
     },
     amountInput: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 42,
       color: theme.colors.text,
       minWidth: 120,
@@ -384,7 +385,7 @@ const createStyles = (theme: AppTheme) =>
       borderColor: theme.colors.border,
     },
     paymentButtonText: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 13,
       color: theme.colors.primary,
     },

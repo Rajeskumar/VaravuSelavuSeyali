@@ -62,7 +62,7 @@ export const TrendNavigator: React.FC<TrendNavigatorProps> = ({ monthlyTrend, se
   return (
     <Box sx={{ px: 2, pb: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
           SPEND OVER TIME · tap a month
         </Typography>
       </Box>
@@ -107,7 +107,7 @@ export const TrendNavigator: React.FC<TrendNavigatorProps> = ({ monthlyTrend, se
             >
               <Box sx={{ height: 16, display: 'flex', alignItems: 'flex-end', mb: 0.5 }}>
                 {isSel && (
-                  <Typography sx={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 600, color: 'text.primary' }}>
+                  <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 600, color: 'text.primary' }}>
                     ${m.total >= 1000 ? `${(m.total/1000).toFixed(1)}k` : Math.round(m.total)}
                   </Typography>
                 )}
@@ -128,7 +128,7 @@ export const TrendNavigator: React.FC<TrendNavigatorProps> = ({ monthlyTrend, se
               <Typography
                 sx={{
                   mt: 1,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Instrument Sans',
                   fontSize: 11,
                   fontWeight: isSel ? 600 : 400,
                   color: isSel ? 'text.primary' : 'text.secondary',

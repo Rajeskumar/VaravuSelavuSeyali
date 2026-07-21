@@ -14,7 +14,6 @@ interface PriceHistoryChartProps {
 
 export const PriceHistoryChart: React.FC<PriceHistoryChartProps> = ({ history }) => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
 
   if (!history || history.length === 0) return null;
 
@@ -51,7 +50,7 @@ export const PriceHistoryChart: React.FC<PriceHistoryChartProps> = ({ history })
             cx={p.x} 
             cy={p.y} 
             r={i === points.length - 1 ? 4 : 2.5} 
-            fill={i === points.length - 1 ? lastColor : (isDark ? theme.palette.background.paper : inkColor)} 
+            fill={i === points.length - 1 ? lastColor : theme.palette.background.paper}
             stroke={i === points.length - 1 ? 'none' : inkColor}
             strokeWidth={1.5}
           />
@@ -65,7 +64,7 @@ export const PriceHistoryChart: React.FC<PriceHistoryChartProps> = ({ history })
           }
           const d = new Date(pt.date);
           return (
-            <Typography key={i} sx={{ fontFamily: 'Inter', fontSize: 10, color: 'text.secondary' }}>
+            <Typography key={i} sx={{ fontFamily: 'Instrument Sans', fontSize: 10, color: 'text.secondary' }}>
               {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
             </Typography>
           );

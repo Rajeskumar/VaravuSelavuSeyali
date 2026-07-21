@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   optionsScroll: { maxHeight: 220 },
   loadingRow: { paddingVertical: 12, alignItems: 'center' },
   option: { paddingHorizontal: 12, paddingVertical: 10 },
-  optionText: { fontFamily: 'Inter-Regular', fontSize: 13.5 },
+  optionText: { fontFamily: 'InstrumentSans-Regular', fontSize: 13.5 },
 });
 
 export default TypeaheadInput;

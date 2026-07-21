@@ -84,7 +84,7 @@ export default function SmartChangeInsightsCard({ userId, year, month }: SmartCh
             transition: 'transform 0.2s, box-shadow 0.2s',
             '&:hover': {
               transform: 'translateY(-2px)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+              boxShadow: '0 4px 16px rgba(156,147,255,0.12)'
             }
           }}
         >

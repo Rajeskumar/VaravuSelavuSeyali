@@ -7,10 +7,10 @@ import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import { IconButton, Tooltip } from '@mui/material';
 
-import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
-import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -26,6 +26,7 @@ import AccountPage from './pages/AccountPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import AskPage from './pages/AskPage';
 import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
+import AmbientBackground from './components/common/AmbientBackground';
 import { QuickCaptureProvider, useQuickCapture } from './context/QuickCaptureContext';
 import { AskProvider, useAsk } from './context/AskContext';
 import { useQuickLogBar } from './hooks/useQuickLogBar';
@@ -36,7 +37,6 @@ import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
 import JoinGroupPage from './pages/JoinGroupPage';
 import Box from '@mui/material/Box';
-import { brand } from './theme';
 import { HEADER_HEIGHT } from './components/layout/layoutConstants';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
@@ -106,6 +106,7 @@ const AppContent: React.FC = () => {
 
   return (
     <>
+      <AmbientBackground />
       <AppBar
         position="fixed"
         sx={{ zIndex: theme => theme.zIndex.drawer + 1 }}
@@ -194,7 +195,7 @@ const AppContent: React.FC = () => {
           )}
 
           <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <IconButton color="inherit" onClick={toggleMode}>
+            <IconButton color="inherit" onClick={toggleMode} aria-label="Toggle color mode">
               {isDark ? <LightModeOutlinedIcon /> : <DarkModeOutlinedIcon />}
             </IconButton>
           </Tooltip>

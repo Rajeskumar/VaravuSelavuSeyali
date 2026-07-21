@@ -244,7 +244,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     ...theme.shadows.sm,
   },
   sectionTitle: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 16,
     color: theme.colors.text,
     marginBottom: 12,
@@ -255,18 +255,18 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     justifyContent: 'space-between',
   },
   preferenceLabel: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 15,
     color: theme.colors.text,
     marginBottom: 2,
   },
   preferenceDesc: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 13,
     color: theme.colors.textSecondary,
   },
   label: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 14,
     color: theme.colors.textSecondary,
     marginBottom: 8,
@@ -278,7 +278,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     fontSize: 16,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     color: theme.colors.text,
     marginBottom: 20,
   },
@@ -298,39 +298,41 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginTop: 8,
   },
   saveButtonText: {
-    color: '#fff',
-    fontFamily: 'Inter-Bold',
+    color: theme.colors.textInverse,
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 16,
   },
+  // Previously a hand-picked light-mode-only red palette (#FECACA/#DC2626/#991B1B) — floated a
+  // light pink border on a dark red surface once the app went dark-only. Theme tokens instead.
   dangerZone: {
     backgroundColor: theme.colors.errorSurface,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: theme.colors.error,
   },
   dangerTitle: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 18,
-    color: '#DC2626',
+    color: theme.colors.error,
     marginBottom: 8,
   },
   dangerDesc: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 14,
-    color: '#991B1B',
+    color: theme.colors.textSecondary,
     marginBottom: 20,
     lineHeight: 20,
   },
   deleteButton: {
-    backgroundColor: '#DC2626',
+    backgroundColor: theme.colors.error,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
   },
   deleteButtonText: {
-    color: '#fff',
-    fontFamily: 'Inter-Bold',
+    color: theme.colors.textInverse,
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 16,
   },
   legalFooter: {
@@ -340,7 +342,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   legalText: {
     fontSize: 13,
     color: theme.colors.textSecondary,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
   },
   legalLinksRow: {
     flexDirection: 'row',
@@ -348,7 +350,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   legalLink: {
     fontSize: 13,
     color: theme.colors.textSecondary,
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     textDecorationLine: 'underline',
   },
 });

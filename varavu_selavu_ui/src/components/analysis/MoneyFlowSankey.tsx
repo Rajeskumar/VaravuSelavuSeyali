@@ -41,8 +41,9 @@ interface ExpenseDetail {
 }
 
 // Neutral gray for the folded "Other categories" bucket — deliberately not a category color
-// since it isn't one category, it's a grab-bag of whatever didn't make the cut.
-const OTHER_CATEGORY_COLOR = '#94A3B8';
+// since it isn't one category, it's a grab-bag of whatever didn't make the cut. Matches
+// theme.ts's `cerebro.textSecondary` exactly, so it reads as "muted text," not a hue choice.
+const OTHER_CATEGORY_COLOR = '#9AA0AF';
 
 /** Above this many distinct categories, the smallest ones fold into a single "Other categories"
  * node rather than each getting their own band — see the file-level comment for why. */
@@ -73,7 +74,7 @@ const MoneyFlowSankey: React.FC<Props> = ({
 
   const sankey = useMemo(() => {
     const labels: string[] = ['Total spent'];
-    const nodeColors: string[] = [mode === 'dark' ? '#E2E8F0' : '#0F172A'];
+    const nodeColors: string[] = [mode === 'dark' ? '#F0F1F5' : '#101218']; // cerebro.textPrimaryDark / textPrimary
     const sources: number[] = [];
     const targets: number[] = [];
     const values: number[] = [];
@@ -206,11 +207,11 @@ const MoneyFlowSankey: React.FC<Props> = ({
                     color: sankey.linkColors,
                     hovertemplate: '<b>%{source.label} → %{target.label}</b><br>$%{value:,.2f}<extra></extra>',
                   },
-                  textfont: { family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif', color: chartTextColor(mode), size: 12 },
+                  textfont: { family: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif", color: chartTextColor(mode), size: 12 },
                 } as any,
               ]}
               layout={{
-                font: { family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif', color: chartTextColor(mode), size: 12 },
+                font: { family: "'Instrument Sans', -apple-system, BlinkMacSystemFont, sans-serif", color: chartTextColor(mode), size: 12 },
                 margin: { l: 4, r: 4, t: 32, b: 4 },
                 height: sankey.height,
                 paper_bgcolor: 'rgba(0,0,0,0)',

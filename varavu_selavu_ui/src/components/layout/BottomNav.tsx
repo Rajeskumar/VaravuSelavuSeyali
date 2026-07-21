@@ -14,9 +14,9 @@ import { BOTTOM_NAV_HEIGHT } from './layoutConstants';
  */
 const BottomNav: React.FC = () => {
   const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const navigate = useNavigate();
   const location = useLocation();
-  const isDark = theme.palette.mode === 'dark';
 
   return (
     <Box
@@ -29,7 +29,7 @@ const BottomNav: React.FC = () => {
         right: 0,
         bottom: 0,
         zIndex: (t) => t.zIndex.appBar,
-        backgroundColor: isDark ? 'rgba(24,24,27,0.92)' : 'rgba(255,255,255,0.92)',
+        backgroundColor: isDark ? 'rgba(5,6,10,0.85)' : 'rgba(255,255,255,0.85)',
         backdropFilter: 'blur(12px)',
         borderTop: '1px solid',
         borderColor: 'divider',

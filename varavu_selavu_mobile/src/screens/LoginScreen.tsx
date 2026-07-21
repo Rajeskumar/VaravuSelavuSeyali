@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Linking } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Linking } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme } from '../context/ThemeContext';
@@ -9,7 +9,6 @@ import CustomButton from '../components/CustomButton';
 import CustomInput from '../components/CustomInput';
 import { showToast } from '../components/Toast';
 import API_BASE_URL from '../api/apiconfig';
-import BrandMark from '../components/BrandMark';
 
 /**
  * Rebuilt to match the web app's post-Slate LoginPage: a flat canvas + single centered card,
@@ -52,9 +51,11 @@ export default function LoginScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.brandRow}>
-          <View style={styles.brandMark}>
-            <BrandMark size={18} color="#FFFFFF" />
-          </View>
+          <Image
+            source={require('../../assets/icon.png')}
+            style={styles.brandMark}
+            resizeMode="contain"
+          />
           <Text style={styles.brandName}>TrackSpense</Text>
         </View>
 
@@ -135,20 +136,12 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     marginBottom: 28,
   },
   brandMark: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: theme.borderRadius.sm,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandMarkText: {
-    fontFamily: 'Inter-Bold',
-    fontSize: 16,
-    color: '#FFFFFF',
   },
   brandName: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 20,
     color: theme.colors.text,
     letterSpacing: -0.3,
@@ -157,14 +150,14 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     padding: 24,
   },
   formTitle: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 22,
     color: theme.colors.text,
     marginBottom: 4,
     textAlign: 'center',
   },
   formSubtitle: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 14,
     color: theme.colors.textSecondary,
     marginBottom: 20,

@@ -1,10 +1,9 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Linking, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, Linking, TouchableOpacity } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import Card from '../components/Card';
-import BrandMark from '../components/BrandMark';
 
 export default function AboutScreen() {
     const { theme } = useAppTheme();
@@ -14,7 +13,11 @@ export default function AboutScreen() {
             {/* App Identity */}
             <View style={styles.hero}>
                 <View style={styles.iconCircle}>
-                    <BrandMark size={44} />
+                    <Image
+                        source={require('../../assets/icon.png')}
+                        style={{ width: 52, height: 52, borderRadius: 14 }}
+                        resizeMode="contain"
+                    />
                 </View>
                 <Text style={styles.appName}>TrackSpense</Text>
                 <Text style={styles.tagline}>Smart Expense Tracking</Text>

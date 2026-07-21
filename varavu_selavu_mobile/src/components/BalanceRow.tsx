@@ -8,7 +8,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import { MemberBalance } from '../api/groups';
 
 interface Props {
@@ -16,11 +16,12 @@ interface Props {
   isCurrentUser?: boolean;
 }
 
-/** Derive a deterministic color from a member ID string. */
+/** Derive a deterministic color from a member ID string. Same violet/cyan-anchored ramp as
+ * the web app's `GroupAvatar.tsx`/`categoryColors.ts`, for a consistent palette family. */
 export function memberColor(memberId: string): string {
   const COLORS = [
-    '#007AFF', '#34C759', '#FF9500', '#AF52DE',
-    '#FF2D55', '#5AC8FA', '#FFCC00', '#FF6B35',
+    '#9C93FF', '#00D2D3', '#7DA6FF', '#5FD9B8',
+    '#E88CD8', '#F0975E', '#6E7FE0', '#B98BC9',
   ];
   let hash = 0;
   for (let i = 0; i < memberId.length; i++) {
@@ -48,7 +49,7 @@ export default function BalanceRow({ balance, isCurrentUser = false }: Props) {
   const isNegative = net < 0;
 
   const netColor = isPositive
-    ? theme.colors.success ?? '#34C759'
+    ? theme.colors.success
     : isNegative
     ? theme.colors.error
     : theme.colors.textTertiary;
@@ -101,29 +102,32 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: 'center',
       marginRight: 12,
     },
+    // CerebroOS's avatar palette (memberColor()) is a set of light pastel tints, fixed in both
+    // modes — ink text clears WCAG AA against all of them (5.6-11.7:1); using the mode-aware
+    // `textInverse` here would go wrong in light mode (it flips to white, ~under 4:1).
     avatarText: {
-      color: '#fff',
-      fontFamily: 'Inter-Bold',
+      color: inkOnPastel,
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 15,
     },
     info: { flex: 1 },
     name: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 15,
       color: theme.colors.text,
     },
     youBadge: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       color: theme.colors.textSecondary,
     },
     netLabel: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       marginTop: 2,
     },
     netAmount: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 16,
     },
   });

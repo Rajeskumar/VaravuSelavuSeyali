@@ -8,16 +8,17 @@ const GROUP_TYPE_EMOJI: Record<string, string> = {
   other: '👥',
 };
 
-// A small curated set of flat, muted tile colors (Reconcile has no gradient —
-// Design Spec §1/§2) so group tiles read as colorful/distinct without looking
-// randomly hashed/muddy the way raw HSL-from-id would.
+// A small curated set of flat tile colors so group tiles read as colorful/distinct without
+// looking randomly hashed/muddy the way raw HSL-from-id would. Same violet/cyan-anchored ramp as
+// `expenses/categoryColors.ts` and `dashboard/SpendSpectrum.tsx`, for a consistent palette family
+// across the app.
 const TILE_COLORS = [
-  '#7E8CA3', // slate
-  '#C97B4D', // clay
-  '#5E9C8F', // teal-green
-  '#B98CC2', // mauve
-  '#A3A86B', // olive
-  '#C77B9E', // rose
+  '#9C93FF', // violet
+  '#00D2D3', // cyan
+  '#7DA6FF', // blue
+  '#5FD9B8', // teal
+  '#E88CD8', // magenta-pink
+  '#F0975E', // amber-orange
 ];
 
 function tileColorForSeed(seed: string): string {

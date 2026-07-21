@@ -209,7 +209,7 @@ export default function AIAnalystScreen() {
                 </View>
                 {isUser && (
                     <View style={[styles.avatarBadge, { backgroundColor: theme.colors.primary }]}>
-                        <Ionicons name="person" size={16} color="#fff" />
+                        <Ionicons name="person" size={16} color={theme.colors.textInverse} />
                     </View>
                 )}
             </View>
@@ -346,7 +346,7 @@ export default function AIAnalystScreen() {
                             activeOpacity={0.7}
                         >
                             {loading ? (
-                                <ActivityIndicator size="small" color="#fff" />
+                                <ActivityIndicator size="small" color={theme.colors.textInverse} />
                             ) : (
                                 <Text style={styles.sendBtnText}>↑</Text>
                             )}
@@ -414,7 +414,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     userBubble: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
     assistantBubble: { backgroundColor: theme.colors.surface, borderBottomLeftRadius: 4, ...theme.shadows.sm },
     bubbleText: { fontSize: 15, lineHeight: 21 },
-    userText: { color: '#fff' },
+    userText: { color: theme.colors.textInverse },
     assistantText: { color: theme.colors.text },
     typingBubble: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 },
     typingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.colors.textTertiary },
@@ -449,7 +449,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         alignItems: 'center',
     },
     sendBtnDisabled: { backgroundColor: theme.colors.textTertiary },
-    sendBtnText: { color: '#fff', fontSize: 20, fontWeight: '700' },
+    sendBtnText: { color: theme.colors.textInverse, fontSize: 20, fontWeight: '700' },
     // Empty state
     emptyState: { alignItems: 'center', paddingVertical: 40 },
     emptyIcon: { fontSize: 48, marginBottom: 12 },

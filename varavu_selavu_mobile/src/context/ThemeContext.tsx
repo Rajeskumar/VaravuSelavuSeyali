@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { AppTheme, ThemeMode, buildTheme, darkTheme, lightTheme } from '../theme';
@@ -50,7 +50,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     SecureStore.deleteItemAsync(STORAGE_KEY).catch(() => {});
   };
 
-  const theme = useMemo(() => (mode === 'dark' ? darkTheme : lightTheme), [mode]);
+  const theme = mode === 'dark' ? darkTheme : lightTheme;
 
   // Avoid a flash of the wrong theme before the saved preference loads.
   if (!loaded) return null;

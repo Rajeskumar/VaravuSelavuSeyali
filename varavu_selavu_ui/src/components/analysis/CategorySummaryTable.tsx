@@ -61,7 +61,7 @@ const CategorySummaryTable: React.FC<Props> = ({ categoryTotals, income, details
                 key={row.category}
                 onMouseEnter={(e) => openPopover(e as any, row.category)}
                 onMouseLeave={closePopover}
-                sx={{ cursor: rowsForCat.length ? 'pointer' : 'default', '&:hover': { background: 'rgba(0,0,0,0.03)' } }}
+                sx={{ cursor: rowsForCat.length ? 'pointer' : 'default', '&:hover': { background: (t) => t.palette.action.hover } }}
               >
                 <TableCell>{row.category}</TableCell>
                 <TableCell align="right">{row.total.toFixed(2)}</TableCell>

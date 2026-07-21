@@ -298,7 +298,7 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: { marginTop: 8 },
     label: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 14,
       color: theme.colors.textSecondary,
       marginBottom: 8,
@@ -318,12 +318,12 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.primary,
     },
     typeBtnText: {
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 14,
       color: theme.colors.textSecondary,
     },
     typeBtnTextActive: {
-      color: '#fff',
+      color: theme.colors.textInverse,
     },
     row: {
       flexDirection: 'row',
@@ -344,10 +344,10 @@ const createStyles = (theme: AppTheme) =>
       justifyContent: 'center',
       marginRight: 10,
     },
-    avatarText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 14 },
+    avatarText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 14 },
     memberName: {
       flex: 1,
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 15,
       color: theme.colors.text,
     },
@@ -364,19 +364,19 @@ const createStyles = (theme: AppTheme) =>
       width: 60,
       textAlign: 'center',
       marginRight: 12,
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       fontSize: 14,
       color: theme.colors.text,
     },
     shareAmount: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 14,
       color: theme.colors.primary,
       minWidth: 60,
       textAlign: 'right',
     },
     warning: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 13,
       color: theme.colors.error,
       marginTop: 8,

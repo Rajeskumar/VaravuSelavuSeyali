@@ -30,15 +30,17 @@ import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
 import { onExpenseChanged } from '../utils/expenseEvents';
 
+// CerebroOS-era ramp: same violet/cyan-anchored hues as the web app's
+// `expenses/categoryColors.ts` and `groups/GroupAvatar.tsx`, for a consistent palette family.
 const categoryDotColors: Record<string, string> = {
-    food: '#B45309', groceries: '#B45309', dining: '#B45309',
-    home: '#3F3F9E', rent: '#3F3F9E', utilities: '#3F3F9E',
-    transport: '#15803D', transportation: '#15803D',
-    entertainment: '#7B7BC4', shopping: '#7B7BC4',
+    food: '#F0975E', groceries: '#F0975E', dining: '#F0975E',
+    home: '#9C93FF', rent: '#9C93FF', utilities: '#9C93FF',
+    transport: '#5FD9B8', transportation: '#5FD9B8',
+    entertainment: '#E88CD8', shopping: '#E88CD8',
 };
 
 function dotColorFor(category: string): string {
-    return categoryDotColors[category?.toLowerCase().trim()] || '#A1A1AA';
+    return categoryDotColors[category?.toLowerCase().trim()] || '#9AA0AF';
 }
 
 /** Mock's `r.ran`/"Logged today" pill — derived from `last_processed_iso` (persists across
@@ -679,7 +681,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         marginBottom: 4,
     },
     headerTitle: {
-        fontFamily: 'SpaceGrotesk-SemiBold',
+        fontFamily: 'BricolageGrotesque-SemiBold',
         fontSize: 22,
         color: theme.colors.text,
         letterSpacing: -0.3,
@@ -692,7 +694,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     dayGroup: { marginBottom: 14 },
     dayLabel: {
-        fontFamily: 'Inter-Bold',
+        fontFamily: 'InstrumentSans-Bold',
         fontSize: 11,
         color: theme.colors.textTertiary,
         letterSpacing: 0.8,
@@ -718,18 +720,18 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     rowLast: { borderBottomWidth: 0 },
     recurringRowLast: {},
     dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-    rowDesc: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text },
-    rowMeta: { fontFamily: 'Inter-Regular', fontSize: 11.5, color: theme.colors.textTertiary, marginTop: 1 },
-    rowAmount: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text, flexShrink: 0 },
+    rowDesc: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
+    rowMeta: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary, marginTop: 1 },
+    rowAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text, flexShrink: 0 },
     pill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, marginRight: 8 },
     pillDue: { backgroundColor: theme.colors.warningSurface },
     pillActive: { backgroundColor: theme.colors.surfaceSecondary },
-    pillText: { fontFamily: 'Inter-Bold', fontSize: 10.5 },
+    pillText: { fontFamily: 'InstrumentSans-Bold', fontSize: 10.5 },
     pillTextDue: { color: theme.colors.warning },
     pillTextActive: { color: theme.colors.textTertiary },
     pillRan: { backgroundColor: theme.colors.successSurface },
     pillTextRan: { color: theme.colors.success },
-    recurringAmount: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text, width: 62, textAlign: 'right' },
+    recurringAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text, width: 62, textAlign: 'right' },
     recurringChevron: { color: theme.colors.textTertiary, fontSize: 12, marginLeft: 8 },
     recurringExpand: {
         backgroundColor: theme.colors.surfaceSecondary,
@@ -738,25 +740,25 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         paddingHorizontal: 14, paddingVertical: 12,
     },
     recurringActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    recurringRanText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.success, paddingVertical: 8 },
+    recurringRanText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.success, paddingVertical: 8 },
     recurringRunBtn: {
         backgroundColor: theme.colors.primary, borderRadius: 999,
         paddingHorizontal: 14, paddingVertical: 8,
     },
-    recurringRunBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: '#fff' },
+    recurringRunBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.textInverse },
     recurringEditBtn: {
         borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
         borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8,
     },
-    recurringEditBtnText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.primary },
+    recurringEditBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.primary },
     recurringEditActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
     recurringFooter: {
         flexDirection: 'row', justifyContent: 'space-between',
         paddingHorizontal: 14, paddingVertical: 11,
         backgroundColor: theme.colors.surfaceSecondary,
     },
-    recurringFooterLabel: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textTertiary },
-    recurringFooterAmount: { fontFamily: 'Inter-Bold', fontSize: 12.5, color: theme.colors.text },
+    recurringFooterLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary },
+    recurringFooterAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 12.5, color: theme.colors.text },
     emptyCard: {
         alignItems: 'center',
         paddingVertical: 40,
@@ -825,6 +827,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,
     },
     pickerChipTextActive: {
-        color: '#FFFFFF',
+        color: theme.colors.textInverse,
     },
 });

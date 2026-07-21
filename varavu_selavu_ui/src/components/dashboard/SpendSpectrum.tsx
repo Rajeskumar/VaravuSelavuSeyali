@@ -13,12 +13,12 @@ interface Props {
   title?: string;
 }
 
-/** Deterministic palette-cycling for arbitrary category names — the reference
- * prototype (Dashboard.jsx) hardcodes 5 named categories with fixed colors;
- * real data has arbitrary category names/counts, so this cycles a fixed
- * ramp of Reconcile-adjacent hues rather than assigning a hardcoded color
- * per literal category name. */
-const SPECTRUM_PALETTE = ['#C97B4D', '#7E8CA3', '#5E9C8F', '#A3A86B', '#C77B9E', '#6B8CBE', '#B08968', '#8A8FA6'];
+/** Deterministic palette-cycling for arbitrary category names — real data has arbitrary
+ * category names/counts, so this cycles a fixed ramp rather than assigning a hardcoded color
+ * per literal category name. CerebroOS-era ramp: violet/cyan brand anchors extended around the
+ * color wheel, kept clear of `positive`/`negative`/`caution` (theme.ts) so a category swatch is
+ * never mistaken for a directional-amount or status color. */
+const SPECTRUM_PALETTE = ['#9C93FF', '#00D2D3', '#7DA6FF', '#5FD9B8', '#E88CD8', '#F0975E', '#6E7FE0', '#B98BC9'];
 
 function colorFor(index: number): string {
   return SPECTRUM_PALETTE[index % SPECTRUM_PALETTE.length];

@@ -39,7 +39,7 @@ import {
 } from '../api/groups';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import { categoryPalette } from '../utils/chartTheme';
 import SegmentedTabs from '../components/SegmentedTabs';
 import BalanceRow from '../components/BalanceRow';
@@ -48,6 +48,7 @@ import GroupSettingsSheet from '../components/GroupSettingsSheet';
 import ActivityList from '../components/ActivityList';
 import ExpenseDetailSheet from '../components/ExpenseDetailSheet';
 import EditGroupExpenseModal from '../components/EditGroupExpenseModal';
+import Badge from '../components/Badge';
 import { showToast } from '../components/Toast';
 import { formatCurrency } from '../utils/currencyMath';
 import { memberColor, initialsFromName } from '../components/BalanceRow';
@@ -350,11 +351,7 @@ export default function GroupDetailScreen() {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={styles.headerName} numberOfLines={1}>{detail.name}</Text>
-            {isArchived && (
-              <View style={[styles.archivedPill, { borderColor: theme.colors.warning }]}>
-                <Text style={[styles.archivedPillText, { color: theme.colors.warning }]}>Archived</Text>
-              </View>
-            )}
+            {isArchived && <Badge label="Archived" tone="caution" />}
           </View>
           <Text style={styles.headerMembers}>{members.length} member{members.length === 1 ? '' : 's'}</Text>
         </View>
@@ -594,7 +591,7 @@ export default function GroupDetailScreen() {
             onPress={handleAddMember}
             disabled={inviteLoading || (!inviteEmail.trim() && !inviteName.trim())}
           >
-            {inviteLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.createBtnText}>Add</Text>}
+            {inviteLoading ? <ActivityIndicator color={theme.colors.textInverse} /> : <Text style={styles.createBtnText}>Add</Text>}
           </TouchableOpacity>
         </View>
       </Modal>
@@ -606,8 +603,8 @@ const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
     loadingCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    errorText: { fontFamily: 'Inter-Regular', fontSize: 16, color: theme.colors.error },
-    backLink: { color: theme.colors.primary, fontFamily: 'Inter-SemiBold', marginTop: 12 },
+    errorText: { fontFamily: 'InstrumentSans-Regular', fontSize: 16, color: theme.colors.error },
+    backLink: { color: theme.colors.primary, fontFamily: 'InstrumentSans-SemiBold', marginTop: 12 },
     banner: {
       marginHorizontal: 16,
       marginBottom: 12,
@@ -617,7 +614,7 @@ const createStyles = (theme: AppTheme) =>
     },
     bannerText: {
       fontSize: 14,
-      fontFamily: 'Inter-Medium',
+      fontFamily: 'InstrumentSans-Medium',
       textAlign: 'center',
     },
     headerRow: {
@@ -630,26 +627,22 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'center', justifyContent: 'center',
     },
     headerEmoji: { fontSize: 22 },
-    headerName: { fontFamily: 'Inter-Bold', fontSize: 17, color: theme.colors.text },
-    headerMembers: { fontFamily: 'Inter-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 1 },
-    archivedPill: {
-      borderWidth: 1, borderRadius: 999,
-      paddingHorizontal: 8, paddingVertical: 2,
-    },
-    archivedPillText: { fontFamily: 'Inter-SemiBold', fontSize: 10 },
+    headerName: { fontFamily: 'InstrumentSans-Bold', fontSize: 17, color: theme.colors.text },
+    headerMembers: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 1 },
     avatarStack: {
       width: 30, height: 30, borderRadius: 999,
       alignItems: 'center', justifyContent: 'center',
       borderWidth: 2, borderColor: theme.colors.background,
     },
-    avatarStackText: { fontFamily: 'Inter-Bold', fontSize: 12, color: '#FFFFFF' },
+    // memberColor() avatar palette is fixed pastel in both modes — ink text always.
+    avatarStackText: { fontFamily: 'InstrumentSans-Bold', fontSize: 12, color: inkOnPastel },
     balanceCenter: { alignItems: 'center', paddingTop: 20, paddingBottom: 4 },
     balanceCenterLabel: {
-      fontFamily: 'Inter-Bold', fontSize: 11, letterSpacing: 0.8,
+      fontFamily: 'InstrumentSans-Bold', fontSize: 11, letterSpacing: 0.8,
       color: theme.colors.textTertiary,
     },
     balanceCenterFigure: {
-      fontFamily: 'SpaceGrotesk-SemiBold', fontSize: 36, marginTop: 4,
+      fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 36, marginTop: 4,
     },
     actionRow: {
       flexDirection: 'row', justifyContent: 'center', gap: 8,
@@ -659,13 +652,13 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.primary, borderRadius: 999,
       paddingHorizontal: 18, paddingVertical: 10,
     },
-    addExpenseBtnText: { fontFamily: 'Inter-Bold', fontSize: 13, color: '#FFFFFF' },
+    addExpenseBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 13, color: theme.colors.textInverse },
     actionBtnDisabled: { opacity: 0.4 },
     settleUpLinkBtn: {
       borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
       borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10,
     },
-    settleUpLinkText: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.primary },
+    settleUpLinkText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.primary },
     // SegmentedTabs supplies its own background/padding/pill chrome — this wrapper now only
     // owns the outer margin (was duplicating the same pill background+padding a second time
     // around the old inline TouchableOpacity tab row).
@@ -679,7 +672,7 @@ const createStyles = (theme: AppTheme) =>
       borderRadius: 14,
       padding: 16,
     },
-    catCardLabel: { fontFamily: 'Inter-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary },
+    catCardLabel: { fontFamily: 'InstrumentSans-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary },
     catBar: {
       flexDirection: 'row', height: 12, borderRadius: 999, overflow: 'hidden',
       marginTop: 12, backgroundColor: theme.colors.surfaceSecondary,
@@ -690,14 +683,14 @@ const createStyles = (theme: AppTheme) =>
     },
     catRowActive: { backgroundColor: theme.colors.primarySurface },
     catDot: { fontSize: 12 },
-    catName: { flex: 1, fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.text },
-    catPct: { fontFamily: 'Inter-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
-    catAmount: { fontFamily: 'Inter-SemiBold', fontSize: 13, color: theme.colors.text, width: 70, textAlign: 'right' },
+    catName: { flex: 1, fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.text },
+    catPct: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
+    catAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.text, width: 70, textAlign: 'right' },
     catFilterRow: {
       flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8,
     },
-    catFilterText: { fontFamily: 'Inter-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
-    catFilterClear: { fontFamily: 'Inter-SemiBold', fontSize: 11.5, color: theme.colors.primary },
+    catFilterText: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
+    catFilterClear: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11.5, color: theme.colors.primary },
     expensesCard: {
       flex: 1,
       marginHorizontal: 16,
@@ -716,22 +709,22 @@ const createStyles = (theme: AppTheme) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.borderLight,
     },
-    expenseDesc: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text },
+    expenseDesc: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
     expenseMeta: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 11.5,
       color: theme.colors.textTertiary,
       marginTop: 1,
     },
     expenseShareText: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 10.5,
       color: theme.colors.textTertiary,
       marginTop: 1,
     },
     expenseEditBtn: { padding: 4, marginLeft: 2 },
     sectionTitle: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 18,
       color: theme.colors.text,
     },
@@ -742,7 +735,7 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: `${theme.colors.primary}20`,
     },
     simplifiedText: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 12,
     },
     transfersCard: {
@@ -753,7 +746,7 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1,
     },
     transfersTitle: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 14,
       color: theme.colors.text,
       marginBottom: 12,
@@ -765,16 +758,16 @@ const createStyles = (theme: AppTheme) =>
       marginBottom: 8,
     },
     transferText: {
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 14,
       color: theme.colors.textSecondary,
     },
     transferAmount: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 14,
       color: theme.colors.text,
     },
-    expenseTotal: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text },
+    expenseTotal: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
     settleBtn: {
       position: 'absolute',
       backgroundColor: theme.colors.primary,
@@ -782,7 +775,7 @@ const createStyles = (theme: AppTheme) =>
       borderRadius: 14,
       alignItems: 'center',
     },
-    settleBtnText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 16 },
+    settleBtnText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
     inviteSheet: {
       backgroundColor: theme.colors.background,
@@ -801,7 +794,7 @@ const createStyles = (theme: AppTheme) =>
       marginBottom: 8,
     },
     inviteTitle: {
-      fontFamily: 'Inter-Bold',
+      fontFamily: 'InstrumentSans-Bold',
       fontSize: 20,
       color: theme.colors.text,
       textAlign: 'center',
@@ -811,7 +804,7 @@ const createStyles = (theme: AppTheme) =>
       borderRadius: 12,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 16,
       color: theme.colors.text,
     },
@@ -822,5 +815,5 @@ const createStyles = (theme: AppTheme) =>
       alignItems: 'center',
     },
     createBtnDisabled: { opacity: 0.5 },
-    createBtnText: { color: '#fff', fontFamily: 'Inter-Bold', fontSize: 16 },
+    createBtnText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
   });

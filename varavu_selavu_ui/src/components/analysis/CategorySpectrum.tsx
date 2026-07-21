@@ -28,7 +28,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
   return (
     <Box sx={{ px: 2, pb: 4 }}>
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 2 }}>
-        <Typography sx={{ fontFamily: 'Inter', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
           CATEGORY BREAKDOWN
         </Typography>
         <Typography sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
@@ -77,7 +77,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                   sx={{
                     flex: 1,
                     textAlign: 'left',
-                    fontFamily: 'Inter',
+                    fontFamily: 'Instrument Sans',
                     fontSize: 13,
                     fontWeight: 600,
                     color: getCatColor(c.category),
@@ -113,7 +113,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                   {txns.length > 0 ? (
                     txns.map((t, i) => (
                       <Box key={i} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', mr: 2 }}>
+                        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', mr: 2 }}>
                           {t.description}
                         </Typography>
                         <Typography sx={{ ...typeScale.amount, fontSize: 13, color: 'text.primary' }}>
@@ -122,7 +122,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                       </Box>
                     ))
                   ) : (
-                    <Typography sx={{ fontFamily: 'Inter', fontSize: 13, color: 'text.secondary' }}>
+                    <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary' }}>
                       No recent transactions
                     </Typography>
                   )}
@@ -133,7 +133,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
         })}
       </Box>
 
-      <Typography sx={{ py: 3, textAlign: 'center', fontFamily: 'Inter', fontSize: 12, color: 'text.secondary' }}>
+      <Typography sx={{ py: 3, textAlign: 'center', fontFamily: 'Instrument Sans', fontSize: 12, color: 'text.secondary' }}>
         Tap a category to see its transactions
       </Typography>
     </Box>

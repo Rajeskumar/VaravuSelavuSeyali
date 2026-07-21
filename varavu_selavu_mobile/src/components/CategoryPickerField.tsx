@@ -110,8 +110,8 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: 12,
       paddingVertical: 8,
     },
-    fieldLabel: { fontFamily: 'Inter-Regular', fontSize: 11, color: theme.colors.textSecondary },
-    fieldValue: { fontFamily: 'Inter-SemiBold', fontSize: 13.5, color: theme.colors.text, marginTop: 1 },
+    fieldLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 11, color: theme.colors.textSecondary },
+    fieldValue: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text, marginTop: 1 },
     chevron: { fontSize: 18, color: theme.colors.textTertiary, marginLeft: 8 },
 
     backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,27,0.4)' },
@@ -125,7 +125,7 @@ const createStyles = (theme: AppTheme) =>
     },
     dragPillWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
     dragPill: { width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.borderLight },
-    sheetTitle: { fontFamily: 'Inter-Bold', fontSize: 15, color: theme.colors.text, marginTop: 6, marginBottom: 10 },
+    sheetTitle: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.text, marginTop: 6, marginBottom: 10 },
 
     mainRow: { gap: 6, paddingBottom: 10 },
     mainChip: {
@@ -133,8 +133,8 @@ const createStyles = (theme: AppTheme) =>
       borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
     },
     mainChipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-    mainChipText: { fontFamily: 'Inter-SemiBold', fontSize: 12.5, color: theme.colors.text },
-    mainChipTextActive: { color: '#FFFFFF' },
+    mainChipText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.text },
+    mainChipTextActive: { color: theme.colors.textInverse },
 
     subList: { marginTop: 2 },
     subRow: {
@@ -142,8 +142,8 @@ const createStyles = (theme: AppTheme) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: theme.colors.borderLight,
     },
-    subRowText: { fontFamily: 'Inter-Regular', fontSize: 14, color: theme.colors.text },
-    subRowTextActive: { fontFamily: 'Inter-SemiBold', color: theme.colors.primary },
+    subRowText: { fontFamily: 'InstrumentSans-Regular', fontSize: 14, color: theme.colors.text },
+    subRowTextActive: { fontFamily: 'InstrumentSans-SemiBold', color: theme.colors.primary },
   });
 
 export default CategoryPickerField;

@@ -135,7 +135,7 @@ export default function FeedbackScreen() {
                     activeOpacity={0.7}
                 >
                     {sending ? (
-                        <ActivityIndicator size="small" color="#fff" />
+                        <ActivityIndicator size="small" color={theme.colors.textInverse} />
                     ) : (
                         <Text style={styles.submitBtnText}>Send</Text>
                     )}
@@ -160,7 +160,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,
     },
     input: {
-        backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 16,
+        backgroundColor: theme.colors.surfaceSecondary, borderRadius: 12, paddingHorizontal: 16,
         paddingVertical: 14, marginBottom: 16, borderWidth: 1.5,
         borderColor: theme.colors.border, fontSize: 16, color: theme.colors.text, minHeight: 48,
     },
@@ -173,5 +173,5 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         alignItems: 'center', marginTop: 8, ...theme.shadows.colored,
     },
     submitBtnDisabled: { opacity: 0.6 },
-    submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    submitBtnText: { color: theme.colors.textInverse, fontSize: 16, fontWeight: '700' },
 });

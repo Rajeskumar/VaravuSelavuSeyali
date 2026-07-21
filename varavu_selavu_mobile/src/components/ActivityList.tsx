@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getGroupActivity, GroupDetail, GroupActivityDTO } from '../api/groups';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
+import { inkOnPastel } from '../theme';
 import { memberColor } from './BalanceRow';
 
 interface ActivityListProps {
@@ -91,7 +92,7 @@ export default function ActivityList({ groupId, group }: ActivityListProps) {
     const initials = actorName.charAt(0).toUpperCase();
 
     return (
-      <View style={[styles.card, { borderColor: theme.colors.borderLight }]}>
+      <View style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.borderLight }]}>
         <View style={[styles.iconContainer, { backgroundColor: theme.colors.surfaceSecondary }]}>
           <Ionicons name={icon} size={20} color={color} />
         </View>
@@ -101,7 +102,8 @@ export default function ActivityList({ groupId, group }: ActivityListProps) {
         </View>
         {item.actor_member_id && (
           <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-            <Text style={styles.avatarText}>{initials}</Text>
+            {/* memberColor() avatar palette is fixed pastel in both modes — ink text always, not mode-aware textInverse. */}
+            <Text style={[styles.avatarText, { color: inkOnPastel }]}>{initials}</Text>
           </View>
         )}
       </View>
@@ -125,11 +127,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   errorText: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 16,
   },
   emptyText: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 16,
     marginTop: 8,
   },
@@ -140,7 +142,6 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     padding: 12,
     borderRadius: 12,
     marginBottom: 8,
@@ -158,11 +159,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   text: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 14,
   },
   time: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 12,
     marginTop: 4,
   },
@@ -175,7 +176,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   avatarText: {
-    color: '#fff',
     fontSize: 12,
     fontWeight: '700',
   },

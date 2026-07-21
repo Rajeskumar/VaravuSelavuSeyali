@@ -93,7 +93,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
         style={styles.keyboardView}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
-          <View style={styles.pill} />
+          <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={[styles.title, { color: theme.colors.text }]}>Group Settings</Text>
@@ -316,7 +316,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#ccc',
     alignSelf: 'center',
     marginBottom: 16,
   },
@@ -327,7 +326,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: {
-    fontFamily: 'Inter-Bold',
+    fontFamily: 'InstrumentSans-Bold',
     fontSize: 20,
   },
   closeBtn: {
@@ -340,7 +339,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   archivedPillText: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 10,
   },
   archivedNote: {
@@ -350,7 +349,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   archivedNoteText: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 12.5,
     lineHeight: 18,
   },
@@ -367,12 +366,12 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   sectionTitle: {
-    fontFamily: 'Inter-SemiBold',
+    fontFamily: 'InstrumentSans-SemiBold',
     fontSize: 16,
     marginBottom: 4,
   },
   sectionDesc: {
-    fontFamily: 'Inter-Regular',
+    fontFamily: 'InstrumentSans-Regular',
     fontSize: 14,
   },
   divider: {

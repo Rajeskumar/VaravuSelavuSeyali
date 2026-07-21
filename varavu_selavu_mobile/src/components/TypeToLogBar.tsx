@@ -66,7 +66,7 @@ const createStyles = (theme: AppTheme) =>
     sparkle: { fontSize: 15, marginRight: 8 },
     input: {
       flex: 1,
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 15,
       color: theme.colors.text,
     },
@@ -75,14 +75,14 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: 4,
     },
     previewText: {
-      fontFamily: 'Inter-SemiBold',
+      fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 12.5,
       color: theme.colors.primary,
     },
     hint: {
       marginTop: 6,
       marginLeft: 4,
-      fontFamily: 'Inter-Regular',
+      fontFamily: 'InstrumentSans-Regular',
       fontSize: 12,
       color: theme.colors.textTertiary,
     },

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import CustomButton from '../components/CustomButton';
 import CustomInput from '../components/CustomInput';
 import { showToast } from '../components/Toast';
@@ -156,15 +156,17 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     fontSize: 48,
     marginBottom: 12,
   },
+  // brandHeader is a real violet→cyan gradient fill, mode-independent (always pastel) — ink
+  // text always, not the mode-aware `textInverse` (which flips to white in light mode).
   brandName: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: inkOnPastel,
     letterSpacing: -0.5,
   },
   brandTagline: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(5,6,10,0.75)',
     marginTop: 4,
     fontWeight: '500',
   },

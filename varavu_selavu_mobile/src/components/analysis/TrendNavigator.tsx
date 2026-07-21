@@ -124,7 +124,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         paddingHorizontal: 20,
     },
     headerText: {
-        fontFamily: 'Inter-Bold',
+        fontFamily: 'InstrumentSans-Bold',
         fontSize: 11,
         letterSpacing: 0.6,
         color: theme.colors.textSecondary,
@@ -148,7 +148,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         marginBottom: 4,
     },
     valueText: {
-        fontFamily: 'Inter-SemiBold',
+        fontFamily: 'InstrumentSans-SemiBold',
         fontSize: 11,
         color: theme.colors.text,
     },
@@ -158,7 +158,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     monthText: {
         marginTop: 8,
-        fontFamily: 'Inter-Regular',
+        fontFamily: 'InstrumentSans-Regular',
         fontSize: 11,
     },
 });

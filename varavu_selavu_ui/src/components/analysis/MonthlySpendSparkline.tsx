@@ -40,7 +40,7 @@ export const MonthlySpendSparkline: React.FC<MonthlySpendSparklineProps> = ({ da
           <Typography
             key={i}
             sx={{
-              fontFamily: 'Inter',
+              fontFamily: 'Instrument Sans',
               fontSize: 10,
               color: 'text.secondary',
               flex: 1,
