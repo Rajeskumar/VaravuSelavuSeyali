@@ -3,7 +3,6 @@ import Drawer from '@mui/material/Drawer';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
-import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -12,10 +11,13 @@ import CloseIcon from '@mui/icons-material/CloseRounded';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { typeScale, tabularNums } from '../../theme';
-import { CATEGORY_GROUPS, findMainCategory } from './AddExpenseForm';
+import { findMainCategory } from './AddExpenseForm';
 import { formatMoney, dayLabel } from './ExpenseFeed';
 import type { FeedExpense } from './ExpenseFeed';
 import { parseAppDate } from '../../utils/date';
+import { getExpenseItems, updateExpenseItems } from '../../api/expenses';
+import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
+import CategoryPickerField from './CategoryPickerField';
 
 export interface ExpenseDetailForm {
   merchantName: string;
@@ -57,6 +59,16 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
   const [form, setForm] = React.useState<ExpenseDetailForm | null>(null);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
 
+  // Itemized expenses (receipt-scanned) get a line-item review/edit section, reusing the
+  // same ScannedItemsCard the create flow uses. itemsLoaded distinguishes "no items to
+  // show" from "haven't fetched yet" so the save handler knows whether to also call
+  // updateExpenseItems.
+  const isItemized = !!expense && (expense.splitType === 'itemized' || (expense.itemCount || 0) > 1);
+  const [items, setItems] = React.useState<ScannedItem[]>([]);
+  const [itemsTax, setItemsTax] = React.useState(0);
+  const [itemsDiscount, setItemsDiscount] = React.useState(0);
+  const [itemsLoaded, setItemsLoaded] = React.useState(false);
+
   React.useEffect(() => {
     if (expense) {
       setForm({
@@ -69,14 +81,51 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
     } else {
       setForm(null);
     }
+    setItems([]);
+    setItemsLoaded(false);
   }, [expense]);
+
+  React.useEffect(() => {
+    if (!expense || !isItemized) return;
+    let mounted = true;
+    getExpenseItems(expense.id)
+      .then((res) => {
+        if (!mounted) return;
+        setItems(res.items.map((it) => ({
+          line_no: it.line_no,
+          item_name: it.item_name,
+          line_total: it.line_total,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          normalized_name: it.normalized_name || undefined,
+        })));
+        setItemsTax(res.tax);
+        setItemsDiscount(res.discount);
+        setItemsLoaded(true);
+      })
+      .catch(() => { /* falls back to the flat amount field only */ });
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expense?.id, isItemized]);
 
   if (!expense || !form) return null;
 
-  const mainCategory = findMainCategory(form.category);
-  const subOptions = CATEGORY_GROUPS[mainCategory] || [];
-
   const handleSave = async () => {
+    if (itemsLoaded && items.length > 0) {
+      await updateExpenseItems(expense.id, {
+        items: items.map((it) => ({
+          line_no: it.line_no,
+          item_name: it.item_name,
+          normalized_name: it.normalized_name,
+          quantity: it.quantity,
+          unit_price: it.unit_price,
+          line_total: it.line_total,
+        })),
+        amount: parseFloat(form.amount) || 0,
+        tax: itemsTax,
+        discount: itemsDiscount,
+      });
+    }
     await onSave(expense, form);
   };
 
@@ -135,19 +184,11 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
           value={form.merchantName}
           onChange={(e) => setForm({ ...form, merchantName: e.target.value })}
         />
-        <TextField
-          select
-          label="Category"
-          fullWidth
-          value={subOptions.includes(form.category) ? form.category : subOptions[0] || ''}
-          onChange={(e) => setForm({ ...form, category: e.target.value })}
-        >
-          {subOptions.map((sub) => (
-            <MenuItem key={sub} value={sub}>
-              {mainCategory} · {sub}
-            </MenuItem>
-          ))}
-        </TextField>
+        <CategoryPickerField
+          mainCategory={findMainCategory(form.category)}
+          subcategory={form.category}
+          onChange={(_main, sub) => setForm({ ...form, category: sub })}
+        />
         <TextField
           label="Amount"
           type="number"
@@ -165,6 +206,17 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
           placeholder="Add a note"
         />
+
+        {itemsLoaded && items.length > 0 && (
+          <ScannedItemsCard
+            items={items}
+            onChange={setItems}
+            merchant={form.merchantName}
+            tax={itemsTax}
+            discount={itemsDiscount}
+            currentAmount={parseFloat(form.amount) || 0}
+          />
+        )}
       </Box>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 3 }}>

@@ -10,12 +10,14 @@
  * editing those happens in GroupDetailScreen; tapping one navigates there instead).
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
+import { listExpenses, deleteExpense, updateExpense, getExpenseItems, updateExpenseItems, ExpenseRecord } from '../api/expenses';
+import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
 import { listGroups, getGroupDetail, moveExpenseToGroup, listAllMyGroupExpenses, UnifiedGroupExpenseRow, GroupSummary, ApiError } from '../api/groups';
 import { listRecurringTemplates, upsertRecurringTemplate, executeRecurringNow, RecurringTemplateDTO, UpsertRecurringPayload } from '../api/recurring';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
@@ -73,7 +75,11 @@ export default function ExpensesScreen() {
     const navigation = useNavigation<any>();
     const isFocused = useIsFocused();
     const { theme } = useAppTheme();
-    const styles = useMemo(() => createStyles(theme), [theme]);
+    // useWindowDimensions (not Dimensions.get(), and not a module-level constant) — reading
+    // window size at module load time returns 0/stale on native before the bridge is ready,
+    // which made the edit sheet's maxHeight resolve to 0 and rendered nothing at all.
+    const { height: windowHeight } = useWindowDimensions();
+    const styles = useMemo(() => createStyles(theme, windowHeight), [theme, windowHeight]);
     const qc = useQueryClient();
     const [tab, setTab] = useState<Tab>('transactions');
     const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
@@ -90,6 +96,13 @@ export default function ExpensesScreen() {
     const [editSubcategory, setEditSubcategory] = useState(CATEGORY_GROUPS[MAIN_CATEGORIES[0]][0]);
     const [editDate, setEditDate] = useState('');
     const [editMerchantName, setEditMerchantName] = useState('');
+    // Itemized expenses (receipt-scanned) get a line-item review/edit section, reusing the
+    // same ScannedItemsCard the create flow uses. editItemsLoaded distinguishes "no items to
+    // show" from "haven't fetched yet" so saveEdit knows whether to also call updateExpenseItems.
+    const [editItems, setEditItems] = useState<ScannedItem[]>([]);
+    const [editItemsTax, setEditItemsTax] = useState(0);
+    const [editItemsDiscount, setEditItemsDiscount] = useState(0);
+    const [editItemsLoaded, setEditItemsLoaded] = useState(false);
 
     // TrackSpense v3 Mobile mock's recurring row expand/edit/run-now (`r.expanded`/`r.editing`) —
     // was previously a flat, non-interactive row.
@@ -209,7 +222,28 @@ export default function ExpensesScreen() {
         setEditSubcategory(expense.category);
         setEditDate(expense.date);
         setEditMerchantName(expense.merchant_name || '');
+        setEditItems([]);
+        setEditItemsLoaded(false);
         setEditModalVisible(true);
+
+        const isItemized = expense.split_type === 'itemized' || (expense.item_count || 0) > 1;
+        if (isItemized) {
+            getExpenseItems(expense.row_id)
+                .then((res) => {
+                    setEditItems(res.items.map((it) => ({
+                        line_no: it.line_no,
+                        item_name: it.item_name,
+                        line_total: it.line_total,
+                        quantity: it.quantity,
+                        unit_price: it.unit_price,
+                        normalized_name: it.normalized_name || undefined,
+                    })));
+                    setEditItemsTax(res.tax);
+                    setEditItemsDiscount(res.discount);
+                    setEditItemsLoaded(true);
+                })
+                .catch(() => { /* falls back to the flat amount field only */ });
+        }
     };
 
     const openMoveModal = (expense: ExpenseRecord) => {
@@ -243,6 +277,21 @@ export default function ExpensesScreen() {
     const saveEdit = async () => {
         if (!editingExpense || !accessToken || !userEmail) return;
         try {
+            if (editItemsLoaded && editItems.length > 0) {
+                await updateExpenseItems(editingExpense.row_id, {
+                    items: editItems.map((it) => ({
+                        line_no: it.line_no,
+                        item_name: it.item_name,
+                        normalized_name: it.normalized_name,
+                        quantity: it.quantity,
+                        unit_price: it.unit_price,
+                        line_total: it.line_total,
+                    })),
+                    amount: parseFloat(editAmount) || 0,
+                    tax: editItemsTax,
+                    discount: editItemsDiscount,
+                });
+            }
             await updateExpense(
                 editingExpense.row_id,
                 {
@@ -534,11 +583,32 @@ export default function ExpensesScreen() {
                 )}
             </ScrollView>
 
-            {/* Edit Modal */}
-            <Modal visible={editModalVisible} animationType="fade" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Edit Transaction</Text>
+            {/* Edit Modal — bottom sheet, standardized with the group expense edit/view sheets */}
+            <Modal visible={editModalVisible} animationType="slide" transparent onRequestClose={() => setEditModalVisible(false)}>
+                <Pressable style={styles.editSheetBackdrop} onPress={() => setEditModalVisible(false)}>
+                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                        <Pressable style={styles.editSheetContent} onPress={(e) => e.stopPropagation()}>
+                            <View style={styles.editSheetPill} />
+                            <View style={styles.editSheetHeader}>
+                                <Text style={styles.editSheetTitle}>Edit Transaction</Text>
+                                <TouchableOpacity
+                                    style={styles.editSheetCloseBtn}
+                                    onPress={() => setEditModalVisible(false)}
+                                    hitSlop={8}
+                                >
+                                    <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
+                                </TouchableOpacity>
+                            </View>
+                            {/* No `style={{ flex: 1 }}` here on purpose: editSheetContent's own height
+                                is auto/content-based (only capped by maxHeight, not a definite flex
+                                height), so a flexBasis:0 flexGrow:1 child can't resolve against it and
+                                collapses to 0 — that's what was rendering only the header. Letting the
+                                ScrollView size to its own content (bounded by the parent's maxHeight +
+                                flexShrink:1) matches the working CategoryPickerField/AddExpenseScreen sheets. */}
+                            <ScrollView
+                                contentContainerStyle={styles.editSheetScrollContent}
+                                showsVerticalScrollIndicator={false}
+                            >
 
                         <CustomInput
                             label="Amount"
@@ -600,6 +670,18 @@ export default function ExpensesScreen() {
                             placeholder="MM/DD/YYYY"
                         />
 
+                        {editItemsLoaded && editItems.length > 0 && (
+                            <ScannedItemsCard
+                                theme={theme}
+                                items={editItems}
+                                onChange={setEditItems}
+                                merchant={editMerchantName}
+                                tax={editItemsTax}
+                                discount={editItemsDiscount}
+                                currentAmount={parseFloat(editAmount) || 0}
+                            />
+                        )}
+
                         <View style={styles.modalButtons}>
                             <CustomButton
                                 title="Cancel"
@@ -615,8 +697,10 @@ export default function ExpensesScreen() {
                                 style={{ flex: 1 }}
                             />
                         </View>
-                    </View>
-                </View>
+                            </ScrollView>
+                        </Pressable>
+                    </KeyboardAvoidingView>
+                </Pressable>
             </Modal>
 
             {/* Move to Group Modal (TS-GRP-121) */}
@@ -671,7 +755,7 @@ export default function ExpensesScreen() {
     );
 }
 
-const createStyles = (theme: AppTheme) => StyleSheet.create({
+const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.create({
     container: {
         flex: 1,
         paddingTop: Platform.OS === 'android' ? 50 : 56,
@@ -803,6 +887,50 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     modalButtons: {
         flexDirection: 'row',
         marginTop: 12,
+    },
+    // Edit-expense bottom sheet — standardized presentation (matches the group expense sheets):
+    // slides up from the bottom, rounded top corners, drag pill, explicit close affordance.
+    // Deliberately separate from modalOverlay/modalContent (which the "Move to Group" modal
+    // below still uses as a centered popup) so this restyle can't affect that sibling modal.
+    editSheetBackdrop: {
+        flex: 1,
+        backgroundColor: theme.colors.overlay,
+        justifyContent: 'flex-end',
+    },
+    editSheetContent: {
+        backgroundColor: theme.colors.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: 24,
+        paddingTop: 12,
+        maxHeight: windowHeight * 0.92,
+        flexShrink: 1,
+        ...theme.shadows.lg,
+    },
+    editSheetScrollContent: {
+        paddingBottom: 28,
+    },
+    editSheetPill: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: theme.colors.borderLight,
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+    editSheetHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 20,
+    },
+    editSheetTitle: {
+        fontFamily: theme.typography.fontFamily.bold,
+        fontSize: 20,
+        color: theme.colors.text,
+    },
+    editSheetCloseBtn: {
+        padding: 4,
     },
     pickerLabel: {
         fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary,

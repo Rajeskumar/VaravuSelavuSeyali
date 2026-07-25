@@ -97,6 +97,7 @@ const ExpensesPage: React.FC = () => {
       groupAmount: e.cost,
       groupName: e.group_name,
       payerSummary: e.payer_summary,
+      splitType: e.split_type,
     }));
 
     if (scope === 'groups') {
@@ -114,6 +115,8 @@ const ExpensesPage: React.FC = () => {
         category: e.category,
         mainCategory: findMainCategory(e.category),
         amount: e.cost,
+        itemCount: e.item_count,
+        splitType: e.split_type,
       }));
     }
 
@@ -128,6 +131,8 @@ const ExpensesPage: React.FC = () => {
       category: e.category,
       mainCategory: findMainCategory(e.category),
       amount: e.cost,
+      itemCount: e.item_count,
+      splitType: e.split_type,
     }));
     return [...personalRows, ...groupRows];
   }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data]);

@@ -25,12 +25,14 @@ import {
   ApiError,
   ExpenseCommentDTO,
   ExpenseHistoryEntry,
+  GroupExpenseItemDTO,
   GroupExpenseRow,
   MemberDTO,
   addExpenseComment,
   deleteExpenseComment,
   deleteGroupExpense,
   getExpenseHistory,
+  getGroupExpenseItems,
   listExpenseComments,
   settleExpenseShare,
 } from '../api/groups';
@@ -79,6 +81,9 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  const [items, setItems] = useState<GroupExpenseItemDTO[]>([]);
+  const [itemsVisible, setItemsVisible] = useState(false);
+
   useEffect(() => {
     if (!visible || !expense) return;
     setCommentsLoading(true);
@@ -91,7 +96,13 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
       .then(setHistory)
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
-  }, [visible, groupId, expense?.row_id]);
+    setItems([]);
+    if (expense.split_type === 'itemized') {
+      getGroupExpenseItems(groupId, expense.row_id)
+        .then((res) => setItems(res.items))
+        .catch(() => {});
+    }
+  }, [visible, groupId, expense?.row_id, expense?.split_type]);
 
   if (!expense) return null;
 
@@ -157,7 +168,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
-        <View style={[styles.sheet, { backgroundColor: theme.colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surface, paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>
@@ -191,6 +202,29 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
               variant="tinted"
               style={{ marginBottom: 16 }}
             />
+          )}
+
+          {items.length > 0 && (
+            <>
+              <Pressable style={styles.historyToggle} onPress={() => setItemsVisible((v) => !v)}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Items ({items.length})</Text>
+                <Ionicons name={itemsVisible ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textSecondary} />
+              </Pressable>
+              {itemsVisible && (
+                <View style={{ marginTop: 8, marginBottom: 16 }}>
+                  {items.map((it) => (
+                    <View key={it.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ color: theme.colors.text, fontFamily: 'InstrumentSans-Regular', fontSize: 14, flex: 1, marginRight: 8 }} numberOfLines={1}>
+                        {it.item_name}
+                      </Text>
+                      <Text style={{ color: theme.colors.text, fontFamily: 'InstrumentSans-SemiBold', fontSize: 14 }}>
+                        ${it.line_total.toFixed(2)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
           )}
 
           <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />

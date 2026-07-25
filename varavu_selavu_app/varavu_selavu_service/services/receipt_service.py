@@ -7,21 +7,37 @@ from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 
-# Category mapping used to ensure the model returns categories that align with the
-# manual entry lists. These mirror the options available in the frontend.
-CATEGORY_GROUPS = {
-    "Home": ["Rent", "Electronics", "Furniture", "Household supplies", "Maintenance", "Mortgage", "Other", "Pets", "Services"],
-    "Transportation": ["Gas/fuel", "Car", "Parking", "Plane", "Other", "Bicycle", "Bus/Train", "Taxi", "Hotel"],
-    "Food & Drink": ["Groceries", "Dining out", "Liquor", "Other"],
-    "Entertainment": ["Movies", "Other", "Games", "Music", "Sports"],
-    "Life": ["Medical expenses", "Insurance", "Taxes", "Education", "Childcare", "Clothing", "Gifts", "Other"],
-    "Other": ["Services", "General", "Electronics"],
-    "Utilities": ["Heat/gas", "Electricity", "Water", "Other", "Cleaning", "Trash", "Other", "TV/Phone/Internet"],
-}
+from .categorization_service import CATEGORY_GROUPS
 
 CATEGORY_PROMPT = "; ".join(
     f"{main}: {', '.join(subs)}" for main, subs in CATEGORY_GROUPS.items()
 )
+
+# Fallback used whenever the model's category can't be validated against CATEGORY_GROUPS —
+# mirrors CategorizationService.classify()'s fallback so an unrecognized category behaves the
+# same way here as it does in the quick-add flow, instead of saving an invalid string verbatim.
+_FALLBACK_MAIN = "Other"
+_FALLBACK_SUB = "General"
+
+
+def _validate_header_category(main: Any, sub: Any) -> Tuple[str, str]:
+    """Validate a header-level (main, sub) pair against CATEGORY_GROUPS, falling back to
+    Other/General on any mismatch — the model sometimes paraphrases a category name (e.g.
+    "Food and Drink" instead of "Food & Drink"), which would otherwise save a string that
+    doesn't match any real category."""
+    if isinstance(main, str) and isinstance(sub, str) and sub in CATEGORY_GROUPS.get(main, []):
+        return main, sub
+    return _FALLBACK_MAIN, _FALLBACK_SUB
+
+
+def _validate_item_category(sub: Any, fallback_sub: str) -> str:
+    """Validate a line item's category_name (subcategory only — items don't carry a separate
+    main category) against any subcategory in CATEGORY_GROUPS. Falls back to the (already
+    validated) header subcategory rather than a blank string, since that's the most useful
+    default for an unrecognized item category."""
+    if isinstance(sub, str) and any(sub in subs for subs in CATEGORY_GROUPS.values()):
+        return sub
+    return fallback_sub
 
 
 class ReceiptService:
@@ -220,9 +236,20 @@ class ReceiptService:
         header["merchant_name_raw"] = header.get("merchant_name", "")
         header["merchant_name"] = header["normalized_merchant_name"]
 
+        # ── Validate categories against CATEGORY_GROUPS ──
+        # The model sometimes paraphrases a category (e.g. "Food and Drink" instead of the
+        # real "Food & Drink") — save an invalid string verbatim and it won't match anything
+        # in the app's category picker/taxonomy. Mirrors CategorizationService.classify()'s
+        # validate-or-fallback behavior, which the quick-add flow already relies on.
+        header["main_category_name"], header["category_name"] = _validate_header_category(
+            header.get("main_category_name"), header.get("category_name")
+        )
         for item in items:
             if not item.get("normalized_name"):
                 item["normalized_name"] = item.get("item_name", "Unknown")
+            item["category_name"] = _validate_item_category(
+                item.get("category_name"), header["category_name"]
+            )
 
         purchased_at_hour = header.get("purchased_at", "")[:13]
         top_names = "".join(i.get("item_name", "") for i in items[:3])

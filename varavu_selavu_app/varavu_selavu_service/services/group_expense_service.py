@@ -5,9 +5,10 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, Group, GroupMember
+from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, ExpenseItem, ExpenseItemSplit, Group, GroupMember
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.split_engine import SplitError, resolve_split, validate_payers
+from varavu_selavu_service.services.item_split_engine import resolve_itemized_split
 
 
 def _to_uuid(value) -> Optional[uuid.UUID]:
@@ -110,6 +111,7 @@ class GroupExpenseService:
             "splits": splits,
             "currency": expense.currency,
             "fx_rate_to_group_currency": float(expense.fx_rate_to_group_currency) if expense.fx_rate_to_group_currency is not None else None,
+            "split_type": expense.split_type,
         }
 
     # ------------------------------------------------------------------
@@ -416,8 +418,6 @@ class GroupExpenseService:
                 item_members.add(mid)
         self._validate_members_in_group(gid, item_members)
 
-        from varavu_selavu_service.services.item_split_engine import resolve_itemized_split
-        
         try:
             split_results = resolve_itemized_split(items, tax=tax, tip=tip, discount=discount, total_amount=amount)
         except SplitError as e:
@@ -462,12 +462,28 @@ class GroupExpenseService:
                 )
             )
             
-        from varavu_selavu_service.db.models import ExpenseItem, ExpenseItemSplit
-        
+        self._write_items(expense.id, actor_email, items)
+
+        self.db.commit()
+
+        self.activity_svc.log(
+            group_id=group_id,
+            actor_email=actor_email,
+            action="expense_created",
+            entity_id=str(expense.id),
+            payload={"description": expense.description, "amount": float(expense.amount)}
+        )
+
+        return self._expense_row(expense, actor_email)
+
+    def _write_items(self, expense_id: uuid.UUID, actor_email: str, items: List[dict]) -> None:
+        """Inserts ExpenseItem + (for any item carrying member_ratios) ExpenseItemSplit rows.
+        Shared by create_itemized_expense and update_items — does not commit or log activity,
+        callers own the transaction boundary."""
         for item in items:
             expense_item = ExpenseItem(
                 id=uuid.uuid4(),
-                expense_id=expense.id,
+                expense_id=expense_id,
                 user_email=actor_email,
                 line_no=item["line_no"],
                 item_name=item["item_name"],
@@ -483,27 +499,186 @@ class GroupExpenseService:
             )
             self.db.add(expense_item)
             self.db.flush()
-            
-            # Record item splits
+
             for mid, ratio in item.get("member_ratios", {}).items():
                 ratio_val = float(ratio)
+                if ratio_val <= 0:
+                    continue
                 item_split = ExpenseItemSplit(
                     id=uuid.uuid4(),
                     expense_item_id=expense_item.id,
                     member_id=_to_uuid(mid),
                     ratio=ratio_val,
-                    amount=item["line_total"] * ratio_val
+                    amount=item["line_total"] * ratio_val,
                 )
                 self.db.add(item_split)
 
+    # ------------------------------------------------------------------
+    # Post-save item viewing/editing
+    # ------------------------------------------------------------------
+
+    def get_items(self, group_id: str, expense_id: str, actor_email: str) -> Dict:
+        self.group_service.require_membership(group_id, actor_email)
+        gid = _to_uuid(group_id)
+        eid = _to_uuid(expense_id)
+        expense = (
+            self.db.query(Expense).filter(Expense.id == eid, Expense.group_id == gid).first() if eid else None
+        )
+        if expense is None:
+            raise HTTPException(status_code=404, detail="Group expense not found")
+
+        rows = (
+            self.db.query(ExpenseItem)
+            .filter(ExpenseItem.expense_id == expense.id)
+            .order_by(ExpenseItem.line_no)
+            .all()
+        )
+        items = [
+            {
+                "id": str(r.id),
+                "line_no": r.line_no,
+                "item_name": r.item_name,
+                "normalized_name": r.normalized_name,
+                "category_id": r.category_id,
+                "quantity": float(r.quantity) if r.quantity is not None else None,
+                "unit": r.unit,
+                "unit_price": float(r.unit_price) if r.unit_price is not None else None,
+                "line_total": float(r.line_total) if r.line_total is not None else 0.0,
+                "tax": float(r.tax) if r.tax is not None else 0.0,
+                "discount": float(r.discount) if r.discount is not None else 0.0,
+            }
+            for r in rows
+        ]
+        return {
+            "items": items,
+            "amount": float(expense.amount or 0),
+            "tax": sum(i["tax"] for i in items),
+            "discount": sum(i["discount"] for i in items),
+        }
+
+    @staticmethod
+    def _rescale_payers(existing_payers: List[ExpensePayer], old_amount: float, new_amount: float) -> List[Dict]:
+        """Keeps each payer's proportional share of the total when items edits change the
+        expense's amount, instead of forcing the user back into the payer picker. Falls back
+        to an equal split if the old amount was 0 (shouldn't normally happen for a saved
+        itemized expense). Rounds to cents with the remainder absorbed by the largest payer."""
+        if not existing_payers:
+            return []
+        total_cents = round(new_amount * 100)
+        if old_amount and old_amount > 0:
+            raw = [(p, (float(p.amount_paid) / old_amount) * new_amount) for p in existing_payers]
+        else:
+            share = new_amount / len(existing_payers)
+            raw = [(p, share) for p in existing_payers]
+
+        rounded = [(p, int(round(amt * 100))) for p, amt in raw]
+        residual = total_cents - sum(c for _, c in rounded)
+        if rounded:
+            idx = max(range(len(rounded)), key=lambda i: rounded[i][1])
+            p, c = rounded[idx]
+            rounded[idx] = (p, c + residual)
+
+        return [{"member_id": str(p.member_id), "amount_paid": c / 100} for p, c in rounded]
+
+    def update_items(
+        self,
+        group_id: str,
+        expense_id: str,
+        actor_email: str,
+        items: List[dict],
+        amount: float,
+        tax: float = 0,
+        discount: float = 0,
+    ) -> Dict:
+        self.group_service.require_membership(group_id, actor_email)
+        gid = _to_uuid(group_id)
+        eid = _to_uuid(expense_id)
+        expense = (
+            self.db.query(Expense).filter(Expense.id == eid, Expense.group_id == gid).first() if eid else None
+        )
+        if expense is None:
+            raise HTTPException(status_code=404, detail="Group expense not found")
+
+        if not items:
+            raise HTTPException(status_code=400, detail="At least one item is required")
+        for item in items:
+            if "item_name" not in item or "line_total" not in item:
+                raise HTTPException(status_code=400, detail="Invalid item")
+        subtotal = sum(i.get("line_total", 0) for i in items)
+        if abs(subtotal + tax - discount - amount) > 0.02:
+            raise HTTPException(status_code=400, detail="Totals do not reconcile")
+
+        # Preserve who's currently assigned to items (falling back to the expense's payers,
+        # then the actor) and re-split every item equally across that same set — matches the
+        # simplification the creation flow already uses (no per-item person-assignment UI here).
+        participant_ids = {
+            str(member_id)
+            for (member_id,) in (
+                self.db.query(ExpenseItemSplit.member_id)
+                .join(ExpenseItem, ExpenseItemSplit.expense_item_id == ExpenseItem.id)
+                .filter(ExpenseItem.expense_id == expense.id)
+                .distinct()
+                .all()
+            )
+        }
+        existing_payers = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == expense.id).all()
+        if not participant_ids:
+            participant_ids = {str(p.member_id) for p in existing_payers}
+        if not participant_ids:
+            actor_member = self.group_service.get_member_by_email(gid, actor_email)
+            if actor_member:
+                participant_ids = {str(actor_member.id)}
+
+        ratio = 1 / len(participant_ids) if participant_ids else 0
+        items_with_ratios = [
+            {**item, "member_ratios": {mid: ratio for mid in participant_ids}} for item in items
+        ]
+
+        try:
+            split_results = resolve_itemized_split(items_with_ratios, tax=tax, tip=0, discount=discount, total_amount=amount)
+        except SplitError as e:
+            raise HTTPException(status_code=400, detail={"message": str(e), **e.details})
+
+        new_payers = self._rescale_payers(existing_payers, float(expense.amount or 0), amount)
+
+        item_ids_subq = self.db.query(ExpenseItem.id).filter(ExpenseItem.expense_id == expense.id)
+        self.db.query(ExpenseItemSplit).filter(ExpenseItemSplit.expense_item_id.in_(item_ids_subq)).delete(synchronize_session=False)
+        self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == expense.id).delete(synchronize_session=False)
+        self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == expense.id).delete(synchronize_session=False)
+        self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense.id).delete(synchronize_session=False)
+
+        expense.amount = amount
+
+        for p in new_payers:
+            self.db.add(
+                ExpensePayer(
+                    id=uuid.uuid4(),
+                    expense_id=expense.id,
+                    member_id=_to_uuid(p["member_id"]),
+                    amount_paid=p["amount_paid"],
+                )
+            )
+        for r in split_results:
+            self.db.add(
+                ExpenseSplit(
+                    id=uuid.uuid4(),
+                    expense_id=expense.id,
+                    member_id=_to_uuid(r.member_id),
+                    amount_owed=r.amount_owed,
+                    basis_type=r.basis_type,
+                    basis_value=r.basis_value,
+                )
+            )
+        self._write_items(expense.id, actor_email, items_with_ratios)
+
         self.db.commit()
-        
+
         self.activity_svc.log(
             group_id=group_id,
             actor_email=actor_email,
-            action="expense_created",
+            action="expense_updated",
             entity_id=str(expense.id),
             payload={"description": expense.description, "amount": float(expense.amount)}
         )
 
-        return self._expense_row(expense, actor_email)
+        return self.get_items(group_id, expense_id, actor_email)

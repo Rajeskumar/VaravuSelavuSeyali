@@ -141,11 +141,66 @@ export interface GroupExpenseRow {
   splits: ExpenseSplitItem[];
   currency?: string | null;
   fx_rate_to_group_currency?: number | null;
+  split_type?: string | null;
 }
 
 export interface GroupExpenseListResponse {
   items: GroupExpenseRow[];
   next_offset?: number | null;
+}
+
+export interface GroupExpenseItemDTO {
+  id: string;
+  line_no: number;
+  item_name: string;
+  normalized_name?: string | null;
+  category_id?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  line_total: number;
+  tax?: number | null;
+  discount?: number | null;
+}
+
+export interface GroupItemsResponse {
+  items: GroupExpenseItemDTO[];
+  amount: number;
+  tax: number;
+  discount: number;
+}
+
+export interface GroupItemsUpdatePayload {
+  items: {
+    line_no: number;
+    item_name: string;
+    normalized_name?: string | null;
+    category_id?: string | null;
+    quantity?: number | null;
+    unit_price?: number | null;
+    line_total: number;
+  }[];
+  amount: number;
+  tax?: number;
+  discount?: number;
+}
+
+export async function getGroupExpenseItems(groupId: string, expenseId: string): Promise<GroupItemsResponse> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/items`, { method: 'GET' });
+  return handleResponse<GroupItemsResponse>(res);
+}
+
+export async function updateGroupExpenseItems(
+  groupId: string,
+  expenseId: string,
+  payload: GroupItemsUpdatePayload
+): Promise<GroupItemsResponse> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/items`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return handleResponse<GroupItemsResponse>(res);
 }
 
 export interface MemberBalance {

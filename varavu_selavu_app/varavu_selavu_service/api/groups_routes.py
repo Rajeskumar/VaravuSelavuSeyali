@@ -30,6 +30,8 @@ from varavu_selavu_service.models.api_models import (
     GroupExpenseWithItemsRequest,
     GroupNotificationPreferenceDTO,
     GroupSummary,
+    ItemsResponse,
+    ItemsUpdateRequest,
     MemberDTO,
     MoveToGroupRequest,
     RecordSettlementRequest,
@@ -613,6 +615,47 @@ def update_group_expense(
     )
     
     return {"success": True, "expense": row}
+
+
+@router.get(
+    "/{group_id}/expenses/{expense_id}/items",
+    response_model=ItemsResponse,
+    summary="Get line items for an itemized group expense",
+)
+def get_group_expense_items(
+    group_id: str,
+    expense_id: str,
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    user_email: str = Depends(auth_required),
+):
+    return svc.get_items(group_id, expense_id, user_email)
+
+
+@router.put(
+    "/{group_id}/expenses/{expense_id}/items",
+    response_model=ItemsResponse,
+    summary="Replace line items on an already-saved itemized group expense",
+)
+def update_group_expense_items(
+    group_id: str,
+    expense_id: str,
+    payload: ItemsUpdateRequest,
+    svc: GroupExpenseService = Depends(get_group_expense_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    user_email: str = Depends(auth_required),
+):
+    items = [i.dict(exclude_unset=True) for i in payload.items]
+    result = svc.update_items(
+        group_id=group_id,
+        expense_id=expense_id,
+        actor_email=user_email,
+        items=items,
+        amount=payload.amount,
+        tax=payload.tax,
+        discount=payload.discount,
+    )
+    analysis_service.invalidate_cache()
+    return result
 
 
 @router.delete("/{group_id}/expenses/{expense_id}", summary="Delete a group expense (any member)")

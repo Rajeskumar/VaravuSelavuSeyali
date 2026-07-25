@@ -56,6 +56,12 @@ export interface FeedExpense {
    * edit re-submits the (Phase-1, always-equal) split. See ExpensesPage's
    * `handleDetailSave` for why this is threaded through rather than rebuilt. */
   payerSummary?: { member_id: string; amount_paid: number }[];
+  /** "Has line items worth viewing/editing" signal — split_type is the reliable marker
+   * (set at creation for both personal and group itemized expenses); itemCount is a
+   * fallback for personal rows created before that marker existed (every personal expense
+   * has >=1 synthesized proxy item, so only itemCount > 1 means "really itemized"). */
+  itemCount?: number;
+  splitType?: string | null;
 }
 
 interface DayGroup {

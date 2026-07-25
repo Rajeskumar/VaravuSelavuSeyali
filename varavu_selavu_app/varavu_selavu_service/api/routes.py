@@ -19,6 +19,9 @@ from varavu_selavu_service.models.api_models import (
     ModelListResponse,
     ExpenseListResponse,
     ExpenseDeleteResponse,
+    ItemsUpdateRequest,
+    ItemsResponse,
+    ExpenseItemDTO,
 )
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
@@ -63,7 +66,8 @@ from varavu_selavu_service.services.insight_analytics_service import InsightAnal
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.notification_service import NotificationService
 from varavu_selavu_service.api.groups_routes import get_group_expense_service, get_notification_service
-from varavu_selavu_service.db.models import ExpenseSplit
+from varavu_selavu_service.db.models import ExpenseSplit, Expense
+import uuid as _uuid
 from varavu_selavu_service.core.limiter import limiter
 
 settings = Settings()
@@ -575,7 +579,7 @@ def create_expense_with_items(
     existing = repo.find_expense_by_fingerprint(user_id, header.get("fingerprint", ""))
     if existing and not force:
         raise HTTPException(status_code=409, detail={"expense_id": existing.get("id")})
-    expense_id = repo.append_expense({**header, "user_email": user_id})
+    expense_id = repo.append_expense({**header, "user_email": user_id, "split_type": "itemized"})
     try:
         item_ids = repo.append_items(user_id, expense_id, items)
     except Exception:
@@ -596,6 +600,84 @@ def create_expense_with_items(
         _log.getLogger("varavu_selavu.routes").warning("Insights aggregation failed: %s", exc)
 
     return {"expense_id": expense_id, "item_ids": item_ids}
+
+
+def _get_owned_personal_expense(db: Session, expense_id: str, user_id: str) -> Expense:
+    try:
+        parsed_id = _uuid.UUID(str(expense_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    expense = (
+        db.query(Expense)
+        .filter(Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None))
+        .first()
+    )
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return expense
+
+
+@router.get(
+    "/expenses/{expense_id}/items",
+    response_model=ItemsResponse,
+    tags=["Expenses"],
+    summary="Get line items for an itemized expense",
+)
+def get_expense_items(
+    expense_id: str,
+    db: Session = Depends(get_db),
+    repo: PostgresRepo = Depends(get_postgres_repo),
+    user_id: str = Depends(auth_required),
+):
+    expense = _get_owned_personal_expense(db, expense_id, user_id)
+    items = repo.get_items_for_expense(expense_id)
+    return {
+        "items": items,
+        "amount": float(expense.amount or 0),
+        "tax": float(expense.tax or 0),
+        "discount": float(expense.discount or 0),
+    }
+
+
+@router.put(
+    "/expenses/{expense_id}/items",
+    response_model=ItemsResponse,
+    tags=["Expenses"],
+    summary="Replace line items on an already-saved itemized expense",
+)
+def update_expense_items(
+    expense_id: str,
+    payload: ItemsUpdateRequest,
+    db: Session = Depends(get_db),
+    repo: PostgresRepo = Depends(get_postgres_repo),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    user_id: str = Depends(auth_required),
+):
+    expense = _get_owned_personal_expense(db, expense_id, user_id)
+    items = [i.dict(exclude_unset=True) for i in payload.items]
+    if not items:
+        raise HTTPException(status_code=400, detail="At least one item is required")
+    for item in items:
+        if "item_name" not in item or "line_total" not in item:
+            raise HTTPException(status_code=400, detail="Invalid item")
+    subtotal = sum(i.get("line_total", 0) for i in items)
+    if abs(subtotal + payload.tax - payload.discount - payload.amount) > 0.02:
+        raise HTTPException(status_code=400, detail="Totals do not reconcile")
+
+    repo.delete_items_for_expense(expense_id)
+    expense.amount = payload.amount
+    expense.tax = payload.tax
+    expense.discount = payload.discount
+    db.add(expense)
+    repo.append_items(user_id, expense_id, items)
+    analysis_service.invalidate_cache()
+
+    return {
+        "items": repo.get_items_for_expense(expense_id),
+        "amount": float(expense.amount or 0),
+        "tax": float(expense.tax or 0),
+        "discount": float(expense.discount or 0),
+    }
 
 
 @router.get(

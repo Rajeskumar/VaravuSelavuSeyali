@@ -3,6 +3,7 @@ from datetime import date as date_type
 from datetime import datetime, timezone
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.models import Expense
 
@@ -94,6 +95,19 @@ class ExpenseService:
 
     def get_expenses_for_user(self, user_id: str) -> List[Dict]:
         expenses = self.db.query(Expense).filter(Expense.user_email == user_id, Expense.group_id.is_(None)).order_by(Expense.purchased_at.desc()).all()
+
+        from varavu_selavu_service.db.models import ExpenseItem
+        expense_ids = [r.id for r in expenses]
+        item_counts: Dict[str, int] = {}
+        if expense_ids:
+            counts = (
+                self.db.query(ExpenseItem.expense_id, func.count(ExpenseItem.id))
+                .filter(ExpenseItem.expense_id.in_(expense_ids))
+                .group_by(ExpenseItem.expense_id)
+                .all()
+            )
+            item_counts = {str(expense_id): count for expense_id, count in counts}
+
         results = []
         for r in expenses:
             dt = r.purchased_at
@@ -106,6 +120,8 @@ class ExpenseService:
                 "category": r.category_id or "",
                 "cost": float(r.amount or 0),
                 "merchant_name": r.merchant_name,
+                "item_count": item_counts.get(str(r.id), 0),
+                "split_type": r.split_type,
             })
         return results
 

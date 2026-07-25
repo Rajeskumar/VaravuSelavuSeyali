@@ -19,6 +19,8 @@ export interface ExpenseRecord {
   category: string;
   cost: number;
   merchant_name?: string;
+  item_count?: number;
+  split_type?: string | null;
 }
 
 export interface ExpenseListResponse {
@@ -122,6 +124,64 @@ export async function categorizeExpense(description: string): Promise<Categorize
     throw new Error('Failed to categorize');
   }
 
+  return response.json();
+}
+
+export interface ExpenseItemDTO {
+  id: string;
+  line_no: number;
+  item_name: string;
+  normalized_name?: string | null;
+  category_id?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  unit_price?: number | null;
+  line_total: number;
+  tax?: number | null;
+  discount?: number | null;
+}
+
+export interface ItemsResponse {
+  items: ExpenseItemDTO[];
+  amount: number;
+  tax: number;
+  discount: number;
+}
+
+export interface ItemsUpdatePayload {
+  items: {
+    line_no: number;
+    item_name: string;
+    normalized_name?: string | null;
+    category_id?: string | null;
+    quantity?: number | null;
+    unit_price?: number | null;
+    line_total: number;
+  }[];
+  amount: number;
+  tax?: number;
+  discount?: number;
+}
+
+/** Fetches an already-saved itemized personal expense's line items. */
+export async function getExpenseItems(rowId: number | string): Promise<ItemsResponse> {
+  const response = await apiFetch(`/api/v1/expenses/${rowId}/items`, { method: 'GET' });
+  if (!response.ok) {
+    throw new Error('Failed to fetch expense items');
+  }
+  return response.json();
+}
+
+/** Replaces an already-saved itemized personal expense's line items. */
+export async function updateExpenseItems(rowId: number | string, payload: ItemsUpdatePayload): Promise<ItemsResponse> {
+  const response = await apiFetch(`/api/v1/expenses/${rowId}/items`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to update expense items');
+  }
   return response.json();
 }
 

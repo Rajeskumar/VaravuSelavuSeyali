@@ -53,6 +53,37 @@ class ExpenseWithItemsResponse(BaseModel):
     item_ids: List[str]
 
 
+class ExpenseItemDTO(BaseModel):
+    id: str
+    line_no: int
+    item_name: str
+    normalized_name: str | None = None
+    category_id: str | None = None
+    quantity: float | None = None
+    unit: str | None = None
+    unit_price: float | None = None
+    line_total: float
+    tax: float | None = 0
+    discount: float | None = 0
+
+
+class ItemsUpdateRequest(BaseModel):
+    """Body for PUT .../items — full replace of an already-saved itemized expense's line
+    items. `amount` is required (not derived) and validated to reconcile with the items'
+    subtotal, mirroring create_expense_with_items's existing check."""
+    items: List[ExpenseItem]
+    amount: float
+    tax: float = 0
+    discount: float = 0
+
+
+class ItemsResponse(BaseModel):
+    items: List[ExpenseItemDTO]
+    amount: float
+    tax: float
+    discount: float
+
+
 class CategorizeRequest(BaseModel):
     """Request payload for expense categorization."""
     description: str
@@ -113,6 +144,12 @@ class Expense(BaseModel):
     category: str
     cost: float
     merchant_name: Optional[str] = None
+    # "has items worth viewing/editing" signal for the client — split_type is the reliable
+    # marker for expenses created after this field started being set; item_count is a
+    # fallback heuristic for older rows (every personal expense has >=1 synthesized proxy
+    # item, so the UI should only treat item_count > 1 as "really itemized").
+    item_count: int = 0
+    split_type: Optional[str] = None
 
 
 class ExpenseRow(Expense):
@@ -512,6 +549,7 @@ class GroupExpenseRow(BaseModel):
     splits: List[ExpenseSplitItem] = []
     currency: Optional[str] = None
     fx_rate_to_group_currency: Optional[float] = None
+    split_type: Optional[str] = None
 
 
 class GroupExpenseCreatedResponse(BaseModel):

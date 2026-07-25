@@ -82,7 +82,8 @@ class PostgresRepo:
             payment_method=payment_method,
             description=description,
             notes=notes,
-            fingerprint=fingerprint
+            fingerprint=fingerprint,
+            split_type=header.get("split_type"),
         )
         self.db.add(expense)
         self.db.commit()
@@ -139,3 +140,39 @@ class PostgresRepo:
         self.db.add_all(db_items)
         self.db.commit()
         return ids
+
+    def get_items_for_expense(self, expense_id: str) -> List[Dict[str, Any]]:
+        try:
+            parsed_id = uuid.UUID(str(expense_id))
+        except ValueError:
+            return []
+
+        items = (
+            self.db.query(ExpenseItem)
+            .filter(ExpenseItem.expense_id == parsed_id)
+            .order_by(ExpenseItem.line_no)
+            .all()
+        )
+        return [
+            {
+                "id": str(item.id),
+                "line_no": item.line_no,
+                "item_name": item.item_name,
+                "normalized_name": item.normalized_name,
+                "category_id": item.category_id,
+                "quantity": float(item.quantity) if item.quantity is not None else None,
+                "unit": item.unit,
+                "unit_price": float(item.unit_price) if item.unit_price is not None else None,
+                "line_total": float(item.line_total) if item.line_total is not None else 0.0,
+                "tax": float(item.tax) if item.tax is not None else 0.0,
+                "discount": float(item.discount) if item.discount is not None else 0.0,
+            }
+            for item in items
+        ]
+
+    def delete_items_for_expense(self, expense_id: str) -> None:
+        try:
+            parsed_id = uuid.UUID(str(expense_id))
+        except ValueError:
+            return
+        self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == parsed_id).delete(synchronize_session=False)
