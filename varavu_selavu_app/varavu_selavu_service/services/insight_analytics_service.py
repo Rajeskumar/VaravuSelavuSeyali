@@ -29,6 +29,18 @@ def canonicalize_name(name: str | None) -> str:
     return (name or "").strip().lower()
 
 
+def _exclusive_end(end_date: str) -> str:
+    """`Expense.purchased_at` is a tz-aware DateTime, not a bare Date, but every
+    end-date filter here is a plain 'YYYY-MM-DD' string. `purchased_at <= end_date`
+    compares against midnight of that day, so it silently excludes every
+    transaction recorded *later* that same day — i.e. almost all of them — which
+    quietly drops the last day of every period from both the current and
+    previous totals. Returns the start of the *next* day so callers can use a
+    half-open `purchased_at < _exclusive_end(end_date)` comparison that actually
+    includes the whole end date."""
+    return (datetime.strptime(end_date, "%Y-%m-%d").date() + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
 class InsightAnalyticsService:
     """
     Core service to dynamically calculate InsightMetrics for merchants, items, and changes.
@@ -59,7 +71,7 @@ class InsightAnalyticsService:
             if start_date:
                 filters.append(Expense.purchased_at >= start_date)
             if end_date:
-                filters.append(Expense.purchased_at <= end_date)
+                filters.append(Expense.purchased_at < _exclusive_end(end_date))
         else:
             if year is not None:
                 if is_sqlite:
@@ -158,7 +170,7 @@ class InsightAnalyticsService:
         if start_date:
             query = query.filter(Expense.purchased_at >= start_date)
         if end_date:
-            query = query.filter(Expense.purchased_at <= end_date)
+            query = query.filter(Expense.purchased_at < _exclusive_end(end_date))
         return {r[0]: float(r[1] or 0) for r in query.group_by(canon_key).all()}
 
     def _item_totals_for_period(
@@ -173,7 +185,7 @@ class InsightAnalyticsService:
         if start_date:
             query = query.filter(Expense.purchased_at >= start_date)
         if end_date:
-            query = query.filter(Expense.purchased_at <= end_date)
+            query = query.filter(Expense.purchased_at < _exclusive_end(end_date))
         return {r[0]: float(r[1] or 0) for r in query.group_by(ExpenseItem.normalized_name).all()}
 
     def calculate_merchant_metrics(
@@ -397,8 +409,15 @@ class InsightAnalyticsService:
         mom_amount = mom_percent = None
         if periods:
             prev_totals = self._merchant_totals_for_period(user_id, periods[2], periods[3])
-            if merchant_name in prev_totals:
-                prev_spent = prev_totals[merchant_name]
+            # `prev_totals` is keyed by canonicalized (trimmed/lowercased) merchant name
+            # (see `_merchant_totals_for_period`); `merchant_name` here is the raw display
+            # string the caller looked this detail view up by, which won't match on a bare
+            # `in`/`[]` lookup if casing/whitespace differs from how it happened to be typed
+            # on past receipts. That silent miss defaulted `prev_spent` out of the picture
+            # entirely rather than to a real, matching previous total.
+            canon_name = canonicalize_name(merchant_name)
+            if canon_name in prev_totals:
+                prev_spent = prev_totals[canon_name]
                 mom_amount = round(tot_spent - prev_spent, 2)
                 mom_percent = round((mom_amount / prev_spent) * 100, 1) if prev_spent else None
 
@@ -716,16 +735,34 @@ class InsightAnalyticsService:
         insights = []
         
         # 1. Biggest Merchant Increase & Decrease
-        curr_merchants = {m.merchant_name: m.total_spent for m in self.calculate_merchant_metrics(user_id, start_date=cs_str, end_date=ce_str, limit=100)}
-        prev_merchants = {m.merchant_name: m.total_spent for m in self.calculate_merchant_metrics(user_id, start_date=ps_str, end_date=pe_str, limit=100)}
-        
+        #
+        # Matched by canonicalized (trimmed/lowercased) name, not the raw display
+        # name `calculate_merchant_metrics` returns: that display name comes from
+        # `MIN(merchant_name)` over whichever rows fall in *that* query's date
+        # range, so the same real merchant can surface a different-cased/spaced
+        # string in the current period than in the previous one (e.g. this
+        # month's rows all say "Walmart", but one old receipt-scan entry last
+        # month says "WALMART", so last period's MIN() picks that instead). Keying
+        # the diff dict by the raw display name made those look like two
+        # different merchants — the real previous spend was never found, silently
+        # defaulted to $0, and a merchant with unchanged spend got reported as a
+        # brand-new-merchant-sized increase.
+        curr_merchant_rows = self.calculate_merchant_metrics(user_id, start_date=cs_str, end_date=ce_str, limit=100)
+        prev_merchant_rows = self.calculate_merchant_metrics(user_id, start_date=ps_str, end_date=pe_str, limit=100)
+        curr_merchants = {canonicalize_name(m.merchant_name): m.total_spent for m in curr_merchant_rows}
+        prev_merchants = {canonicalize_name(m.merchant_name): m.total_spent for m in prev_merchant_rows}
+        # Prefer the current period's display casing (what the merchant looks like "now");
+        # fall back to the previous period's for merchants that dropped off entirely.
+        merchant_display_names = {canonicalize_name(m.merchant_name): m.merchant_name for m in prev_merchant_rows}
+        merchant_display_names.update({canonicalize_name(m.merchant_name): m.merchant_name for m in curr_merchant_rows})
+
         merchant_diffs = []
         for m, curr_spent in curr_merchants.items():
             prev_spent = prev_merchants.get(m, 0)
             diff = curr_spent - prev_spent
             if abs(diff) > 10:  # Only care about > $10 changes
                 merchant_diffs.append((m, curr_spent, prev_spent, diff))
-                
+
         # Handle new merchants
         for m, curr_spent in curr_merchants.items():
             if m not in prev_merchants and curr_spent > 50:
@@ -736,10 +773,10 @@ class InsightAnalyticsService:
                     change_amount=curr_spent,
                     change_percent=100,
                     time_scope="merchant",
-                    entity_name=m,
+                    entity_name=merchant_display_names[m],
                 ))
                 break # Only show one new merchant to avoid noise
-                
+
         merchant_diffs.sort(key=lambda x: x[3], reverse=True)
         group_suffix = self._group_scope_suffix(user_id)
         if merchant_diffs:
@@ -747,28 +784,30 @@ class InsightAnalyticsService:
             biggest_inc = merchant_diffs[0]
             if biggest_inc[3] > 0 and biggest_inc[2] > 0: # make sure it's an increase and not a new merchant which is handled above
                 pct = (biggest_inc[3] / biggest_inc[2]) * 100
+                inc_name = merchant_display_names[biggest_inc[0]]
                 insights.append(ChangeInsight(
-                    metric_name=f"Spend Increased at {biggest_inc[0]}{group_suffix}",
+                    metric_name=f"Spend Increased at {inc_name}{group_suffix}",
                     previous_value=biggest_inc[2],
                     current_value=biggest_inc[1],
                     change_amount=biggest_inc[3],
                     change_percent=round(pct, 1),
                     time_scope="merchant",
-                    entity_name=biggest_inc[0],
+                    entity_name=inc_name,
                 ))
 
             # Biggest Decrease
             biggest_dec = merchant_diffs[-1]
             if biggest_dec[3] < 0 and biggest_dec[2] > 0:
                 pct = (biggest_dec[3] / biggest_dec[2]) * 100
+                dec_name = merchant_display_names[biggest_dec[0]]
                 insights.append(ChangeInsight(
-                    metric_name=f"Spend Decreased at {biggest_dec[0]}{group_suffix}",
+                    metric_name=f"Spend Decreased at {dec_name}{group_suffix}",
                     previous_value=biggest_dec[2],
                     current_value=biggest_dec[1],
                     change_amount=biggest_dec[3],
                     change_percent=round(pct, 1),
                     time_scope="merchant",
-                    entity_name=biggest_dec[0],
+                    entity_name=dec_name,
                 ))
 
         # 2. Biggest Category Increase
@@ -776,11 +815,11 @@ class InsightAnalyticsService:
         # double-counted here at their *full* amount on top of whatever their actual
         # personal spend is (same class of bug TS-GRP-106 fixed in AnalysisService).
         curr_cat_query = self.db.query(Expense.category_id, func.sum(Expense.amount)).filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.purchased_at >= cs_str)
-        if ce_str: curr_cat_query = curr_cat_query.filter(Expense.purchased_at <= ce_str)
+        if ce_str: curr_cat_query = curr_cat_query.filter(Expense.purchased_at < _exclusive_end(ce_str))
         curr_cats = {r[0]: float(r[1] or 0) for r in curr_cat_query.group_by(Expense.category_id).all()}
 
         prev_cat_query = self.db.query(Expense.category_id, func.sum(Expense.amount)).filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.purchased_at >= ps_str)
-        if pe_str: prev_cat_query = prev_cat_query.filter(Expense.purchased_at <= pe_str)
+        if pe_str: prev_cat_query = prev_cat_query.filter(Expense.purchased_at < _exclusive_end(pe_str))
         prev_cats = {r[0]: float(r[1] or 0) for r in prev_cat_query.group_by(Expense.category_id).all()}
         
         cat_diffs = []
@@ -846,7 +885,7 @@ class InsightAnalyticsService:
                 .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.purchased_at >= cs_str)
             )
             if ce_str:
-                curr_largest_query = curr_largest_query.filter(Expense.purchased_at <= ce_str)
+                curr_largest_query = curr_largest_query.filter(Expense.purchased_at < _exclusive_end(ce_str))
             largest = curr_largest_query.order_by(Expense.amount.desc()).first()
 
             if largest:
@@ -888,7 +927,7 @@ class InsightAnalyticsService:
                 Expense.purchased_at >= cs_str,
             )
             if ce_str:
-                curr_tpl_query = curr_tpl_query.filter(Expense.purchased_at <= ce_str)
+                curr_tpl_query = curr_tpl_query.filter(Expense.purchased_at < _exclusive_end(ce_str))
             curr_amount = float(curr_tpl_query.scalar() or 0)
 
             prev_tpl_query = self.db.query(func.sum(Expense.amount)).filter(
@@ -898,7 +937,7 @@ class InsightAnalyticsService:
                 Expense.purchased_at >= ps_str,
             )
             if pe_str:
-                prev_tpl_query = prev_tpl_query.filter(Expense.purchased_at <= pe_str)
+                prev_tpl_query = prev_tpl_query.filter(Expense.purchased_at < _exclusive_end(pe_str))
             prev_amount = float(prev_tpl_query.scalar() or 0)
 
             if prev_amount > 0 and curr_amount > prev_amount:
@@ -923,4 +962,23 @@ class InsightAnalyticsService:
         # Rank by relative magnitude so the most eye-catching change wins one
         # of the 3-5 card slots, regardless of which type produced it.
         insights.sort(key=lambda i: abs(i.change_percent), reverse=True)
-        return insights[:5]
+
+        # A single real change (e.g. a recurring bill whose description also
+        # matches its own merchant_name) can be produced independently by two
+        # sections above — same underlying Expense rows, reached via different
+        # queries, so they land with the same entity_name and change_percent
+        # but different metric_name/time_scope. The card headline is built from
+        # entity_name alone (see WhatChangedRail/InsightRail), so that rendered
+        # as the exact same card twice. Keep only the highest-magnitude insight
+        # (first, thanks to the sort above) per canonicalized entity name.
+        seen_entities = set()
+        deduped = []
+        for insight in insights:
+            key = canonicalize_name(insight.entity_name) if insight.entity_name else None
+            if key and key in seen_entities:
+                continue
+            if key:
+                seen_entities.add(key)
+            deduped.append(insight)
+
+        return deduped[:5]
