@@ -350,3 +350,82 @@ class TestCookieAuthDoesNotWeakenAuthz:
             assert res.status_code == 401
         finally:
             test_client.cookies.clear()
+
+
+# ----------------------------------------------------------------------
+# P2-5 #3: "Mark as settled" already exists (POST/GET/DELETE settlements +
+# SettleUpDialog). These lock in its interaction with the now-unified balance
+# engine and with the 409 delete guard.
+# ----------------------------------------------------------------------
+
+
+class TestSettleUpInteractsWithBalancesAndDeleteGuard:
+    @staticmethod
+    def _group_where_other_owes_me(test_client, db_session):
+        db_session.add(User(id=uuid.uuid4(), email="owes@test.com", password_hash="h", name="O"))
+        db_session.commit()
+        group_id = test_client.post("/api/v1/groups", json={"name": "Settle"}).json()["group_id"]
+        other = test_client.post(
+            f"/api/v1/groups/{group_id}/members", json={"email": "owes@test.com"}
+        ).json()["member_id"]
+        mine = (
+            db_session.query(GroupMember)
+            .filter(GroupMember.group_id == uuid.UUID(group_id), GroupMember.user_email == "test@user.com")
+            .first()
+        )
+        test_client.post(
+            f"/api/v1/groups/{group_id}/expenses",
+            json={
+                "date": "01/15/2026", "description": "Dinner", "category": "Food",
+                "amount": 50.00,
+                "payers": [{"member_id": str(mine.id), "amount_paid": 50.00}],
+                "split": {"type": "equal", "entries": [{"member_id": str(mine.id)}, {"member_id": other}]},
+            },
+        )
+        return group_id, str(mine.id), other
+
+    def _my_list_balance(self, test_client, group_id):
+        body = test_client.get("/api/v1/groups").json()
+        return next(g["my_balance"] for g in body if g["group_id"] == group_id)
+
+    def test_settling_up_zeroes_the_balance_in_list_and_detail(self, test_client, db_session):
+        group_id, mine, other = self._group_where_other_owes_me(test_client, db_session)
+        assert self._my_list_balance(test_client, group_id) == 25.00
+
+        res = test_client.post(
+            f"/api/v1/groups/{group_id}/settlements",
+            json={"from_member_id": other, "to_member_id": mine, "amount": 25.00},
+        )
+        assert res.status_code == 201, res.text
+
+        # Both endpoints must agree after the settlement, not just the detail one.
+        assert self._my_list_balance(test_client, group_id) == 0.0
+        balances = test_client.get(f"/api/v1/groups/{group_id}/balances").json()
+        assert all(row["net"] == 0.0 for row in balances["members"])
+
+    def test_group_delete_is_unblocked_once_settled(self, test_client, db_session):
+        group_id, mine, other = self._group_where_other_owes_me(test_client, db_session)
+
+        # Outstanding: the 409 guard applies.
+        assert test_client.delete(f"/api/v1/groups/{group_id}").status_code == 409
+
+        test_client.post(
+            f"/api/v1/groups/{group_id}/settlements",
+            json={"from_member_id": other, "to_member_id": mine, "amount": 25.00},
+        )
+
+        # Settled: no force needed.
+        assert test_client.delete(f"/api/v1/groups/{group_id}").status_code in (200, 204)
+
+    def test_undoing_a_settlement_restores_the_balance(self, test_client, db_session):
+        group_id, mine, other = self._group_where_other_owes_me(test_client, db_session)
+        settlement_id = test_client.post(
+            f"/api/v1/groups/{group_id}/settlements",
+            json={"from_member_id": other, "to_member_id": mine, "amount": 25.00},
+        ).json()["id"]
+        assert self._my_list_balance(test_client, group_id) == 0.0
+
+        assert test_client.delete(
+            f"/api/v1/groups/{group_id}/settlements/{settlement_id}"
+        ).status_code in (200, 204)
+        assert self._my_list_balance(test_client, group_id) == 25.00

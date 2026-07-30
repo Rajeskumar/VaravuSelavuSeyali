@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks, Request
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
+
+from fastapi.responses import StreamingResponse
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
@@ -26,6 +29,7 @@ from varavu_selavu_service.models.api_models import (
 )
 from varavu_selavu_service.core.money import to_decimal, validate_money_amount
 from varavu_selavu_service.services.expense_service import ExpenseService
+from varavu_selavu_service.services.personal_export_service import PersonalExportService
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.repo.postgres_repo import PostgresRepo
 from varavu_selavu_service.services.chat_service import (
@@ -85,6 +89,9 @@ router.include_router(entity_resolution_router)
 # Dependency providers
 def get_expense_service(db: Session = Depends(get_db)) -> ExpenseService:
     return ExpenseService(db)
+
+def get_personal_export_service(db: Session = Depends(get_db)) -> PersonalExportService:
+    return PersonalExportService(db)
 
 def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
     return AnalysisService(db=db, ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
@@ -197,6 +204,25 @@ def create_expense(
         "merchant_name": saved.get("merchant_name"),
     }
     return {"success": True, "expense": expense_payload}
+
+
+@router.get(
+    "/expenses/export.csv",
+    tags=["Expenses"],
+    summary="Export all my personal expenses as CSV",
+)
+def export_personal_expenses_csv(
+    start_date: Optional[str] = Query(None, description="Inclusive MM/DD/YYYY lower bound"),
+    end_date: Optional[str] = Query(None, description="Inclusive MM/DD/YYYY upper bound"),
+    svc: PersonalExportService = Depends(get_personal_export_service),
+    user_id: str = Depends(auth_required),
+):
+    csv_text = svc.export_csv(user_id, start_date=start_date, end_date=end_date)
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="trackspense_expenses.csv"'},
+    )
 
 
 @router.get(

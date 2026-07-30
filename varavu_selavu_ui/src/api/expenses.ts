@@ -162,3 +162,28 @@ export async function suggestCategory(description: string): Promise<CategorySugg
   if (!res.ok) throw new Error('Failed to classify expense');
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Personal-ledger CSV export (P2-5)
+// ---------------------------------------------------------------------------
+
+/** Downloads the caller's personal expenses as CSV. Bounds are MM/DD/YYYY. */
+export async function exportMyExpensesCsv(startDate?: string, endDate?: string): Promise<void> {
+  const params = new URLSearchParams();
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+  const query = params.toString();
+
+  const res = await fetchWithAuth(`/api/v1/expenses/export.csv${query ? `?${query}` : ''}`);
+  if (!res.ok) throw new Error('Failed to export expenses');
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'trackspense_expenses.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}

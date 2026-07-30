@@ -15,7 +15,8 @@ import ExpenseDetailSheet, { ExpenseDetailForm } from '../components/expenses/Ex
 import MoveToGroupDialog from '../components/expenses/MoveToGroupDialog';
 import RecurringTab from '../components/expenses/RecurringTab';
 import SegmentedTabs from '../components/common/SegmentedTabs';
-import { listExpenses, deleteExpense, updateExpense, ExpenseRecord } from '../api/expenses';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
+import { listExpenses, deleteExpense, updateExpense, exportMyExpensesCsv, ExpenseRecord } from '../api/expenses';
 import {
   listAllMyGroupExpenses,
   updateGroupExpense,
@@ -145,6 +146,18 @@ const ExpensesPage: React.FC = () => {
   );
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<ExpenseRecord | null>(null);
+  const [exporting, setExporting] = React.useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportMyExpensesCsv();
+    } catch {
+      setToast({ open: true, message: 'Could not export your expenses.', severity: 'error' });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // --- Detail sheet state (tap-to-open, inline edit — TS-DES-102) ---
   const [detailExpense, setDetailExpense] = React.useState<FeedExpense | null>(null);
@@ -328,9 +341,19 @@ const ExpensesPage: React.FC = () => {
               instead of AddExpenseForm; the Dialog+AddExpenseForm below is still used, but only
               reached via a row's Edit icon (handleRowEdit) now. */}
           {tab === 'transactions' && (
-            <Button variant="contained" onClick={() => openQuickCapture()}>
-              Add Expense
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadOutlinedIcon />}
+                disabled={exporting}
+                onClick={handleExport}
+              >
+                {exporting ? 'Exporting…' : 'Export CSV'}
+              </Button>
+              <Button variant="contained" onClick={() => openQuickCapture()}>
+                Add Expense
+              </Button>
+            </Box>
           )}
         </Box>
 
