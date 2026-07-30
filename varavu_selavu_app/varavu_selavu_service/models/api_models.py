@@ -1,7 +1,25 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, EmailStr, Field, conint
+
+from varavu_selavu_service.core.money import (
+    MAX_AMOUNT,
+    MoneyAmount,
+    NonNegativeMoney,
+    OptionalNonNegativeMoney,
+)
+from varavu_selavu_service.core.text_sanitize import (
+    CategoryStr,
+    DescriptionStr,
+    DisplayNameStr,
+    NameStr,
+    OptionalDisplayNameStr,
+    OptionalMerchantStr,
+    OptionalNameStr,
+    OptionalNotesStr,
+)
 
 class LoginRequest(BaseModel):
     username: str
@@ -13,11 +31,11 @@ class LoginResponse(BaseModel):
 
 class ExpenseRequest(BaseModel):
     user_id: str
-    cost: float
-    category: str
-    description: str
+    cost: MoneyAmount
+    category: CategoryStr
+    description: DescriptionStr
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
-    merchant_name: Optional[str] = None
+    merchant_name: OptionalMerchantStr = None
 
 
 class ReceiptParseResponse(BaseModel):
@@ -30,15 +48,15 @@ class ReceiptParseResponse(BaseModel):
 
 class ExpenseItem(BaseModel):
     line_no: int
-    item_name: str
-    normalized_name: str | None = None
+    item_name: DescriptionStr
+    normalized_name: OptionalNameStr = None
     category_id: str | None = None
     quantity: float | None = None
     unit: str | None = None
-    unit_price: float | None = None
-    line_total: float
-    tax: float | None = 0
-    discount: float | None = 0
+    unit_price: OptionalNonNegativeMoney = None
+    line_total: NonNegativeMoney
+    tax: OptionalNonNegativeMoney = Decimal("0")
+    discount: OptionalNonNegativeMoney = Decimal("0")
     attributes_json: str | None = None
 
 
@@ -72,9 +90,9 @@ class ItemsUpdateRequest(BaseModel):
     items. `amount` is required (not derived) and validated to reconcile with the items'
     subtotal, mirroring create_expense_with_items's existing check."""
     items: List[ExpenseItem]
-    amount: float
-    tax: float = 0
-    discount: float = 0
+    amount: MoneyAmount
+    tax: NonNegativeMoney = Decimal("0")
+    discount: NonNegativeMoney = Decimal("0")
 
 
 class ItemsResponse(BaseModel):
@@ -86,7 +104,7 @@ class ItemsResponse(BaseModel):
 
 class CategorizeRequest(BaseModel):
     """Request payload for expense categorization."""
-    description: str
+    description: DescriptionStr
 
 
 class CategorizeResponse(BaseModel):
@@ -319,11 +337,11 @@ class RecurringTemplateDTO(BaseModel):
 
 
 class UpsertRecurringTemplateRequest(BaseModel):
-    description: str
-    category: str
-    merchant_name: str | None = None
+    description: DescriptionStr
+    category: CategoryStr
+    merchant_name: OptionalMerchantStr = None
     day_of_month: conint(ge=1, le=31)  # type: ignore
-    default_cost: float
+    default_cost: MoneyAmount
     start_date_iso: str | None = None
     status: str = "Active"
     group_id: str | None = None
@@ -346,14 +364,14 @@ class ConfirmRecurringRequest(BaseModel):
 # ---------------------- Groups (TS-GRP series) ---------------------- #
 
 class CreateGroupRequest(BaseModel):
-    name: str
+    name: NameStr
     group_type: str = "other"  # trip|home|couple|other
     cover: Optional[str] = None
     currency: str = "USD"
 
 
 class UpdateGroupRequest(BaseModel):
-    name: Optional[str] = None
+    name: OptionalNameStr = None
     group_type: Optional[str] = None
     cover: Optional[str] = None
     simplify_debts: Optional[bool] = None
@@ -374,7 +392,7 @@ class GroupSummary(BaseModel):
     name: str
     group_type: str
     member_count: int
-    my_balance: float = 0.0  # real balance computation lands with TS-GRP-104
+    my_balance: float = 0.0
     status: str
     archived_at: Optional[datetime] = None
     deleted_at: Optional[datetime] = None
@@ -407,7 +425,7 @@ class GroupActivityListResponse(BaseModel):
 
 class AddMemberRequest(BaseModel):
     email: Optional[EmailStr] = None
-    display_name: Optional[str] = None
+    display_name: OptionalDisplayNameStr = None
 
 
 class CreateInviteRequest(BaseModel):
@@ -433,10 +451,10 @@ class AcceptInviteResponse(BaseModel):
 class RecordSettlementRequest(BaseModel):
     from_member_id: str
     to_member_id: str
-    amount: float
+    amount: MoneyAmount
     method: Optional[str] = None
     settled_at: Optional[str] = None  # ISO 8601; defaults to now() when omitted
-    notes: Optional[str] = None
+    notes: OptionalNotesStr = None
 
 
 class SettlementDTO(BaseModel):
@@ -469,15 +487,16 @@ class GroupSplitConfig(BaseModel):
 
 class GroupExpensePayerEntry(BaseModel):
     member_id: str
-    amount_paid: float
+    # May be zero: a member can be listed as a payer contributing nothing.
+    amount_paid: NonNegativeMoney
 
 
 class GroupExpenseRequest(BaseModel):
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
-    description: str
-    category: str
-    amount: float
-    merchant_name: Optional[str] = None
+    description: DescriptionStr
+    category: CategoryStr
+    amount: MoneyAmount
+    merchant_name: OptionalMerchantStr = None
     payers: List[GroupExpensePayerEntry]
     split: GroupSplitConfig
     # TS-GRP-131: currency this expense was actually paid in. None/omitted means
@@ -509,10 +528,10 @@ class GroupExpenseItemEntry(BaseModel):
 
 class GroupExpenseWithItemsRequest(BaseModel):
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
-    description: str
-    category: str
-    amount: float
-    merchant_name: Optional[str] = None
+    description: DescriptionStr
+    category: CategoryStr
+    amount: MoneyAmount
+    merchant_name: OptionalMerchantStr = None
     payers: List[GroupExpensePayerEntry]
     items: List[GroupExpenseItemEntry]
     currency: Optional[str] = None
@@ -604,7 +623,7 @@ class SendEmailRequest(BaseModel):
     user_email: str
     subject: str
     message_body: str
-    name: Optional[str] = None
+    name: OptionalNameStr = None
 
 
 class SendEmailResponse(BaseModel):
@@ -683,7 +702,7 @@ class SettleExpenseShareRequest(BaseModel):
     member_id: str
     payer_member_id: Optional[str] = None
     method: Optional[str] = None
-    notes: Optional[str] = None
+    notes: OptionalNotesStr = None
 
 
 # ---------------------- Payment deep links (TS-GRP-130) ---------------------- #
@@ -752,12 +771,12 @@ class ResolveResponse(BaseModel):
 
 
 class CreateCanonicalMerchantRequest(BaseModel):
-    display_name: str
+    display_name: DisplayNameStr
     default_category_id: Optional[str] = None
 
 
 class CreateCanonicalItemRequest(BaseModel):
-    display_name: str
+    display_name: DisplayNameStr
     brand: Optional[str] = None
     default_category_id: Optional[str] = None
     unit_type: Optional[str] = None

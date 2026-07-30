@@ -138,9 +138,11 @@ def test_put_items_rejects_non_reconciling_total(test_client, db_session):
 def test_put_items_rejects_empty_items(test_client, db_session):
     expense_id = _create_personal_itemized(test_client)
 
+    # A valid amount is used so this exercises the empty-items branch rather than
+    # tripping the amount > 0 schema constraint first (which returns 422).
     res = test_client.put(
         f"/api/v1/expenses/{expense_id}/items",
-        json={"items": [], "amount": 0.0, "tax": 0.0, "discount": 0.0},
+        json={"items": [], "amount": 10.0, "tax": 0.0, "discount": 0.0},
     )
     assert res.status_code == 400
 

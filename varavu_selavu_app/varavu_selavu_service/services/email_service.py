@@ -1,5 +1,6 @@
 """Generic email service – sends SMTP messages via Gmail relay."""
 
+import html
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -69,16 +70,23 @@ def send_email(
     text_part = MIMEText("\n".join(text_lines), "plain", "utf-8")
 
     # ---- HTML part ----
+    # Every interpolated value is user-supplied; escape at the sink so a
+    # description or contact-form message cannot inject markup into the email.
+    e_form_type = html.escape(form_type.replace('_', ' ').title())
+    e_name = html.escape(name or 'N/A')
+    e_user_email = html.escape(user_email)
+    e_subject = html.escape(subject)
+    e_message_body = html.escape(message_body)
     html_body = f"""
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px">
-        <h2 style="color:#059669">{form_type.replace('_', ' ').title()}</h2>
+        <h2 style="color:#059669">{e_form_type}</h2>
         <table style="border-collapse:collapse;width:100%">
             <tr><td style="padding:8px;font-weight:bold;color:#475569">From</td>
-                <td style="padding:8px">{name or 'N/A'} &lt;{user_email}&gt;</td></tr>
+                <td style="padding:8px">{e_name} &lt;{e_user_email}&gt;</td></tr>
             <tr style="background:#f8fafc"><td style="padding:8px;font-weight:bold;color:#475569">Subject</td>
-                <td style="padding:8px">{subject}</td></tr>
+                <td style="padding:8px">{e_subject}</td></tr>
         </table>
-        <div style="margin-top:16px;padding:16px;background:#f8fafc;border-radius:8px;white-space:pre-wrap">{message_body}</div>
+        <div style="margin-top:16px;padding:16px;background:#f8fafc;border-radius:8px;white-space:pre-wrap">{e_message_body}</div>
         <p style="margin-top:24px;font-size:12px;color:#94a3b8">Sent from TrackSpense App</p>
     </div>
     """

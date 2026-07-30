@@ -86,14 +86,17 @@ def test_settlement_from_equals_to_returns_400(test_client, db_session):
     assert res.status_code == 400
 
 
-def test_settlement_amount_must_be_positive(test_client, db_session):
+@pytest.mark.parametrize("amount", [0, -5, 1_000_001, 10.999])
+def test_settlement_amount_must_be_positive_and_in_range(test_client, db_session, amount):
+    """Schema-level money constraints reject the amount with 422 before the
+    handler runs (P1-3)."""
     group_id, admin_id, member2_id = _make_group_with_two_members(test_client, db_session)
 
     res = test_client.post(
         f"/api/v1/groups/{group_id}/settlements",
-        json={"from_member_id": member2_id, "to_member_id": admin_id, "amount": 0},
+        json={"from_member_id": member2_id, "to_member_id": admin_id, "amount": amount},
     )
-    assert res.status_code == 400
+    assert res.status_code == 422
 
 
 def test_member_not_in_group_returns_400(test_client, db_session):

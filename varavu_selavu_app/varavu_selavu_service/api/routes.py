@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks, Request
 from datetime import datetime
+from decimal import Decimal
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
@@ -23,6 +24,7 @@ from varavu_selavu_service.models.api_models import (
     ItemsResponse,
     ExpenseItemDTO,
 )
+from varavu_selavu_service.core.money import to_decimal, validate_money_amount
 from varavu_selavu_service.services.expense_service import ExpenseService
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.repo.postgres_repo import PostgresRepo
@@ -570,11 +572,15 @@ def create_expense_with_items(
     for item in items:
         if "item_name" not in item or "line_total" not in item:
             raise HTTPException(status_code=400, detail="Invalid item")
-    subtotal = sum(i.get("line_total", 0) for i in items)
-    tax = header.get("tax", 0)
-    tip = header.get("tip", 0)
-    discount = header.get("discount", 0)
-    if abs(subtotal + tax + tip - discount - header["amount"]) > 0.02:
+    # `header` is an untyped dict, so its amount has not been through the
+    # constrained money types the way a declared field would have been.
+    amount = validate_money_amount(header["amount"], field_name="amount")
+    header = {**header, "amount": amount}
+    subtotal = sum(((i.get("line_total") or Decimal("0")) for i in items), Decimal("0"))
+    tax = to_decimal(header.get("tax"))
+    tip = to_decimal(header.get("tip"))
+    discount = to_decimal(header.get("discount"))
+    if abs(subtotal + tax + tip - discount - amount) > Decimal("0.02"):
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
     existing = repo.find_expense_by_fingerprint(user_id, header.get("fingerprint", ""))
     if existing and not force:
@@ -660,8 +666,8 @@ def update_expense_items(
     for item in items:
         if "item_name" not in item or "line_total" not in item:
             raise HTTPException(status_code=400, detail="Invalid item")
-    subtotal = sum(i.get("line_total", 0) for i in items)
-    if abs(subtotal + payload.tax - payload.discount - payload.amount) > 0.02:
+    subtotal = sum(((i.get("line_total") or Decimal("0")) for i in items), Decimal("0"))
+    if abs(subtotal + payload.tax - payload.discount - payload.amount) > Decimal("0.02"):
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
 
     repo.delete_items_for_expense(expense_id)
