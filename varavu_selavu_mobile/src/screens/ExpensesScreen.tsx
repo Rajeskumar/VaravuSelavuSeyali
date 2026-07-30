@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { listExpenses, deleteExpense, updateExpense, getExpenseItems, updateExpenseItems, ExpenseRecord } from '../api/expenses';
 import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
+import ExpenseItemsViewSheet from '../components/ExpenseItemsViewSheet';
 import { listGroups, getGroupDetail, moveExpenseToGroup, listAllMyGroupExpenses, UnifiedGroupExpenseRow, GroupSummary, ApiError } from '../api/groups';
 import { listRecurringTemplates, upsertRecurringTemplate, executeRecurringNow, RecurringTemplateDTO, UpsertRecurringPayload } from '../api/recurring';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
@@ -108,6 +109,10 @@ export default function ExpensesScreen() {
     // was previously a flat, non-interactive row.
     const [recOpenId, setRecOpenId] = useState<string | null>(null);
     const [recEdit, setRecEdit] = useState<{ id: string; description: string; category: string; day_of_month: string; default_cost: string } | null>(null);
+
+    // Read-only itemized view for scanned personal expenses — previously the only place
+    // items ever rendered was inside the editable ScannedItemsCard, one tap deeper in Edit.
+    const [viewItemsExpense, setViewItemsExpense] = useState<ExpenseRecord | null>(null);
 
     // TS-GRP-121: Move-to-group modal state
     const [moveModalVisible, setMoveModalVisible] = useState(false);
@@ -314,9 +319,10 @@ export default function ExpensesScreen() {
     };
 
     const showRowActions = (expense: ExpenseRecord) => {
-        const buttons: any[] = [
-            { text: 'Edit', onPress: () => handleEdit(expense) },
-        ];
+        const isItemized = expense.split_type === 'itemized' || (expense.item_count || 0) > 1;
+        const buttons: any[] = [];
+        if (isItemized) buttons.push({ text: 'View Items', onPress: () => setViewItemsExpense(expense) });
+        buttons.push({ text: 'Edit', onPress: () => handleEdit(expense) });
         if (groupsEnabled) buttons.push({ text: 'Move to group', onPress: () => openMoveModal(expense) });
         buttons.push({ text: 'Delete', style: 'destructive', onPress: () => handleDelete(expense.row_id) });
         buttons.push({ text: 'Cancel', style: 'cancel' });
@@ -751,6 +757,12 @@ export default function ExpensesScreen() {
                     </View>
                 </View>
             </Modal>
+
+            <ExpenseItemsViewSheet
+                visible={!!viewItemsExpense}
+                expense={viewItemsExpense}
+                onClose={() => setViewItemsExpense(null)}
+            />
         </LinearGradient>
     );
 }

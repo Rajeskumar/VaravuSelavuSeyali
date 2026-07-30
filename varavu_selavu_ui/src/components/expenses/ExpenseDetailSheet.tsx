@@ -16,6 +16,7 @@ import { formatMoney, dayLabel } from './ExpenseFeed';
 import type { FeedExpense } from './ExpenseFeed';
 import { parseAppDate } from '../../utils/date';
 import { getExpenseItems, updateExpenseItems } from '../../api/expenses';
+import { getGroupExpenseItems, updateGroupExpenseItems } from '../../api/groups';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
 import CategoryPickerField from './CategoryPickerField';
 
@@ -88,7 +89,14 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
   React.useEffect(() => {
     if (!expense || !isItemized) return;
     let mounted = true;
-    getExpenseItems(expense.id)
+    // Group rows in this unified feed need the group-scoped items endpoint — the personal one
+    // (`getExpenseItems`) is scoped server-side to `group_id IS NULL` and 404s for these, which
+    // silently left the items section unrendered (`itemsLoaded` never flipped true) for every
+    // itemized group expense opened from the main Expenses page.
+    const fetchItems = expense.kind === 'group' && expense.groupId
+      ? getGroupExpenseItems(expense.groupId, String(expense.id))
+      : getExpenseItems(expense.id);
+    fetchItems
       .then((res) => {
         if (!mounted) return;
         setItems(res.items.map((it) => ({
@@ -112,7 +120,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
 
   const handleSave = async () => {
     if (itemsLoaded && items.length > 0) {
-      await updateExpenseItems(expense.id, {
+      const itemsPayload = {
         items: items.map((it) => ({
           line_no: it.line_no,
           item_name: it.item_name,
@@ -124,7 +132,12 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
         amount: parseFloat(form.amount) || 0,
         tax: itemsTax,
         discount: itemsDiscount,
-      });
+      };
+      if (expense.kind === 'group' && expense.groupId) {
+        await updateGroupExpenseItems(expense.groupId, String(expense.id), itemsPayload);
+      } else {
+        await updateExpenseItems(expense.id, itemsPayload);
+      }
     }
     await onSave(expense, form);
   };
