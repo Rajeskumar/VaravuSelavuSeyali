@@ -107,13 +107,15 @@ class GroupService:
             "user_email": member.user_email,
         }
 
-    def _group_summary(self, group: Group, member_count: int) -> Dict:
+    def _group_summary(self, group: Group, member_count: int, member_id: uuid.UUID) -> Dict:
+        from varavu_selavu_service.services.balance_service import BalanceService  # local import: avoids a circular import (BalanceService composes GroupService)
+
         return {
             "group_id": str(group.id),
             "name": group.name,
             "group_type": group.group_type,
             "member_count": member_count,
-            "my_balance": 0.0,
+            "my_balance": float(BalanceService(self.db).member_net(group.id, member_id)),
             "status": group.status,
             "archived_at": group.archived_at,
             "deleted_at": group.deleted_at,
@@ -180,7 +182,7 @@ class GroupService:
             payload={"name": name, "group_type": group_type}
         )
 
-        return self._group_summary(group, member_count=1)
+        return self._group_summary(group, member_count=1, member_id=new_member.id)
 
     def list_groups_for_user(self, email: str, include_archived: bool = False, include_deleted: bool = False) -> List[Dict]:
         statuses = ["active"]
@@ -196,13 +198,13 @@ class GroupService:
             .all()
         )
         summaries = []
-        for group, _member in rows:
+        for group, member in rows:
             member_count = (
                 self.db.query(GroupMember)
                 .filter(GroupMember.group_id == group.id, GroupMember.status.in_(["active", "invited"]))
                 .count()
             )
-            summaries.append(self._group_summary(group, member_count))
+            summaries.append(self._group_summary(group, member_count, member.id))
         return summaries
 
     def get_group_detail(self, group_id: str, email: str) -> Dict:

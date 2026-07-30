@@ -305,3 +305,169 @@ def test_simplified_debts_greedy_netting(test_client, db_session):
     assert transfers[0]["to_member_id"] == m["test@user.com"]
     assert transfers[0]["amount"] == 100.0
 
+
+# ----------------------------------------------------------------------
+# List-vs-detail balance consistency.
+# GET /groups used to hardcode my_balance=0.0 ("settled up") while
+# GET /groups/{id}/balances computed the real net — a self-contradicting ledger.
+# ----------------------------------------------------------------------
+
+
+def _my_balance_from_list(test_client, group_id: str) -> float:
+    body = test_client.get("/api/v1/groups").json()
+    return next(g["my_balance"] for g in body if g["group_id"] == group_id)
+
+
+def _net_from_detail(test_client, group_id: str, member_id: str) -> float:
+    body = test_client.get(f"/api/v1/groups/{group_id}/balances").json()
+    return next(row["net"] for row in body["members"] if row["member_id"] == member_id)
+
+
+def test_list_my_balance_matches_detail_net_when_owing(test_client, db_session):
+    """Reproduces the reported RSJ discrepancy: caller owes money, so the list
+    must not report 0.0/"settled up"."""
+    group_id, m = _make_group_with_members(test_client, db_session, ["sai@test.com", "jeevitha@test.com"])
+
+    # sai pays 237.20, split equally three ways -> caller owes 79.07 (approx)
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Groceries",
+            "category": "Food",
+            "amount": 237.20,
+            "payers": [{"member_id": m["sai@test.com"], "amount_paid": 237.20}],
+            "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
+        },
+    )
+
+    list_balance = _my_balance_from_list(test_client, group_id)
+    detail_net = _net_from_detail(test_client, group_id, m["test@user.com"])
+
+    assert list_balance == detail_net
+    assert list_balance < 0, "caller owes money; list must not report settled up"
+
+
+def test_list_my_balance_matches_detail_net_when_owed(test_client, db_session):
+    """Mirror case: caller is the payer and is owed money."""
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Hotel",
+            "category": "Travel",
+            "amount": 300.00,
+            "payers": [{"member_id": m["test@user.com"], "amount_paid": 300.00}],
+            "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
+        },
+    )
+
+    list_balance = _my_balance_from_list(test_client, group_id)
+    assert list_balance == _net_from_detail(test_client, group_id, m["test@user.com"])
+    assert list_balance == 200.00
+
+
+def test_list_my_balance_is_zero_for_genuinely_settled_group(test_client, db_session):
+    """A group with activity that nets to zero really is "settled up"."""
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Lunch",
+            "category": "Food",
+            "amount": 50.00,
+            "payers": [{"member_id": m["test@user.com"], "amount_paid": 50.00}],
+            "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
+        },
+    )
+    # b repays their 25.00 share -> caller nets to 0
+    test_client.post(
+        f"/api/v1/groups/{group_id}/settlements",
+        json={"from_member_id": m["b@test.com"], "to_member_id": m["test@user.com"], "amount": 25.00},
+    )
+
+    assert _my_balance_from_list(test_client, group_id) == 0.0
+    assert _net_from_detail(test_client, group_id, m["test@user.com"]) == 0.0
+
+
+def test_list_my_balance_unaffected_by_simplify_debts(test_client, db_session):
+    """simplify_debts only changes suggested transfers, never a member's net."""
+    from varavu_selavu_service.db.models import Group
+
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Dinner",
+            "category": "Food",
+            "amount": 90.00,
+            "payers": [{"member_id": m["b@test.com"], "amount_paid": 90.00}],
+            "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
+        },
+    )
+
+    before = _my_balance_from_list(test_client, group_id)
+
+    group = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
+    group.simplify_debts = True
+    db_session.commit()
+
+    assert _my_balance_from_list(test_client, group_id) == before
+    assert before == -30.00
+
+
+def test_list_my_balance_zero_sums_across_all_members(test_client, db_session):
+    """Property: every member's list-level my_balance summed over the group == 0."""
+    emails = ["b@test.com", "c@test.com"]
+    group_id, m = _make_group_with_members(test_client, db_session, emails)
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Cabin",
+            "category": "Travel",
+            "amount": 100.00,
+            "payers": [{"member_id": m["test@user.com"], "amount_paid": 100.00}],
+            "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
+        },
+    )
+
+    total = _my_balance_from_list(test_client, group_id)
+    for email in emails:
+        old = _as_user(email)
+        try:
+            total += _my_balance_from_list(test_client, group_id)
+        finally:
+            _restore(old)
+
+    assert round(total, 2) == 0.0
+
+
+def test_list_my_balance_respects_expense_currency_fx(test_client, db_session):
+    """Balances are expressed in the group's currency; the list must apply the
+    same FX conversion the detail endpoint does."""
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Museum",
+            "category": "Entertainment",
+            "amount": 100.00,
+            "currency": "EUR",
+            "payers": [{"member_id": m["test@user.com"], "amount_paid": 100.00}],
+            "split": {"type": "equal", "entries": [{"member_id": m[e]} for e in m]},
+        },
+    )
+
+    assert _my_balance_from_list(test_client, group_id) == _net_from_detail(
+        test_client, group_id, m["test@user.com"]
+    )
+

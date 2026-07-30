@@ -8,6 +8,7 @@ import { useTheme } from '@mui/material/styles';
 import GroupAvatar from './GroupAvatar';
 import { GroupSummary } from '../../api/groups';
 import { tabularNums } from '../../theme';
+import { balanceDirection, formatBalanceAmount } from '../../utils/balance';
 
 interface GroupCardProps {
   group: GroupSummary;
@@ -26,9 +27,14 @@ interface GroupCardProps {
  */
 const GroupCard: React.FC<GroupCardProps> = ({ group, onClick }) => {
   const theme = useTheme();
-  const balanceLabel = group.my_balance > 0 ? "You're owed" : group.my_balance < 0 ? 'You owe' : 'Settled up';
+  const direction = balanceDirection(group.my_balance);
+  const balanceLabel = direction === 'owed' ? "You're owed" : direction === 'owes' ? 'You owe' : 'Settled up';
   const balanceColor =
-    group.my_balance > 0 ? theme.palette.success.main : group.my_balance < 0 ? theme.palette.error.main : theme.palette.text.secondary;
+    direction === 'owed'
+      ? theme.palette.success.main
+      : direction === 'owes'
+        ? theme.palette.error.main
+        : theme.palette.text.secondary;
 
   return (
     <Card>
@@ -53,9 +59,9 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick }) => {
           <Typography variant="caption" color="text.secondary">
             {balanceLabel}
           </Typography>
-          {group.my_balance !== 0 && (
+          {direction !== 'settled' && (
             <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: balanceColor, ...tabularNums }}>
-              ${Math.abs(group.my_balance).toFixed(2)}
+              {formatBalanceAmount(group.my_balance)}
             </Typography>
           )}
         </Box>
