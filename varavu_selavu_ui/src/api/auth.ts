@@ -1,5 +1,6 @@
 // src/api/auth.ts
 import API_BASE_URL from './apiconfig';
+import { csrfHeader } from './csrf';
 
 export interface LoginPayload {
   username: string;
@@ -11,6 +12,8 @@ export interface LoginResponse {
   refresh_token: string;
   token_type: string;
   email?: string;
+  /** Echoed back in the X-CSRF-Token header on state-changing requests. */
+  csrf_token?: string;
 }
 
 export interface RegisterPayload {
@@ -24,11 +27,16 @@ export interface RefreshRequest {
   refresh_token: string;
 }
 
+/** Tokens arrive as HttpOnly cookies, so every auth call must send and accept
+ * cookies. Nothing here reads or writes a token in localStorage. */
+const withCookies: RequestInit = { credentials: 'include' };
+
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
   const params = new URLSearchParams();
   params.append('username', payload.username);
   params.append('password', payload.password);
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+    ...withCookies,
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -68,6 +76,7 @@ function decodeGoogleIdToken(idToken: string): { email?: string; name?: string }
 export async function loginWithGoogle(id_token: string): Promise<LoginResponse> {
   const decoded = decodeGoogleIdToken(id_token);
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/google`, {
+    ...withCookies,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -85,6 +94,7 @@ export async function loginWithGoogle(id_token: string): Promise<LoginResponse> 
 
 export async function register(payload: RegisterPayload): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+    ...withCookies,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -97,26 +107,49 @@ export async function register(payload: RegisterPayload): Promise<void> {
   }
 }
 
-export async function logout(refresh_token: string): Promise<void> {
+export async function logout(): Promise<void> {
   await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+    ...withCookies,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...csrfHeader(),
     },
-    body: JSON.stringify({ refresh_token }),
   });
 }
 
-export async function refresh(refresh_token: string): Promise<LoginResponse> {
+/** The refresh token travels as an HttpOnly cookie; there is nothing to pass. */
+export async function refresh(): Promise<LoginResponse> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    ...withCookies,
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ refresh_token }),
+    headers: { 'Content-Type': 'application/json' },
   });
   if (!response.ok) {
     throw new Error('Refresh failed');
+  }
+  return response.json();
+}
+
+/** One-time upgrade for sessions predating cookie auth: hands the server the
+ * refresh token still sitting in localStorage in exchange for cookies. */
+export async function exchangeLegacySession(refresh_token: string): Promise<LoginResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/session`, {
+    ...withCookies,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token }),
+  });
+  if (!response.ok) {
+    throw new Error('Session exchange failed');
+  }
+  return response.json();
+}
+
+export async function fetchMe(): Promise<{ email: string }> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, withCookies);
+  if (!response.ok) {
+    throw new Error('Not authenticated');
   }
   return response.json();
 }
@@ -128,6 +161,7 @@ export interface ForgotPasswordPayload {
 
 export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
+    ...withCookies,
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

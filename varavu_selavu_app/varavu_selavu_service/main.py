@@ -10,6 +10,7 @@ import logging
 from varavu_selavu_service.api.routes import router
 from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.core.config import Settings
+from varavu_selavu_service.core.csrf import CSRFMiddleware
 
 settings = Settings()
 
@@ -28,6 +29,12 @@ app.include_router(router)
 
 # List the origins that should be allowed to make cross-origin requests
 origins = settings.CORS_ALLOW_ORIGINS
+
+
+# Added before CORS so it runs *after* it: a rejected cross-origin request still
+# gets CORS headers, letting the browser surface the 403 instead of an opaque
+# network error.
+app.add_middleware(CSRFMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

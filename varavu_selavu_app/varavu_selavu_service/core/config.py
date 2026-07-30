@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from pydantic.v1 import BaseSettings
 
 try:  # pragma: no cover - optional dependency
@@ -61,6 +61,14 @@ class Settings(BaseSettings):
 
     JWT_SECRET: str = "change-me"
     JWT_EXPIRE_MINUTES: int = 30
+    REFRESH_EXPIRE_MINUTES: int = 60 * 24 * 7
+
+    # Auth cookies (P0-1). Tokens are delivered to browsers as HttpOnly cookies
+    # so page JavaScript cannot read them; native clients keep using the
+    # Authorization header. Secure is disabled only for local http development.
+    AUTH_COOKIE_SECURE: bool = True
+    AUTH_COOKIE_SAMESITE: str = "strict"
+    AUTH_COOKIE_DOMAIN: Optional[str] = None
 
     # Groups (TS-GRP series) — staged rollout flag; off by default so nothing
     # group-related is reachable until explicitly enabled (spec §13.4).

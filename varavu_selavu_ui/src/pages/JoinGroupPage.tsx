@@ -24,7 +24,8 @@ const JoinGroupPage: React.FC = () => {
 
   React.useEffect(() => {
     if (!token) return;
-    const isLoggedIn = !!localStorage.getItem('vs_token');
+    // Auth tokens are HttpOnly cookies; vs_user is the readable session marker.
+    const isLoggedIn = !!localStorage.getItem('vs_user');
     if (!isLoggedIn) {
       sessionStorage.setItem(PENDING_INVITE_KEY, token);
       setState('need-login');

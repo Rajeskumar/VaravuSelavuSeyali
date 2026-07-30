@@ -1,13 +1,14 @@
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from .service import AuthService
+from .cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from .security import create_access_token, create_refresh_token, auth_required, decode_token
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
@@ -28,14 +29,23 @@ class RegisterRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    """Tokens are set as HttpOnly cookies for browsers *and* returned in the body
+    for native clients, which have no cookie jar and keep using
+    `Authorization: Bearer` with SecureStore. The web client ignores these body
+    fields and never persists them."""
+
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
     email: str | None = None
+    csrf_token: str | None = None
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    """Native clients post the refresh token; browsers send the refresh cookie
+    and omit the body entirely."""
+
+    refresh_token: str | None = None
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -43,19 +53,36 @@ class ForgotPasswordRequest(BaseModel):
     password: str
 
 
+def _issue_session(response: Response, email: str) -> dict:
+    """Mints a token pair, sets the auth cookies, and returns the body payload."""
+    access = create_access_token({"sub": email})
+    refresh = create_refresh_token({"sub": email})
+    csrf_token = set_auth_cookies(response, access, refresh)
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type": "bearer",
+        "email": email,
+        "csrf_token": csrf_token,
+    }
+
+
 @router.post("/forgot-password")
-def forgot_password(data: ForgotPasswordRequest, auth: AuthService = Depends(get_auth_service)):
-    ok = auth.reset_password(data.email, data.password)
-    if not ok:
-        raise HTTPException(status_code=400, detail="User not found")
+@limiter.limit("5/hour")
+def forgot_password(request: Request, data: ForgotPasswordRequest, auth: AuthService = Depends(get_auth_service)):
+    # Always reports success: a "User not found" here tells an attacker which
+    # email addresses are registered.
+    auth.reset_password(data.email, data.password)
     return {"success": True}
 
 
 @router.post("/register")
-def register(data: RegisterRequest, auth: AuthService = Depends(get_auth_service)):
+@limiter.limit("5/hour")
+def register(request: Request, data: RegisterRequest, auth: AuthService = Depends(get_auth_service)):
     ok = auth.register_user(data.name, data.phone, data.email, data.password)
     if not ok:
-        raise HTTPException(status_code=400, detail="User already exists")
+        # Deliberately generic — "User already exists" is an enumeration oracle.
+        raise HTTPException(status_code=400, detail="Unable to complete registration")
     return {"success": True}
 
 
@@ -63,41 +90,77 @@ def register(data: RegisterRequest, auth: AuthService = Depends(get_auth_service
 @limiter.limit("5/minute")
 def login(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     auth: AuthService = Depends(get_auth_service),
 ):
     if not auth.authenticate_user(form_data.username, form_data.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    access = create_access_token({"sub": form_data.username})
-    refresh = create_refresh_token({"sub": form_data.username})
-    return {
-        "access_token": access,
-        "refresh_token": refresh,
-        "token_type": "bearer",
-        "email": form_data.username,
-    }
+    return _issue_session(response, form_data.username)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(data: RefreshRequest, auth: AuthService = Depends(get_auth_service)):
-    if auth.is_refresh_token_revoked(data.refresh_token):
+@limiter.limit("20/minute")
+def refresh(
+    request: Request,
+    response: Response,
+    data: RefreshRequest | None = None,
+    auth: AuthService = Depends(get_auth_service),
+):
+    presented = request.cookies.get(REFRESH_COOKIE) or (data.refresh_token if data else None)
+    if not presented:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-    payload = decode_token(data.refresh_token, "refresh")
+
+    # Reuse detection: a token that was already exchanged must never work again.
+    if auth.is_refresh_token_revoked(presented):
+        clear_auth_cookies(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    payload = decode_token(presented, "refresh")
     email = payload.get("sub")
-    access = create_access_token({"sub": email})
-    refresh_token = create_refresh_token({"sub": email})
-    return {
-        "access_token": access,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "email": email,
-    }
+
+    # Rotation: the presented token is spent as part of issuing the new pair.
+    auth.revoke_refresh_token(presented)
+    return _issue_session(response, email)
 
 
 @router.post("/logout")
-def logout(data: RefreshRequest, auth: AuthService = Depends(get_auth_service)):
-    auth.revoke_refresh_token(data.refresh_token)
+def logout(
+    request: Request,
+    response: Response,
+    data: RefreshRequest | None = None,
+    auth: AuthService = Depends(get_auth_service),
+):
+    presented = request.cookies.get(REFRESH_COOKIE) or (data.refresh_token if data else None)
+    if presented:
+        auth.revoke_refresh_token(presented)
+    clear_auth_cookies(response)
     return {"success": True}
+
+
+@router.post("/session", response_model=TokenResponse)
+@limiter.limit("10/minute")
+def exchange_session(
+    request: Request,
+    response: Response,
+    data: RefreshRequest | None = None,
+    auth: AuthService = Depends(get_auth_service),
+):
+    """One-time migration for sessions created before cookies existed (P0-1).
+
+    The web client posts the refresh token it still holds in localStorage; we
+    validate it, issue cookies, and it clears localStorage. Remove this endpoint
+    once refresh-token lifetimes guarantee no legacy sessions remain.
+    """
+    presented = data.refresh_token if data else None
+    if not presented:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    if auth.is_refresh_token_revoked(presented):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    payload = decode_token(presented, "refresh")
+    auth.revoke_refresh_token(presented)
+    return _issue_session(response, payload.get("sub"))
 
 
 @router.get("/me")
@@ -110,7 +173,13 @@ class GoogleLoginRequest(BaseModel):
 
 
 @router.post("/google", response_model=TokenResponse)
-def google_login(data: GoogleLoginRequest, auth: AuthService = Depends(get_auth_service)):
+@limiter.limit("10/minute")
+def google_login(
+    request: Request,
+    response: Response,
+    data: GoogleLoginRequest,
+    auth: AuthService = Depends(get_auth_service),
+):
     try:
         token_info = id_token.verify_oauth2_token(
             data.id_token,
@@ -124,14 +193,7 @@ def google_login(data: GoogleLoginRequest, auth: AuthService = Depends(get_auth_
     name = token_info.get("name", email)
     if not auth.get_user(email):
         auth.register_user(name, "", email, "")
-    access = create_access_token({"sub": email})
-    refresh = create_refresh_token({"sub": email})
-    return {
-        "access_token": access,
-        "refresh_token": refresh,
-        "token_type": "bearer",
-        "email": email,
-    }
+    return _issue_session(response, email)
 
 
 class ProfileResponse(BaseModel):
