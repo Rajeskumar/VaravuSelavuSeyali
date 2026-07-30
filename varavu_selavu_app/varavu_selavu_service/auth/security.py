@@ -17,6 +17,27 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=F
 
 ALGORITHM = "HS256"
 
+# The default JWT_SECRET is a publicly-known literal in this repo. Anyone could
+# forge a token for any account with it, so refuse to serve traffic if a real
+# deployment ever starts without the secret injected.
+INSECURE_JWT_SECRETS = {"change-me", "", "secret", "test-secret"}
+MIN_JWT_SECRET_LENGTH = 32
+
+
+def assert_signing_secret_is_safe(env: str, secret: str) -> None:
+    """Raises in any non-local environment when the signing key is weak."""
+    if env == "local":
+        return
+    if secret in INSECURE_JWT_SECRETS:
+        raise RuntimeError(
+            "JWT_SECRET is still the default/placeholder value. Set a strong secret "
+            "(from Secret Manager) before serving traffic."
+        )
+    if len(secret) < MIN_JWT_SECRET_LENGTH:
+        raise RuntimeError(
+            f"JWT_SECRET must be at least {MIN_JWT_SECRET_LENGTH} characters; got {len(secret)}."
+        )
+
 
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()

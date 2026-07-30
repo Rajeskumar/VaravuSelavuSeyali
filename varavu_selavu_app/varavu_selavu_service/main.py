@@ -11,6 +11,7 @@ from varavu_selavu_service.api.routes import router
 from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.core.config import Settings
 from varavu_selavu_service.core.csrf import CSRFMiddleware
+from varavu_selavu_service.auth.security import assert_signing_secret_is_safe
 
 settings = Settings()
 
@@ -19,6 +20,9 @@ logging.basicConfig(
     level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
+
+# Fail fast rather than serve traffic with a forgeable signing key.
+assert_signing_secret_is_safe(settings.ENVIRONMENT, settings.JWT_SECRET)
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 app.state.limiter = limiter

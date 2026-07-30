@@ -245,3 +245,31 @@ class TestNoUserEnumeration:
         )
         assert res.status_code == 200
         assert res.json()["success"] is True
+
+
+class TestSigningSecretGuard:
+    """The default JWT_SECRET is a public literal in this repo; a real deployment
+    must not be able to boot with it (cross-cutting "Secrets" item)."""
+
+    def test_local_environment_tolerates_the_default(self):
+        from varavu_selavu_service.auth.security import assert_signing_secret_is_safe
+
+        assert_signing_secret_is_safe("local", "change-me")  # must not raise
+
+    @pytest.mark.parametrize("secret", ["change-me", "", "secret", "test-secret"])
+    def test_placeholder_secrets_are_rejected_outside_local(self, secret):
+        from varavu_selavu_service.auth.security import assert_signing_secret_is_safe
+
+        with pytest.raises(RuntimeError, match="JWT_SECRET"):
+            assert_signing_secret_is_safe("production", secret)
+
+    def test_short_secrets_are_rejected_outside_local(self):
+        from varavu_selavu_service.auth.security import assert_signing_secret_is_safe
+
+        with pytest.raises(RuntimeError, match="at least 32"):
+            assert_signing_secret_is_safe("production", "abc123")
+
+    def test_a_strong_secret_passes(self):
+        from varavu_selavu_service.auth.security import assert_signing_secret_is_safe
+
+        assert_signing_secret_is_safe("production", "x" * 48)  # must not raise
