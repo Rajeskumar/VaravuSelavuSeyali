@@ -703,6 +703,17 @@ export default function ExpensesScreen() {
                                 style={{ flex: 1 }}
                             />
                         </View>
+                        {groupsEnabled && (
+                            <CustomButton
+                                title="Move to Group…"
+                                variant="outline"
+                                onPress={() => {
+                                    setEditModalVisible(false);
+                                    if (editingExpense) openMoveModal(editingExpense);
+                                }}
+                                style={{ marginTop: 10 }}
+                            />
+                        )}
                             </ScrollView>
                         </Pressable>
                     </KeyboardAvoidingView>

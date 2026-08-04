@@ -26,6 +26,7 @@ import {
 import { AnalysisScope } from '../api/analysis';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { useQuickCapture } from '../context/QuickCaptureContext';
+import { isoToMMDDYYYY } from '../utils/date';
 
 type ExpensesTab = 'transactions' | 'recurring';
 
@@ -258,18 +259,17 @@ const ExpensesPage: React.FC = () => {
     setDetailSaving(true);
     try {
       const amount = parseFloat(patch.amount) || 0;
-      // The detail sheet edits merchant/category/amount/notes only (matching
-      // the reference prototype) — the underlying `description` field is
-      // preserved as-is rather than overwritten with the merchant name, so a
-      // personal expense's distinct description ("Coffee run") isn't clobbered
-      // just because its merchant field was edited ("Starbucks"). `date` is
-      // likewise preserved unchanged — it's already in the MM/DD/YYYY shape
-      // both update endpoints expect, and this sheet doesn't expose a date
-      // field to edit.
+      // The detail sheet edits merchant/category/amount/date/notes — the underlying
+      // `description` field is preserved as-is rather than overwritten with the merchant
+      // name, so a personal expense's distinct description ("Coffee run") isn't clobbered
+      // just because its merchant field was edited ("Starbucks"). `patch.date` comes back
+      // as ISO 'YYYY-MM-DD' (the native date input's shape) and needs converting to the
+      // MM/DD/YYYY both update endpoints expect.
+      const date = isoToMMDDYYYY(patch.date);
       if (expense.kind === 'personal') {
         await updateExpense(expense.id as number, {
           user_id: user,
-          date: expense.date,
+          date,
           description: expense.description,
           category: patch.category,
           cost: amount,
@@ -290,7 +290,7 @@ const ExpensesPage: React.FC = () => {
           ? expense.payerSummary.map((p) => ({ member_id: p.member_id, amount_paid: amount }))
           : [];
         await updateGroupExpense(expense.groupId, String(expense.id), {
-          date: expense.date,
+          date,
           description: expense.description,
           category: patch.category,
           amount,

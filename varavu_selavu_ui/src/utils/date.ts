@@ -29,6 +29,15 @@ export function parseAppDate(input: string): Date {
   return new Date(input);
 }
 
+// Formats a Date as a local 'YYYY-MM-DD' string (not `toISOString()`, which
+// converts to UTC first and can shift the date by a day for timezones behind UTC).
+export function toISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function formatAppDate(input: string): string {
   const d = parseAppDate(input);
   if (Number.isNaN(d.getTime())) return input;
