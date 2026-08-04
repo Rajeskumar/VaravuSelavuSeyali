@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict, List, Optional
 
 from fastapi import HTTPException
@@ -501,7 +502,7 @@ class GroupExpenseService:
             self.db.flush()
 
             for mid, ratio in item.get("member_ratios", {}).items():
-                ratio_val = float(ratio)
+                ratio_val = Decimal(str(ratio))
                 if ratio_val <= 0:
                     continue
                 item_split = ExpenseItemSplit(
@@ -509,7 +510,7 @@ class GroupExpenseService:
                     expense_item_id=expense_item.id,
                     member_id=_to_uuid(mid),
                     ratio=ratio_val,
-                    amount=item["line_total"] * ratio_val,
+                    amount=Decimal(str(item["line_total"])) * ratio_val,
                 )
                 self.db.add(item_split)
 
@@ -557,28 +558,30 @@ class GroupExpenseService:
         }
 
     @staticmethod
-    def _rescale_payers(existing_payers: List[ExpensePayer], old_amount: float, new_amount: float) -> List[Dict]:
+    def _rescale_payers(existing_payers: List[ExpensePayer], old_amount: Decimal, new_amount: Decimal) -> List[Dict]:
         """Keeps each payer's proportional share of the total when items edits change the
         expense's amount, instead of forcing the user back into the payer picker. Falls back
         to an equal split if the old amount was 0 (shouldn't normally happen for a saved
         itemized expense). Rounds to cents with the remainder absorbed by the largest payer."""
         if not existing_payers:
             return []
-        total_cents = round(new_amount * 100)
-        if old_amount and old_amount > 0:
-            raw = [(p, (float(p.amount_paid) / old_amount) * new_amount) for p in existing_payers]
+        old_amount = Decimal(str(old_amount))
+        new_amount = Decimal(str(new_amount))
+        total_cents = int((new_amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+        if old_amount > 0:
+            raw = [(p, (Decimal(str(p.amount_paid)) / old_amount) * new_amount) for p in existing_payers]
         else:
             share = new_amount / len(existing_payers)
             raw = [(p, share) for p in existing_payers]
 
-        rounded = [(p, int(round(amt * 100))) for p, amt in raw]
+        rounded = [(p, int((amt * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))) for p, amt in raw]
         residual = total_cents - sum(c for _, c in rounded)
         if rounded:
             idx = max(range(len(rounded)), key=lambda i: rounded[i][1])
             p, c = rounded[idx]
             rounded[idx] = (p, c + residual)
 
-        return [{"member_id": str(p.member_id), "amount_paid": c / 100} for p, c in rounded]
+        return [{"member_id": str(p.member_id), "amount_paid": Decimal(c) / 100} for p, c in rounded]
 
     def update_items(
         self,
@@ -604,8 +607,8 @@ class GroupExpenseService:
         for item in items:
             if "item_name" not in item or "line_total" not in item:
                 raise HTTPException(status_code=400, detail="Invalid item")
-        subtotal = sum(i.get("line_total", 0) for i in items)
-        if abs(subtotal + tax - discount - amount) > 0.02:
+        subtotal = sum(((i.get("line_total") or Decimal("0")) for i in items), Decimal("0"))
+        if abs(subtotal + Decimal(str(tax)) - Decimal(str(discount)) - Decimal(str(amount))) > Decimal("0.02"):
             raise HTTPException(status_code=400, detail="Totals do not reconcile")
 
         # Preserve who's currently assigned to items (falling back to the expense's payers,
@@ -639,7 +642,7 @@ class GroupExpenseService:
         except SplitError as e:
             raise HTTPException(status_code=400, detail={"message": str(e), **e.details})
 
-        new_payers = self._rescale_payers(existing_payers, float(expense.amount or 0), amount)
+        new_payers = self._rescale_payers(existing_payers, Decimal(str(expense.amount or 0)), Decimal(str(amount)))
 
         item_ids_subq = self.db.query(ExpenseItem.id).filter(ExpenseItem.expense_id == expense.id)
         self.db.query(ExpenseItemSplit).filter(ExpenseItemSplit.expense_item_id.in_(item_ids_subq)).delete(synchronize_session=False)

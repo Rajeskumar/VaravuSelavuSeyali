@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from varavu_selavu_service.core.csv_safety import sanitize_csv_row
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, GroupMember, Settlement
 from varavu_selavu_service.services.group_service import GroupService
 
@@ -32,7 +33,13 @@ class GroupExportService:
 
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
+
+        def write_row(row):
+            """Every data row goes through the formula-injection guard: descriptions,
+            notes and member display names are unrestricted free text."""
+            writer.writerow(sanitize_csv_row(row))
+
+        write_row([
             "record_type", "date", "description_or_note", "category", "amount", "currency",
             "from_or_payer", "to_or_participant", "method",
         ])
@@ -51,7 +58,7 @@ class GroupExportService:
                 f"{members[s.member_id].display_name} (${float(s.amount_owed):.2f})"
                 for s in splits if s.member_id in members
             )
-            writer.writerow([
+            write_row([
                 "expense",
                 e.purchased_at.strftime("%m/%d/%Y") if e.purchased_at else "",
                 e.description or "",
@@ -69,7 +76,7 @@ class GroupExportService:
         for s in settlements:
             from_name = members[s.from_member_id].display_name if s.from_member_id in members else "Unknown"
             to_name = members[s.to_member_id].display_name if s.to_member_id in members else "Unknown"
-            writer.writerow([
+            write_row([
                 "settlement",
                 s.settled_at.strftime("%m/%d/%Y") if s.settled_at else "",
                 s.notes or "",

@@ -28,9 +28,13 @@ def test_register_login_and_me(test_client, db_session):
         assert me.status_code == 200
         assert me.json()["email"] == "alice@test.com"
 
+        # Login now also sets an auth cookie, so the jar has to be emptied for
+        # this to be a genuinely unauthenticated request.
+        test_client.cookies.clear()
         unauthorized = test_client.get("/api/v1/auth/me")
         assert unauthorized.status_code == 401
     finally:
+        test_client.cookies.clear()
         if old_override:
             app.dependency_overrides[auth_required] = old_override
 
@@ -53,13 +57,20 @@ def test_refresh_and_logout(test_client, db_session):
         tokens = login_resp.json()
         refresh_token = tokens["refresh_token"]
 
+        # Native-client flow: the token is supplied in the body. The cookie jar is
+        # emptied between calls because a refresh cookie would take precedence and
+        # keep handing back a valid, freshly rotated token.
+        test_client.cookies.clear()
         refresh_resp = test_client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         assert refresh_resp.status_code == 200
 
+        test_client.cookies.clear()
         test_client.post("/api/v1/auth/logout", json={"refresh_token": refresh_token})
+        test_client.cookies.clear()
         invalid = test_client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
         assert invalid.status_code == 401
     finally:
+        test_client.cookies.clear()
         if old_override:
             app.dependency_overrides[auth_required] = old_override
 

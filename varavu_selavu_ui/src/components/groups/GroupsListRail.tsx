@@ -11,6 +11,7 @@ import GroupAvatar from './GroupAvatar';
 import SegmentedTabs from '../common/SegmentedTabs';
 import { GroupSummary } from '../../api/groups';
 import { tabularNums } from '../../theme';
+import { balanceDirection, formatBalanceAmount } from '../../utils/balance';
 
 type RailTab = 'active' | 'archived';
 
@@ -82,9 +83,19 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
         )}
         {groups.map((g) => {
           const selected = g.group_id === selectedId;
+          const direction = balanceDirection(g.my_balance);
           const balanceLabel =
-            g.my_balance > 0 ? `you're owed $${g.my_balance.toFixed(2)}` : g.my_balance < 0 ? `you owe $${Math.abs(g.my_balance).toFixed(2)}` : 'settled up';
-          const balanceColor = g.my_balance > 0 ? theme.palette.success.main : g.my_balance < 0 ? theme.palette.error.main : theme.palette.text.secondary;
+            direction === 'owed'
+              ? `you're owed ${formatBalanceAmount(g.my_balance)}`
+              : direction === 'owes'
+                ? `you owe ${formatBalanceAmount(g.my_balance)}`
+                : 'settled up';
+          const balanceColor =
+            direction === 'owed'
+              ? theme.palette.success.main
+              : direction === 'owes'
+                ? theme.palette.error.main
+                : theme.palette.text.secondary;
           return (
             <Box
               key={g.group_id}

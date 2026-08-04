@@ -26,6 +26,7 @@ import {
   ReceiptParseDraft,
 } from '../../api/expenses';
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
+import { MAX_AMOUNT_LENGTH, amountError, isValidAmount, sanitizeAmountInput } from '../../utils/amount';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
 import {
@@ -145,6 +146,9 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [expenseDate, setExpenseDate] = useState(existing ? mmddyyyyToISO(existing.date) : new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState(existing?.description || '');
   const [cost, setCost] = useState(existing?.cost || 0);
+  // The input is text-backed so partial entries like "10." are typable; `cost`
+  // stays the numeric source of truth for validation and submission.
+  const [costText, setCostText] = useState(existing?.cost ? String(existing.cost) : '');
   const [merchantName, setMerchantName] = useState(existing?.merchant_name || '');
   const [userPickedMerchant, setUserPickedMerchant] = useState(!!existing?.merchant_name);
   const [mainCategory, setMainCategory] = useState(initialMain);
@@ -156,6 +160,13 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [recurring, setRecurring] = useState(false);
   const [repeatDay, setRepeatDay] = useState<number>(new Date().getDate());
   const typingRef = useRef<NodeJS.Timeout | null>(null);
+
+  /** Sets the numeric cost and its text mirror together. */
+  const setCostValue = (value: number) => {
+    setCost(value);
+    setCostText(value ? String(value) : '');
+  };
+  const costError = amountError(cost);
 
   // Compact "tap to edit" state (feedback: auto-populated fields shouldn't sit fully expanded
   // by default) — merchant/date collapse to a label until tapped; category opens a picker menu.
@@ -259,7 +270,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       header: { ...res.header, description: desc, main_category_name: main, category_name: sub || CATEGORY_GROUPS[main][0] },
     };
     setDraft(processed);
-    setCost(Number(res.header.amount) || 0);
+    setCostValue(Number(res.header.amount) || 0);
     setGroupItems((res.items || []).map((i: any, idx: number) => ({
       line_no: idx + 1,
       item_name: i.item_name,
@@ -314,7 +325,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     if (existing) {
       setExpenseDate(mmddyyyyToISO(existing.date));
       setDescription(existing.description);
-      setCost(existing.cost);
+      setCostValue(existing.cost);
       setMerchantName(existing.merchant_name || '');
       setUserPickedMerchant(!!existing.merchant_name);
       const main = findMainCategory(existing.category);
@@ -378,7 +389,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
 
   const saveDisabled = () => {
     const requiredFilled =
-      description.trim() !== '' && cost > 0 && expenseDate && subcategory && mainCategory;
+      description.trim() !== '' && isValidAmount(cost) && expenseDate && subcategory && mainCategory;
     if (mode === 'group' && !existing) {
       if (draft && draft.items.length > 0) {
         return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payersValid || !groupItemsValid;
@@ -427,7 +438,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           }
           setMessage('Group expense added successfully.');
           setDescription('');
-          setCost(0);
+          setCostValue(0);
           setDraft(null);
           scan.setFile(null);
           onSuccess?.();
@@ -499,7 +510,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           });
         }
         setDescription('');
-        setCost(0);
+        setCostValue(0);
         setDraft(null);
         scan.setFile(null);
       }
@@ -692,16 +703,23 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 fullWidth
                 size="small"
                 label="Cost"
-                type="number"
-                value={cost}
-                
+                // text + inputMode rather than type="number": lets us reject
+                // out-of-range keystrokes outright so the field cannot overflow.
+                type="text"
+                inputMode="decimal"
+                value={costText}
                 onChange={e => {
-                  const val = parseFloat(e.target.value);
+                  const next = sanitizeAmountInput(e.target.value);
+                  if (next === null) return; // out of range or >2dp: ignore the edit
+                  setCostText(next);
+                  const val = next === '' ? 0 : Number(next);
                   setCost(val);
                   if (draft) setDraft({ ...draft, header: { ...draft.header, amount: val } });
                 }}
                 required
-                inputProps={{ min: 0, step: 0.01 }}
+                error={costError !== null}
+                helperText={costError ?? ' '}
+                inputProps={{ maxLength: MAX_AMOUNT_LENGTH, 'aria-label': 'Cost' }}
                 InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
               />
             </Grid>

@@ -154,8 +154,9 @@ const FAQS = [
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const token = typeof window !== 'undefined' ? localStorage.getItem('vs_token') : null;
-  const goStart = () => navigate(token ? '/dashboard' : '/register');
+  // Auth tokens are HttpOnly cookies; vs_user is the readable session marker.
+  const signedIn = typeof window !== 'undefined' ? !!localStorage.getItem('vs_user') : false;
+  const goStart = () => navigate(signedIn ? '/dashboard' : '/register');
   const bootLine = useTypedText('trackspense :: ready — a cerebroos product');
 
   return (

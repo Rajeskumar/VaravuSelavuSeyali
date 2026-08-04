@@ -7,6 +7,7 @@ import { fetchWithAuth } from '../../api/api';
 import { getModels, ModelsResponse, ModelOption } from '../../api/models';
 import SegmentedTabs from '../common/SegmentedTabs';
 import { typeScale } from '../../theme';
+import { escapeHtml } from '../../utils/html';
 
 interface AIAnalystChatProps {
   userId: string | null;
@@ -132,8 +133,10 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
     let html: string[] = [];
     let table: string[] = [];
 
+    // Escape before any substitution: model output reflects stored expense text,
+    // so raw markup here would be stored XSS via dangerouslySetInnerHTML below.
     const formatInline = (line: string) =>
-      line
+      escapeHtml(line)
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, `<code style="background: ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; padding: 2px 4px; border-radius: 4px;">$1</code>`);

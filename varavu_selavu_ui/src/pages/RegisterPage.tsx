@@ -48,8 +48,7 @@ const RegisterPage: React.FC = () => {
           try {
             setGoogleLoading(true);
             const data = await loginWithGoogle(resp.credential);
-            localStorage.setItem('vs_token', data.access_token);
-            localStorage.setItem('vs_refresh', data.refresh_token);
+            // Tokens are set as HttpOnly cookies by the server.
             if (data.email) localStorage.setItem('vs_user', data.email);
             window.dispatchEvent(new Event('vs_auth_changed'));
             navigate('/dashboard');
@@ -79,8 +78,7 @@ const RegisterPage: React.FC = () => {
       // Auto-login after successful registration
       const { login } = await import('../api/auth');
       const data = await login({ username: email, password });
-      localStorage.setItem('vs_token', data.access_token);
-      localStorage.setItem('vs_refresh', data.refresh_token);
+      // Tokens are set as HttpOnly cookies by the server.
       if (data.email) localStorage.setItem('vs_user', data.email);
       window.dispatchEvent(new Event('vs_auth_changed'));
       navigate('/dashboard');

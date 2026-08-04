@@ -31,7 +31,7 @@ import { QuickCaptureProvider, useQuickCapture } from './context/QuickCaptureCon
 import { AskProvider, useAsk } from './context/AskContext';
 import { useQuickLogBar } from './hooks/useQuickLogBar';
 import WillLogPreview from './components/common/WillLogPreview';
-import { logout as apiLogout } from './api/auth';
+import { logout as apiLogout, exchangeLegacySession } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
 import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
@@ -40,8 +40,12 @@ import Box from '@mui/material/Box';
 import { HEADER_HEIGHT } from './components/layout/layoutConstants';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
-  const token = localStorage.getItem('vs_token');
-  if (!token) return <Navigate to="/login" replace />;
+  // The access token is an HttpOnly cookie and deliberately unreadable here, so
+  // this guard keys off the non-sensitive identity marker set at login. It is a
+  // routing hint, not the security boundary: the server authorizes every request,
+  // and fetchWithAuth redirects to /login on a 401 it cannot refresh away.
+  const user = localStorage.getItem('vs_user');
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 };
 
@@ -91,14 +95,36 @@ const AppContent: React.FC = () => {
     };
   }, []);
 
-  const handleLogout = () => {
-    const refresh = localStorage.getItem('vs_refresh');
-    if (refresh) {
-      apiLogout(refresh);
+  // Migrates sessions created before tokens moved into HttpOnly cookies: trade the
+  // refresh token still in localStorage for cookies once, then erase it. Users stay
+  // logged in across the rollout instead of being bounced to /login.
+  React.useEffect(() => {
+    const legacyRefresh = localStorage.getItem('vs_refresh');
+    const legacyAccess = localStorage.getItem('vs_token');
+    if (!legacyRefresh && !legacyAccess) return;
+
+    const clearLegacyTokens = () => {
+      localStorage.removeItem('vs_token');
+      localStorage.removeItem('vs_refresh');
+    };
+
+    if (!legacyRefresh) {
+      clearLegacyTokens();
+      return;
     }
+
+    exchangeLegacySession(legacyRefresh)
+      .catch(() => {
+        // Expired or already spent — the next API call's 401 sends them to /login.
+        localStorage.removeItem('vs_user');
+      })
+      .finally(clearLegacyTokens);
+  }, []);
+
+  const handleLogout = () => {
+    // Revokes the refresh token and expires the auth cookies server-side.
+    apiLogout();
     localStorage.removeItem('vs_user');
-    localStorage.removeItem('vs_token');
-    localStorage.removeItem('vs_refresh');
     setUser(null);
     window.dispatchEvent(new Event('vs_auth_changed'));
     navigate('/login');

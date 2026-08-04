@@ -716,7 +716,7 @@ Description: '{user_description}'."
 ### 11.1 Architecture
 - **Framework:** React 19 + TypeScript
 - **Routing:** React Router v6 (BrowserRouter)
-- **State:** Local state + `localStorage` for auth; TanStack React Query for server state
+- **State:** Local state + HttpOnly auth cookies (see 11.4); TanStack React Query for server state
 - **UI Framework:** Material-UI (MUI) v7
 - **Charts:** Plotly.js via `react-plotly.js`
 - **Styling:** Emotion CSS-in-JS via MUI Theme
@@ -747,20 +747,44 @@ Description: '{user_description}'."
 | `/feature-request` | `FeatureRequestPage` | No | Submit a feature request or idea |
 
 ### 11.4 Auth Guard
+
+Tokens are **HttpOnly cookies**, so the guard cannot read them. It keys off the
+non-sensitive identity marker instead — a routing hint, not the security
+boundary. The server authorizes every request, and `fetchWithAuth` redirects to
+`/login` on a 401 it cannot silently refresh away.
+
 ```typescript
 const RequireAuth = ({ children }) => {
-  const token = localStorage.getItem('vs_token');
-  if (!token) return <Navigate to="/login" replace />;
+  const user = localStorage.getItem('vs_user');
+  if (!user) return <Navigate to="/login" replace />;
   return children;
 };
 ```
 
-### 11.5 Local Storage Keys
-| Key | Purpose |
+### 11.5 Auth Cookies and Local Storage
+
+JWTs were moved out of `localStorage` (pre-launch audit P0-1): anything readable
+by page JavaScript is one unescaped sink away from account takeover.
+
+| Cookie | Flags | Purpose |
+|:---|:---|:---|
+| `vs_token` | HttpOnly, Secure, SameSite=Strict, `Path=/` | Access token (~30 min) |
+| `vs_refresh` | HttpOnly, Secure, SameSite=Strict, `Path=/api/v1/auth` | Refresh token (7 days), path-scoped so ordinary API traffic never carries it |
+| `vs_csrf` | Secure, SameSite=Strict, **not** HttpOnly | Double-submit CSRF token; the client echoes it in `X-CSRF-Token` |
+
+| Local Storage Key | Purpose |
 |:---|:---|
-| `vs_token` | JWT access token |
-| `vs_refresh` | JWT refresh token |
-| `vs_user` | User email |
+| `vs_user` | User email, for display and as the session marker. Not a credential. |
+
+`vs_token` / `vs_refresh` in `localStorage` are legacy only: on first load after
+the rollout, `App.tsx` exchanges a lingering refresh token for cookies once via
+`POST /api/v1/auth/session`, then erases both keys.
+
+**Native clients are unchanged.** React Native has no browser cookie jar, so the
+Expo app keeps `Authorization: Bearer` with SecureStore (iOS Keychain / Android
+Keystore); `auth_required` reads the cookie first and falls back to the header.
+CSRF is enforced only for cookie-authenticated requests, since a Bearer client
+has no ambient credential to abuse.
 
 ### 11.6 Layout
 - **Authenticated:** Sidebar drawer (`MainLayout`) + top AppBar with user menu

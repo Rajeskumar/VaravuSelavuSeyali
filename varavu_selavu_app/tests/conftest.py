@@ -8,6 +8,10 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+# TestClient talks plain http to "testserver", and a Secure cookie would not be
+# sent back over it. Cookie attributes themselves are asserted explicitly in
+# tests/test_auth_cookies.py.
+os.environ["AUTH_COOKIE_SECURE"] = "false"
 
 from varavu_selavu_service.main import app
 from varavu_selavu_service.db.session import Base, get_db
@@ -54,6 +58,28 @@ def test_app():
 @pytest.fixture(scope="session")
 def test_client(test_app):
     return TestClient(test_app)
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Rate-limit counters are process-global; without this, tests that log in or
+    register repeatedly exhaust the limit and start seeing 429s."""
+    from varavu_selavu_service.core.limiter import limiter
+
+    limiter.reset()
+    yield
+    limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _clear_analysis_cache():
+    """AnalysisService._CACHE is class-level, so it outlives the per-test database
+    and would otherwise serve one test's totals to the next."""
+    from varavu_selavu_service.services.analysis_service import AnalysisService
+
+    AnalysisService._CACHE.clear()
+    yield
+    AnalysisService._CACHE.clear()
+
 
 @pytest.fixture(scope="function")
 def db_session():

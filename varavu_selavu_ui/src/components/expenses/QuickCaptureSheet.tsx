@@ -28,6 +28,7 @@ import CategoryPickerField from './CategoryPickerField';
 import PaidBySplitSummary from '../groups/PaidBySplitSummary';
 import { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
 import { computePayersValid } from '../groups/PayerPicker';
+import { isValidAmount, sanitizeAmountInput } from '../../utils/amount';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 /** CATEGORY_GROUPS.Other includes 'General' — used when suggestCategory can't classify. */
@@ -38,8 +39,10 @@ function pressKey(amount: string, key: string): string {
   if (key === '.') return amount.includes('.') ? amount : (amount || '0') + '.';
   const dec = amount.split('.')[1];
   if (dec && dec.length >= 2) return amount;
-  if (amount.replace('.', '').length >= 7) return amount;
-  return amount + key;
+  // Shares the server's ceiling, so the keypad cannot compose an amount the API
+  // would reject with an opaque 422.
+  const next = amount + key;
+  return sanitizeAmountInput(next) === null ? amount : next;
 }
 
 interface QuickCaptureSheetProps {
@@ -258,7 +261,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, amountNum));
   const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, amountNum));
-  const ready = amountNum > 0 && description.trim() !== '' && !saving && payersValid && splitValid;
+  const ready = isValidAmount(amountNum) && description.trim() !== '' && !saving && payersValid && splitValid;
 
   const resolveCategory = async (): Promise<string> => {
     if (scannedCategory) return scannedCategory;
@@ -471,7 +474,10 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               <TextField
                 variant="standard"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                onChange={(e) => {
+                  const next = sanitizeAmountInput(e.target.value);
+                  if (next !== null) setAmount(next);
+                }}
                 placeholder="0.00"
                 autoFocus
                 slotProps={{ input: { disableUnderline: true } }}

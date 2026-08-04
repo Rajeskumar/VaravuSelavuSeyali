@@ -43,13 +43,9 @@ const ProfilePage: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
-    const refresh = localStorage.getItem('vs_refresh');
-    if (refresh) {
-      apiLogout(refresh);
-    }
+    // Revokes the refresh token and expires the auth cookies server-side.
+    apiLogout();
     localStorage.removeItem('vs_user');
-    localStorage.removeItem('vs_token');
-    localStorage.removeItem('vs_refresh');
     window.dispatchEvent(new Event('vs_auth_changed'));
     // Do not navigate here; header handler does on menu. This page can be reached directly too.
   };

@@ -1,5 +1,9 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks, Request
 from datetime import datetime
+from decimal import Decimal
+from typing import Optional
+
+from fastapi.responses import StreamingResponse
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
@@ -23,7 +27,9 @@ from varavu_selavu_service.models.api_models import (
     ItemsResponse,
     ExpenseItemDTO,
 )
+from varavu_selavu_service.core.money import to_decimal, validate_money_amount
 from varavu_selavu_service.services.expense_service import ExpenseService
+from varavu_selavu_service.services.personal_export_service import PersonalExportService
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.repo.postgres_repo import PostgresRepo
 from varavu_selavu_service.services.chat_service import (
@@ -83,6 +89,9 @@ router.include_router(entity_resolution_router)
 # Dependency providers
 def get_expense_service(db: Session = Depends(get_db)) -> ExpenseService:
     return ExpenseService(db)
+
+def get_personal_export_service(db: Session = Depends(get_db)) -> PersonalExportService:
+    return PersonalExportService(db)
 
 def get_analysis_service(db: Session = Depends(get_db)) -> AnalysisService:
     return AnalysisService(db=db, ttl_sec=settings.ANALYSIS_CACHE_TTL_SEC)
@@ -195,6 +204,25 @@ def create_expense(
         "merchant_name": saved.get("merchant_name"),
     }
     return {"success": True, "expense": expense_payload}
+
+
+@router.get(
+    "/expenses/export.csv",
+    tags=["Expenses"],
+    summary="Export all my personal expenses as CSV",
+)
+def export_personal_expenses_csv(
+    start_date: Optional[str] = Query(None, description="Inclusive MM/DD/YYYY lower bound"),
+    end_date: Optional[str] = Query(None, description="Inclusive MM/DD/YYYY upper bound"),
+    svc: PersonalExportService = Depends(get_personal_export_service),
+    user_id: str = Depends(auth_required),
+):
+    csv_text = svc.export_csv(user_id, start_date=start_date, end_date=end_date)
+    return StreamingResponse(
+        iter([csv_text]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="trackspense_expenses.csv"'},
+    )
 
 
 @router.get(
@@ -570,11 +598,15 @@ def create_expense_with_items(
     for item in items:
         if "item_name" not in item or "line_total" not in item:
             raise HTTPException(status_code=400, detail="Invalid item")
-    subtotal = sum(i.get("line_total", 0) for i in items)
-    tax = header.get("tax", 0)
-    tip = header.get("tip", 0)
-    discount = header.get("discount", 0)
-    if abs(subtotal + tax + tip - discount - header["amount"]) > 0.02:
+    # `header` is an untyped dict, so its amount has not been through the
+    # constrained money types the way a declared field would have been.
+    amount = validate_money_amount(header["amount"], field_name="amount")
+    header = {**header, "amount": amount}
+    subtotal = sum(((i.get("line_total") or Decimal("0")) for i in items), Decimal("0"))
+    tax = to_decimal(header.get("tax"))
+    tip = to_decimal(header.get("tip"))
+    discount = to_decimal(header.get("discount"))
+    if abs(subtotal + tax + tip - discount - amount) > Decimal("0.02"):
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
     existing = repo.find_expense_by_fingerprint(user_id, header.get("fingerprint", ""))
     if existing and not force:
@@ -660,8 +692,8 @@ def update_expense_items(
     for item in items:
         if "item_name" not in item or "line_total" not in item:
             raise HTTPException(status_code=400, detail="Invalid item")
-    subtotal = sum(i.get("line_total", 0) for i in items)
-    if abs(subtotal + payload.tax - payload.discount - payload.amount) > 0.02:
+    subtotal = sum(((i.get("line_total") or Decimal("0")) for i in items), Decimal("0"))
+    if abs(subtotal + payload.tax - payload.discount - payload.amount) > Decimal("0.02"):
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
 
     repo.delete_items_for_expense(expense_id)

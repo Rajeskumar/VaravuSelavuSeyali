@@ -90,7 +90,7 @@ class AnalysisService:
 
         if row_count > 0:
             total_val = self.db.query(func.sum(Expense.amount)).filter(*filters).scalar()
-            total = float(total_val) if total_val else 0.0
+            total = round(float(total_val), 2) if total_val else 0.0
 
             cat_results = self.db.query(
                 Expense.category_id,
@@ -99,7 +99,7 @@ class AnalysisService:
 
             for r in cat_results:
                 cat_name = r[0] or "Uncategorized"
-                val = float(r[1])
+                val = round(float(r[1]), 2)
                 category_totals.append({"category": cat_name, "total": val})
 
             month_expr = self._month_expr(Expense.purchased_at, is_sqlite)
@@ -110,7 +110,7 @@ class AnalysisService:
 
             for r in trend_results:
                 if r[0]:
-                    monthly_trend.append({"month": r[0], "total": float(r[1])})
+                    monthly_trend.append({"month": r[0], "total": round(float(r[1]), 2)})
 
             detail_rows = self.db.query(
                 Expense.purchased_at,
@@ -230,13 +230,15 @@ class AnalysisService:
                 "cost": amt,
             })
 
-        category_totals = [{"category": k, "total": v} for k, v in sorted(category_sums.items(), key=lambda kv: -kv[1])]
-        monthly_trend = [{"month": k, "total": v} for k, v in sorted(month_sums.items())]
+        # Rounded at the aggregation boundary: accumulating floats otherwise
+        # surfaces artifacts like 306.49999999999994 in the UI.
+        category_totals = [{"category": k, "total": round(v, 2)} for k, v in sorted(category_sums.items(), key=lambda kv: -kv[1])]
+        monthly_trend = [{"month": k, "total": round(v, 2)} for k, v in sorted(month_sums.items())]
 
         return {
             "category_totals": category_totals,
             "monthly_trend": monthly_trend,
-            "total": total,
+            "total": round(total, 2),
             "category_expense_details": details,
             "row_count": row_count,
         }
@@ -248,14 +250,14 @@ class AnalysisService:
         for c in personal_leg["category_totals"] + share_leg["category_totals"]:
             category_sums[c["category"]] = category_sums.get(c["category"], 0.0) + c["total"]
         category_totals = [
-            {"category": k, "total": v} for k, v in sorted(category_sums.items(), key=lambda kv: -kv[1])
+            {"category": k, "total": round(v, 2)} for k, v in sorted(category_sums.items(), key=lambda kv: -kv[1])
         ]
 
         month_sums: Dict[str, float] = {}
         for leg in (personal_leg, share_leg):
             for m in leg["monthly_trend"]:
                 month_sums[m["month"]] = month_sums.get(m["month"], 0.0) + m["total"]
-        monthly_trend = [{"month": k, "total": v} for k, v in sorted(month_sums.items())]
+        monthly_trend = [{"month": k, "total": round(v, 2)} for k, v in sorted(month_sums.items())]
 
         details: Dict[str, list] = {}
         for leg in (personal_leg, share_leg):

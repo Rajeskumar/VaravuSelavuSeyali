@@ -31,7 +31,9 @@ const UserMenu: React.FC<Props> = ({ email, onProfile, onFeedback, onLogout }) =
   return (
     <>
       <Tooltip title={email}>
-        <IconButton onClick={handleOpen} size="small" sx={{ ml: 2 }} aria-controls={open ? 'user-menu' : undefined} aria-haspopup="true" aria-expanded={open ? 'true' : undefined}>
+        {/* minWidth/minHeight 44: a standalone header target, so it keeps the
+            touch-target minimum even though size="small" shrinks the ripple. */}
+        <IconButton onClick={handleOpen} size="small" sx={{ ml: 2, minWidth: 44, minHeight: 44 }} aria-controls={open ? 'user-menu' : undefined} aria-haspopup="true" aria-expanded={open ? 'true' : undefined}>
           <Avatar sx={{ width: 32, height: 32 }}>{initials}</Avatar>
         </IconButton>
       </Tooltip>

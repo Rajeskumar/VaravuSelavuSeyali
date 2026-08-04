@@ -98,3 +98,124 @@ def test_empty_group_exports_header_only(test_client, db_session):
     text = res.text.lstrip("﻿")
     rows = list(csv.reader(io.StringIO(text)))
     assert len(rows) == 1
+
+
+# ----------------------------------------------------------------------
+# CSV formula-injection guard (P0-1). Descriptions, settlement notes and
+# member display names are free text and land in spreadsheet cells.
+# ----------------------------------------------------------------------
+
+
+def _export_rows(test_client, group_id):
+    res = test_client.get(f"/api/v1/groups/{group_id}/export.csv")
+    assert res.status_code == 200
+    return list(csv.reader(io.StringIO(res.text.lstrip("﻿"))))
+
+
+def test_formula_in_description_is_neutralized(test_client, db_session):
+    group_id = test_client.post("/api/v1/groups", json={"name": "Trip"}).json()["group_id"]
+    admin_id = _member_id(db_session, group_id, "test@user.com")
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "=cmd|'/c calc'!A1",
+            "category": "Food",
+            "amount": 10.00,
+            "payers": [{"member_id": admin_id, "amount_paid": 10.00}],
+            "split": {"type": "equal", "entries": [{"member_id": admin_id}]},
+        },
+    )
+
+    rows = _export_rows(test_client, group_id)
+    description_cell = rows[1][2]
+    assert description_cell.startswith("'="), description_cell
+    assert description_cell == "'=cmd|'/c calc'!A1"
+
+
+@pytest.mark.parametrize("payload", ["=1+1", "+1", "-1+1", "@SUM(A1)"])
+def test_all_formula_trigger_prefixes_are_neutralized(test_client, db_session, payload):
+    group_id = test_client.post("/api/v1/groups", json={"name": "Trip"}).json()["group_id"]
+    admin_id = _member_id(db_session, group_id, "test@user.com")
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": payload,
+            "category": "Food",
+            "amount": 10.00,
+            "payers": [{"member_id": admin_id, "amount_paid": 10.00}],
+            "split": {"type": "equal", "entries": [{"member_id": admin_id}]},
+        },
+    )
+
+    rows = _export_rows(test_client, group_id)
+    assert rows[1][2] == "'" + payload
+
+
+def test_formula_in_display_name_is_neutralized(test_client, db_session):
+    """Display names are attacker-controlled and reach the payer/participant cells."""
+    group_id = test_client.post("/api/v1/groups", json={"name": "Trip"}).json()["group_id"]
+    test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "=HYPERLINK(1)"})
+
+    admin_id = _member_id(db_session, group_id, "test@user.com")
+    evil = (
+        db_session.query(GroupMember)
+        .filter(GroupMember.group_id == uuid.UUID(group_id), GroupMember.display_name.like("%HYPERLINK%"))
+        .first()
+    )
+    assert evil is not None, "placeholder member was not created"
+
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Dinner",
+            "category": "Food",
+            "amount": 10.00,
+            "payers": [{"member_id": str(evil.id), "amount_paid": 10.00}],
+            "split": {"type": "equal", "entries": [{"member_id": admin_id}]},
+        },
+    )
+
+    rows = _export_rows(test_client, group_id)
+    assert rows[1][6].startswith("'="), rows[1][6]
+
+
+def test_negative_amount_cell_is_not_quoted(test_client, db_session):
+    """Numeric cells must stay numeric — the guard only applies to text."""
+    group_id = test_client.post("/api/v1/groups", json={"name": "Trip"}).json()["group_id"]
+    admin_id = _member_id(db_session, group_id, "test@user.com")
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Dinner",
+            "category": "Food",
+            "amount": 10.00,
+            "payers": [{"member_id": admin_id, "amount_paid": 10.00}],
+            "split": {"type": "equal", "entries": [{"member_id": admin_id}]},
+        },
+    )
+    rows = _export_rows(test_client, group_id)
+    assert rows[1][4] == "10.0"
+
+
+def test_ordinary_description_is_left_untouched(test_client, db_session):
+    group_id = test_client.post("/api/v1/groups", json={"name": "Trip"}).json()["group_id"]
+    admin_id = _member_id(db_session, group_id, "test@user.com")
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/15/2026",
+            "description": "Dinner at Joe's",
+            "category": "Food",
+            "amount": 10.00,
+            "payers": [{"member_id": admin_id, "amount_paid": 10.00}],
+            "split": {"type": "equal", "entries": [{"member_id": admin_id}]},
+        },
+    )
+    rows = _export_rows(test_client, group_id)
+    assert rows[1][2] == "Dinner at Joe's"

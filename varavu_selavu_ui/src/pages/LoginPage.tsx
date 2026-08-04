@@ -67,8 +67,8 @@ const LoginPage: React.FC = () => {
           try {
             setGoogleLoading(true);
             const data = await loginWithGoogle(resp.credential);
-            localStorage.setItem('vs_token', data.access_token);
-            localStorage.setItem('vs_refresh', data.refresh_token);
+            // Tokens are set as HttpOnly cookies by the server. Only the
+            // display identity is kept client-side.
             if (data.email) localStorage.setItem('vs_user', data.email);
             window.dispatchEvent(new Event('vs_auth_changed'));
             navigate(postLoginDestination());
@@ -94,9 +94,8 @@ const LoginPage: React.FC = () => {
     setError(null);
     try {
       const response = await login({ username: email, password });
-      // Persist tokens and user id for subsequent API calls
-      localStorage.setItem('vs_token', response.access_token);
-      localStorage.setItem('vs_refresh', response.refresh_token);
+      // Tokens are set as HttpOnly cookies by the server; persisting them here
+      // would put them back within reach of any script on the page.
       localStorage.setItem('vs_user', response.email || email);
       window.dispatchEvent(new Event('vs_auth_changed'));
       navigate(postLoginDestination());

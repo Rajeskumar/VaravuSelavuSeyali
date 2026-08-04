@@ -14,7 +14,7 @@ import { typeScale, tabularNums } from '../../theme';
 import { findMainCategory } from './AddExpenseForm';
 import { formatMoney, dayLabel } from './ExpenseFeed';
 import type { FeedExpense } from './ExpenseFeed';
-import { parseAppDate } from '../../utils/date';
+import { parseAppDate, isoToMMDDYYYY, toISODate } from '../../utils/date';
 import { getExpenseItems, updateExpenseItems } from '../../api/expenses';
 import { getGroupExpenseItems, updateGroupExpenseItems } from '../../api/groups';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
@@ -25,6 +25,10 @@ export interface ExpenseDetailForm {
   category: string; // subcategory
   amount: string;
   notes: string;
+  /** ISO 'YYYY-MM-DD' — the shape the native `<input type="date">` needs. Callers
+   * converting back to the MM/DD/YYYY the update endpoints expect should use
+   * `isoToMMDDYYYY` from `utils/date`. */
+  date: string;
 }
 
 interface ExpenseDetailSheetProps {
@@ -77,6 +81,10 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
         category: expense.category,
         amount: Math.abs(expense.groupAmount ?? expense.amount).toFixed(2),
         notes: expense.notes || '',
+        // `FeedExpense.date` can arrive as either MM/DD/YYYY or YYYY-MM-DD depending on
+        // source — `parseAppDate` handles both; `mmddyyyyToISO` alone would mis-parse an
+        // already-ISO date.
+        date: toISODate(parseAppDate(expense.date)),
       });
       setConfirmingDelete(false);
     } else {
@@ -202,14 +210,24 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
           subcategory={form.category}
           onChange={(_main, sub) => setForm({ ...form, category: sub })}
         />
-        <TextField
-          label="Amount"
-          type="number"
-          fullWidth
-          value={form.amount}
-          onChange={(e) => setForm({ ...form, amount: e.target.value })}
-          inputProps={{ min: 0, step: 0.01, style: tabularNums }}
-        />
+        <Box sx={{ display: 'flex', gap: 1.5 }}>
+          <TextField
+            label="Date"
+            type="date"
+            fullWidth
+            value={form.date}
+            onChange={(e) => setForm({ ...form, date: e.target.value })}
+            InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Amount"
+            type="number"
+            fullWidth
+            value={form.amount}
+            onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            inputProps={{ min: 0, step: 0.01, style: tabularNums }}
+          />
+        </Box>
         <TextField
           label="Notes"
           fullWidth

@@ -7,6 +7,7 @@ import { useTheme } from '@mui/material/styles';
 import { cerebro, typeScale, tabularNums } from '../../theme';
 import { GroupSummary } from '../../api/groups';
 import { AnalysisGroupSummary } from '../../api/analysis';
+import { isSettled } from '../../utils/balance';
 
 interface StripGroup {
   group_id: string;
@@ -31,7 +32,7 @@ function mergeGroups(groups: GroupSummary[], summaries: AnalysisGroupSummary[]):
       group_id: g.group_id,
       name: g.name,
       member_count: g.member_count,
-      settled: Math.abs(balance) < 0.005,
+      settled: isSettled(balance),
       pendingAmount,
     };
   });

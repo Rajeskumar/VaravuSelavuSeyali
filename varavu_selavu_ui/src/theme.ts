@@ -256,6 +256,18 @@ export function getTheme(mode: PaletteMode = 'dark'): Theme {
           },
         },
       },
+      MuiIconButton: {
+        styleOverrides: {
+          // Default-size icon buttons are standalone tap targets (header actions,
+          // dialog close, row menus) and MUI's default lands at 42px — just under
+          // the 44×44 minimum. Explicitly-small ones are left alone, since those
+          // sit inside dense rows next to a larger primary target.
+          sizeMedium: {
+            minWidth: 44,
+            minHeight: 44,
+          },
+        },
+      },
       MuiButton: {
         styleOverrides: {
           root: {
