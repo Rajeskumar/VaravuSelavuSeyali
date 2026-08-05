@@ -49,6 +49,15 @@ const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
   return children;
 };
 
+// Inverse of RequireAuth — an already-logged-in session hitting /login or /register directly
+// (bookmark, typed URL, browser back button) should land on the dashboard instead of being shown
+// the auth form again. Same routing-hint caveat as RequireAuth: real enforcement is server-side.
+const RequireGuest: React.FC<{ children: JSX.Element }> = ({ children }) => {
+  const user = localStorage.getItem('vs_user');
+  if (user) return <Navigate to="/dashboard" replace />;
+  return children;
+};
+
 // Home is now the default route and is public
 const Root: React.FC = () => <HomePage />;
 
@@ -267,8 +276,8 @@ const AppContent: React.FC = () => {
       )}
       <Routes>
         <Route path="/" element={<Root />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/login" element={<RequireGuest><LoginPage /></RequireGuest>} />
+        <Route path="/register" element={<RequireGuest><RegisterPage /></RequireGuest>} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         {/* Public: logged-out visitors' only path to support — /email/send itself has no auth
             requirement either. Logged-in users get a faster path via the avatar menu's Feedback

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
@@ -9,12 +9,13 @@ import { Ionicons } from '@expo/vector-icons';
 import SimpleSelect from '../components/SimpleSelect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import {
   getTopItems, getItemDetail,
-  ItemInsightSummary, ItemInsightDetail,
+  ItemInsightSummary,
 } from '../api/analytics';
 import { ListSkeleton, HeroSkeleton } from '../components/SkeletonLoader';
 import { AddExpenseContext } from './AddExpenseScreen';
@@ -55,55 +56,41 @@ export default function ItemInsightsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [items, setItems] = useState<ItemInsightSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<ItemInsightDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   // Keep picker values as strings across platforms (RN Web/Android/iOS)
   // Mixing number and string values can cause blank selections on some platforms
   const [year, setYear] = useState<string>('all');
   const [month, setMonth] = useState<string>('all');
+  const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
 
   const activeFilters = {
     year: year === 'all' ? undefined : Number(year),
     month: month === 'all' ? undefined : Number(month),
   };
 
-  const fetchItems = useCallback(async () => {
-    if (!userEmail) return;
-    try {
-      const data = await getTopItems(userEmail, activeFilters);
-      setItems(data);
-    } catch {
-      // non-fatal
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userEmail, year, month]);
+  // Cached via react-query (keyed on year/month filters) instead of a plain useEffect fetch —
+  // revisiting this screen, or switching filters back to a combination already seen, now renders
+  // from cache instead of always reshowing the skeleton. Stack-navigated screens like this one
+  // remount on every visit, so without a cache this always refetched from scratch.
+  const itemsQuery = useQuery({
+    queryKey: ['top-items', userEmail, activeFilters],
+    queryFn: () => getTopItems(userEmail as string, activeFilters),
+    enabled: !!userEmail,
+  });
+  const items = itemsQuery.data ?? [];
+  const loading = itemsQuery.isLoading;
+  const refreshing = itemsQuery.isRefetching;
+  const onRefresh = () => { itemsQuery.refetch(); };
 
-  useEffect(() => {
-    setLoading(true);
-    fetchItems();
-  }, [fetchItems]);
+  const detailQuery = useQuery({
+    queryKey: ['item-detail', userEmail, selectedItemName, activeFilters],
+    queryFn: () => getItemDetail(userEmail as string, selectedItemName as string, activeFilters),
+    enabled: !!userEmail && !!selectedItemName,
+  });
+  const selectedItem = detailQuery.data ?? null;
+  const detailLoading = detailQuery.isFetching;
 
-  const onRefresh = () => { setRefreshing(true); fetchItems(); };
-
-  const handleSelectItem = async (item: ItemInsightSummary) => {
-    if (!userEmail) return;
-    setDetailLoading(true);
-    setSelectedItem(null);
-    try {
-      const itemName = item.normalized_name || item.item_name || '';
-      const detail = await getItemDetail(userEmail, itemName, activeFilters);
-      setSelectedItem(detail);
-    } catch {
-      // non-fatal
-    } finally {
-      setDetailLoading(false);
-    }
+  const handleSelectItem = (item: ItemInsightSummary) => {
+    setSelectedItemName(item.normalized_name || item.item_name || '');
   };
 
   const askAi = (question: string) => {
@@ -167,7 +154,7 @@ export default function ItemInsightsScreen() {
       <LinearGradient colors={theme.gradients.surface} style={styles.container}>
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top }}>
         <View style={styles.detailTopRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedItem(null)}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedItemName(null)}>
             <Ionicons name="chevron-back" size={18} color={theme.colors.primary} />
             <Text style={styles.backText}>Items</Text>
           </TouchableOpacity>

@@ -83,6 +83,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [stage, setStage] = React.useState<'entry' | 'saved'>('entry');
   const [amount, setAmount] = React.useState('');
   const [description, setDescription] = React.useState('');
+  const [expenseDate, setExpenseDate] = React.useState(() => new Date().toISOString().split('T')[0]);
   const [who, setWho] = React.useState(initialGroupId || 'me');
   const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [scannedCategory, setScannedCategory] = React.useState<string | null>(null);
@@ -94,7 +95,6 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [scannedItems, setScannedItems] = React.useState<ScannedItem[]>([]);
   const [scannedTax, setScannedTax] = React.useState(0);
   const [scannedDiscount, setScannedDiscount] = React.useState(0);
-  const [scannedPurchasedAt, setScannedPurchasedAt] = React.useState<string | null>(null);
   const [scannedFingerprint, setScannedFingerprint] = React.useState<string | null>(null);
   const [groupDetail, setGroupDetail] = React.useState<GroupDetailResponse | null>(null);
   const [payers, setPayers] = React.useState<PayerSummaryItem[]>([]);
@@ -126,7 +126,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       }
       setScannedTax(Number(hdr.tax) || 0);
       setScannedDiscount(Number(hdr.discount) || 0);
-      setScannedPurchasedAt(hdr.purchased_at || null);
+      if (hdr.purchased_at) setExpenseDate(hdr.purchased_at.split('T')[0]);
       setScannedFingerprint(res.fingerprint || null);
       // The itemized save path only supports an equal split (member_ratios per item, no
       // percentage/exact/shares/adjustment analog) — if the user had already customized to a
@@ -150,6 +150,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setStage('entry');
     setAmount('');
     setDescription('');
+    setExpenseDate(new Date().toISOString().split('T')[0]);
     setWho(initialGroupId || 'me');
     setScannedCategory(null);
     setScannedMerchant(null);
@@ -158,7 +159,6 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setScannedItems([]);
     setScannedTax(0);
     setScannedDiscount(0);
-    setScannedPurchasedAt(null);
     setScannedFingerprint(null);
     setGroupDetail(null);
     setPayers([]);
@@ -291,6 +291,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               category,
               amount: amountNum,
               merchantName: scannedMerchant || undefined,
+              date: expenseDate,
               items: itemsToSave,
               tax: scannedTax,
               discount: scannedDiscount,
@@ -302,6 +303,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               category,
               amount: amountNum,
               merchantName: scannedMerchant || undefined,
+              date: expenseDate,
               payers,
               split: splitValue,
             });
@@ -312,10 +314,11 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
           category,
           amount: amountNum,
           merchantName: scannedMerchant || undefined,
+          date: expenseDate,
           items: itemsToSave,
           tax: scannedTax,
           discount: scannedDiscount,
-          purchasedAtIso: scannedPurchasedAt || undefined,
+          purchasedAtIso: `${expenseDate}T00:00:00`,
           fingerprint: scannedFingerprint || undefined,
         });
         setSavedLine('Logged to your personal ledger.');
@@ -325,6 +328,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
           category,
           amount: amountNum,
           merchantName: scannedMerchant || undefined,
+          date: expenseDate,
         });
         setSavedLine('Logged to your personal ledger.');
       }
@@ -503,6 +507,17 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               sx={{ mt: 1 }}
             />
 
+            <TextField
+              fullWidth
+              size="small"
+              label="Date"
+              type="date"
+              value={expenseDate}
+              onChange={(e) => setExpenseDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ mt: 1 }}
+            />
+
             <EntityAutocomplete
               value={scannedMerchant || ''}
               onValueChange={(v) => {
@@ -604,6 +619,17 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
             placeholder="Description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            sx={{ mt: 1 }}
+          />
+
+          <TextField
+            fullWidth
+            size="small"
+            label="Date"
+            type="date"
+            value={expenseDate}
+            onChange={(e) => setExpenseDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
             sx={{ mt: 1 }}
           />
 

@@ -13,8 +13,9 @@
  * group expense edits go through `EditGroupExpenseModal.tsx`, personal edits through
  * `ExpensesScreen.tsx`'s own inline modal — so nothing is lost for *editing*; only the *creation*
  * flow's power-user controls (multi-payer, itemized splits, currency override, explicit category
- * picker, custom date) are gone, the same trade-off already accepted for the web app's own Quick
- * Capture. Category (and merchant) are AI-suggested via the existing debounced
+ * picker) are gone, the same trade-off already accepted for the web app's own Quick Capture — a
+ * date field was reintroduced (defaults to today, editable via a native date picker) so past
+ * bills can be backdated. Category (and merchant) are AI-suggested via the existing debounced
  * `categorizeExpense()` call and now surfaced live via CategoryPickerField / the merchant
  * TypeaheadInput — previously these were silently resolved but never shown or editable before
  * being persisted. `userPickedCategory`/`userPickedMerchant` stop the debounce from clobbering a
@@ -24,9 +25,10 @@ import React, { useState, useRef, useCallback, createContext, useMemo } from 're
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
-  Dimensions, Pressable, Switch, Alert,
+  Dimensions, Pressable, Switch, Alert, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from '../context/AuthContext';
 import { addExpense, addExpenseWithItems, categorizeExpense, uploadReceipt } from '../api/expenses';
 import {
@@ -52,9 +54,20 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
-function todayMMDDYYYY(): string {
-  const d = new Date();
+function formatMMDDYYYY(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+/** "Aug 4, 2026" (year omitted when it's the current one) for the compact date row. */
+function formatShortDate(d: Date): string {
+  const includeYear = d.getFullYear() !== new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: includeYear ? 'numeric' : undefined });
+}
+
+function startOfDay(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
 }
 
 /** "1st"/"2nd"/"3rd"/"4th" — matches the mock's "Repeats monthly on the 15th." copy. */
@@ -94,6 +107,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [stage, setStage] = useState<'entry' | 'saved'>('entry');
   const [amt, setAmt] = useState('');
   const [desc, setDesc] = useState('');
+  const [expenseDate, setExpenseDate] = useState(() => startOfDay(new Date()));
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [who, setWho] = useState('me');
   const [merchantName, setMerchantName] = useState('');
   const [mainCategory, setMainCategory] = useState('');
@@ -135,6 +150,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setStage('entry');
     setAmt('');
     setDesc('');
+    setExpenseDate(startOfDay(new Date()));
+    setShowDatePicker(false);
     setMerchantName('');
     setMainCategory('');
     setSubcategory('');
@@ -219,6 +236,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setScannedTax(Number(hdr.tax) || 0);
     setScannedDiscount(Number(hdr.discount) || 0);
     setScannedPurchasedAt(hdr.purchased_at || null);
+    if (hdr.purchased_at) {
+      const parsed = new Date(hdr.purchased_at);
+      if (!isNaN(parsed.getTime())) setExpenseDate(startOfDay(parsed));
+    }
     setScannedFingerprint(res.fingerprint || null);
     // The itemized save path only supports an equal split (member_ratios per item, no
     // percentage/exact/shares/adjustment analog) — if the user had already customized to a
@@ -354,7 +375,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
       if (!isGroup && itemsToSave.length > 0) {
         const header = {
           merchant_name: merchantName || undefined,
-          purchased_at: scannedPurchasedAt || new Date().toISOString(),
+          purchased_at: expenseDate.toISOString(),
           amount: numAmount,
           tax: scannedTax || 0,
           tip: 0,
@@ -384,7 +405,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             cost: numAmount,
             category: mainCategory || 'Other',
             sub_category: subcategory || 'General',
-            date: todayMMDDYYYY(),
+            date: formatMMDDYYYY(expenseDate),
             user_id: userEmail,
             merchant_name: merchantName || undefined,
           },
@@ -442,7 +463,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             ...(idx === 0 ? { tax: scannedTax || 0, discount: scannedDiscount || 0 } : {}),
           }));
           const row = await addGroupExpenseWithItems(who, {
-            date: todayMMDDYYYY(),
+            date: formatMMDDYYYY(expenseDate),
             description: desc.trim(),
             category: mainCategory || 'Other',
             amount: numAmount,
@@ -453,7 +474,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
           myShare = row.my_share;
         } else {
           const row = await addGroupExpense(who, {
-            date: todayMMDDYYYY(),
+            date: formatMMDDYYYY(expenseDate),
             description: desc.trim(),
             category: mainCategory || 'Other',
             amount: numAmount,
@@ -557,6 +578,50 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     onChangeText={handleDescChange}
                     selectionColor={theme.colors.primary}
                   />
+
+                  <TouchableOpacity
+                    style={styles.dateRow}
+                    onPress={() => setShowDatePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.dateRowLabel}>📅 Date</Text>
+                    <Text style={styles.dateRowValue}>{formatShortDate(expenseDate)}</Text>
+                  </TouchableOpacity>
+                  {showDatePicker && (
+                    Platform.OS === 'ios' ? (
+                      <Modal transparent animationType="slide" visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
+                        <Pressable style={styles.datePickerBackdrop} onPress={() => setShowDatePicker(false)}>
+                          <Pressable style={styles.datePickerSheet} onPress={(e) => e.stopPropagation()}>
+                            <View style={styles.datePickerHeader}>
+                              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                <Text style={styles.datePickerDone}>Done</Text>
+                              </TouchableOpacity>
+                            </View>
+                            <DateTimePicker
+                              value={expenseDate}
+                              mode="date"
+                              display="inline"
+                              maximumDate={new Date()}
+                              onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                                if (selected) setExpenseDate(startOfDay(selected));
+                              }}
+                            />
+                          </Pressable>
+                        </Pressable>
+                      </Modal>
+                    ) : (
+                      <DateTimePicker
+                        value={expenseDate}
+                        mode="date"
+                        display="default"
+                        maximumDate={new Date()}
+                        onChange={(event: DateTimePickerEvent, selected?: Date) => {
+                          setShowDatePicker(false);
+                          if (event.type === 'set' && selected) setExpenseDate(startOfDay(selected));
+                        }}
+                      />
+                    )
+                  )}
 
                   <TypeaheadInput
                     theme={theme}
@@ -742,6 +807,18 @@ const createStyles = (theme: AppTheme) =>
       paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'InstrumentSans-Regular', fontSize: 13.5,
       color: theme.colors.text, marginTop: 8,
     },
+
+    dateRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, marginTop: 8,
+    },
+    dateRowLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 13.5, color: theme.colors.textSecondary },
+    dateRowValue: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
+    datePickerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,27,0.4)' },
+    datePickerSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 16 },
+    datePickerHeader: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 },
+    datePickerDone: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14, color: theme.colors.primary },
 
     merchantInputWrap: { marginTop: 8 },
     merchantInput: {

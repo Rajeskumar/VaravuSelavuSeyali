@@ -21,7 +21,10 @@
       "bundleIdentifier": "com.anonymous.varavuselavumobile",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "This app uses your local network to connect to the development server while building.",
-        "NSBonjourServices": ["_dev._tcp", "_http._tcp"]
+        "NSBonjourServices": [
+          "_dev._tcp",
+          "_http._tcp"
+        ]
       }
     },
     "android": {
@@ -42,7 +45,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -58,8 +64,8 @@
           "cameraPermission": "TrackSpense uses your camera to scan a receipt.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ]
   }
 }
-

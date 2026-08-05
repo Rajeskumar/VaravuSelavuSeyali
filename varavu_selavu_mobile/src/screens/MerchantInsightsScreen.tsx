@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   ActivityIndicator, RefreshControl, ScrollView,
@@ -8,12 +8,13 @@ import { Ionicons } from '@expo/vector-icons';
 import SimpleSelect from '../components/SimpleSelect';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import {
   getTopMerchants, getMerchantDetail,
-  MerchantInsightSummary, MerchantInsightDetail,
+  MerchantInsightSummary,
 } from '../api/analytics';
 import { ListSkeleton, HeroSkeleton } from '../components/SkeletonLoader';
 import { AddExpenseContext } from './AddExpenseScreen';
@@ -34,53 +35,40 @@ export default function MerchantInsightsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [merchants, setMerchants] = useState<MerchantInsightSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedMerchant, setSelectedMerchant] = useState<MerchantInsightDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
   // Keep picker values as strings across platforms to avoid blank selection issues
   const [year, setYear] = useState<string>('all');
   const [month, setMonth] = useState<string>('all');
+  const [selectedMerchantName, setSelectedMerchantName] = useState<string | null>(null);
 
   const activeFilters = {
     year: year === 'all' ? undefined : Number(year),
     month: month === 'all' ? undefined : Number(month),
   };
 
-  const fetchMerchants = useCallback(async () => {
-    if (!userEmail) return;
-    try {
-      const data = await getTopMerchants(userEmail, activeFilters);
-      setMerchants(data);
-    } catch {
-      // non-fatal
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userEmail, year, month]);
+  // Cached via react-query (keyed on year/month filters) instead of a plain useEffect fetch —
+  // revisiting this screen, or switching filters back to a combination already seen, now renders
+  // from cache instead of always reshowing the skeleton. Stack-navigated screens like this one
+  // remount on every visit, so without a cache this always refetched from scratch.
+  const merchantsQuery = useQuery({
+    queryKey: ['top-merchants', userEmail, activeFilters],
+    queryFn: () => getTopMerchants(userEmail as string, activeFilters),
+    enabled: !!userEmail,
+  });
+  const merchants = merchantsQuery.data ?? [];
+  const loading = merchantsQuery.isLoading;
+  const refreshing = merchantsQuery.isRefetching;
+  const onRefresh = () => { merchantsQuery.refetch(); };
 
-  useEffect(() => {
-    setLoading(true);
-    fetchMerchants();
-  }, [fetchMerchants]);
+  const detailQuery = useQuery({
+    queryKey: ['merchant-detail', userEmail, selectedMerchantName, activeFilters],
+    queryFn: () => getMerchantDetail(userEmail as string, selectedMerchantName as string, activeFilters),
+    enabled: !!userEmail && !!selectedMerchantName,
+  });
+  const selectedMerchant = detailQuery.data ?? null;
+  const detailLoading = detailQuery.isFetching;
 
-  const onRefresh = () => { setRefreshing(true); fetchMerchants(); };
-
-  const handleSelectMerchant = async (m: MerchantInsightSummary) => {
-    if (!userEmail) return;
-    setDetailLoading(true);
-    setSelectedMerchant(null);
-    try {
-      const detail = await getMerchantDetail(userEmail, m.merchant_name, activeFilters);
-      setSelectedMerchant(detail);
-    } catch {
-      // non-fatal
-    } finally {
-      setDetailLoading(false);
-    }
+  const handleSelectMerchant = (m: MerchantInsightSummary) => {
+    setSelectedMerchantName(m.merchant_name);
   };
 
   const askAi = (question: string) => {
@@ -146,7 +134,7 @@ export default function MerchantInsightsScreen() {
       <LinearGradient colors={theme.gradients.surface} style={styles.container}>
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingTop: insets.top }}>
         <View style={styles.detailTopRow}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedMerchant(null)}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => setSelectedMerchantName(null)}>
             <Ionicons name="chevron-back" size={18} color={theme.colors.primary} />
             <Text style={styles.backText}>Merchants</Text>
           </TouchableOpacity>

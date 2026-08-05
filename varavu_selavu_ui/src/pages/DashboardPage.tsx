@@ -13,12 +13,12 @@ import SpendSpectrum from '../components/dashboard/SpendSpectrum';
 import MyGroupsStrip from '../components/dashboard/MyGroupsStrip';
 import InsightOfTheDay, { Insight } from '../components/dashboard/InsightOfTheDay';
 import TypeToLogBar from '../components/dashboard/TypeToLogBar';
-import { getAnalysis, AnalysisResponse } from '../api/analysis';
+import { getAnalysis } from '../api/analysis';
 import { getChangeInsights, ChangeInsight } from '../api/analytics';
 import { parseAppDate } from '../utils/date';
 import { dayLabel } from '../components/expenses/ExpenseFeed';
 import { listExpenses } from '../api/expenses';
-import { listAllMyGroupExpenses, listGroups, UnifiedGroupExpenseRow, GroupSummary } from '../api/groups';
+import { listAllMyGroupExpenses, listGroups } from '../api/groups';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { cerebro, tabularNums } from '../theme';
@@ -94,9 +94,6 @@ function pickInsight(
 }
 
 const DashboardPage: React.FC = () => {
-  const [data, setData] = React.useState<AnalysisResponse | null>(null);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
   const now = React.useMemo(() => new Date(), []);
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
@@ -110,126 +107,81 @@ const DashboardPage: React.FC = () => {
   const queryClient = useQueryClient();
   const user = localStorage.getItem('vs_user') || '';
   const { enabled: groupsEnabled } = useGroupsEnabled();
-  const [groups, setGroups] = React.useState<GroupSummary[]>([]);
-  const [groupExpenses, setGroupExpenses] = React.useState<UnifiedGroupExpenseRow[]>([]);
-  const [personalRecent, setPersonalRecent] = React.useState<{ date: string; description: string; category: string; cost: number }[]>([]);
   const [showCombinedToast, setShowCombinedToast] = React.useState(false);
-  const [changeInsights, setChangeInsights] = React.useState<ChangeInsight[]>([]);
-  const [yearTrend, setYearTrend] = React.useState<{ month: string; total: number }[]>([]);
-  // TS-DES-111: bumped whenever the global Add Expense FAB (MainLayout.tsx)
-  // saves — DashboardPage fetches via plain useEffect rather than react-query,
-  // so it can't rely on query-cache invalidation and needs its own signal to
-  // refetch while mounted.
-  const [refreshKey, setRefreshKey] = React.useState(0);
 
-  React.useEffect(() => onExpenseChanged(() => setRefreshKey((k) => k + 1)), []);
-
-  React.useEffect(() => {
-    const user = localStorage.getItem('vs_user');
-    if (!user) {
-      setError('Please login to view dashboard.');
-      setLoading(false);
-      return;
-    }
-    (async () => {
-      try {
-        // Combined = personal + user's share across all groups (spec §11.2/§17.1);
-        // the True Total hero re-scopes this same fetched payload via its lens.
-        // TS-DES-111: current month only — previously fetched the whole calendar
-        // year (year with no month) while the hero label claimed to be month-scoped.
-        const resp = await getAnalysis({ year, month, scope: 'combined' });
-        setData(resp);
-        if (!localStorage.getItem(COMBINED_TOAST_KEY)) {
-          setShowCombinedToast(true);
-          localStorage.setItem(COMBINED_TOAST_KEY, '1');
-        }
-      } catch (e) {
-        setError('Failed to load dashboard data.');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [year, month, refreshKey]);
-
-  // TS-DES-111: a separate, year-wide fetch purely for `monthly_trend` — once the
-  // main fetch above is scoped to a single month (the bug fix), its own
-  // `monthly_trend` only ever contains that one month, so there's no prior-month
-  // entry left to diff against for the hero's month-over-month delta.
-  React.useEffect(() => {
-    const user = localStorage.getItem('vs_user');
-    if (!user) return;
-    (async () => {
-      try {
-        const resp = await getAnalysis({ year, scope: 'combined' });
-        setYearTrend(resp.monthly_trend);
-      } catch {
-        setYearTrend([]);
-      }
-    })();
-  }, [year, refreshKey]);
-
+  // Everything below goes through react-query's cache instead of the plain useEffect-per-fetch
+  // pattern this page used to have (which refetched from scratch on every mount, even a moment
+  // after the user had just been here). Query keys are shared with the pages that fetch the same
+  // data (Analysis Overview tab uses the same ['analysis', ...] shape; Expenses page uses the same
+  // ['all-group-expenses']/['groups', false] keys) so navigating between them is instant. A save
+  // anywhere in the app (Quick Capture/chat/type-to-log) still refreshes this page immediately via
+  // the invalidation in the onExpenseChanged listener below, replacing the old refreshKey bump.
+  const analysisQuery = useQuery({
+    // Combined = personal + user's share across all groups (spec §11.2/§17.1); the True Total
+    // hero re-scopes this same fetched payload via its lens.
+    queryKey: ['analysis', user, year, month, 'combined'],
+    queryFn: () => getAnalysis({ year, month, scope: 'combined' }),
+    enabled: !!user,
+  });
+  // TS-DES-111: a separate, year-wide fetch purely for `monthly_trend` — once the main fetch
+  // above is scoped to a single month (the bug fix), its own `monthly_trend` only ever contains
+  // that one month, so there's no prior-month entry left to diff against for the hero's
+  // month-over-month delta.
+  const yearTrendQuery = useQuery({
+    queryKey: ['analysis', user, year, null, 'combined'],
+    queryFn: () => getAnalysis({ year, scope: 'combined' }),
+    enabled: !!user,
+  });
   // TS-DES-111, scope reused by TS-DES-203's InsightOfTheDay: ranked change insights for the
   // current month, same scope as the main fetch.
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const insights = await getChangeInsights({ year, month });
-        if (mounted) setChangeInsights(insights);
-      } catch {
-        if (mounted) setChangeInsights([]);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [year, month, refreshKey]);
-
+  const changeInsightsQuery = useQuery({
+    queryKey: ['change-insights', year, month],
+    queryFn: () => getChangeInsights({ year, month }),
+    enabled: !!user,
+  });
   // Unified recent-transactions feed: personal + (if enabled) my group shares, merged.
-  // `refreshKey` is part of the query key (not just invalidated) so a bump forces a refetch even
-  // though this page fetches everything else via plain useEffect — matches how the effects below
-  // already depend on it. Previously missing here, so Quick Capture/chat/type-to-log saves never
-  // showed up in Recent without navigating away and back.
   const expensesQuery = useQuery({
-    queryKey: ['dashboard-expenses', user, refreshKey],
+    queryKey: ['dashboard-expenses', user],
     queryFn: () => listExpenses(0, 50),
     enabled: !!user,
   });
+  const groupsQuery = useQuery({
+    queryKey: ['groups', false],
+    queryFn: () => listGroups(false),
+    enabled: groupsEnabled,
+  });
+  const groupExpensesQuery = useQuery({
+    queryKey: ['all-group-expenses'],
+    queryFn: listAllMyGroupExpenses,
+    enabled: groupsEnabled,
+  });
+
+  React.useEffect(() => onExpenseChanged(() => {
+    queryClient.invalidateQueries({ queryKey: ['analysis'] });
+    queryClient.invalidateQueries({ queryKey: ['change-insights'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-expenses'] });
+    queryClient.invalidateQueries({ queryKey: ['all-group-expenses'] });
+  }), [queryClient]);
 
   React.useEffect(() => {
-    if (expensesQuery.data) {
-      setPersonalRecent(
-        expensesQuery.data.items.map(e => ({ date: e.date, description: e.description, category: e.category, cost: e.cost }))
-      );
+    if (analysisQuery.data && !localStorage.getItem(COMBINED_TOAST_KEY)) {
+      setShowCombinedToast(true);
+      localStorage.setItem(COMBINED_TOAST_KEY, '1');
     }
-  }, [expensesQuery.data]);
+  }, [analysisQuery.data]);
 
-  React.useEffect(() => {
-    if (!groupsEnabled) {
-      setGroupExpenses([]);
-      setGroups([]);
-      return;
-    }
-    let mounted = true;
-    (async () => {
-      try {
-        const [rows, groupList] = await Promise.all([listAllMyGroupExpenses(), listGroups()]);
-        if (mounted) {
-          setGroupExpenses(rows);
-          setGroups(groupList);
-        }
-      } catch {
-        if (mounted) {
-          setGroupExpenses([]);
-          setGroups([]);
-        }
-      }
-    })();
-    return () => { mounted = false; };
-    // refreshKey: same reason as expensesQuery above — a group expense logged via Quick
-    // Capture/chat/type-to-log needs this to refetch too, not just the personal list.
-  }, [groupsEnabled, refreshKey]);
+  const groups = groupsEnabled ? (groupsQuery.data ?? []) : [];
+  const groupExpenses = groupsEnabled ? (groupExpensesQuery.data ?? []) : [];
+  const personalRecent = (expensesQuery.data?.items ?? []).map(e => (
+    { date: e.date, description: e.description, category: e.category, cost: e.cost }
+  ));
+  const changeInsights = changeInsightsQuery.data ?? [];
+  const yearTrend = yearTrendQuery.data?.monthly_trend ?? [];
 
-  if (loading) return <Typography sx={{ mt: 4 }}>Loading dashboard...</Typography>;
-  if (error) return <Typography color="error" sx={{ mt: 4 }}>{error}</Typography>;
+  if (!user) return <Typography color="error" sx={{ mt: 4 }}>Please login to view dashboard.</Typography>;
+  if (analysisQuery.isLoading) return <Typography sx={{ mt: 4 }}>Loading dashboard...</Typography>;
+  if (analysisQuery.isError) return <Typography color="error" sx={{ mt: 4 }}>Failed to load dashboard data.</Typography>;
+  const data = analysisQuery.data;
   if (!data) return null;
 
   // Unified feed (spec §11.2): personal expenses + my share of group expenses,

@@ -1,12 +1,22 @@
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import MerchantsTab from './MerchantsTab';
 import { MemoryRouter } from 'react-router-dom';
 import * as analyticsApi from '../../api/analytics';
 
 // Mock the API client
 jest.mock('../../api/analytics');
+
+function renderTab() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter><MerchantsTab /></MemoryRouter>
+    </QueryClientProvider>
+  );
+}
 
 // TS-DES-205 — migrated from pages/MerchantInsightsPage.test.tsx (that page is deleted; this tab
 // component is its replacement, mounted inside ExpenseAnalysisPage's SubTabBar).
@@ -22,7 +32,7 @@ describe('MerchantsTab', () => {
 
   it('renders the empty state when no merchants are returned', async () => {
     (analyticsApi.getTopMerchants as jest.Mock).mockResolvedValueOnce([]);
-    render(<MemoryRouter><MerchantsTab /></MemoryRouter>);
+    renderTab();
 
     expect(await screen.findByText(/No merchant insights yet/i)).toBeInTheDocument();
   });
@@ -33,7 +43,7 @@ describe('MerchantsTab', () => {
       { id: '2', merchant_name: 'Target', total_spent: 120.0, transaction_count: 5 }
     ]);
 
-    render(<MemoryRouter><MerchantsTab /></MemoryRouter>);
+    renderTab();
 
     const list = await screen.findByRole('list');
     expect(await within(list).findByText('Costco')).toBeInTheDocument();
@@ -60,7 +70,7 @@ describe('MerchantsTab', () => {
       ]
     });
 
-    render(<MemoryRouter><MerchantsTab /></MemoryRouter>);
+    renderTab();
 
     // Click the merchant (within the list, since the summary card also shows its name)
     const list = await screen.findByRole('list');
