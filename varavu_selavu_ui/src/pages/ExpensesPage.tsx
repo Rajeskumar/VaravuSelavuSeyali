@@ -42,7 +42,7 @@ const ExpensesPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const { openQuickCapture } = useQuickCapture();
-  const [scope, setScope] = React.useState<AnalysisScope>('personal');
+  const [scope, setScope] = React.useState<AnalysisScope>('combined');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: ExpensesTab = tabParam === 'recurring' ? 'recurring' : 'transactions';
@@ -431,6 +431,26 @@ const ExpensesPage: React.FC = () => {
             }}
             onError={(msg) => setToast({ open: true, message: msg, severity: 'error' })}
             onCancel={handleClose}
+            onMoveToGroup={
+              groupsEnabled
+                ? (record) => {
+                    handleClose();
+                    setMoveExpense({
+                      key: `personal-${record.row_id}`,
+                      kind: 'personal',
+                      id: record.row_id,
+                      date: record.date,
+                      description: record.description,
+                      merchantName: record.merchant_name || undefined,
+                      category: record.category,
+                      mainCategory: findMainCategory(record.category),
+                      amount: record.cost,
+                      itemCount: record.item_count,
+                      splitType: record.split_type,
+                    });
+                  }
+                : undefined
+            }
           />
         </Box>
       </Dialog>

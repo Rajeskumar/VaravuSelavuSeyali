@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box, Typography, Paper, Chip, IconButton, LinearProgress, Button, Skeleton, useTheme,
 } from '@mui/material';
@@ -9,7 +10,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeRounded';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightRounded';
 import {
   getTopMerchants, getMerchantDetail,
-  MerchantInsightSummary, MerchantInsightDetail,
+  MerchantInsightSummary,
 } from '../../api/analytics';
 import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../common/InsightScopeFilter';
 import { motion } from 'framer-motion';
@@ -31,54 +32,41 @@ const MerchantsTab: React.FC = () => {
   const theme = useTheme();
   const userId = localStorage.getItem('vs_user') || '';
   const navigate = useNavigate();
-  const [merchants, setMerchants] = useState<MerchantInsightSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [detail, setDetail] = useState<MerchantInsightDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedMerchant, setSelectedMerchant] = useState<string | null>(null);
   const [scope, setScope] = useState(defaultInsightScopeState());
   const location = useLocation();
 
   const activeFilters = useMemo(() => resolveScopeFilters(scope), [scope]);
 
-  useEffect(() => {
-    if (!userId) return;
-    setLoading(true);
-    getTopMerchants(activeFilters)
-      .then(setMerchants)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [userId, activeFilters]);
+  // Cached via react-query (keyed on scope) instead of a plain useEffect fetch — revisiting this
+  // tab, or switching scope back to one already seen, now renders from cache instead of always
+  // reshowing the skeleton.
+  const merchantsQuery = useQuery({
+    queryKey: ['top-merchants', userId, activeFilters],
+    queryFn: () => getTopMerchants(activeFilters),
+    enabled: !!userId,
+  });
+  const merchants = merchantsQuery.data ?? [];
+  const loading = merchantsQuery.isLoading;
 
+  // Deep-link support (`?merchant=<name>`) — picks the detail query below instead of fetching directly.
   useEffect(() => {
     if (!userId) return;
     const params = new URLSearchParams(location.search);
     const merchantParam = params.get('merchant');
-    if (merchantParam) {
-      (async () => {
-        setDetailLoading(true);
-        try {
-          const d = await getMerchantDetail(merchantParam, activeFilters);
-          setDetail(d);
-        } catch {
-          // ignore
-        } finally {
-          setDetailLoading(false);
-        }
-      })();
-    }
-  }, [location.search, userId, activeFilters]);
+    if (merchantParam) setSelectedMerchant(merchantParam);
+  }, [location.search, userId]);
 
-  const handleSelect = async (m: MerchantInsightSummary) => {
-    setDetailLoading(true);
-    setDetail(null);
-    try {
-      const d = await getMerchantDetail(m.merchant_name, activeFilters);
-      setDetail(d);
-    } catch {
-      // non-fatal
-    } finally {
-      setDetailLoading(false);
-    }
+  const detailQuery = useQuery({
+    queryKey: ['merchant-detail', selectedMerchant, activeFilters],
+    queryFn: () => getMerchantDetail(selectedMerchant as string, activeFilters),
+    enabled: !!userId && !!selectedMerchant,
+  });
+  const detail = detailQuery.data ?? null;
+  const detailLoading = detailQuery.isFetching;
+
+  const handleSelect = (m: MerchantInsightSummary) => {
+    setSelectedMerchant(m.merchant_name);
   };
 
   const askAi = (question: string) => {
@@ -143,7 +131,7 @@ const MerchantsTab: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
           {/* Header */}
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
-            <IconButton onClick={() => setDetail(null)} sx={{ p: 0.5, mr: 0.5, color: 'text.primary' }}>
+            <IconButton onClick={() => setSelectedMerchant(null)} sx={{ p: 0.5, mr: 0.5, color: 'text.primary' }}>
               <ArrowBackIcon />
             </IconButton>
             <Typography sx={{ fontSize: 13, color: 'text.secondary', fontWeight: 500 }}>

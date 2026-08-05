@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Box, Typography, Paper, Chip, IconButton, LinearProgress, Button, Skeleton, useTheme,
 } from '@mui/material';
@@ -9,7 +10,7 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeRounded';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightRounded';
 import {
   getTopItems, getItemDetail,
-  ItemInsightSummary, ItemInsightDetail,
+  ItemInsightSummary,
 } from '../../api/analytics';
 import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../common/InsightScopeFilter';
 import { motion } from 'framer-motion';
@@ -41,57 +42,42 @@ const ItemsTab: React.FC = () => {
   const theme = useTheme();
   const userId = localStorage.getItem('vs_user') || '';
   const navigate = useNavigate();
-  const [items, setItems] = useState<ItemInsightSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [detail, setDetail] = useState<ItemInsightDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [scope, setScope] = useState(defaultInsightScopeState());
   const location = useLocation();
 
-  const activeFilters = resolveScopeFilters(scope);
+  const activeFilters = useMemo(() => resolveScopeFilters(scope), [scope]);
 
-  useEffect(() => {
-    if (!userId) return;
-    setLoading(true);
-    getTopItems(activeFilters)
-      .then(setItems)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, scope.mode, scope.year, scope.month, scope.startDate, scope.endDate]);
+  // Cached via react-query (keyed on scope) instead of a plain useEffect fetch — revisiting this
+  // tab, or switching scope back to one already seen, now renders from cache instead of always
+  // reshowing the skeleton.
+  const itemsQuery = useQuery({
+    queryKey: ['top-items', userId, activeFilters],
+    queryFn: () => getTopItems(activeFilters),
+    enabled: !!userId,
+  });
+  const items = itemsQuery.data ?? [];
+  const loading = itemsQuery.isLoading;
 
+  // Deep-link support (`?item=<name>`) — picks the detail query below instead of fetching directly.
   useEffect(() => {
     if (!userId) return;
     const params = new URLSearchParams(location.search);
     const itemParam = params.get('item');
-    if (itemParam) {
-      (async () => {
-        setDetailLoading(true);
-        try {
-          const d = await getItemDetail(itemParam, activeFilters);
-          setDetail(d);
-        } catch {
-          // ignore
-        } finally {
-          setDetailLoading(false);
-        }
-      })();
-    }
+    if (itemParam) setSelectedItem(itemParam);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, userId]);
 
-  const handleSelect = async (item: ItemInsightSummary) => {
-    setDetailLoading(true);
-    setDetail(null);
-    try {
-      const itemName = item.item_name || item.normalized_name || '';
-      const d = await getItemDetail(itemName, activeFilters);
-      setDetail(d);
-    } catch {
-      // non-fatal
-    } finally {
-      setDetailLoading(false);
-    }
+  const detailQuery = useQuery({
+    queryKey: ['item-detail', selectedItem, activeFilters],
+    queryFn: () => getItemDetail(selectedItem as string, activeFilters),
+    enabled: !!userId && !!selectedItem,
+  });
+  const detail = detailQuery.data ?? null;
+  const detailLoading = detailQuery.isFetching;
+
+  const handleSelect = (item: ItemInsightSummary) => {
+    setSelectedItem(item.item_name || item.normalized_name || '');
   };
 
   const askAi = (question: string) => {
@@ -128,7 +114,7 @@ const ItemsTab: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
           {/* Header */}
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
-            <IconButton onClick={() => setDetail(null)} sx={{ p: 0.5, mr: 0.5, color: 'text.primary' }}>
+            <IconButton onClick={() => setSelectedItem(null)} sx={{ p: 0.5, mr: 0.5, color: 'text.primary' }}>
               <ArrowBackIcon />
             </IconButton>
             <Typography sx={{ fontSize: 13, color: 'text.secondary', fontWeight: 500 }}>

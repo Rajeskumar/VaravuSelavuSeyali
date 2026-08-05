@@ -85,6 +85,10 @@ interface AddExpenseFormProps {
   onSuccess?: () => void;
   onCancel?: () => void;
   onError?: (message: string) => void;
+  /** Edit-mode only — offers to convert this personal expense into a group expense. Reached from
+   * ExpensesPage's row Edit icon (this form), separate from the tap-to-open ExpenseDetailSheet's
+   * own "Move to group…" button, but both should offer it. */
+  onMoveToGroup?: (existing: ExpenseRecord) => void;
 }
 
 /**
@@ -139,7 +143,7 @@ function CompactRow({
   );
 }
 
-const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSuccess, onCancel, onError }) => {
+const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSuccess, onCancel, onError, onMoveToGroup }) => {
   const defaultMain = Object.keys(CATEGORY_GROUPS)[0];
   const initialSub = existing ? existing.category : CATEGORY_GROUPS[defaultMain][0];
   const initialMain = existing ? findMainCategory(initialSub) : defaultMain;
@@ -947,13 +951,22 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               </>
             )}
             <Grid size={12}>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
-                {onCancel && (
-                  <Button onClick={onCancel}>Cancel</Button>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mt: 1 }}>
+                {existing && groupsEnabled && onMoveToGroup ? (
+                  <Button variant="outlined" onClick={() => onMoveToGroup(existing)} disabled={saving}>
+                    Move to group…
+                  </Button>
+                ) : (
+                  <span />
                 )}
-                <Button type="submit" variant="contained" color="primary" disabled={saveDisabled()}>
-                  {saving ? 'Saving...' : existing ? 'Update Expense' : 'Add Expense'}
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  {onCancel && (
+                    <Button onClick={onCancel}>Cancel</Button>
+                  )}
+                  <Button type="submit" variant="contained" color="primary" disabled={saveDisabled()}>
+                    {saving ? 'Saving...' : existing ? 'Update Expense' : 'Add Expense'}
+                  </Button>
+                </Box>
               </Box>
             </Grid>
             {message && (

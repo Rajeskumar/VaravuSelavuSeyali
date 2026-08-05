@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Box, Typography, CircularProgress, IconButton } from '@mui/material';
 import ArrowUpRightIcon from '@mui/icons-material/ArrowOutwardRounded';
 import ArrowDownRightIcon from '@mui/icons-material/SubdirectoryArrowRightRounded';
 import { useTheme } from '@mui/material/styles';
+import { useQuery } from '@tanstack/react-query';
 import { getChangeInsights, ChangeInsight } from '../../api/analytics';
 
 interface WhatChangedRailProps {
@@ -14,17 +15,13 @@ interface WhatChangedRailProps {
 
 export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, month, onAsk }) => {
   const theme = useTheme();
-  const [insights, setInsights] = useState<ChangeInsight[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!userId) return;
-    setLoading(true);
-    getChangeInsights({ year, month })
-      .then(setInsights)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [userId, year, month]);
+  // Same ['change-insights', year, month] key DashboardPage uses — cached and shared, instead
+  // of a plain useEffect fetch that reran every mount.
+  const { data: insights = [], isLoading: loading } = useQuery({
+    queryKey: ['change-insights', year, month],
+    queryFn: () => getChangeInsights({ year, month }),
+    enabled: !!userId,
+  });
 
   if (loading) {
     return (
