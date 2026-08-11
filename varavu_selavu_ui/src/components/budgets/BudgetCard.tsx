@@ -11,8 +11,10 @@ import MoreVertIcon from '@mui/icons-material/MoreVertRounded';
 import EditIcon from '@mui/icons-material/EditRounded';
 import DeleteIcon from '@mui/icons-material/DeleteRounded';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesomeRounded';
-import { useMutation } from '@tanstack/react-query';
-import { BudgetDTO, getBudgetAskWhy } from '../../api/budgets';
+import NotificationsOffRoundedIcon from '@mui/icons-material/NotificationsOffRounded';
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { BudgetDTO, getBudgetAskWhy, updateBudget } from '../../api/budgets';
 import BudgetProgressBar, { formatBudgetMoney } from './BudgetProgressBar';
 
 interface BudgetCardProps {
@@ -24,8 +26,16 @@ interface BudgetCardProps {
 /** Mirrors RecurringCard.tsx's card shell (header/body/footer, "⋮" edit-delete menu) so Budgets
  * reads as native to the app rather than a bolted-on surface (PRD §6 design principle). */
 const BudgetCard: React.FC<BudgetCardProps> = ({ budget, onEdit, onDelete }) => {
+  const qc = useQueryClient();
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const title = budget.target_type === 'overall' ? 'Overall' : budget.category || 'Budget';
+
+  // §5.3 per-budget mute — backend's PATCH /budgets/{id} already accepted `muted`, but neither
+  // client exposed a way to reach it. Toggled from the same "⋮" menu as Edit/Delete.
+  const muteMut = useMutation({
+    mutationFn: () => updateBudget(budget.id, { muted: !budget.muted }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budgets'] }),
+  });
 
   // §5.4 "Ask why" — calls /budgets/{id}/ask-why, which hands the model this budget's own
   // figures plus every contributing transaction (BudgetService.build_ask_why_prompt) and shows
@@ -58,6 +68,14 @@ const BudgetCard: React.FC<BudgetCardProps> = ({ budget, onEdit, onDelete }) => 
           <MenuItem onClick={() => { setAnchorEl(null); onEdit(budget); }}>
             <EditIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} /> Edit
           </MenuItem>
+          <MenuItem onClick={() => { setAnchorEl(null); muteMut.mutate(); }} disabled={muteMut.isPending}>
+            {budget.muted ? (
+              <NotificationsActiveRoundedIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+            ) : (
+              <NotificationsOffRoundedIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+            )}
+            {budget.muted ? 'Unmute alerts' : 'Mute alerts'}
+          </MenuItem>
           <MenuItem onClick={() => { setAnchorEl(null); onDelete(budget); }} sx={{ color: 'error.main' }}>
             <DeleteIcon fontSize="small" sx={{ mr: 1 }} /> Delete
           </MenuItem>
@@ -73,6 +91,14 @@ const BudgetCard: React.FC<BudgetCardProps> = ({ budget, onEdit, onDelete }) => 
           label={budget.scope === 'combined' ? 'Combined' : 'Personal'}
           sx={{ height: 18, fontSize: 10.5, fontWeight: 700, bgcolor: 'action.hover' }}
         />
+        {budget.muted && (
+          <Chip
+            size="small"
+            icon={<NotificationsOffRoundedIcon sx={{ fontSize: '13px !important' }} />}
+            label="Muted"
+            sx={{ height: 18, fontSize: 10.5, fontWeight: 700, bgcolor: 'action.hover', color: 'text.secondary' }}
+          />
+        )}
       </Box>
 
       <BudgetProgressBar spent={budget.spent} amount={budget.amount} status={budget.status} />

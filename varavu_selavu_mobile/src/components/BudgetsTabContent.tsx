@@ -13,8 +13,9 @@ import {
   ActivityIndicator, Switch, Alert,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import {
-  listBudgets, createBudget, deleteBudget, getBudgetSuggestions, getBudgetAskWhy,
+  listBudgets, createBudget, updateBudget, deleteBudget, getBudgetSuggestions, getBudgetAskWhy,
   BudgetDTO, BudgetTargetType, BudgetScope,
 } from '../api/budgets';
 import { checkGroupsEnabled } from '../api/groups';
@@ -101,6 +102,14 @@ export default function BudgetsTabContent() {
     onError: () => Alert.alert('Failed to delete budget'),
   });
 
+  // §5.3 per-budget mute — backend's PATCH /budgets/{id} already accepted `muted`, but neither
+  // client exposed a way to reach it. Toggled with a tap on the card's bell icon.
+  const muteMut = useMutation({
+    mutationFn: (b: BudgetDTO) => updateBudget(b.id, { muted: !b.muted }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['budgets'] }),
+    onError: () => Alert.alert('Failed to update mute setting'),
+  });
+
   const openAdd = () => {
     setEditing(false);
     setForm(emptyForm());
@@ -181,6 +190,18 @@ export default function BudgetsTabContent() {
                       <Text style={styles.scopeBadgeText}>{b.scope === 'combined' ? 'Combined' : 'Personal'}</Text>
                     </View>
                   </View>
+                  <TouchableOpacity
+                    onPress={() => muteMut.mutate(b)}
+                    disabled={muteMut.isPending}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel={b.muted ? 'Unmute budget alerts' : 'Mute budget alerts'}
+                  >
+                    <Ionicons
+                      name={b.muted ? 'notifications-off-outline' : 'notifications-outline'}
+                      size={17}
+                      color={b.muted ? theme.colors.textTertiary : theme.colors.textSecondary}
+                    />
+                  </TouchableOpacity>
                 </View>
 
                 <BudgetProgressBar theme={theme} spent={b.spent} amount={b.amount} status={b.status} />
