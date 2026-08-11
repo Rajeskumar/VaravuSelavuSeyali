@@ -122,11 +122,17 @@ const AppContent: React.FC = () => {
       return;
     }
 
+    // On failure, deliberately leave `vs_user` alone: this effect runs once on the
+    // app's initial mount and the exchange is async, so it can still resolve *after*
+    // a fresh, unrelated login has already set a valid cookie session + `vs_user`
+    // (reproduced: stale legacy keys left over from before this migration caused a
+    // real login to flash the dashboard and then get bounced back to /login, with
+    // no console error, because this failure handler blew away the just-set
+    // `vs_user`). A genuinely dead session is already caught by fetchWithAuth's own
+    // 401 → forceLogout path on the next real API call — no need to duplicate that
+    // here, and doing so is exactly what created the race.
     exchangeLegacySession(legacyRefresh)
-      .catch(() => {
-        // Expired or already spent — the next API call's 401 sends them to /login.
-        localStorage.removeItem('vs_user');
-      })
+      .catch(() => {})
       .finally(clearLegacyTokens);
   }, []);
 
