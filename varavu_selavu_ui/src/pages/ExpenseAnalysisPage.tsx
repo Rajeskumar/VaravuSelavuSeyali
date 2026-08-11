@@ -7,19 +7,30 @@ import SegmentedTabs from '../components/common/SegmentedTabs';
 import OverviewTab from '../components/analysis/OverviewTab';
 import ItemsTab from '../components/analysis/ItemsTab';
 import MerchantsTab from '../components/analysis/MerchantsTab';
+import BudgetsTab from '../components/analysis/BudgetsTab';
+import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 
-type AnalysisTab = 'overview' | 'items' | 'merchants';
+type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets';
 
 /**
  * ExpenseAnalysisPage (TS-DES-106 rebuild, TS-DES-205 tab host) — Overview/Items/Merchants now
  * live as `SubTabBar` panes on one page instead of three separate pages/routes. `Items` and
  * `Merchants` supersede the deleted `ItemInsightsPage`/`MerchantInsightsPage` (`/item-insights`
  * and `/merchant-insights` now redirect here, preserving `?item=`/`?merchant=`).
+ *
+ * TS-BUD-101 adds `Budgets` as a 4th pane here rather than a new top-level nav item — same
+ * "fold a niche surface into an existing tab bar" call as Items/Merchants, keeping navItems.ts's
+ * deliberately-shrunk 4-item nav (TS-DES-202) intact.
  */
 const ExpenseAnalysisPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { enabled: budgetsEnabled } = useBudgetsEnabled();
   const tabParam = searchParams.get('tab');
-  const tab: AnalysisTab = tabParam === 'items' ? 'items' : tabParam === 'merchants' ? 'merchants' : 'overview';
+  const tab: AnalysisTab =
+    tabParam === 'items' ? 'items'
+    : tabParam === 'merchants' ? 'merchants'
+    : tabParam === 'budgets' && budgetsEnabled ? 'budgets'
+    : 'overview';
 
   const handleTabChange = (next: AnalysisTab) => {
     const params = new URLSearchParams(searchParams);
@@ -42,7 +53,7 @@ const ExpenseAnalysisPage: React.FC = () => {
         <Typography sx={{ ...typeScale.display, fontSize: 28, color: 'text.primary' }}>
           Analysis
         </Typography>
-        <Box sx={{ maxWidth: 300 }}>
+        <Box sx={{ maxWidth: budgetsEnabled ? 380 : 300 }}>
           <SegmentedTabs<AnalysisTab>
             value={tab}
             onChange={handleTabChange}
@@ -50,6 +61,7 @@ const ExpenseAnalysisPage: React.FC = () => {
               { value: 'overview', label: 'Overview' },
               { value: 'items', label: 'Items' },
               { value: 'merchants', label: 'Merchants' },
+              ...(budgetsEnabled ? [{ value: 'budgets' as const, label: 'Budgets' }] : []),
             ]}
             fullWidth
             ariaLabel="Analysis section"
@@ -60,6 +72,7 @@ const ExpenseAnalysisPage: React.FC = () => {
       {tab === 'overview' && <OverviewTab />}
       {tab === 'items' && <ItemsTab />}
       {tab === 'merchants' && <MerchantsTab />}
+      {tab === 'budgets' && <BudgetsTab />}
     </Box>
   );
 };

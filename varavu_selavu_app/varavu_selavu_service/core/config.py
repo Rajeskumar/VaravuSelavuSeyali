@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     # A lookup failure never blocks expense creation; FxRateService falls back to 1:1.
     FX_RATE_API_URL: str = "https://open.er-api.com/v6/latest"
 
+    # Budgets (TS-BUD series) — unlike GROUPS_ENABLED/ENTITY_RESOLUTION_ENABLED's staged
+    # rollout, this defaults ON: budgets are personal-only, additive, and have no cross-user
+    # blast radius, so there's no reason to gate them behind an explicit opt-in.
+    BUDGETS_ENABLED: bool = True
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -14,6 +14,7 @@
  * mock; replaced with the structure above.
  */
 import React, { useState, useMemo } from 'react';
+import { useRoute } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -32,8 +33,10 @@ import SegmentedTabs from '../components/SegmentedTabs';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { AddExpenseContext } from './AddExpenseScreen';
+import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
+import BudgetsTabContent from '../components/BudgetsTabContent';
 
-type AnalysisTab = 'overview' | 'items' | 'merchants';
+type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets';
 
 const formatCurrency = (amount: number) => `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -43,8 +46,15 @@ export default function AnalysisScreen() {
     const styles = useMemo(() => createStyles(theme), [theme]);
     const qc = useQueryClient();
     const { openAddExpense } = React.useContext(AddExpenseContext);
+    const route = useRoute<any>();
 
+    const { enabled: budgetsEnabled } = useBudgetsEnabled();
     const [tab, setTab] = useState<AnalysisTab>('overview');
+    // Dashboard's Budgets summary card navigates here with `{ initialTab: 'budgets' }` — same
+    // pattern as GroupsScreen's own `initialTab` param handling.
+    React.useEffect(() => {
+        if (route.params?.initialTab === 'budgets' && budgetsEnabled) setTab('budgets');
+    }, [route.params?.initialTab, budgetsEnabled]);
     const [includeGroups, setIncludeGroups] = useState(true);
     const scope = includeGroups ? 'combined' : 'personal';
     // TrackSpense v3 Mobile mock's category drill-down (`anCat`/`anHasCat`): tapping a category
@@ -139,6 +149,7 @@ export default function AnalysisScreen() {
                             { value: 'overview', label: 'Overview' },
                             { value: 'items', label: 'Items' },
                             { value: 'merchants', label: 'Merchants' },
+                            ...(budgetsEnabled ? [{ value: 'budgets' as const, label: 'Budgets' }] : []),
                         ]}
                     />
                 </View>
@@ -321,6 +332,8 @@ export default function AnalysisScreen() {
                         )}
                     </View>
                 )}
+
+                {tab === 'budgets' && budgetsEnabled && <BudgetsTabContent />}
             </ScrollView>
         </ScreenWrapper>
     );

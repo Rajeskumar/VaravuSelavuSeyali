@@ -20,6 +20,9 @@ import { dayLabel } from '../components/expenses/ExpenseFeed';
 import { listExpenses } from '../api/expenses';
 import { listAllMyGroupExpenses, listGroups } from '../api/groups';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
+import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
+import { listBudgets, BudgetDTO } from '../api/budgets';
+import BudgetsSummaryCard from '../components/dashboard/BudgetsSummaryCard';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { cerebro, tabularNums } from '../theme';
 
@@ -107,6 +110,7 @@ const DashboardPage: React.FC = () => {
   const queryClient = useQueryClient();
   const user = localStorage.getItem('vs_user') || '';
   const { enabled: groupsEnabled } = useGroupsEnabled();
+  const { enabled: budgetsEnabled } = useBudgetsEnabled();
   const [showCombinedToast, setShowCombinedToast] = React.useState(false);
 
   // Everything below goes through react-query's cache instead of the plain useEffect-per-fetch
@@ -155,12 +159,18 @@ const DashboardPage: React.FC = () => {
     queryFn: listAllMyGroupExpenses,
     enabled: groupsEnabled,
   });
+  const budgetsQuery = useQuery({
+    queryKey: ['budgets'],
+    queryFn: () => listBudgets(),
+    enabled: budgetsEnabled,
+  });
 
   React.useEffect(() => onExpenseChanged(() => {
     queryClient.invalidateQueries({ queryKey: ['analysis'] });
     queryClient.invalidateQueries({ queryKey: ['change-insights'] });
     queryClient.invalidateQueries({ queryKey: ['dashboard-expenses'] });
     queryClient.invalidateQueries({ queryKey: ['all-group-expenses'] });
+    queryClient.invalidateQueries({ queryKey: ['budgets'] });
   }), [queryClient]);
 
   React.useEffect(() => {
@@ -177,6 +187,16 @@ const DashboardPage: React.FC = () => {
   ));
   const changeInsights = changeInsightsQuery.data ?? [];
   const yearTrend = yearTrendQuery.data?.monthly_trend ?? [];
+  const budgets = budgetsEnabled ? (budgetsQuery.data ?? []) : [];
+  // Only combined-scope category budgets are inlined under "Where it went" rows below — that
+  // list is itself always combined-scope, so a personal-scope budget's own (personal-only)
+  // spent figure would silently mismatch the row's combined total if shown there.
+  const combinedCategoryBudgets: Record<string, BudgetDTO> = {};
+  for (const b of budgets) {
+    if (b.scope === 'combined' && b.target_type === 'category' && b.category) {
+      combinedCategoryBudgets[b.category] = b;
+    }
+  }
 
   if (!user) return <Typography color="error" sx={{ mt: 4 }}>Please login to view dashboard.</Typography>;
   if (analysisQuery.isLoading) return <Typography sx={{ mt: 4 }}>Loading dashboard...</Typography>;
@@ -269,6 +289,8 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       )}
 
+      {budgetsEnabled && <BudgetsSummaryCard budgets={budgets} />}
+
       {/* DesktopDashboard.jsx puts "Where it went" and "My Groups" side by side
           (`grid-cols-2`); stacked full-width on mobile, same as before. When there's no groups
           strip to show, SpendSpectrum keeps the full row rather than leaving an empty column. */}
@@ -281,7 +303,7 @@ const DashboardPage: React.FC = () => {
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <Box sx={{ mb: 3 }}>
-            <SpendSpectrum data={data.category_totals} />
+            <SpendSpectrum data={data.category_totals} budgetsByCategory={combinedCategoryBudgets} />
           </Box>
         </motion.div>
 

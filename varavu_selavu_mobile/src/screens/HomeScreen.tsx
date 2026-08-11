@@ -19,6 +19,9 @@ import { showToast } from '../components/Toast';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { computeIPaidTotal, computeNetWithPeople, AnalysisGroupSummary } from '../utils/dashboardTotals';
 import { AddExpenseContext } from './AddExpenseScreen';
+import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
+import { listBudgets } from '../api/budgets';
+import BudgetsSummaryCard from '../components/BudgetsSummaryCard';
 
 // ─── Category icon map ───────────────────────────────────────────────────────
 const categoryEmojis: Record<string, string> = {
@@ -372,6 +375,13 @@ export default function HomeScreen() {
     enabled: !!accessToken && !!userEmail && !!groupsEnabled,
   });
 
+  const { enabled: budgetsEnabled } = useBudgetsEnabled();
+  const { data: budgetsData } = useQuery({
+    queryKey: ['budgets'],
+    queryFn: () => listBudgets(),
+    enabled: !!accessToken && budgetsEnabled,
+  });
+
   const loading = loadingMonth;
 
   const onRefresh = async () => {
@@ -379,6 +389,7 @@ export default function HomeScreen() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['analysis'] }),
       queryClient.invalidateQueries({ queryKey: ['groupExpenses'] }),
+      queryClient.invalidateQueries({ queryKey: ['budgets'] }),
     ]);
     setRefreshing(false);
   };
@@ -387,6 +398,7 @@ export default function HomeScreen() {
     return onExpenseChanged(() => {
       queryClient.invalidateQueries({ queryKey: ['analysis'] });
       queryClient.invalidateQueries({ queryKey: ['groupExpenses'] });
+      queryClient.invalidateQueries({ queryKey: ['budgets'] });
     });
   }, [queryClient]);
 
@@ -467,6 +479,14 @@ export default function HomeScreen() {
 
         {/* ── My Groups (TrackSpense v3) ────────────────────── */}
         <GroupChipsRow groupSummaries={groupSummaries} onPress={(groupId) => navigation.navigate('GroupDetail', { groupId })} />
+
+        {/* ── Budgets (TS-BUD-101) ──────────────────────────── */}
+        {budgetsEnabled && (
+          <BudgetsSummaryCard
+            budgets={budgetsData || []}
+            onPress={() => navigation.navigate('Analysis', { initialTab: 'budgets' })}
+          />
+        )}
 
         {/* ── Recent Activity ───────────────────────────────── */}
         <SectionHeader

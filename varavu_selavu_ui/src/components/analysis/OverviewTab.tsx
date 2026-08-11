@@ -11,6 +11,8 @@ import { useQuery } from '@tanstack/react-query';
 import { getAnalysis } from '../../api/analysis';
 import { ChangeInsight } from '../../api/analytics';
 import { glassCardSx } from '../../theme';
+import { useBudgetsEnabled } from '../../hooks/useBudgetsEnabled';
+import { listBudgets, BudgetDTO } from '../../api/budgets';
 
 import SegmentedTabs from '../common/SegmentedTabs';
 import { TrendNavigator } from './TrendNavigator';
@@ -54,6 +56,9 @@ const OverviewTab: React.FC = () => {
   // TrackSpense v3 Prototype's one proposed Analysis change — defaults on (unchanged behavior).
   const [includeGroups, setIncludeGroups] = useState(true);
   const scope = includeGroups ? 'combined' : 'personal';
+  const isYearMode = periodMode === 'year';
+
+  const { enabled: budgetsEnabled } = useBudgetsEnabled();
 
   // Year/Month dropdown anchor
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -82,6 +87,22 @@ const OverviewTab: React.FC = () => {
     enabled: !!user,
   });
 
+  // §6.2 — inline budget progress in the category breakdown, honoring this same Month/Year and
+  // Include-group-shares toggles (the latter is already `scope` above). Budgets are monthly-only
+  // in v1 (PRD §5.1/§11), so this only applies in month mode, not the whole-year rollup.
+  const period = `${year}-${String(month).padStart(2, '0')}`;
+  const { data: budgetsData } = useQuery({
+    queryKey: ['budgets', scope, period],
+    queryFn: () => listBudgets({ scope, period }),
+    enabled: !!user && budgetsEnabled && !isYearMode,
+  });
+  const budgetsByCategory: Record<string, BudgetDTO> = {};
+  for (const b of budgetsData || []) {
+    if (b.target_type === 'category' && b.category) {
+      budgetsByCategory[b.category] = b;
+    }
+  }
+
   if (monthLoading || yearLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -108,7 +129,6 @@ const OverviewTab: React.FC = () => {
     setAnchorEl(null);
   };
 
-  const isYearMode = periodMode === 'year';
   // The active period's data — CategorySpectrum/MoneyFlowSankey/the empty-state check all read
   // from whichever of these is "the period" right now, so the year toggle only has to swap one
   // reference rather than thread a condition through every consumer.
@@ -158,6 +178,7 @@ const OverviewTab: React.FC = () => {
           total={periodData.total_expenses}
           categoryTotals={periodData.category_totals}
           details={periodData.category_expense_details || {}}
+          budgetsByCategory={isYearMode ? undefined : budgetsByCategory}
         />
 
         <Box sx={{ mt: 4, mb: 4 }}>

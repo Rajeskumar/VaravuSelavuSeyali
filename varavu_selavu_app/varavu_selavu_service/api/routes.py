@@ -67,7 +67,14 @@ from varavu_selavu_service.models.api_models import (
     SendEmailRequest,
     SendEmailResponse,
     ChangeInsight,
+    BudgetDTO,
+    CreateBudgetRequest,
+    UpdateBudgetRequest,
+    BudgetBreakdownResponse,
+    BudgetSuggestion,
+    BudgetAskWhyResponse,
 )
+from varavu_selavu_service.services.budget_service import BudgetService
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.notification_service import NotificationService
@@ -117,6 +124,15 @@ def get_categorization_service() -> CategorizationService:
 def get_recurring_service(db: Session = Depends(get_db)) -> RecurringService:
     return RecurringService(db)
 
+def get_budget_service(db: Session = Depends(get_db)) -> BudgetService:
+    return BudgetService(db)
+
+def require_budgets_enabled() -> None:
+    # Same pattern as groups_routes.require_groups_enabled — reads Settings() fresh so the flag
+    # can be toggled at runtime/in tests without reloading this module.
+    if not Settings().BUDGETS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
 def get_insight_analytics_service(db: Session = Depends(get_db)) -> InsightAnalyticsService:
     return InsightAnalyticsService(db=db)
 
@@ -139,6 +155,7 @@ def get_config():
     return {
         "groups_enabled": settings_now.GROUPS_ENABLED,
         "entity_resolution_enabled": settings_now.ENTITY_RESOLUTION_ENABLED,
+        "budgets_enabled": settings_now.BUDGETS_ENABLED,
     }
 
 
@@ -1107,6 +1124,154 @@ def delete_recurring_template(
 ):
     ok = svc.delete_template(user_id, template_id)
     return {"success": bool(ok)}
+
+
+# ---------------------- Budgets (TS-BUD-101) ---------------------- #
+
+@router.get(
+    "/budgets",
+    response_model=list[BudgetDTO],
+    tags=["Budgets"],
+    summary="List budgets with live spent/committed/remaining/projected/status",
+)
+def list_budgets(
+    scope: str | None = Query(None, description="personal | combined"),
+    period: str | None = Query(None, description="YYYY-MM, defaults to the current month"),
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.list_budgets(user_id, scope=scope, period_str=period)
+
+
+@router.post(
+    "/budgets",
+    response_model=BudgetDTO,
+    tags=["Budgets"],
+    summary="Create a budget, or edit the existing one for the same (scope, category) — FR-2",
+)
+def create_budget(
+    data: CreateBudgetRequest,
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.create_or_update(user_id, data)
+
+
+@router.patch(
+    "/budgets/{budget_id}",
+    response_model=BudgetDTO,
+    tags=["Budgets"],
+    summary="Update a budget's amount/rollover/thresholds/mute",
+)
+def update_budget(
+    budget_id: str,
+    data: UpdateBudgetRequest,
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.update_budget(user_id, budget_id, data)
+
+
+@router.delete(
+    "/budgets/{budget_id}",
+    response_model=dict,
+    tags=["Budgets"],
+    summary="Delete a budget (soft — past-period snapshots are retained, FR-8)",
+)
+def delete_budget(
+    budget_id: str,
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    svc.delete_budget(user_id, budget_id)
+    return {"success": True}
+
+
+@router.get(
+    "/budgets/{budget_id}/breakdown",
+    response_model=BudgetBreakdownResponse,
+    tags=["Budgets"],
+    summary="Contributing transactions for a budget's period — feeds \"Ask why\"",
+)
+def get_budget_breakdown(
+    budget_id: str,
+    period: str | None = Query(None, description="YYYY-MM, defaults to the current month"),
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.get_breakdown(user_id, budget_id, period_str=period)
+
+
+@router.get(
+    "/budgets/suggestions",
+    response_model=list[BudgetSuggestion],
+    tags=["Budgets"],
+    summary="Median-of-last-3-months suggested budget amounts per category",
+)
+def get_budget_suggestions(
+    scope: str = Query("personal", description="personal | combined"),
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.get_suggestions(user_id, scope=scope)
+
+
+@router.post(
+    "/budgets/{budget_id}/ask-why",
+    response_model=BudgetAskWhyResponse,
+    tags=["Budgets"],
+    summary="AI explanation of a budget's status, grounded in its contributing transactions",
+)
+@limiter.limit("5/minute")
+def budget_ask_why(
+    request: Request,
+    budget_id: str,
+    period: str | None = Query(None, description="YYYY-MM, defaults to the current month"),
+    svc: BudgetService = Depends(get_budget_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
+    group_service: GroupService = Depends(get_group_service),
+    balance_service: BalanceService = Depends(get_balance_service),
+    expense_service: ExpenseService = Depends(get_expense_service),
+    group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    """§5.4 — hands the model the budget's live figures and every contributing transaction
+    (via BudgetService.get_breakdown/build_ask_why_prompt) instead of just deep-linking to the
+    general chat surface, then reuses the same call_chat_model dispatch /analysis/chat uses."""
+    breakdown = svc.get_breakdown(user_id, budget_id, period_str=period)
+    query_text = svc.build_ask_why_prompt(breakdown)
+    try:
+        result = call_chat_model(
+            messages=[{"role": "user", "content": query_text}],
+            user_id=user_id,
+            analysis_service=analysis_service,
+            analytics_service=analytics_service,
+            insight_service=insight_service,
+            group_service=group_service,
+            balance_service=balance_service,
+            expense_service=expense_service,
+            group_expense_service=group_expense_service,
+            groups_enabled=settings.GROUPS_ENABLED,
+        )
+        return {"response": result.response}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import logging
+        logging.getLogger("varavu_selavu.routes").exception("Budget ask-why failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="The AI analyst is temporarily unavailable. Please try again later."
+        )
 
 
 # ---------------------- Email ---------------------- #

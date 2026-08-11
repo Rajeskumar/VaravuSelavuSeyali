@@ -3,6 +3,7 @@ import { fetchWithAuth } from './api';
 export interface FeatureFlags {
   groups_enabled: boolean;
   entity_resolution_enabled: boolean;
+  budgets_enabled: boolean;
 }
 
 /** Client-visible feature flag surface (TS-GRP-111) — never requires auth and

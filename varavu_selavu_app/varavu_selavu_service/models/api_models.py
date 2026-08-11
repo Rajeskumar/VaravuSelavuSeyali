@@ -147,6 +147,10 @@ class FeatureFlagsResponse(BaseModel):
     # TS-ENT-105: same pattern, for the merchant/item typeahead + resolution
     # endpoints — lets web/mobile hide the typeahead UI without a 404 probe.
     entity_resolution_enabled: bool
+    # TS-BUD-101: same pattern, for the Budgets tab/screen and its Dashboard/Analysis
+    # integrations — defaults True (see Settings.BUDGETS_ENABLED), but still client-checked
+    # for consistency with every other feature surface.
+    budgets_enabled: bool
 
 
 class DashboardResponse(BaseModel):
@@ -798,4 +802,93 @@ class CanonicalItemDTO(BaseModel):
     default_category_id: Optional[str] = None
     unit_type: Optional[str] = None
     is_global: bool
+
+
+# ---------------------- Budgets (TS-BUD-101) ---------------------- #
+
+BudgetScope = Literal["personal", "combined"]
+BudgetTargetType = Literal["overall", "category"]
+BudgetStatus = Literal["on_track", "at_risk", "over_pace", "exceeded"]
+
+DEFAULT_ALERT_THRESHOLDS = [80, 100]
+
+
+class CreateBudgetRequest(BaseModel):
+    """FR-1/FR-2: creating a budget for a (scope, category, period_type) that already has one
+    edits the existing budget in place instead of erroring or duplicating (BudgetService)."""
+    scope: BudgetScope = "personal"
+    target_type: BudgetTargetType
+    category: Optional[CategoryStr] = None
+    amount: MoneyAmount
+    currency: str = "USD"
+    rollover: bool = False
+    alert_thresholds: List[int] = Field(default_factory=lambda: list(DEFAULT_ALERT_THRESHOLDS))
+
+
+class UpdateBudgetRequest(BaseModel):
+    """All fields optional — PATCH semantics, only supplied fields change."""
+    amount: Optional[MoneyAmount] = None
+    rollover: Optional[bool] = None
+    alert_thresholds: Optional[List[int]] = None
+    muted: Optional[bool] = None
+
+
+class BudgetDTO(BaseModel):
+    id: str
+    scope: BudgetScope
+    target_type: BudgetTargetType
+    category: Optional[str] = None
+    amount: float
+    currency: str
+    period_type: str
+    rollover: bool
+    alert_thresholds: List[int]
+    muted: bool
+    period_start: str  # YYYY-MM-DD
+    period_end: str  # YYYY-MM-DD
+    # Live ledger figures (§5.2) — spent/committed always use AnalysisService's scope-aware
+    # sums, never a second calculation path (spec §8 consistency requirement).
+    spent: float
+    committed: float
+    remaining: float
+    projected: float
+    status: BudgetStatus
+    # True once this period has ended and the figures above were read from an immutable
+    # BudgetPeriodSnapshot (FR-7/FR-8) rather than computed live off the current ledger.
+    is_snapshot: bool = False
+
+
+class BudgetTransactionRow(BaseModel):
+    date: str
+    description: str
+    category: str
+    cost: float
+    # Known simplification: AnalysisService's merged category_expense_details rows (the shared
+    # calculation path this reuses, per the spec §8 consistency requirement) don't currently tag
+    # personal-vs-group at the individual-row level for combined scope, so these stay unset
+    # rather than guessed. Personal-scope budgets are unambiguous (every row is personal).
+    kind: Optional[Literal["personal", "group"]] = None
+    group_name: Optional[str] = None
+
+
+class BudgetBreakdownResponse(BaseModel):
+    """Feeds the "Ask why" affordance (§5.4) — the budget's own live figures plus every
+    transaction that contributed to `spent` this period."""
+    budget: BudgetDTO
+    transactions: List[BudgetTransactionRow]
+
+
+class BudgetSuggestion(BaseModel):
+    """§5.4 — median of the last 3 months' spend per category, a one-tap starting point when
+    creating a new budget. Suggestion only; never auto-applied."""
+    category: str
+    suggested_amount: float
+    based_on_months: int
+
+
+class BudgetAskWhyResponse(BaseModel):
+    """§5.4 "Ask why" — a plain-language explanation generated from the budget's own live
+    figures plus its contributing transactions (BudgetService.build_ask_why_prompt), reusing
+    the same chat model dispatch as /analysis/chat rather than a second AI integration path."""
+    response: str
 

@@ -4,11 +4,17 @@ import ChevronDownIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import ChevronUpIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import { typeScale, withAlpha } from '../../theme';
 import { categoryTint } from '../expenses/categoryColors';
+import { BudgetDTO } from '../../api/budgets';
+import BudgetProgressBar, { STATUS_LABEL, statusColor } from '../budgets/BudgetProgressBar';
 
 interface CategorySpectrumProps {
   total: number;
   categoryTotals: { category: string; total: number }[];
   details: Record<string, { date: string; description: string; category: string; cost: number }[]>;
+  /** §6.2 — a matching row grows a thin budget progress bar directly underneath it, honoring
+   * whatever Month/Year + Include-group-shares scope the caller resolved this for. Undefined in
+   * Year mode, where budgets (monthly-only in v1) have no matching period to compare against. */
+  budgetsByCategory?: Record<string, BudgetDTO>;
 }
 
 // Reuses the same category→color mapping as ExpenseFeed's tint dots (was its own
@@ -18,7 +24,7 @@ function getCatColor(cat: string) {
   return categoryTint(cat);
 }
 
-export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categoryTotals, details }) => {
+export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categoryTotals, details, budgetsByCategory }) => {
   const theme = useTheme();
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
 
@@ -52,6 +58,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
           const isExpanded = expandedCat === c.category;
           const pct = total > 0 ? Math.round((c.total / total) * 100) : 0;
           const txns = details[c.category] || [];
+          const budget = budgetsByCategory?.[c.category];
 
           return (
             <Box key={c.category} sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
@@ -107,7 +114,16 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                   <ChevronDownIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
                 )}
               </Box>
-              
+
+              {budget && (
+                <Box sx={{ pl: 3.5, pr: 1, pb: 1.5, mt: -0.5 }}>
+                  <BudgetProgressBar spent={budget.spent} amount={budget.amount} status={budget.status} showLabel={false} />
+                  <Typography variant="caption" sx={{ color: statusColor(theme, budget.status), fontWeight: 600 }}>
+                    Budget: {STATUS_LABEL[budget.status]}
+                  </Typography>
+                </Box>
+              )}
+
               {isExpanded && (
                 <Box sx={{ pl: 3.5, pb: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
                   {txns.length > 0 ? (
