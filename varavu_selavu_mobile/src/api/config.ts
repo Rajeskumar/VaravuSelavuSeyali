@@ -6,6 +6,7 @@ import { apiFetch } from './apiFetch';
 export interface FeatureFlags {
   groups_enabled: boolean;
   entity_resolution_enabled: boolean;
+  budgets_enabled: boolean;
 }
 
 /** Never requires auth and never 404s, unlike probing /groups directly. */

@@ -396,3 +396,53 @@ class FxRate(Base):
     rate = Column(Numeric(18, 8), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+
+class Budget(Base):
+    """TS-BUD-101: a per-user monthly spending limit, overall or per-category, tracked against
+    the same unified personal/combined ledger AnalysisService already computes (spec §8) — no
+    third calculation path. `category` is null for an overall budget. Dedup on
+    (user_email, scope, target_type, category, period_type) is enforced in BudgetService rather
+    than a DB constraint, matching RecurringService.upsert_template's find-existing-or-create
+    pattern (a plain unique constraint can't dedupe nullable `category` rows portably across
+    Postgres and the sqlite test engine)."""
+    __tablename__ = "budgets"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    scope = Column(String(20), nullable=False, default="personal")  # personal | combined
+    target_type = Column(String(20), nullable=False)  # overall | category
+    category = Column(String(100), nullable=True)  # null when target_type == overall
+    amount = Column(Numeric(12, 2), nullable=False)
+    currency = Column(String(10), nullable=False, default="USD")
+    period_type = Column(String(20), nullable=False, default="monthly")
+    rollover = Column(Boolean, nullable=False, default=False)
+    alert_thresholds = Column(JSON, nullable=False, default=list)
+    muted = Column(Boolean, nullable=False, default=False)
+    start_date = Column(Date, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class BudgetPeriodSnapshot(Base):
+    """TS-BUD-101: immutable per-(budget, period) record, written lazily the first time a past
+    (already-ended) period is read (BudgetService._get_or_create_snapshot) — no scheduler
+    required. Once written, a snapshot is never recomputed, satisfying FR-7/FR-8 ("history for
+    past periods is immutable") and surviving budget edits/deletes (soft-deleted budgets keep
+    their snapshots for Analysis history)."""
+    __tablename__ = "budget_period_snapshots"
+    __table_args__ = (
+        UniqueConstraint("budget_id", "period_start", name="uq_budget_period_snapshots_budget_period"),
+        {"schema": "trackspense"}
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    budget_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.budgets.id", ondelete="CASCADE"), nullable=False, index=True)
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    spent = Column(Numeric(12, 2), nullable=False)
+    status = Column(String(20), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+

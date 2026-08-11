@@ -20,14 +20,14 @@ def test_config_reflects_groups_enabled_true(test_client):
     os.environ["GROUPS_ENABLED"] = "true"
     res = test_client.get("/api/v1/config")
     assert res.status_code == 200
-    assert res.json() == {"groups_enabled": True, "entity_resolution_enabled": False}
+    assert res.json() == {"groups_enabled": True, "entity_resolution_enabled": False, "budgets_enabled": True}
 
 
 def test_config_reflects_groups_enabled_false(test_client):
     os.environ["GROUPS_ENABLED"] = "false"
     res = test_client.get("/api/v1/config")
     assert res.status_code == 200
-    assert res.json() == {"groups_enabled": False, "entity_resolution_enabled": False}
+    assert res.json() == {"groups_enabled": False, "entity_resolution_enabled": False, "budgets_enabled": True}
 
 
 @pytest.fixture(autouse=True)
@@ -47,4 +47,4 @@ def test_config_reflects_entity_resolution_enabled_true(test_client):
     os.environ["ENTITY_RESOLUTION_ENABLED"] = "true"
     res = test_client.get("/api/v1/config")
     assert res.status_code == 200
-    assert res.json() == {"groups_enabled": False, "entity_resolution_enabled": True}
+    assert res.json() == {"groups_enabled": False, "entity_resolution_enabled": True, "budgets_enabled": True}

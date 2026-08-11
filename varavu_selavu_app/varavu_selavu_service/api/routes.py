@@ -67,7 +67,13 @@ from varavu_selavu_service.models.api_models import (
     SendEmailRequest,
     SendEmailResponse,
     ChangeInsight,
+    BudgetDTO,
+    CreateBudgetRequest,
+    UpdateBudgetRequest,
+    BudgetBreakdownResponse,
+    BudgetSuggestion,
 )
+from varavu_selavu_service.services.budget_service import BudgetService
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.notification_service import NotificationService
@@ -117,6 +123,15 @@ def get_categorization_service() -> CategorizationService:
 def get_recurring_service(db: Session = Depends(get_db)) -> RecurringService:
     return RecurringService(db)
 
+def get_budget_service(db: Session = Depends(get_db)) -> BudgetService:
+    return BudgetService(db)
+
+def require_budgets_enabled() -> None:
+    # Same pattern as groups_routes.require_groups_enabled — reads Settings() fresh so the flag
+    # can be toggled at runtime/in tests without reloading this module.
+    if not Settings().BUDGETS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
 def get_insight_analytics_service(db: Session = Depends(get_db)) -> InsightAnalyticsService:
     return InsightAnalyticsService(db=db)
 
@@ -139,6 +154,7 @@ def get_config():
     return {
         "groups_enabled": settings_now.GROUPS_ENABLED,
         "entity_resolution_enabled": settings_now.ENTITY_RESOLUTION_ENABLED,
+        "budgets_enabled": settings_now.BUDGETS_ENABLED,
     }
 
 
@@ -1107,6 +1123,102 @@ def delete_recurring_template(
 ):
     ok = svc.delete_template(user_id, template_id)
     return {"success": bool(ok)}
+
+
+# ---------------------- Budgets (TS-BUD-101) ---------------------- #
+
+@router.get(
+    "/budgets",
+    response_model=list[BudgetDTO],
+    tags=["Budgets"],
+    summary="List budgets with live spent/committed/remaining/projected/status",
+)
+def list_budgets(
+    scope: str | None = Query(None, description="personal | combined"),
+    period: str | None = Query(None, description="YYYY-MM, defaults to the current month"),
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.list_budgets(user_id, scope=scope, period_str=period)
+
+
+@router.post(
+    "/budgets",
+    response_model=BudgetDTO,
+    tags=["Budgets"],
+    summary="Create a budget, or edit the existing one for the same (scope, category) — FR-2",
+)
+def create_budget(
+    data: CreateBudgetRequest,
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.create_or_update(user_id, data)
+
+
+@router.patch(
+    "/budgets/{budget_id}",
+    response_model=BudgetDTO,
+    tags=["Budgets"],
+    summary="Update a budget's amount/rollover/thresholds/mute",
+)
+def update_budget(
+    budget_id: str,
+    data: UpdateBudgetRequest,
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.update_budget(user_id, budget_id, data)
+
+
+@router.delete(
+    "/budgets/{budget_id}",
+    response_model=dict,
+    tags=["Budgets"],
+    summary="Delete a budget (soft — past-period snapshots are retained, FR-8)",
+)
+def delete_budget(
+    budget_id: str,
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    svc.delete_budget(user_id, budget_id)
+    return {"success": True}
+
+
+@router.get(
+    "/budgets/{budget_id}/breakdown",
+    response_model=BudgetBreakdownResponse,
+    tags=["Budgets"],
+    summary="Contributing transactions for a budget's period — feeds \"Ask why\"",
+)
+def get_budget_breakdown(
+    budget_id: str,
+    period: str | None = Query(None, description="YYYY-MM, defaults to the current month"),
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.get_breakdown(user_id, budget_id, period_str=period)
+
+
+@router.get(
+    "/budgets/suggestions",
+    response_model=list[BudgetSuggestion],
+    tags=["Budgets"],
+    summary="Median-of-last-3-months suggested budget amounts per category",
+)
+def get_budget_suggestions(
+    scope: str = Query("personal", description="personal | combined"),
+    svc: BudgetService = Depends(get_budget_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    return svc.get_suggestions(user_id, scope=scope)
 
 
 # ---------------------- Email ---------------------- #

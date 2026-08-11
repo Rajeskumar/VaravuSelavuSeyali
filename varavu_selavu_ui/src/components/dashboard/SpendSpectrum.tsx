@@ -2,6 +2,9 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { typeScale, tabularNums } from '../../theme';
+import { BudgetDTO } from '../../api/budgets';
+import BudgetProgressBar, { STATUS_LABEL, statusColor } from '../budgets/BudgetProgressBar';
+import { useTheme } from '@mui/material/styles';
 
 interface CategoryTotal {
   category: string;
@@ -11,6 +14,10 @@ interface CategoryTotal {
 interface Props {
   data: CategoryTotal[];
   title?: string;
+  /** Category-target budgets, keyed by category name — a matching row grows a thin budget
+   * progress bar directly underneath it (PRD §6.1: "budgets appear next to the spend they
+   * govern"), instead of the summary card being the only place budgets show up. */
+  budgetsByCategory?: Record<string, BudgetDTO>;
 }
 
 /** Deterministic palette-cycling for arbitrary category names — real data has arbitrary
@@ -31,7 +38,8 @@ function formatMoney(n: number): string {
 /** Ranked category spectrum (Design Spec §4.3): a proportional stacked bar plus
  * ranked rows with amount + percentage, replacing CategoryBreakdownSunburst as
  * the Dashboard's primary category view (TS-DES-103). */
-const SpendSpectrum: React.FC<Props> = ({ data, title = 'WHERE IT WENT' }) => {
+const SpendSpectrum: React.FC<Props> = ({ data, title = 'WHERE IT WENT', budgetsByCategory }) => {
+  const theme = useTheme();
   const ranked = [...data].filter((d) => d.total > 0).sort((a, b) => b.total - a.total);
   const total = ranked.reduce((sum, d) => sum + d.total, 0);
 
@@ -65,20 +73,33 @@ const SpendSpectrum: React.FC<Props> = ({ data, title = 'WHERE IT WENT' }) => {
       </Box>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {ranked.map((c, i) => (
-          <Box key={c.category} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: colorFor(i), flexShrink: 0 }} />
-            <Typography variant="body2" sx={{ flex: 1, color: 'text.primary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {c.category}
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', ...tabularNums }}>
-              {formatMoney(c.total)}
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary', width: 34, textAlign: 'right' }}>
-              {Math.round((c.total / total) * 100)}%
-            </Typography>
-          </Box>
-        ))}
+        {ranked.map((c, i) => {
+          const budget = budgetsByCategory?.[c.category];
+          return (
+            <Box key={c.category}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: colorFor(i), flexShrink: 0 }} />
+                <Typography variant="body2" sx={{ flex: 1, color: 'text.primary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {c.category}
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', ...tabularNums }}>
+                  {formatMoney(c.total)}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', width: 34, textAlign: 'right' }}>
+                  {Math.round((c.total / total) * 100)}%
+                </Typography>
+              </Box>
+              {budget && (
+                <Box sx={{ pl: 2.25, pr: 5.25, mt: 0.5 }}>
+                  <BudgetProgressBar spent={budget.spent} amount={budget.amount} status={budget.status} showLabel={false} />
+                  <Typography variant="caption" sx={{ color: statusColor(theme, budget.status), fontWeight: 600 }}>
+                    Budget: {STATUS_LABEL[budget.status]}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          );
+        })}
       </Box>
     </Box>
   );
