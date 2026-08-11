@@ -70,6 +70,7 @@ export default function BudgetsTabContent() {
   const budgets = data || [];
 
   const [formVisible, setFormVisible] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
 
   const { data: suggestions } = useQuery({
@@ -103,11 +104,13 @@ export default function BudgetsTabContent() {
   });
 
   const openAdd = () => {
+    setEditing(false);
     setForm(emptyForm());
     setFormVisible(true);
   };
 
   const openEdit = (b: BudgetDTO) => {
+    setEditing(true);
     setForm({
       target_type: b.target_type,
       category: b.category || '',
@@ -201,7 +204,7 @@ export default function BudgetsTabContent() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Budget</Text>
+              <Text style={styles.modalTitle}>{editing ? 'Edit Budget' : 'New Budget'}</Text>
               <TouchableOpacity onPress={() => setFormVisible(false)} activeOpacity={0.7}>
                 <Text style={styles.modalClose}>✕</Text>
               </TouchableOpacity>
