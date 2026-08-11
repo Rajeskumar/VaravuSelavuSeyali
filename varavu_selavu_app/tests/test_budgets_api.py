@@ -7,12 +7,15 @@ calculation path), FR-8 soft delete retains history, plus amount validation and 
 import os
 import uuid
 from datetime import date, timedelta
+from unittest.mock import patch
 
 import pytest
 
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.db.models import Group, GroupMember, User
 from varavu_selavu_service.main import app
+from varavu_selavu_service.models.api_models import ResolvedPeriod, ResolvedScope
+from varavu_selavu_service.services.chat_service import ChatResult
 
 TODAY = date.today()
 THIS_MONTH = TODAY.strftime("%m/%d/%Y")
@@ -235,6 +238,37 @@ def test_budgets_endpoints_404_when_disabled(test_client, db_session):
             os.environ["BUDGETS_ENABLED"] = old_val
         else:
             os.environ.pop("BUDGETS_ENABLED", None)
+
+
+@patch("varavu_selavu_service.api.routes.call_chat_model")
+def test_ask_why_grounds_prompt_in_budget_and_transactions(mock_call_chat_model, test_client, db_session):
+    """§5.4 — the ask-why prompt handed to the model must include the budget's own figures and
+    every contributing transaction from get_breakdown, not just a generic pre-filled question."""
+    mock_call_chat_model.return_value = ChatResult(
+        response="You're over Dining out mostly because of one $150 splurge.",
+        resolved_period=ResolvedPeriod(start_date="2023-05-01", end_date="2023-05-31", label="May 2023", source="explicit_param"),
+        resolved_scope=ResolvedScope(kind="personal"),
+    )
+    _add_personal_expense(test_client, "Big splurge", "Dining out", 150.0)
+    budget = test_client.post(
+        "/api/v1/budgets", json={"target_type": "category", "category": "Dining out", "amount": 100.0}
+    ).json()
+
+    res = test_client.post(f"/api/v1/budgets/{budget['id']}/ask-why")
+    assert res.status_code == 200
+    assert res.json()["response"] == "You're over Dining out mostly because of one $150 splurge."
+
+    assert mock_call_chat_model.call_count == 1
+    prompt = mock_call_chat_model.call_args.kwargs["messages"][0]["content"]
+    assert "Dining out" in prompt
+    assert "Big splurge" in prompt
+    assert "$150.00" in prompt
+    assert "exceeded" in prompt
+
+
+def test_ask_why_404_for_missing_budget(test_client, db_session):
+    res = test_client.post("/api/v1/budgets/00000000-0000-0000-0000-000000000000/ask-why")
+    assert res.status_code == 404
 
 
 def test_never_accepts_client_supplied_user_id(test_client, db_session):

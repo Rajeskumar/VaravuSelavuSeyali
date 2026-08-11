@@ -13,9 +13,8 @@ import {
   ActivityIndicator, Switch, Alert,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigation } from '@react-navigation/native';
 import {
-  listBudgets, createBudget, deleteBudget, getBudgetSuggestions,
+  listBudgets, createBudget, deleteBudget, getBudgetSuggestions, getBudgetAskWhy,
   BudgetDTO, BudgetTargetType, BudgetScope,
 } from '../api/budgets';
 import { checkGroupsEnabled } from '../api/groups';
@@ -63,7 +62,6 @@ export default function BudgetsTabContent() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const qc = useQueryClient();
-  const navigation = useNavigation<any>();
 
   const { data: groupsEnabled } = useQuery({ queryKey: ['groupsEnabled'], queryFn: checkGroupsEnabled });
   const { data, isLoading } = useQuery({ queryKey: ['budgets'], queryFn: () => listBudgets() });
@@ -130,12 +128,16 @@ export default function BudgetsTabContent() {
     ]);
   };
 
+  // §5.4 "Ask why" — calls /budgets/{id}/ask-why, which hands the model this budget's own
+  // figures plus every contributing transaction (BudgetService.build_ask_why_prompt) and shows
+  // the grounded explanation inline, rather than deep-linking to the "AI Analyst" chat screen
+  // with a pre-filled question and no transaction context.
+  const [askWhyId, setAskWhyId] = useState<string | null>(null);
+  const askWhyMut = useMutation({ mutationFn: (id: string) => getBudgetAskWhy(id) });
   const askWhy = (b: BudgetDTO) => {
-    const title = b.target_type === 'overall' ? 'Overall' : b.category || 'Budget';
-    const question = b.status === 'exceeded' || b.status === 'over_pace'
-      ? `Why am I over my ${title} budget this month?`
-      : `How is my ${title} budget doing this month?`;
-    navigation.navigate('AI Analyst', { initialQuery: question });
+    if (askWhyMut.isPending) return;
+    setAskWhyId(b.id);
+    askWhyMut.mutate(b.id);
   };
 
   const toggleThreshold = (t: number) => {
@@ -189,10 +191,26 @@ export default function BudgetsTabContent() {
                       ? 'Final for this period'
                       : `Projected ${formatBudgetMoney(b.projected)}${b.committed > 0 ? ` · ${formatBudgetMoney(b.committed)} committed` : ''}`}
                   </Text>
-                  <TouchableOpacity onPress={() => askWhy(b)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={styles.askWhy}>✨ Ask why</Text>
+                  <TouchableOpacity
+                    onPress={() => askWhy(b)}
+                    disabled={askWhyMut.isPending}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.askWhy}>
+                      {askWhyId === b.id && askWhyMut.isPending ? 'Thinking…' : '✨ Ask why'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
+
+                {askWhyId === b.id && (askWhyMut.isSuccess || askWhyMut.isError) && (
+                  <View style={styles.askWhyBox}>
+                    <Text style={askWhyMut.isError ? styles.askWhyErrorText : styles.askWhyText}>
+                      {askWhyMut.isError
+                        ? (askWhyMut.error as Error)?.message || 'Failed to get an explanation.'
+                        : askWhyMut.data?.response}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
@@ -339,6 +357,13 @@ const createStyles = (theme: AppTheme) =>
     },
     footerText: { fontFamily: 'InstrumentSans-Regular', fontSize: 11, color: theme.colors.textTertiary, flex: 1 },
     askWhy: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11.5, color: theme.colors.primary },
+    askWhyBox: {
+      marginTop: 10, paddingTop: 10,
+      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderLight,
+      borderStyle: 'dashed',
+    },
+    askWhyText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.text, lineHeight: 18 },
+    askWhyErrorText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.error },
 
     emptyCard: {
       alignItems: 'center', paddingVertical: 36,

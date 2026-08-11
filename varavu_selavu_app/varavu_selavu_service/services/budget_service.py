@@ -305,6 +305,34 @@ class BudgetService:
             ],
         }
 
+    def build_ask_why_prompt(self, breakdown: Dict[str, Any]) -> str:
+        """§5.4 "Ask why" — embeds the budget's own live figures and every transaction from
+        get_breakdown directly into the prompt, so the model explains the exact numbers the user
+        is looking at instead of re-deriving (or guessing) them via its own tool calls."""
+        budget = breakdown["budget"]
+        title = "Overall" if budget["target_type"] == "overall" else (budget["category"] or "Budget")
+        scope_label = "combined (personal + my group shares)" if budget["scope"] == "combined" else "personal-only"
+        txns = breakdown["transactions"][:40]
+        if txns:
+            txn_lines = "\n".join(
+                f"- {t['date']}: {t['description'] or t['category']} — ${t['cost']:.2f}" for t in txns
+            )
+        else:
+            txn_lines = "(no contributing transactions yet this period)"
+        committed_clause = (
+            f", with ${budget['committed']:.2f} in committed recurring charges still due"
+            if budget["committed"] > 0 else ""
+        )
+        return (
+            f"My \"{title}\" budget for {budget['period_start']} to {budget['period_end']} is "
+            f"${budget['amount']:.2f} ({scope_label} scope). So far I've spent ${budget['spent']:.2f}"
+            f"{committed_clause}, projected to reach ${budget['projected']:.2f} by period end — "
+            f"status: {budget['status']}.\n\n"
+            f"Here are the transactions that count toward it:\n{txn_lines}\n\n"
+            "In 2-4 plain-language sentences, explain why I'm at this status, calling out specific "
+            "transactions or a spending pattern if it's useful. Don't just restate the numbers above."
+        )
+
     def get_suggestions(self, user_id: str, scope: str = "personal") -> List[Dict[str, Any]]:
         # §5.4 — median of the last 3 completed calendar months per category. "Completed" so an
         # in-progress current month (partial data) never skews the suggestion low.

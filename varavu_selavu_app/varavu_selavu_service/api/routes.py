@@ -72,6 +72,7 @@ from varavu_selavu_service.models.api_models import (
     UpdateBudgetRequest,
     BudgetBreakdownResponse,
     BudgetSuggestion,
+    BudgetAskWhyResponse,
 )
 from varavu_selavu_service.services.budget_service import BudgetService
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
@@ -1219,6 +1220,58 @@ def get_budget_suggestions(
     _: None = Depends(require_budgets_enabled),
 ):
     return svc.get_suggestions(user_id, scope=scope)
+
+
+@router.post(
+    "/budgets/{budget_id}/ask-why",
+    response_model=BudgetAskWhyResponse,
+    tags=["Budgets"],
+    summary="AI explanation of a budget's status, grounded in its contributing transactions",
+)
+@limiter.limit("5/minute")
+def budget_ask_why(
+    request: Request,
+    budget_id: str,
+    period: str | None = Query(None, description="YYYY-MM, defaults to the current month"),
+    svc: BudgetService = Depends(get_budget_service),
+    analysis_service: AnalysisService = Depends(get_analysis_service),
+    analytics_service: AnalyticsService = Depends(get_analytics_service),
+    insight_service: InsightAnalyticsService = Depends(get_insight_analytics_service),
+    group_service: GroupService = Depends(get_group_service),
+    balance_service: BalanceService = Depends(get_balance_service),
+    expense_service: ExpenseService = Depends(get_expense_service),
+    group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_budgets_enabled),
+):
+    """§5.4 — hands the model the budget's live figures and every contributing transaction
+    (via BudgetService.get_breakdown/build_ask_why_prompt) instead of just deep-linking to the
+    general chat surface, then reuses the same call_chat_model dispatch /analysis/chat uses."""
+    breakdown = svc.get_breakdown(user_id, budget_id, period_str=period)
+    query_text = svc.build_ask_why_prompt(breakdown)
+    try:
+        result = call_chat_model(
+            messages=[{"role": "user", "content": query_text}],
+            user_id=user_id,
+            analysis_service=analysis_service,
+            analytics_service=analytics_service,
+            insight_service=insight_service,
+            group_service=group_service,
+            balance_service=balance_service,
+            expense_service=expense_service,
+            group_expense_service=group_expense_service,
+            groups_enabled=settings.GROUPS_ENABLED,
+        )
+        return {"response": result.response}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import logging
+        logging.getLogger("varavu_selavu.routes").exception("Budget ask-why failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="The AI analyst is temporarily unavailable. Please try again later."
+        )
 
 
 # ---------------------- Email ---------------------- #

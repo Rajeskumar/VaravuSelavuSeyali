@@ -885,3 +885,10 @@ class BudgetSuggestion(BaseModel):
     suggested_amount: float
     based_on_months: int
 
+
+class BudgetAskWhyResponse(BaseModel):
+    """§5.4 "Ask why" — a plain-language explanation generated from the budget's own live
+    figures plus its contributing transactions (BudgetService.build_ask_why_prompt), reusing
+    the same chat model dispatch as /analysis/chat rather than a second AI integration path."""
+    response: str
+
