@@ -8,7 +8,7 @@ from google.oauth2 import id_token
 from google.auth.transport import requests
 
 from .service import AuthService
-from .cookies import REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
+from .cookies import CSRF_COOKIE, REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from .security import create_access_token, create_refresh_token, auth_required, decode_token
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
@@ -164,8 +164,20 @@ def exchange_session(
 
 
 @router.get("/me")
-def me(user: str = Depends(auth_required)):
-    return {"email": user}
+def me(request: Request, user: str = Depends(auth_required)):
+    """Also echoes the current `vs_csrf` cookie value in the body.
+
+    The frontend and backend are cross-site in prod (`expense.cerebroos.com`
+    vs `*.run.app`), so client JS can never read `vs_csrf` via
+    `document.cookie` — that's scoped to the page's own origin, not the
+    backend's. The browser still attaches the cookie correctly to *requests*
+    (that's a separate, origin-agnostic mechanism), so the server can always
+    read it back off `request.cookies` and hand it to the client here — no
+    new token minted, just relaying the one already in hand. This is how a
+    reloaded page (session already valid, nothing freshly issued by
+    login/refresh) gets a CSRF token to echo on its first mutating request.
+    """
+    return {"email": user, "csrf_token": request.cookies.get(CSRF_COOKIE)}
 
 
 class GoogleLoginRequest(BaseModel):

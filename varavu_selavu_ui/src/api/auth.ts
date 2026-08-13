@@ -1,6 +1,6 @@
 // src/api/auth.ts
 import API_BASE_URL from './apiconfig';
-import { csrfHeader } from './csrf';
+import { csrfHeader, setCsrfToken } from './csrf';
 
 export interface LoginPayload {
   username: string;
@@ -48,7 +48,9 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
     throw new Error('Login failed');
   }
 
-  return response.json();
+  const data: LoginResponse = await response.json();
+  setCsrfToken(data.csrf_token);
+  return data;
 }
 
 // Attempt to help backend map fields correctly by also sending decoded email/name
@@ -89,7 +91,9 @@ export async function loginWithGoogle(id_token: string): Promise<LoginResponse> 
     throw new Error('Google login failed');
   }
 
-  return response.json();
+  const data: LoginResponse = await response.json();
+  setCsrfToken(data.csrf_token);
+  return data;
 }
 
 export async function register(payload: RegisterPayload): Promise<void> {
@@ -128,7 +132,9 @@ export async function refresh(): Promise<LoginResponse> {
   if (!response.ok) {
     throw new Error('Refresh failed');
   }
-  return response.json();
+  const data: LoginResponse = await response.json();
+  setCsrfToken(data.csrf_token);
+  return data;
 }
 
 /** One-time upgrade for sessions predating cookie auth: hands the server the
@@ -143,15 +149,19 @@ export async function exchangeLegacySession(refresh_token: string): Promise<Logi
   if (!response.ok) {
     throw new Error('Session exchange failed');
   }
-  return response.json();
+  const data: LoginResponse = await response.json();
+  setCsrfToken(data.csrf_token);
+  return data;
 }
 
-export async function fetchMe(): Promise<{ email: string }> {
+export async function fetchMe(): Promise<{ email: string; csrf_token?: string }> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, withCookies);
   if (!response.ok) {
     throw new Error('Not authenticated');
   }
-  return response.json();
+  const data: { email: string; csrf_token?: string } = await response.json();
+  setCsrfToken(data.csrf_token);
+  return data;
 }
 
 export interface ForgotPasswordPayload {

@@ -17,6 +17,39 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/${_PROJECT_ID}/varavu-selavu-frontend']
 
+  # Run pending Alembic migrations against the prod DB, using the image just
+  # built/pushed above so the migration set always matches the code about to
+  # be deployed. Runs *before* the deploy steps so new code never queries a
+  # table/column that doesn't exist yet. Fixes the gap that let the `budgets`
+  # feature ship with its table never created in prod: migrations used to be
+  # a manual, undocumented step run by hand against prod from someone's own
+  # machine.
+  #
+  # Delegates to a Cloud Run Job rather than running `alembic` directly in
+  # this Cloud Build step: confirmed by testing directly that Cloud Build's
+  # default worker pool cannot reach the Supabase host over IPv6
+  # ("OperationalError: Cannot assign requested address"). Cloud Run's own
+  # networking — already proven by the backend service itself — doesn't have
+  # that problem, so the migration runs there instead. `migrate-db` is a
+  # standing job resource, re-pointed at the freshly built image and
+  # re-executed on every deploy.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'run-migrations'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        gcloud run jobs deploy migrate-db \
+          --image=gcr.io/${_PROJECT_ID}/varavu-selavu-backend \
+          --region=${_REGION} \
+          --command=bash \
+          --args="-c,cd /app && alembic upgrade head" \
+          --set-secrets=DATABASE_URL=SUPABASE_PG_DB_URL:latest \
+          --service-account=varavu-selavu-seyali@${_PROJECT_ID}.iam.gserviceaccount.com \
+          --max-retries=0
+        gcloud run jobs execute migrate-db --region=${_REGION} --wait
+
   # Deploy backend to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: 'gcloud'

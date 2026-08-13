@@ -1,8 +1,12 @@
-import { CSRF_HEADER, csrfHeader, needsCsrf, readCsrfToken } from './csrf';
+import { CSRF_HEADER, csrfHeader, needsCsrf, readCsrfToken, setCsrfToken } from './csrf';
 
 function setCookie(value: string) {
   Object.defineProperty(document, 'cookie', { value, writable: true, configurable: true });
 }
+
+// The in-memory token is module state — reset it so tests don't leak into
+// each other regardless of order.
+beforeEach(() => setCsrfToken(null));
 
 describe('readCsrfToken', () => {
   it('reads the token when it is the only cookie', () => {
@@ -40,6 +44,34 @@ describe('csrfHeader', () => {
   it('produces nothing when no token exists', () => {
     setCookie('');
     expect(csrfHeader()).toEqual({});
+  });
+});
+
+describe('setCsrfToken (cross-origin fallback)', () => {
+  it('prefers the in-memory token over the cookie', () => {
+    setCookie('vs_csrf=from-cookie');
+    setCsrfToken('from-memory');
+    expect(readCsrfToken()).toBe('from-memory');
+    expect(csrfHeader()).toEqual({ [CSRF_HEADER]: 'from-memory' });
+  });
+
+  it('falls back to the cookie when no in-memory token was ever set (same-origin)', () => {
+    setCookie('vs_csrf=from-cookie');
+    expect(readCsrfToken()).toBe('from-cookie');
+  });
+
+  it('falls back to the cookie when the in-memory token is cleared', () => {
+    setCookie('vs_csrf=from-cookie');
+    setCsrfToken('from-memory');
+    setCsrfToken(null);
+    expect(readCsrfToken()).toBe('from-cookie');
+  });
+
+  it('accepts undefined the same as null (matches an auth response with no csrf_token field)', () => {
+    setCookie('vs_csrf=from-cookie');
+    setCsrfToken('from-memory');
+    setCsrfToken(undefined);
+    expect(readCsrfToken()).toBe('from-cookie');
   });
 });
 

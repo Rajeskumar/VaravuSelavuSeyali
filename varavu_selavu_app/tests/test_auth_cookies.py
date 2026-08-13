@@ -98,6 +98,20 @@ class TestLoginSetsCookies:
         assert res.status_code == 200, res.text
         assert res.json()["email"] == EMAIL
 
+    def test_me_echoes_the_csrf_cookie_in_the_body(self, test_client, registered):
+        """Frontend and backend are cross-site in prod, so client JS can never read
+        `vs_csrf` via document.cookie — that's scoped to the page's own origin, not
+        the backend's. `/me` hands back the value it read off the *request's*
+        cookies (which the browser attaches correctly regardless of origin), so a
+        reloaded page can still get a token to echo on its first mutating request."""
+        _login(test_client)
+        expected = test_client.cookies.get(CSRF_COOKIE)
+        assert expected
+
+        res = test_client.get("/api/v1/auth/me")
+        assert res.status_code == 200, res.text
+        assert res.json()["csrf_token"] == expected
+
 
 class TestBearerFallback:
     """Native clients have no cookie jar and must keep working."""
@@ -110,6 +124,9 @@ class TestBearerFallback:
         res = test_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert res.status_code == 200, res.text
         assert res.json()["email"] == "native@test.com"
+        # No cookie jar on native clients, so nothing to echo — never crashes on
+        # a missing cookie.
+        assert res.json()["csrf_token"] is None
 
     def test_login_still_returns_tokens_in_the_body(self, test_client, registered):
         body = _login(test_client).json()

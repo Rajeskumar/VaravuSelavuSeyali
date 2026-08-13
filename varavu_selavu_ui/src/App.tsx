@@ -31,7 +31,7 @@ import { QuickCaptureProvider, useQuickCapture } from './context/QuickCaptureCon
 import { AskProvider, useAsk } from './context/AskContext';
 import { useQuickLogBar } from './hooks/useQuickLogBar';
 import WillLogPreview from './components/common/WillLogPreview';
-import { logout as apiLogout, exchangeLegacySession } from './api/auth';
+import { logout as apiLogout, exchangeLegacySession, fetchMe } from './api/auth';
 import RecurringPrompt from './components/expenses/RecurringPrompt';
 import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
@@ -102,6 +102,17 @@ const AppContent: React.FC = () => {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('vs_auth_changed', onStorage as EventListener);
     };
+  }, []);
+
+  // Warms the in-memory CSRF token (see api/csrf.ts) for a session that already
+  // existed when the page loaded — login/refresh set it directly from their own
+  // response body, but a plain reload has neither, and `document.cookie` can never
+  // read `vs_csrf` cross-site. Without this, a returning user's *first* mutating
+  // request after a reload (not a fresh login) 403s. Failure is fine to ignore: an
+  // actually-dead session surfaces the normal way, via fetchWithAuth's 401 → logout.
+  React.useEffect(() => {
+    if (!localStorage.getItem('vs_user')) return;
+    fetchMe().catch(() => {});
   }, []);
 
   // Migrates sessions created before tokens moved into HttpOnly cookies: trade the
