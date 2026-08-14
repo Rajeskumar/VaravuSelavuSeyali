@@ -1,6 +1,6 @@
 # TS-SEC-101 — Put the API on the same site as the frontend (retire `SameSite=None`)
 
-**Status:** 🚧 In progress — `trackspense-api.cerebroos.com` domain mapping is live (DNS resolved, cert provisioned); frontend build now points at it; `AUTH_COOKIE_SAMESITE` revert + Safari verification still pending.
+**Status:** ✅ Done (2026-08-14) — `AUTH_COOKIE_SAMESITE=strict` live in prod; verified working on desktop Safari and mobile Safari (the two browsers that were failing).
 **Priority:** P1 → **elevated**: confirmed this isn't just a CSRF defense-in-depth gap, it's a full login failure for every WebKit-based browser (desktop Safari, mobile Safari, and Chrome-for-iOS — Apple mandates WebKit for all iOS browsers, so "Chrome" on an iPhone is WebKit underneath). `SameSite=None` only ever helped Chromium; Safari's ITP blocks cross-site cookie storage unconditionally, independent of `SameSite`.
 **Depends on:** none
 **Related:** [remediation-outcome.md](remediation-outcome.md) §"Before deploying" item 3 (flagged this exact risk pre-launch; the flag was missed, not wrong); [INFRASTRUCTURE.md](../INFRASTRUCTURE.md) §4 for the live DNS/domain-mapping setup
@@ -34,12 +34,12 @@ Originally scoped as path-based routing (`expense.cerebroos.com/api/*` via a Clo
 
 **Mechanism (implemented):** a native GCP Cloud Run **domain mapping** for `trackspense-api.cerebroos.com` → `varavu-selavu-backend`, DNS-only in Cloudflare (must not be proxied — Google's managed-cert issuance needs to see the real `CNAME → ghs.googlehosted.com` record directly). Named `trackspense-api` rather than the initially-used `api` — this GCP project/domain hosts other unrelated apps, and a bare `api.cerebroos.com` would misleadingly imply it's the API for the whole domain rather than just this product. See [INFRASTRUCTURE.md](../INFRASTRUCTURE.md) §4 for the full DNS/mapping mechanics and why it has to stay DNS-only.
 
-**Progress:**
+**Progress — all done:**
 1. ✅ Domain mapping created, DNS added in Cloudflare (grey-cloud/DNS-only), cert provisioned, verified live (`curl https://trackspense-api.cerebroos.com/api/v1/config` → `200`).
-2. ✅ Frontend's `REACT_APP_API_BASE_URL` (`varavu_selavu_ui/.env.production`) now points at `https://trackspense-api.cerebroos.com` instead of the raw `*.run.app` URL; deployed.
-3. ⬜ Flip `AUTH_COOKIE_SAMESITE` back to `strict` (verified safe per the remediation report — the Google OAuth flow POSTs an id_token rather than relying on a top-level redirect, so `Strict` doesn't break it).
-4. ⬜ Verify login on desktop Safari, mobile Safari, and Chrome-for-iOS — the actual browsers/devices that were failing.
-5. ⬜ Update `remediation-outcome.md`'s "Before deploying" §3 to point at this ticket's resolution instead of standing as an open warning.
+2. ✅ Frontend's `REACT_APP_API_BASE_URL` (`varavu_selavu_ui/.env.production`) now points at `https://trackspense-api.cerebroos.com` instead of the raw `*.run.app` URL; deployed and confirmed in the served bundle (zero remaining references to the old `*.run.app` URL).
+3. ✅ `AUTH_COOKIE_SAMESITE` flipped back to `strict` on the backend Cloud Run service.
+4. ✅ Verified on desktop Safari and mobile Safari — both log in and save cleanly, no bounce, no 401/403. (Chrome-for-iOS not separately re-tested, but it shares Safari's WebKit engine and the identical failure mode this fixes, so treated as covered.)
+5. ✅ `remediation-outcome.md`'s "Before deploying" §3 updated to point here instead of standing as an open warning.
 
 `CORS_ALLOW_ORIGINS` is unchanged and stays required — `expense.cerebroos.com` and `trackspense-api.cerebroos.com` are same-site but still different origins, so CORS (not SameSite/ITP) is what governs whether the browser lets the frontend's JS read the response at all. That's the one thing path-based routing would have removed that this doesn't; not worth the extra infrastructure for it alone.
 

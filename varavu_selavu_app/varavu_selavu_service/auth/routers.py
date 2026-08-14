@@ -1,4 +1,6 @@
 import os
+import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
@@ -53,10 +55,32 @@ class ForgotPasswordRequest(BaseModel):
     password: str
 
 
-def _issue_session(response: Response, email: str) -> dict:
-    """Mints a token pair, sets the auth cookies, and returns the body payload."""
+def _issue_session(
+    response: Response,
+    auth: AuthService,
+    email: str,
+    family_id: Optional[uuid.UUID] = None,
+    jti: Optional[uuid.UUID] = None,
+) -> dict:
+    """Mints a token pair, sets the auth cookies, registers the refresh token's rotation
+    state, and returns the body payload.
+
+    `family_id=None` starts a brand-new family (login, Google login, a legacy-session
+    exchange's replacement token) — pass the family_id returned by
+    `AuthService.rotate_refresh_token`/`exchange_legacy_refresh_token` to continue an existing
+    one instead (refresh). `jti` lets a caller that already generated one (to pass into
+    `rotate_refresh_token` for `replaced_by` tracking) reuse it here instead of minting a
+    second, mismatched one.
+    """
     access = create_access_token({"sub": email})
-    refresh = create_refresh_token({"sub": email})
+    new_jti = jti or uuid.uuid4()
+    refresh = create_refresh_token({"sub": email, "jti": str(new_jti)})
+    # Single source of truth for the DB row's expiry: whatever `create_refresh_token` actually
+    # embedded, not a second independent computation that could drift from it.
+    expires_at = datetime.fromtimestamp(decode_token(refresh, "refresh")["exp"], tz=timezone.utc)
+
+    auth.register_refresh_token(new_jti, family_id or uuid.uuid4(), email, expires_at)
+
     csrf_token = set_auth_cookies(response, access, refresh)
     return {
         "access_token": access,
@@ -96,7 +120,7 @@ def login(
 ):
     if not auth.authenticate_user(form_data.username, form_data.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    return _issue_session(response, form_data.username)
+    return _issue_session(response, auth, form_data.username)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -111,17 +135,22 @@ def refresh(
     if not presented:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
-    # Reuse detection: a token that was already exchanged must never work again.
-    if auth.is_refresh_token_revoked(presented):
-        clear_auth_cookies(response)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-
+    # Signature/expiry/type validated first — only a cryptographically genuine refresh token's
+    # jti is ever used as a DB lookup key.
     payload = decode_token(presented, "refresh")
     email = payload.get("sub")
+    old_jti = uuid.UUID(payload["jti"])
+    new_jti = uuid.uuid4()
 
-    # Rotation: the presented token is spent as part of issuing the new pair.
-    auth.revoke_refresh_token(presented)
-    return _issue_session(response, email)
+    # Rotation + reuse detection (with a grace period for legitimate concurrent-tab/device
+    # races): raises 401 and revokes the whole family on genuine reuse. See
+    # AuthService.rotate_refresh_token.
+    try:
+        family_id = auth.rotate_refresh_token(old_jti, new_jti)
+    except HTTPException:
+        clear_auth_cookies(response)
+        raise
+    return _issue_session(response, auth, email, family_id=family_id, jti=new_jti)
 
 
 @router.post("/logout")
@@ -133,7 +162,13 @@ def logout(
 ):
     presented = request.cookies.get(REFRESH_COOKIE) or (data.refresh_token if data else None)
     if presented:
-        auth.revoke_refresh_token(presented)
+        # Best-effort: logout must never itself fail just because the presented token happens
+        # to already be expired/malformed — there's simply nothing left to revoke in that case.
+        try:
+            jti = uuid.UUID(decode_token(presented, "refresh")["jti"])
+            auth.revoke_refresh_token(jti)
+        except HTTPException:
+            pass
     clear_auth_cookies(response)
     return {"success": True}
 
@@ -155,12 +190,17 @@ def exchange_session(
     presented = data.refresh_token if data else None
     if not presented:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-    if auth.is_refresh_token_revoked(presented):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     payload = decode_token(presented, "refresh")
-    auth.revoke_refresh_token(presented)
-    return _issue_session(response, payload.get("sub"))
+    email = payload.get("sub")
+    legacy_jti = uuid.UUID(payload["jti"])
+    legacy_expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
+
+    # Same reuse/grace-period rule as normal rotation, except an unknown jti here is the
+    # *expected* case (predates refresh-token tracking), not a sign of forgery. See
+    # AuthService.exchange_legacy_refresh_token.
+    family_id = auth.exchange_legacy_refresh_token(legacy_jti, email, legacy_expires_at)
+    return _issue_session(response, auth, email, family_id=family_id)
 
 
 @router.get("/me")
@@ -205,7 +245,7 @@ def google_login(
     name = token_info.get("name", email)
     if not auth.get_user(email):
         auth.register_user(name, "", email, "")
-    return _issue_session(response, email)
+    return _issue_session(response, auth, email)
 
 
 class ProfileResponse(BaseModel):

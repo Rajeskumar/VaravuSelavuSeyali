@@ -164,5 +164,58 @@ logging in per test starts returning 429 partway through a run.
    default; only local http development turns it off).
 3. Confirm the API and app are same-site, or switch `AUTH_COOKIE_SAMESITE` to
    `lax` — Strict cookies are not sent cross-site.
+
+   **Hit in prod (2026-08-11):** they weren't same-site (`expense.cerebroos.com`
+   vs the backend's raw `*.run.app` URL), and `Lax` wouldn't have been enough
+   either — the SPA's calls are background `fetch()`, not top-level
+   navigations, which `Lax` also blocks cross-site. Symptom: login succeeded,
+   every following request 401'd (including the refresh retry), client bounced
+   back to `/login`. Interim fix: `AUTH_COOKIE_SAMESITE=none` env var on the
+   backend Cloud Run service — no redeploy needed, took effect immediately.
+
+   **Resolved (2026-08-14):** interim fix also turned out to be insufficient for
+   Safari/WebKit specifically — Intelligent Tracking Prevention blocks
+   cross-site cookie storage outright, independent of `SameSite`, so every
+   WebKit-based browser (desktop Safari, mobile Safari, and Chrome-for-iOS,
+   since Apple mandates WebKit for all iOS browsers) still couldn't log in even
+   with `SameSite=None`. Fixed properly via
+   [TS-SEC-101](TS-SEC-101-same-origin-auth-cookies.md): a `trackspense-api.cerebroos.com`
+   Cloud Run domain mapping puts frontend and backend on the same site (not
+   full path-based same-origin routing — same-site is all `SameSite`/ITP
+   actually require, see the ticket for why the larger load-balancer approach
+   wasn't worth it). `AUTH_COOKIE_SAMESITE` is back to `strict`. Verified on
+   desktop Safari and mobile Safari.
 4. Existing sessions migrate on next load. Watch for a spike in
    `POST /auth/session` followed by it falling to zero, then delete the endpoint.
+
+## Follow-ups
+
+| Ticket | Title | Status |
+|:---|:---|:---|
+| [TS-SEC-101](TS-SEC-101-same-origin-auth-cookies.md) | Same-site auth cookies (retire `AUTH_COOKIE_SAMESITE=none`) | ✅ Done (2026-08-14) |
+| — | [DB-backed refresh-token revocation](#known-gap--refresh-token-revocation-doesnt-scale-past-one-instance) | 🚧 Implemented, not yet deployed (2026-08-14) |
+
+## Known gap — refresh-token revocation doesn't scale past one instance
+
+**Implemented and tested, not yet deployed (2026-08-14).** ⚠️ The code below is complete and passing (32/32 in `test_auth_cookies.py`, full suite 414 passed/4 skipped) but is still sitting uncommitted in the working tree — Cloud Build only deploys what's on `main`, so **production is still running the in-memory set described under "The original finding" below** until this is committed and pushed. Don't treat this section as describing live prod behavior until that lands; check `git log` on `auth/service.py` or `INFRASTRUCTURE.md` §10 for current deploy status.
+
+Moved to a `refresh_tokens` table in Postgres (migration `b2c3d4e5f6a7`), keyed by `jti` with a `family_id` linking every token descended from one login. `AuthService.rotate_refresh_token` now does RFC 9700-style cascading revocation — reuse of an already-rotated token revokes the *entire family*, not just the reused token (verified: a second, never-itself-reused token from the same family is confirmed dead too, `test_reuse_outside_grace_period_revokes_the_whole_family_not_just_the_reused_token`) — closing the "reuse detection doesn't fire across instances" and "logout doesn't revoke a second tab" gaps below. Also added a 1-minute grace period on reuse (`GRACE_PERIOD`) so a legitimate concurrent-tab/device refresh race isn't treated as theft; a token revoked by explicit logout or an already-caught reuse is exempt from that leniency (`revoked_reason`, checked family-wide via `_family_hard_killed`, not just on the presented row) and stays dead immediately. Rollout was zero-downtime: an in-flight, not-yet-rotated refresh token is unaffected by switching where revocation state lives, since it was never revoked in either the old set or the new (empty) table.
+
+The original finding, for context:
+
+`auth/service.py` tracks spent/revoked refresh tokens in a plain module-level `set()`:
+
+```python
+_REVOKED_REFRESH_TOKENS: set[str] = set()
+```
+
+Every `/auth/refresh` call checks this set for **reuse detection** (a token already spent must never work again), then adds the presented token to it as part of **rotation** (issuing a fresh pair). `/auth/logout` adds the token too. The design — rotate on every use, detect reuse as a signal of theft — is the right pattern. The problem is entirely about *where* that state lives: in-process memory, not something shared across instances or durable across restarts. The backend runs `min-instances: 1, max-instances: 20` — this gap gets **more** consequential, not less, as traffic grows and Cloud Run actually uses that headroom.
+
+**What breaks for a real user, concretely, as instance count goes up:**
+
+- **Multi-tab / multi-device races → occasional surprise logouts.** Two tabs (or web + a second device) sharing a session can each trigger a refresh around the same moment. If both land on the *same* instance, the second one correctly gets rejected as reuse — expected, if a little abrupt. If they land on *different* instances (increasingly likely as instance count grows with load), the instance that never saw the rotation still thinks the presented token is valid, happily issues a second new pair, and now two "latest" refresh tokens are in flight with only one winning the shared cookie jar. Best case, mildly confusing; worst case, the losing tab's session state ends up inconsistent. This is the one that actually inconveniences legitimate users, and its frequency scales directly with concurrent instance count.
+- **Reuse detection silently doesn't fire across instances.** If a stolen refresh token gets used by an attacker and then the real client also tries to use it, whichever one hits an instance that already saw the other's rotation gets correctly blocked — but the one that lands on a *different*, unaware instance sails through. Reuse detection is real, but only reliably enforced per-instance, not per-token-globally. Not a user-facing blocker, but it quietly weakens the actual security property this mechanism exists for.
+- **Every deploy/restart wipes all revocation state.** Since our new Cloud Build pipeline (see `INFRASTRUCTURE.md` §6) deploys automatically on every push to `main`, this now happens *more* often than before, not less. A token that was explicitly revoked (rotated away, or a user hit "logout") five minutes before a deploy is, on the fresh instance, indistinguishable from a token that was never revoked at all — it'll be accepted again until it naturally expires (refresh tokens live 7 days). Not a blocker for legitimate users; a real exposure window for anyone whose token was compromised right before a deploy.
+- **Unbounded memory growth, low urgency.** Nothing ever prunes this set — nothing removes an entry once a token naturally expires. On a long-lived instance (`min-instances: 1` means one can, in principle, run for a long time between forced recycles) this grows monotonically with every login/refresh/logout it personally handles. Back-of-envelope: at ~250 bytes/token and the 512Mi memory limit, that's on the order of a couple million entries before it's a real problem — plausible only under sustained heavy traffic on an instance that goes an unusually long time without being recycled. Deploys ironically "fix" this by wiping the leak along with the (desired) revocation data. Lowest-urgency item here, but a genuine unbounded-growth structure, worth knowing about.
+
+**None of this was a hard outage-level blocker** — at the traffic level this was found at it mostly would have manifested as the rare double-tab logout. It would have gotten steadily worse, not better, as concurrent users and instance count grew, which is why it was fixed proactively rather than waiting for it to actually hurt. Every failure mode above is eliminated the same way: `_REVOKED_REFRESH_TOKENS` moved out of process memory into shared, durable storage (Postgres, already a dependency — no Redis/Memorystore needed, consistent with how the migration-job fix earlier in this project preferred "use what's already there" over standing up something new). One thing intentionally *not* done: expired-row cleanup is not yet automated (the table will grow indefinitely, just no longer unbounded-per-process — it's bounded by actual token volume, which is a very different risk profile). Worth a periodic `DELETE WHERE expires_at < now()` at some point, not urgent.

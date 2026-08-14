@@ -91,8 +91,8 @@ const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({ mainCategory,
             key={sub}
             selected={pickerMain === resolvedMain && sub === subcategory}
             onClick={() => {
-              onChange(pickerMain, sub);
               setAnchor(null);
+              onChange(pickerMain, sub);
             }}
           >
             {sub}

@@ -67,8 +67,13 @@ def create_refresh_token(data: dict, expires_minutes: Optional[int] = None) -> s
     # `jti` makes every refresh token unique. Without it the payload is a pure
     # function of (sub, exp), so two logins in the same second mint an identical
     # token and revoking one silently revokes the other — which breaks both
-    # rotation and reuse detection.
-    return create_token({**data, "jti": str(uuid.uuid4())}, expires, "refresh")
+    # rotation and reuse detection. Callers that need to know the jti ahead of
+    # time (to register it in the refresh_tokens table under a specific rotation
+    # family before the token itself exists) can pass one in via `data["jti"]`;
+    # otherwise one is generated here as before.
+    payload = {**data}
+    payload.setdefault("jti", str(uuid.uuid4()))
+    return create_token(payload, expires, "refresh")
 
 
 def decode_token(token: str, token_type: str) -> dict:

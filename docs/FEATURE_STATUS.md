@@ -8,6 +8,8 @@
 >
 > **Updated 2026-07-14 (web only):** Quick Capture is now the single, shared fast-entry surface across mobile and desktop (`QuickCaptureContext`, header type-to-log bar, "+ New expense"), the dashboard hero gained a "Net with people" figure + lens toggle on both breakpoints, and Analysis gained an "include group shares" toggle — see §7 below. Separately, the AI Analyst chat agent (§3) can now **create** personal and group expenses, not just answer questions — new `create_expense`/`create_group_expense` LangGraph tools, with merchant-name capture and natural-language payer resolution (`paid_by`) for group expenses. Update/delete chat actions remain out of scope (create-only, by design — see §3). Mobile parity for this round was not done.
 >
+> **Updated 2026-08-14:** Budgets shipped a full MVP (backend + web + mobile, feature-flagged) since the last pass — this table previously described it as an unbuilt `localStorage` stub in §4; that was stale. See new §6a for current status and known gaps.
+>
 > **Status key:** ✅ Built · 🚧 Partial (some requirements met, real gaps remain) · ❌ Not built
 
 ---
@@ -85,7 +87,6 @@ That file already tracks launch-blocker checklist items with `[x]`/`[ ]`. Verifi
 
 **Still open and worth prioritizing (unchanged, still real gaps):**
 - No automated IDOR test (a user can't currently be *proven* unable to read another user's data — the auth logic looks correct, but nothing tests it)
-- Budgets: only a `localStorage`-backed dashboard card stub exists (`BudgetVsActualCard.tsx`) — no real backend, no full screen
 - Savings goals: zero implementation
 - Bank sync / Plaid: zero implementation (roadmap item, not urgent)
 - Reviewer demo account for app store review: no seed script exists (a throwaway account was created ad hoc during a recent session for screenshots — `demo@trackspense.app` — but that's not a documented, reproducible seed process)
@@ -137,6 +138,24 @@ Phase 1 ("Split the Bill" MVP) above is fully built. Phase 2 ("Parity & Differen
 | [TS-GRP-122 — Archive & Restore Groups](features/tickets/TS-GRP-122-archive-restore-groups.md) | ✅ Built | Added `archived_at` and `deleted_at` timestamps with Alembic migration. Implemented backend lifecycle endpoints and frontend Web/Mobile Segmented Tabs for active/archived separation, plus "Danger Zone" controls. |
 
 See [`features/tickets/README.md`](features/tickets/README.md) for the full Phase 2/3 ticket table, suggested build order, and dependency graph. Remaining tickets are 📋 **Planned**.
+
+---
+
+## 6a. Budgets & Spending Limits
+
+Full MVP per [`features/budgeting/trackspense-budgets-prd.md`](features/budgeting/trackspense-budgets-prd.md) — shipped on backend and both clients since this table's last verification pass, superseding the earlier "stub" note in §4.
+
+| Area | Status | Notes |
+|:---|:---|:---|
+| Backend API | ✅ Built | `POST/GET/PATCH/DELETE /budgets`, `/budgets/{id}/breakdown`, `/budgets/suggestions`, `/budgets/{id}/ask-why` (`api/routes.py`), full service layer (`services/budget_service.py`), Alembic migration `a1b2c3d4e5f6_add_budgets.py`. |
+| Web | ✅ Built | `BudgetsTab.tsx` (4th sub-tab on Analysis), `BudgetCard.tsx`, `BudgetProgressBar.tsx`, dashboard `BudgetsSummaryCard.tsx`, `useBudgetsEnabled.ts` reading the live `/config` flag. |
+| Mobile | ✅ Built | `BudgetsTabContent.tsx`, `BudgetProgressBar.tsx`, `BudgetsSummaryCard.tsx`, `useBudgetsEnabled.ts` — full parity with web, not a stub. |
+| Feature flag | ✅ Built | Gated behind `BUDGETS_ENABLED` (defaults `true` in code; no explicit override in the live Cloud Run env, so prod runs on the code default). |
+| Backend tests | ✅ Built | 16 tests (`tests/test_budgets_api.py`) — amount bounds, category-required, dedup-on-create, combined scope, soft delete, breakdown, exceeded status, suggestions, flag-off 404, ask-why grounding, and an explicit IDOR-style "never accepts client-supplied user_id" test. |
+
+**Known gaps (not launch-blocking):**
+- `alert_thresholds: List[int]` has no bounds validation (no `ge=0`/`le=100` per element, no max list length) — accepted and stored as-is.
+- Zero dedicated frontend test coverage on either client (no `BudgetsTab.test.tsx` / `BudgetsTabContent.test.*` anywhere), despite solid backend coverage and non-trivial UI components.
 
 ---
 

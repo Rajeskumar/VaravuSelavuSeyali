@@ -5,13 +5,29 @@ so the real cookie/header resolution runs.
 """
 
 import uuid
+from datetime import timedelta
 
 import pytest
 
 from varavu_selavu_service.auth.cookies import ACCESS_COOKIE, CSRF_COOKIE, CSRF_HEADER, REFRESH_COOKIE
 from varavu_selavu_service.auth.security import auth_required, create_access_token
-from varavu_selavu_service.db.models import User
+from varavu_selavu_service.auth.service import GRACE_PERIOD
+from varavu_selavu_service.db.models import RefreshToken, User
 from varavu_selavu_service.main import app
+
+
+def _backdate_latest_revocation(db_session, email: str, by: timedelta) -> None:
+    """Pushes the most-recently-revoked refresh_tokens row for `email` further into the
+    past, to test grace-period-boundary behavior without a real sleep in the test."""
+    row = (
+        db_session.query(RefreshToken)
+        .filter(RefreshToken.user_email == email, RefreshToken.revoked_at.isnot(None))
+        .order_by(RefreshToken.issued_at.desc())
+        .first()
+    )
+    assert row is not None, "expected a revoked refresh_tokens row to backdate"
+    row.revoked_at = row.revoked_at - by
+    db_session.commit()
 
 PASSWORD = "correct-horse-battery"
 EMAIL = "cookie@test.com"
@@ -195,9 +211,11 @@ class TestRefreshRotation:
         assert rotated.status_code == 200
         assert rotated.json()["refresh_token"] != first_refresh
 
-    def test_reusing_a_spent_refresh_token_is_rejected(self, test_client, registered):
-        """Native-client flow: the token travels in the body, with no cookie jar
-        to supply a fresher one."""
+    def test_reusing_a_spent_refresh_token_within_grace_period_is_allowed(self, test_client, registered):
+        """A short grace period on reuse absorbs legitimate concurrent-refresh races (two
+        tabs, or web + a second device, both refreshing within the same window) instead of
+        treating every one as theft — see AuthService.rotate_refresh_token. Native-client
+        flow: the token travels in the body, with no cookie jar to supply a fresher one."""
         original = _login(test_client).json()["refresh_token"]
         test_client.cookies.clear()
 
@@ -206,7 +224,66 @@ class TestRefreshRotation:
         test_client.cookies.clear()
 
         replayed = test_client.post("/api/v1/auth/refresh", json={"refresh_token": original})
+        assert replayed.status_code == 200, replayed.text
+
+    def test_both_sides_of_a_within_grace_race_end_up_independently_usable(self, test_client, registered):
+        """The actual point of the grace period: two tabs racing on the same stale token both
+        walk away with a session that keeps working, rather than one of them getting logged
+        out for no reason the user could see."""
+        original = _login(test_client).json()["refresh_token"]
+        test_client.cookies.clear()
+
+        tab_a = test_client.post("/api/v1/auth/refresh", json={"refresh_token": original}).json()["refresh_token"]
+        test_client.cookies.clear()
+        tab_b = test_client.post("/api/v1/auth/refresh", json={"refresh_token": original}).json()["refresh_token"]
+        test_client.cookies.clear()
+
+        assert tab_a != tab_b, "each side of the race should get its own distinct descendant token"
+        assert test_client.post("/api/v1/auth/refresh", json={"refresh_token": tab_a}).status_code == 200
+        test_client.cookies.clear()
+        assert test_client.post("/api/v1/auth/refresh", json={"refresh_token": tab_b}).status_code == 200
+
+    def test_reusing_a_spent_refresh_token_outside_grace_period_is_rejected(
+        self, test_client, db_session, registered
+    ):
+        """Past the grace window, reuse of an already-rotated token is what it looks like —
+        the legitimate client already moved on, so revoke the whole family."""
+        original = _login(test_client).json()["refresh_token"]
+        test_client.cookies.clear()
+
+        first = test_client.post("/api/v1/auth/refresh", json={"refresh_token": original})
+        assert first.status_code == 200, first.text
+        test_client.cookies.clear()
+
+        _backdate_latest_revocation(db_session, EMAIL, by=GRACE_PERIOD + timedelta(seconds=1))
+
+        replayed = test_client.post("/api/v1/auth/refresh", json={"refresh_token": original})
         assert replayed.status_code == 401
+
+    def test_reuse_outside_grace_period_revokes_the_whole_family_not_just_the_reused_token(
+        self, test_client, db_session, registered
+    ):
+        """RFC 9700-style cascading revocation: detecting reuse of an old token must kill every
+        token descended from that login, including ones that were never themselves reused —
+        otherwise an attacker's legitimate-looking current token survives the "detection"."""
+        original = _login(test_client).json()["refresh_token"]
+        test_client.cookies.clear()
+
+        current = test_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": original}
+        ).json()["refresh_token"]
+        test_client.cookies.clear()
+
+        _backdate_latest_revocation(db_session, EMAIL, by=GRACE_PERIOD + timedelta(seconds=1))
+
+        # Triggers reuse detection on the old token — should revoke the entire family.
+        reuse = test_client.post("/api/v1/auth/refresh", json={"refresh_token": original})
+        assert reuse.status_code == 401
+        test_client.cookies.clear()
+
+        # The *other*, never-itself-reused, currently-valid token must be dead too.
+        also_dead = test_client.post("/api/v1/auth/refresh", json={"refresh_token": current})
+        assert also_dead.status_code == 401
 
     def test_refresh_without_any_token_is_rejected(self, test_client, db_session, real_auth):
         res = test_client.post("/api/v1/auth/refresh")
@@ -238,11 +315,23 @@ class TestLegacySessionExchange:
         assert res.status_code == 200, res.text
         assert ACCESS_COOKIE in {c.name for c in res.cookies.jar}
 
-    def test_exchange_is_single_use(self, test_client, registered):
+    def test_exchange_reuse_within_grace_period_is_allowed(self, test_client, registered):
+        """Same grace-period leniency as ordinary rotation — see
+        AuthService.exchange_legacy_refresh_token."""
         legacy_refresh = _login(test_client).json()["refresh_token"]
         test_client.cookies.clear()
 
         assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 200
+        assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 200
+
+    def test_exchange_reuse_outside_grace_period_is_rejected(self, test_client, db_session, registered):
+        legacy_refresh = _login(test_client).json()["refresh_token"]
+        test_client.cookies.clear()
+
+        assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 200
+
+        _backdate_latest_revocation(db_session, EMAIL, by=GRACE_PERIOD + timedelta(seconds=1))
+
         assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 401
 
 

@@ -794,11 +794,11 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                     key={sub}
                     selected={pickerMain === mainCategory && sub === subcategory}
                     onClick={() => {
+                      setCategoryMenuAnchor(null);
                       setMainCategory(pickerMain);
                       setSubcategory(sub);
                       setUserPickedCategory(true);
                       if (draft) setDraft({ ...draft, header: { ...draft.header, main_category_name: pickerMain, category_name: sub } });
-                      setCategoryMenuAnchor(null);
                     }}
                   >
                     {sub}

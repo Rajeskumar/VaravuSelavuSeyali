@@ -1,11 +1,27 @@
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import uuid
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from varavu_selavu_service.db.models import User, Expense, GroupMember
+from varavu_selavu_service.db.models import User, Expense, GroupMember, RefreshToken
 from .security import hash_password, verify_password
 
-_REVOKED_REFRESH_TOKENS: set[str] = set()
+# How long an already-rotated refresh token is still honored as a legitimate
+# concurrent-request race (two tabs/devices refreshing within the same window)
+# rather than treated as reuse/theft. Chosen short enough that a real attacker
+# replaying a stolen-and-already-rotated token essentially never lands inside
+# it, long enough to absorb real-world race conditions across instances.
+GRACE_PERIOD = timedelta(minutes=1)
+
+
+def _aware(dt: datetime) -> datetime:
+    """Normalizes a datetime read back from the DB to timezone-aware UTC.
+    Postgres (`timestamptz`) round-trips as aware; SQLite (used by the test
+    suite) round-trips as naive — this makes comparisons against
+    `datetime.now(timezone.utc)` safe under both, matching the existing
+    pattern in GroupService.accept_invite."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
 class AuthService:
@@ -129,8 +145,130 @@ class AuthService:
             self.db.rollback()
             return False
 
-    def revoke_refresh_token(self, token: str) -> None:
-        _REVOKED_REFRESH_TOKENS.add(token)
+    def register_refresh_token(
+        self, jti: uuid.UUID, family_id: uuid.UUID, user_email: str, expires_at: datetime
+    ) -> None:
+        """Records a freshly-minted refresh token — either the first of a new family (login)
+        or a rotation's successor (refresh), depending on whether `family_id` is newly
+        generated or carried over by the caller."""
+        self.db.add(RefreshToken(
+            jti=jti, family_id=family_id, user_email=user_email, expires_at=expires_at,
+        ))
+        self.db.commit()
 
-    def is_refresh_token_revoked(self, token: str) -> bool:
-        return token in _REVOKED_REFRESH_TOKENS
+    # revoked_reason values that mean "this entire family is intentionally/permanently over,"
+    # as opposed to "this one token was superseded by ordinary rotation churn." Any row in a
+    # family carrying one of these means *no* token from that family gets grace-period
+    # leniency anymore, even a different row whose own revoked_reason is still "rotated" —
+    # logout (or an already-caught reuse) kills the whole session tree, not just whichever
+    # token happened to be presented at that moment.
+    _HARD_KILL_REASONS = {"logout", "reuse_detected"}
+
+    def _family_hard_killed(self, family_id: uuid.UUID) -> bool:
+        return self.db.query(RefreshToken).filter(
+            RefreshToken.family_id == family_id,
+            RefreshToken.revoked_reason.in_(self._HARD_KILL_REASONS),
+        ).first() is not None
+
+    def _is_reuse_within_grace(self, row: "RefreshToken", now: datetime) -> bool:
+        return now - _aware(row.revoked_at) <= GRACE_PERIOD
+
+    def rotate_refresh_token(self, jti: uuid.UUID, new_jti: uuid.UUID) -> uuid.UUID:
+        """Validates the presented refresh token's `jti` and retires it as part of rotation.
+        Returns the family_id the caller should register `new_jti` under.
+
+        Raises 401 if the token is unknown or expired. Raises 401 (and revokes the *entire*
+        family — RFC 9700-style cascading revocation) if it was already rotated and is being
+        presented again outside GRACE_PERIOD, since that's a strong signal of theft: the
+        legitimate client already moved on, so this presenter has a copy they shouldn't. A
+        reuse *within* GRACE_PERIOD is treated as a benign concurrent-refresh race (two tabs,
+        or web + a second device, both refreshing within the same window) rather than an
+        attack, and is allowed through to mint another descendant in the same family — but
+        only if that's what the prior revocation actually was (`revoked_reason` "rotated"); a
+        token revoked by explicit logout or a previously-caught reuse is dead immediately and
+        permanently, regardless of timing.
+        """
+        invalid = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+        row = self.db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+        if row is None:
+            raise invalid
+
+        now = datetime.now(timezone.utc)
+        if _aware(row.expires_at) < now:
+            raise invalid
+
+        if row.revoked_at is not None:
+            if self._family_hard_killed(row.family_id) or not self._is_reuse_within_grace(row, now):
+                self.revoke_family(row.family_id, reason="reuse_detected")
+                raise invalid
+            # Within the grace window, and this family has never been logged out or already
+            # caught reusing a token — not an error, fall through and register another
+            # descendant of this same family.
+        else:
+            row.revoked_at = now
+            row.revoked_reason = "rotated"
+            row.replaced_by = new_jti
+            self.db.commit()
+
+        return row.family_id
+
+    def exchange_legacy_refresh_token(self, jti: uuid.UUID, user_email: str, expires_at: datetime) -> uuid.UUID:
+        """One-time upgrade path for sessions that predate this table (P0-1 migration): unlike
+        `rotate_refresh_token`, an unknown `jti` here is the *expected* case — the token was
+        minted before refresh-token tracking existed, not a sign of forgery (its signature
+        already proved authenticity via `decode_token` before this is called). Registers the
+        legacy token as pre-spent (it authorizes exactly one exchange) and starts a fresh
+        family for the cookie-based session that replaces it. A second exchange attempt with
+        the same legacy token follows the identical reuse/grace-period rule as normal rotation.
+
+        A `jti` that turns out to *already* be tracked (e.g. a client calling this endpoint
+        with a token straight from `/login`, not an actually-legacy one — not a real-world
+        path, but not forbidden either) is handled too: if it was never used, it's simply spent
+        under its existing family, same as any other one-time exchange; if it was already used,
+        the normal reuse/grace-period rule applies.
+        """
+        invalid = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        now = datetime.now(timezone.utc)
+
+        row = self.db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+        if row is not None:
+            if row.revoked_at is None:
+                row.revoked_at = now
+                row.revoked_reason = "exchanged"
+                self.db.commit()
+                return row.family_id
+            if self._family_hard_killed(row.family_id) or not self._is_reuse_within_grace(row, now):
+                self.revoke_family(row.family_id, reason="reuse_detected")
+                raise invalid
+            return row.family_id
+
+        # Genuinely unknown — the expected case for a real pre-migration token: mint a new
+        # family, and record this token as already-exchanged (it authorizes exactly one
+        # exchange, never rotates further under its own jti).
+        family_id = uuid.uuid4()
+        self.db.add(RefreshToken(
+            jti=jti, family_id=family_id, user_email=user_email,
+            expires_at=expires_at, revoked_at=now, revoked_reason="exchanged",
+        ))
+        self.db.commit()
+        return family_id
+
+    def revoke_family(self, family_id: uuid.UUID, reason: str = "logout") -> None:
+        self.db.query(RefreshToken).filter(
+            RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None)
+        ).update(
+            {"revoked_at": datetime.now(timezone.utc), "revoked_reason": reason},
+            synchronize_session=False,
+        )
+        self.db.commit()
+
+    def revoke_refresh_token(self, jti: uuid.UUID) -> None:
+        """Explicit logout — revokes the presented token's *entire family*, not just the one
+        token, so a second tab/device's already-rotated descendant doesn't stay silently valid
+        after the user explicitly logged out. Not grace-period-eligible: `revoked_reason`
+        "logout" means any further presentation of a token from this family is rejected
+        immediately, on purpose — the user asked for the session to be over."""
+        row = self.db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+        if row is not None:
+            self.revoke_family(row.family_id, reason="logout")

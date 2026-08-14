@@ -446,3 +446,33 @@ class BudgetPeriodSnapshot(Base):
     status = Column(String(20), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+
+class RefreshToken(Base):
+    """Refresh-token rotation state, replacing the process-local in-memory set that couldn't
+    span the backend's multiple Cloud Run instances or survive a restart (remediation-outcome.md
+    "Known gap — refresh-token revocation doesn't scale past one instance").
+
+    `family_id` is constant across every token descending from one login. Reuse of an
+    already-rotated (`revoked_at` set) token outside GRACE_PERIOD is treated as theft and
+    revokes the whole family (RFC 9700-style cascading revocation — AuthService.rotate_refresh_token).
+    Reuse *within* GRACE_PERIOD is treated as a legitimate concurrent-tab/device refresh race,
+    not an attack, and is allowed to mint another descendant in the same family instead of
+    logging the user out."""
+    __tablename__ = "refresh_tokens"
+    __table_args__ = {"schema": "trackspense"}
+
+    jti = Column(UUID(as_uuid=True), primary_key=True)
+    family_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    issued_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    # "rotated" | "exchanged" | "logout" | "reuse_detected" — only "rotated"/"exchanged" get
+    # the grace-period leniency in AuthService.rotate_refresh_token/exchange_legacy_refresh_token;
+    # a token revoked by explicit logout or because reuse was already caught must stay dead
+    # immediately and permanently, not for another GRACE_PERIOD.
+    revoked_reason = Column(String(20), nullable=True)
+    # Informational only (not read by any revocation/reuse logic) — which token superseded
+    # this one, for tracing a session's lineage during troubleshooting.
+    replaced_by = Column(UUID(as_uuid=True), nullable=True)
+
