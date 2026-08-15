@@ -1,11 +1,19 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import hashlib
+import secrets
 import uuid
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from varavu_selavu_service.db.models import User, Expense, GroupMember, RefreshToken
+from varavu_selavu_service.db.models import User, Expense, GroupMember, RefreshToken, EmailToken
 from .security import hash_password, verify_password
+
+# Verification links are low-stakes (a stale one just means "request a new one"), so a
+# generous window avoids nagging a user who doesn't check email same-day. Reset links
+# authorize an account takeover if intercepted, so they get a much tighter window.
+EMAIL_VERIFY_TOKEN_TTL = timedelta(days=3)
+PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
 
 # How long an already-rotated refresh token is still honored as a legitimate
 # concurrent-request race (two tabs/devices refreshing within the same window)
@@ -45,7 +53,7 @@ class AuthService:
             }
         return None
 
-    def register_user(self, name: str, phone: str, email: str, password: str) -> bool:
+    def register_user(self, name: str, phone: Optional[str], email: str, password: str) -> bool:
         if self.get_user(email):
             return False
         hashed = hash_password(password)
@@ -83,11 +91,73 @@ class AuthService:
         user = self.db.query(User).filter(User.email == email).first()
         if not user:
             return False
-            
+
         hashed = hash_password(password)
         user.password_hash = hashed
         self.db.commit()
         return True
+
+    def is_email_verified(self, email: str) -> bool:
+        user = self.db.query(User).filter(User.email == email).first()
+        return bool(user and user.email_verified)
+
+    def mark_email_verified(self, email: str) -> None:
+        user = self.db.query(User).filter(User.email == email).first()
+        if user:
+            user.email_verified = True
+            self.db.commit()
+
+    @staticmethod
+    def _hash_token(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+    def create_email_token(self, user_email: str, purpose: str, ttl: timedelta) -> str:
+        """Mints a one-time token for the given purpose ("verify_email" or "reset_password")
+        and returns the *raw* token — only its hash is persisted. The raw value goes straight
+        into an emailed URL and is never stored or logged anywhere else."""
+        token = secrets.token_urlsafe(32)
+        self.db.add(EmailToken(
+            id=uuid.uuid4(),
+            user_email=user_email,
+            token_hash=self._hash_token(token),
+            purpose=purpose,
+            expires_at=datetime.now(timezone.utc) + ttl,
+        ))
+        self.db.commit()
+        return token
+
+    def redeem_email_token(self, token: str, purpose: str) -> Optional[str]:
+        """Validates and single-use-consumes a token, returning the associated user's email
+        on success or None if it's unknown, expired, already used, or minted for a different
+        purpose (a verify-email link can never double as a password-reset link)."""
+        row = self.db.query(EmailToken).filter(EmailToken.token_hash == self._hash_token(token)).first()
+        if row is None or row.purpose != purpose:
+            return None
+        if row.used_at is not None:
+            return None
+        if _aware(row.expires_at) < datetime.now(timezone.utc):
+            return None
+        row.used_at = datetime.now(timezone.utc)
+        self.db.commit()
+        return row.user_email
+
+    def revoke_all_sessions_for_user(self, user_email: str, reason: str = "password_reset") -> None:
+        """Ends every active session for a user — called after a password reset so a stolen
+        password (the presumed reason for the reset) can't keep a session alive under the old
+        credentials. Mirrors `revoke_family`'s per-row update but fans out across every family
+        the user has, not just one."""
+        family_ids = (
+            self.db.query(RefreshToken.family_id)
+            .filter(RefreshToken.user_email == user_email, RefreshToken.revoked_at.is_(None))
+            .distinct()
+            .all()
+        )
+        now = datetime.now(timezone.utc)
+        for (family_id,) in family_ids:
+            self.db.query(RefreshToken).filter(
+                RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None)
+            ).update({"revoked_at": now, "revoked_reason": reason}, synchronize_session=False)
+        self.db.commit()
 
     def update_profile(
         self,
@@ -162,7 +232,7 @@ class AuthService:
     # leniency anymore, even a different row whose own revoked_reason is still "rotated" —
     # logout (or an already-caught reuse) kills the whole session tree, not just whichever
     # token happened to be presented at that moment.
-    _HARD_KILL_REASONS = {"logout", "reuse_detected"}
+    _HARD_KILL_REASONS = {"logout", "reuse_detected", "password_reset"}
 
     def _family_hard_killed(self, family_id: uuid.UUID) -> bool:
         return self.db.query(RefreshToken).filter(

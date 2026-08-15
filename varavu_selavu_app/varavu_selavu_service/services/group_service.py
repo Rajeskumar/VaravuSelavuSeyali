@@ -114,6 +114,7 @@ class GroupService:
             "group_id": str(group.id),
             "name": group.name,
             "group_type": group.group_type,
+            "currency": group.currency,
             "member_count": member_count,
             "my_balance": float(BalanceService(self.db).member_net(group.id, member_id)),
             "status": group.status,

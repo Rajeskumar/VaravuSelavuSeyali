@@ -10,6 +10,7 @@ import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { useTheme } from '@mui/material/styles';
 import { MemberDTO, PayerSummaryItem } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
+import { formatMoney, currencySymbol } from '../../utils/money';
 
 interface PayerPickerProps {
   amount: number;
@@ -17,6 +18,7 @@ interface PayerPickerProps {
   payers: PayerSummaryItem[];
   onChange: (payers: PayerSummaryItem[]) => void;
   onValidityChange?: (valid: boolean) => void;
+  currency?: string;
 }
 
 const TOLERANCE = 0.01;
@@ -44,6 +46,7 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
   payers,
   onChange,
   onValidityChange,
+  currency = 'USD',
 }) => {
   const theme = useTheme();
   const [mode, setMode] = React.useState<'single' | 'multiple'>(payers.length > 1 ? 'multiple' : 'single');
@@ -176,7 +179,7 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
                   sx={{ width: 120 }}
                   inputProps={{ 'aria-label': `Amount paid by ${m.display_name}` }}
                   InputProps={{
-                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                    startAdornment: <InputAdornment position="start">{currencySymbol(currency)}</InputAdornment>,
                   }}
                 />
               )}
@@ -187,7 +190,7 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
 
       {!isValid && (
         <Typography color="error" variant="body2" sx={{ mt: 1 }}>
-          Amounts paid must equal total expense (${amount.toFixed(2)}). Currently: ${totalEntered.toFixed(2)}.
+          Amounts paid must equal total expense ({formatMoney(amount, currency)}). Currently: {formatMoney(totalEntered, currency)}.
         </Typography>
       )}
       {isValid && (

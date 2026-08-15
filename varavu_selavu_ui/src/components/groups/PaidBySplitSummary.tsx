@@ -13,11 +13,13 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { MemberDTO, PayerSummaryItem } from '../../api/groups';
 import PayerPicker from './PayerPicker';
 import SplitEditor, { SplitEditorValue, SplitType } from './SplitEditor';
+import { formatMoney } from '../../utils/money';
 
 interface Props {
   amount: number;
   members: MemberDTO[];
   myMemberId?: string;
+  currency?: string;
   payers: PayerSummaryItem[];
   onPayersChange: (payers: PayerSummaryItem[]) => void;
   onPayersValidityChange?: (valid: boolean) => void;
@@ -80,6 +82,7 @@ const PaidBySplitSummary: React.FC<Props> = ({
   onSplitValidityChange,
   allowedTypes,
   onCustomized,
+  currency = 'USD',
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -142,7 +145,7 @@ const PaidBySplitSummary: React.FC<Props> = ({
       </Typography>
       {perPerson !== null && (
         <Typography sx={{ fontSize: '0.8rem', color: 'text.disabled', mt: 0.25 }}>
-          (${perPerson.toFixed(2)}/person)
+          ({formatMoney(perPerson, currency)}/person)
         </Typography>
       )}
 
@@ -176,7 +179,7 @@ const PaidBySplitSummary: React.FC<Props> = ({
         </DialogTitle>
         <DialogContent dividers>
           {pickerType === 'payer' && (
-            <PayerPicker amount={amount} members={members} payers={localPayers} onChange={setLocalPayers} onValidityChange={setLocalPayersValid} />
+            <PayerPicker amount={amount} members={members} payers={localPayers} onChange={setLocalPayers} onValidityChange={setLocalPayersValid} currency={currency} />
           )}
           {pickerType === 'split' && (
             <SplitEditor
@@ -186,6 +189,7 @@ const PaidBySplitSummary: React.FC<Props> = ({
               onChange={setLocalSplit}
               onValidityChange={setLocalSplitValid}
               allowedTypes={allowedTypes}
+              currency={currency}
             />
           )}
         </DialogContent>

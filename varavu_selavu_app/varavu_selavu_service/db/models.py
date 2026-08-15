@@ -22,6 +22,28 @@ class User(Base):
     paypal_handle = Column(String(100))
     upi_id = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    # Python-side default (False) applies to every new signup going forward; the migration
+    # backfills pre-existing rows to True via a server_default so this doesn't suddenly nag
+    # the entire existing user base the day it ships.
+    email_verified = Column(Boolean, nullable=False, default=False)
+
+
+class EmailToken(Base):
+    """One-time tokens for email-verification and password-reset links. Only a SHA-256
+    hash of the token is stored — the raw token lives solely in the emailed URL, the same
+    handling a password gets, since possessing it is equivalent to proving email ownership
+    (verify) or authorizing an account takeover (reset)."""
+
+    __tablename__ = "email_tokens"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    purpose = Column(String(20), nullable=False)  # "verify_email" | "reset_password"
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class Expense(Base):

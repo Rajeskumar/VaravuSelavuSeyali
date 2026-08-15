@@ -77,9 +77,9 @@ const fieldLabels: Record<string, string> = {
   merchant_name: 'Merchant',
 };
 
-function formatFieldValue(field: string, value: any): string {
+function formatFieldValue(field: string, value: any, currency: string = 'USD'): string {
   if (value === null || value === undefined) return '—';
-  if (field === 'amount') return `$${Number(value).toFixed(2)}`;
+  if (field === 'amount') return formatMoney(Number(value), currency);
   return String(value);
 }
 
@@ -109,6 +109,10 @@ const ExpenseDetailDialog: React.FC<Props> = ({
 }) => {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('sm'));
+
+  // This expense's own currency wins (TS-GRP-131 per-expense currency override), falling
+  // back to the group's currency, then USD — same precedence as the edit-save payload below.
+  const displayCurrency = expense.currency || groupCurrency || 'USD';
 
   const [comments, setComments] = useState<ExpenseCommentDTO[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
@@ -349,10 +353,10 @@ const ExpenseDetailDialog: React.FC<Props> = ({
           ) : (
             <>
               <Typography sx={{ ...typeScale.display, color: theme.palette.text.primary }}>
-                {formatMoney(expense.cost)}{expense.currency && expense.currency !== 'USD' ? ` ${expense.currency}` : ''}
+                {formatMoney(expense.cost, displayCurrency)}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {expense.description} · your share {formatMoney(expense.my_share)}
+                {expense.description} · your share {formatMoney(expense.my_share, displayCurrency)}
               </Typography>
             </>
           )}
@@ -398,6 +402,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               onPayersChange={setEditPayers}
               splitValue={editSplitValue}
               onSplitChange={setEditSplitValue}
+              currency={displayCurrency}
             />
           </Box>
 
@@ -409,6 +414,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               tax={itemsTax}
               discount={itemsDiscount}
               currentAmount={editAmount}
+              currency={displayCurrency}
             />
           )}
 
@@ -441,7 +447,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={sectionCardSx}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-              Paid by {expense.payer_summary.map((p) => `${nameFor(p.member_id)} (${formatMoney(p.amount_paid)})`).join(', ')}
+              Paid by {expense.payer_summary.map((p) => `${nameFor(p.member_id)} (${formatMoney(p.amount_paid, displayCurrency)})`).join(', ')}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
               {expense.splits.map((s) => (
@@ -453,7 +459,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
                     {nameFor(s.member_id)}
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, ...tabularNums }}>
-                    {formatMoney(s.share)}
+                    {formatMoney(s.share, displayCurrency)}
                   </Typography>
                 </Box>
               ))}
@@ -473,7 +479,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
                         {it.item_name}
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600, ...tabularNums }}>
-                        {formatMoney(it.line_total)}
+                        {formatMoney(it.line_total, displayCurrency)}
                       </Typography>
                     </Box>
                   ))}
@@ -490,7 +496,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               onClick={handleSettleMyShare}
               fullWidth
             >
-              {settling ? 'Settling...' : `Settle my ${formatMoney(expense.my_share)} share`}
+              {settling ? 'Settling...' : `Settle my ${formatMoney(expense.my_share, displayCurrency)} share`}
             </Button>
           )}
 
@@ -562,8 +568,8 @@ const ExpenseDetailDialog: React.FC<Props> = ({
                           sx={{ mr: 0.5, mt: 0.5 }}
                           label={
                             change && typeof change === 'object' && 'from' in change
-                              ? `${fieldLabels[field] || field}: ${formatFieldValue(field, change.from)} → ${formatFieldValue(field, change.to)}`
-                              : `${fieldLabels[field] || field}: ${formatFieldValue(field, change)}`
+                              ? `${fieldLabels[field] || field}: ${formatFieldValue(field, change.from, groupCurrency)} → ${formatFieldValue(field, change.to, groupCurrency)}`
+                              : `${fieldLabels[field] || field}: ${formatFieldValue(field, change, groupCurrency)}`
                           }
                         />
                       ))}

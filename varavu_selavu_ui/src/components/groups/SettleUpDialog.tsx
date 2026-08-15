@@ -16,6 +16,7 @@ import { createSettlement, ApiError, MemberBalance, BalanceTransfer } from '../.
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import { withAlpha, typeScale, tabularNums } from '../../theme';
 import { venmoLink, paypalMeLink, upiLink } from '../../utils/paymentDeepLinks';
+import { formatMoney, currencySymbol } from '../../utils/money';
 
 interface SettleUpDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ interface SettleUpDialogProps {
    * row-per-debt picker instead of a blank From/To form. */
   transfers?: BalanceTransfer[];
   myMemberId?: string;
+  currency?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -57,7 +59,7 @@ function useCountDown() {
   return { displayValue, setDisplayValue, runFrom };
 }
 
-const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members, transfers = [], myMemberId, onClose, onSuccess }) => {
+const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members, transfers = [], myMemberId, currency = 'USD', onClose, onSuccess }) => {
   const theme = useTheme();
   const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name || '';
   const [fromMemberId, setFromMemberId] = React.useState('');
@@ -228,7 +230,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                           {nameFor(otherId)}
                         </Typography>
                         <Typography sx={{ fontSize: '0.8rem', color: iOwe ? theme.palette.error.main : theme.palette.success.main }}>
-                          {iOwe ? 'you owe' : 'owes you'} ${t.amount.toFixed(2)}
+                          {iOwe ? 'you owe' : 'owes you'} {formatMoney(t.amount, currency)}
                         </Typography>
                       </Box>
                       <Button size="small" variant="outlined" onClick={() => pickTransfer(t)}>
@@ -271,7 +273,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
             >
               {stage === 'done' && <TaskAltRoundedIcon sx={{ fontSize: 28 }} />}
               <Typography sx={{ ...typeScale.display, ...tabularNums, color: 'inherit' }}>
-                ${(stage === 'done' ? 0 : displayValue).toFixed(2)}
+                {formatMoney(stage === 'done' ? 0 : displayValue, currency)}
               </Typography>
             </Box>
           </Box>
@@ -314,7 +316,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                 <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
                   <ArrowForwardRoundedIcon />
                   <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: 'primary.main', ...tabularNums }}>
-                    ${amount ? amount.toFixed(2) : '0.00'}
+                    {formatMoney(amount || 0, currency)}
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'center' }}>
@@ -384,7 +386,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                 disabled={saving}
                 value={amount}
                 onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-                InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
+                InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol(currency)}</InputAdornment> }}
                 inputProps={{ min: 0, step: 0.01 }}
               />
               <TextField select label="Method" fullWidth disabled={saving} value={method} onChange={(e) => setMethod(e.target.value)}>

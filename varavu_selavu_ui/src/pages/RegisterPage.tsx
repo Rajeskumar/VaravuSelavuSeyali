@@ -11,7 +11,7 @@ import Divider from '@mui/material/Divider';
 import Link from '@mui/material/Link';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
-import { loginWithGoogle, register } from '../api/auth';
+import { loginWithGoogle, register, ApiError } from '../api/auth';
 import { motion } from 'framer-motion';
 import PageContainer from '../components/layout/PageContainer';
 
@@ -74,7 +74,7 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      await register({ name, email, phone, password });
+      await register({ name, email, phone: phone || undefined, password });
       // Auto-login after successful registration
       const { login } = await import('../api/auth');
       const data = await login({ username: email, password });
@@ -82,8 +82,18 @@ const RegisterPage: React.FC = () => {
       if (data.email) localStorage.setItem('vs_user', data.email);
       window.dispatchEvent(new Event('vs_auth_changed'));
       navigate('/dashboard');
-    } catch {
-      setError('Registration failed');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 429) {
+          setError('Too many attempts — wait a bit and try again.');
+        } else {
+          // Deliberately generic for 400/validation-class failures too (e.g. email
+          // already registered) — matches the backend's anti-enumeration response.
+          setError('Registration failed. Please check your details and try again.');
+        }
+      } else {
+        setError("Can't reach the server — check your connection and try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -141,11 +151,10 @@ const RegisterPage: React.FC = () => {
                 <Grid size={12}>
                   <TextField
                     fullWidth
-                    label="Phone"
+                    label="Phone (optional)"
                     type="tel"
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
-                    required
                     disabled={googleLoading || loading}
                   />
                 </Grid>

@@ -86,9 +86,9 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
           const direction = balanceDirection(g.my_balance);
           const balanceLabel =
             direction === 'owed'
-              ? `you're owed ${formatBalanceAmount(g.my_balance)}`
+              ? `you're owed ${formatBalanceAmount(g.my_balance, g.currency)}`
               : direction === 'owes'
-                ? `you owe ${formatBalanceAmount(g.my_balance)}`
+                ? `you owe ${formatBalanceAmount(g.my_balance, g.currency)}`
                 : 'settled up';
           const balanceColor =
             direction === 'owed'

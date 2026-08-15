@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -9,14 +10,48 @@ from pydantic import BaseModel, EmailStr
 from google.oauth2 import id_token
 from google.auth.transport import requests
 
-from .service import AuthService
+from .service import AuthService, EMAIL_VERIFY_TOKEN_TTL, PASSWORD_RESET_TOKEN_TTL
 from .cookies import CSRF_COOKIE, REFRESH_COOKIE, clear_auth_cookies, set_auth_cookies
 from .security import create_access_token, create_refresh_token, auth_required, decode_token
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.core.limiter import limiter
+from varavu_selavu_service.core.config import Settings
+from varavu_selavu_service.services.email_service import send_transactional_email
 
 router = APIRouter(tags=["Auth"])
+logger = logging.getLogger(__name__)
+_settings = Settings()
+
+
+def _send_verification_email(user_email: str, token: str) -> None:
+    """Best-effort — a send failure must never block registration or login; the user can
+    always hit "resend verification" once logged in."""
+    try:
+        send_transactional_email(
+            to_email=user_email,
+            subject="Verify your TrackSpense email",
+            heading="Verify your email",
+            body_html="Confirm this is your email address to finish setting up TrackSpense.",
+            cta_label="Verify email",
+            cta_url=f"{_settings.PUBLIC_APP_URL}/verify-email?token={token}",
+        )
+    except Exception:
+        logger.exception("Failed to send verification email to %s", user_email)
+
+
+def _send_password_reset_email(user_email: str, token: str) -> None:
+    try:
+        send_transactional_email(
+            to_email=user_email,
+            subject="Reset your TrackSpense password",
+            heading="Reset your password",
+            body_html="We received a request to reset your TrackSpense password. This link expires in 1 hour.",
+            cta_label="Reset password",
+            cta_url=f"{_settings.PUBLIC_APP_URL}/reset-password?token={token}",
+        )
+    except Exception:
+        logger.exception("Failed to send password reset email to %s", user_email)
 
 
 def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
@@ -25,7 +60,7 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
 
 class RegisterRequest(BaseModel):
     name: str
-    phone: str
+    phone: Optional[str] = None
     email: EmailStr
     password: str
 
@@ -52,7 +87,15 @@ class RefreshRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
     password: str
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
 
 
 def _issue_session(
@@ -94,10 +137,48 @@ def _issue_session(
 @router.post("/forgot-password")
 @limiter.limit("5/hour")
 def forgot_password(request: Request, data: ForgotPasswordRequest, auth: AuthService = Depends(get_auth_service)):
-    # Always reports success: a "User not found" here tells an attacker which
-    # email addresses are registered.
-    auth.reset_password(data.email, data.password)
+    # Always reports success: a "User not found" here tells an attacker which email
+    # addresses are registered. If the account exists, email it a one-time reset link —
+    # this endpoint never accepts a new password directly (that used to be a critical
+    # account-takeover bug: anyone who knew a user's email could reset their password with
+    # zero proof of ownership, protected only by a 5/hour rate limit).
+    if auth.get_user(data.email):
+        token = auth.create_email_token(data.email, "reset_password", PASSWORD_RESET_TOKEN_TTL)
+        _send_password_reset_email(data.email, token)
     return {"success": True}
+
+
+@router.post("/reset-password")
+@limiter.limit("5/hour")
+def reset_password(request: Request, data: ResetPasswordRequest, auth: AuthService = Depends(get_auth_service)):
+    email = auth.redeem_email_token(data.token, "reset_password")
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+    auth.reset_password(email, data.password)
+    # The presumed reason for a reset is a compromised password — don't leave any
+    # session alive under the old one.
+    auth.revoke_all_sessions_for_user(email, reason="password_reset")
+    return {"success": True}
+
+
+@router.post("/verify-email")
+@limiter.limit("10/hour")
+def verify_email(request: Request, data: VerifyEmailRequest, auth: AuthService = Depends(get_auth_service)):
+    email = auth.redeem_email_token(data.token, "verify_email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    auth.mark_email_verified(email)
+    return {"success": True}
+
+
+@router.post("/resend-verification")
+@limiter.limit("3/hour")
+def resend_verification(request: Request, user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
+    if auth.is_email_verified(user):
+        return {"success": True, "already_verified": True}
+    token = auth.create_email_token(user, "verify_email", EMAIL_VERIFY_TOKEN_TTL)
+    _send_verification_email(user, token)
+    return {"success": True, "already_verified": False}
 
 
 @router.post("/register")
@@ -107,6 +188,8 @@ def register(request: Request, data: RegisterRequest, auth: AuthService = Depend
     if not ok:
         # Deliberately generic — "User already exists" is an enumeration oracle.
         raise HTTPException(status_code=400, detail="Unable to complete registration")
+    token = auth.create_email_token(data.email, "verify_email", EMAIL_VERIFY_TOKEN_TTL)
+    _send_verification_email(data.email, token)
     return {"success": True}
 
 
@@ -204,7 +287,7 @@ def exchange_session(
 
 
 @router.get("/me")
-def me(request: Request, user: str = Depends(auth_required)):
+def me(request: Request, user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
     """Also echoes the current `vs_csrf` cookie value in the body.
 
     The frontend and backend are cross-site in prod (`expense.cerebroos.com`
@@ -217,7 +300,7 @@ def me(request: Request, user: str = Depends(auth_required)):
     reloaded page (session already valid, nothing freshly issued by
     login/refresh) gets a CSRF token to echo on its first mutating request.
     """
-    return {"email": user, "csrf_token": request.cookies.get(CSRF_COOKIE)}
+    return {"email": user, "csrf_token": request.cookies.get(CSRF_COOKIE), "email_verified": auth.is_email_verified(user)}
 
 
 class GoogleLoginRequest(BaseModel):
@@ -245,6 +328,11 @@ def google_login(
     name = token_info.get("name", email)
     if not auth.get_user(email):
         auth.register_user(name, "", email, "")
+    # Google already verified this address as part of its own OAuth flow (asserted via the
+    # id_token's own email_verified claim) — no reason to make the user verify it a second
+    # time through our own email-link flow.
+    if token_info.get("email_verified"):
+        auth.mark_email_verified(email)
     return _issue_session(response, auth, email)
 
 

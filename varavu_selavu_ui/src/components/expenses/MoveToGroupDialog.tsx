@@ -105,6 +105,7 @@ const MoveToGroupDialog: React.FC<MoveToGroupDialogProps> = ({ open, expenseId, 
             value={splitValue}
             onChange={setSplitValue}
             onValidityChange={setSplitValid}
+            currency={groupDetailQuery.data.currency}
           />
         )}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>

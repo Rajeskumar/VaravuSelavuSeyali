@@ -114,7 +114,7 @@ const ItemsTab: React.FC = () => {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
           {/* Header */}
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
-            <IconButton onClick={() => setSelectedItem(null)} sx={{ p: 0.5, mr: 0.5, color: 'text.primary' }}>
+            <IconButton onClick={() => setSelectedItem(null)} aria-label="Back to item list" sx={{ p: 0.5, mr: 0.5, color: 'text.primary' }}>
               <ArrowBackIcon />
             </IconButton>
             <Typography sx={{ fontSize: 13, color: 'text.secondary', fontWeight: 500 }}>

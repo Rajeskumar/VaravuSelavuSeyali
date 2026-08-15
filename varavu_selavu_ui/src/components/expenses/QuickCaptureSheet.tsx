@@ -15,6 +15,7 @@ import { useTheme } from '@mui/material/styles';
 import { typeScale, tabularNums } from '../../theme';
 import { CATEGORY_GROUPS, findMainCategory } from './AddExpenseForm';
 import { formatMoney } from './ExpenseFeed';
+import { currencySymbol } from '../../utils/money';
 import { suggestCategory } from '../../api/expenses';
 import { listGroups, getGroup, GroupSummary, GroupDetailResponse, PayerSummaryItem } from '../../api/groups';
 import { suggestMerchants } from '../../api/entityResolution';
@@ -107,6 +108,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [savedAmount, setSavedAmount] = React.useState(0);
+  const [savedCurrency, setSavedCurrency] = React.useState('USD');
   const [savedLine, setSavedLine] = React.useState('');
 
   const scan = useReceiptScan({
@@ -218,6 +220,10 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const selectedGroup = who !== 'me' ? groups.find((g) => g.group_id === who) : undefined;
   const myEmail = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
   const myMemberId = groupDetail?.members.find((m) => m.user_email === myEmail)?.member_id;
+  // Prefer the freshly-fetched detail once it lands; selectedGroup's own currency (from the
+  // GroupSummary list) covers the brief window right after picking a group before that fetch
+  // resolves, so the amount display doesn't flash `$` and then switch.
+  const activeCurrency = groupDetail?.currency ?? selectedGroup?.currency ?? 'USD';
 
   // Fetches the full member list (GroupSummary only has member_count) and resets payers/split
   // to "just me, split equally among everyone" whenever the selected group changes, or the
@@ -307,7 +313,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               payers,
               split: splitValue,
             });
-        setSavedLine(`Logged to ${selectedGroup.name} — your share ${formatMoney(myShare)} joins your personal total automatically.`);
+        setSavedLine(`Logged to ${selectedGroup.name} — your share ${formatMoney(myShare, activeCurrency)} joins your personal total automatically.`);
       } else if (itemsToSave.length > 0) {
         await logPersonalWithItems({
           description: description.trim(),
@@ -333,6 +339,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         setSavedLine('Logged to your personal ledger.');
       }
       setSavedAmount(amountNum);
+      setSavedCurrency(activeCurrency);
       setStage('saved');
     } catch {
       setError('Failed to save expense. Please try again.');
@@ -393,6 +400,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         onSplitChange={setSplitValue}
         allowedTypes={itemsToSave.length > 0 ? ['equal'] : undefined}
         onCustomized={() => setCustomized(true)}
+        currency={activeCurrency}
       />
     </Box>
   );
@@ -432,7 +440,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         <CheckRoundedIcon sx={{ fontSize: 28 }} />
       </Box>
       <Typography component="div" sx={{ ...typeScale.display, fontSize: 26 }}>
-        {formatMoney(savedAmount)}
+        {formatMoney(savedAmount, savedCurrency)}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', px: 1.5 }}>
         {savedLine}
@@ -548,6 +556,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 tax={scannedTax}
                 discount={scannedDiscount}
                 currentAmount={amountNum}
+                currency={activeCurrency}
               />
             )}
 
@@ -609,7 +618,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
           <Box sx={{ textAlign: 'center', pt: 1.25, pb: 0.5 }}>
             <Typography component="div" sx={{ ...typeScale.displayHero, fontSize: 42, minHeight: 52 }}>
-              {amount ? `$${amount}` : '$0.00'}
+              {amount ? `${currencySymbol(activeCurrency)}${amount}` : `${currencySymbol(activeCurrency)}0.00`}
             </Typography>
           </Box>
 

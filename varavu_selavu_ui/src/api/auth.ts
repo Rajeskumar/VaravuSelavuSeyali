@@ -19,8 +19,21 @@ export interface LoginResponse {
 export interface RegisterPayload {
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   password: string;
+}
+
+/** Carries the HTTP status so callers can distinguish rate-limiting, invalid
+ * credentials, and other server errors instead of showing one generic message.
+ * A network failure (no response at all) throws a plain Error instead, with no
+ * `status` — callers should treat "not an ApiError" as "couldn't reach the server." */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
 }
 
 export interface RefreshRequest {
@@ -45,7 +58,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
   });
 
   if (!response.ok) {
-    throw new Error('Login failed');
+    throw new ApiError('Login failed', response.status);
   }
 
   const data: LoginResponse = await response.json();
@@ -107,7 +120,7 @@ export async function register(payload: RegisterPayload): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error('Registration failed');
+    throw new ApiError('Registration failed', response.status);
   }
 }
 
@@ -154,19 +167,18 @@ export async function exchangeLegacySession(refresh_token: string): Promise<Logi
   return data;
 }
 
-export async function fetchMe(): Promise<{ email: string; csrf_token?: string }> {
+export async function fetchMe(): Promise<{ email: string; csrf_token?: string; email_verified?: boolean }> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, withCookies);
   if (!response.ok) {
     throw new Error('Not authenticated');
   }
-  const data: { email: string; csrf_token?: string } = await response.json();
+  const data: { email: string; csrf_token?: string; email_verified?: boolean } = await response.json();
   setCsrfToken(data.csrf_token);
   return data;
 }
 
 export interface ForgotPasswordPayload {
   email: string;
-  password: string;
 }
 
 export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
@@ -180,6 +192,47 @@ export async function forgotPassword(payload: ForgotPasswordPayload): Promise<vo
   });
 
   if (!response.ok) {
-    throw new Error('Forgot password failed');
+    throw new ApiError('Forgot password failed', response.status);
   }
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  password: string;
+}
+
+export async function resetPassword(payload: ResetPasswordPayload): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/reset-password`, {
+    ...withCookies,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new ApiError('Reset password failed', response.status);
+  }
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/verify-email`, {
+    ...withCookies,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (!response.ok) {
+    throw new ApiError('Email verification failed', response.status);
+  }
+}
+
+export async function resendVerification(): Promise<{ already_verified: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/resend-verification`, {
+    ...withCookies,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...csrfHeader() },
+  });
+  if (!response.ok) {
+    throw new ApiError('Failed to resend verification email', response.status);
+  }
+  return response.json();
 }

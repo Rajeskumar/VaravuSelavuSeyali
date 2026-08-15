@@ -1,5 +1,5 @@
 import React from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../common/LazyPlot';
 import { motion } from 'framer-motion';
 import { useTheme } from '@mui/material/styles';
 import CategoryDetailsDrawer, { ExpenseItem } from '../common/CategoryDetailsDrawer';

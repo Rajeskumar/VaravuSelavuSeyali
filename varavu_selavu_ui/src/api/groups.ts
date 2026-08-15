@@ -40,6 +40,7 @@ export interface GroupSummary {
   group_id: string;
   name: string;
   group_type: string;
+  currency: string;
   member_count: number;
   my_balance: number;
   status: string;

@@ -232,7 +232,7 @@ const RecurringTab: React.FC = () => {
             <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
               {editing ? 'Edit Template' : 'Add Template'}
             </Typography>
-            <IconButton onClick={() => setFormOpen(false)} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
+            <IconButton onClick={() => setFormOpen(false)} aria-label="Close" sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>

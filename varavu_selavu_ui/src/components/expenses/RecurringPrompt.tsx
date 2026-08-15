@@ -109,7 +109,7 @@ const RecurringPrompt: React.FC = () => {
           <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
             {due.length} recurring expense{due.length === 1 ? ' is' : 's are'} due
           </Typography>
-          <IconButton onClick={() => setOpen(false)} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
+          <IconButton onClick={() => setOpen(false)} aria-label="Dismiss" sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>

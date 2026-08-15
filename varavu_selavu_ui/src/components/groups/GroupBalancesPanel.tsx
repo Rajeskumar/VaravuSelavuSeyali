@@ -7,12 +7,14 @@ import { useTheme } from '@mui/material/styles';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import { MemberBalance } from '../../api/groups';
 import { typeScale, tabularNums } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 interface Props {
   members: MemberBalance[];
   myMemberId?: string;
   onSettleUp: () => void;
   disabled?: boolean;
+  currency?: string;
 }
 
 /**
@@ -22,7 +24,7 @@ interface Props {
  * button. Only rendered at `lg+` — GroupDetailPage's own centered mobile/tablet-width hero
  * balance (also standalone, no border) covers every narrower width, so the two never both show.
  */
-const GroupBalancesPanel: React.FC<Props> = ({ members, myMemberId, onSettleUp, disabled }) => {
+const GroupBalancesPanel: React.FC<Props> = ({ members, myMemberId, onSettleUp, disabled, currency = 'USD' }) => {
   const theme = useTheme();
   const positiveColor = theme.palette.success.main;
   const negativeColor = theme.palette.error.main;
@@ -45,7 +47,7 @@ const GroupBalancesPanel: React.FC<Props> = ({ members, myMemberId, onSettleUp, 
           {myNet >= 0 ? "You're owed" : 'You owe'}
         </Typography>
         <Typography component="div" sx={{ ...typeScale.display, ...tabularNums, color: myNet >= 0 ? positiveColor : negativeColor, mt: 0.5 }}>
-          ${Math.abs(myNet).toFixed(2)}
+          {formatMoney(myNet, currency)}
         </Typography>
       </Box>
 
@@ -68,7 +70,7 @@ const GroupBalancesPanel: React.FC<Props> = ({ members, myMemberId, onSettleUp, 
               </Typography>
             </Box>
             <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', ...tabularNums, color: m.net > 0 ? negativeColor : positiveColor }}>
-              {m.net > 0 ? '−' : '+'}${Math.abs(m.net).toFixed(2)}
+              {m.net > 0 ? '−' : '+'}{formatMoney(m.net, currency)}
             </Typography>
           </Box>
         ))}

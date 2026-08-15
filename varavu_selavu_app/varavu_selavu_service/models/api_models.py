@@ -395,6 +395,7 @@ class GroupSummary(BaseModel):
     group_id: str
     name: str
     group_type: str
+    currency: str = "USD"
     member_count: int
     my_balance: float = 0.0
     status: str

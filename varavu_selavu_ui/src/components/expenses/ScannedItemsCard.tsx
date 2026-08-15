@@ -9,6 +9,7 @@ import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
 import { typeScale, tabularNums } from '../../theme';
 import { formatMoney } from './ExpenseFeed';
+import { currencySymbol } from '../../utils/money';
 import { suggestItems } from '../../api/entityResolution';
 import { useEntityResolutionEnabled } from '../../hooks/useEntityResolutionEnabled';
 import EntityAutocomplete from './EntityAutocomplete';
@@ -33,6 +34,7 @@ interface ScannedItemsCardProps {
    * reconcileOk() caption for the same reason: a receipt total the user tweaks by a
    * few cents shouldn't stop them from logging the expense). */
   currentAmount: number;
+  currency?: string;
 }
 
 /**
@@ -43,7 +45,7 @@ interface ScannedItemsCardProps {
  * while focused lets the user type a decimal normally; onCommit still pushes numeric
  * updates up on every valid keystroke so the reconciliation footer stays live.
  */
-const ItemPriceField: React.FC<{ value: number; onCommit: (n: number) => void }> = ({ value, onCommit }) => {
+const ItemPriceField: React.FC<{ value: number; onCommit: (n: number) => void; currency?: string }> = ({ value, onCommit, currency = 'USD' }) => {
   const [text, setText] = React.useState(String(value));
   const focused = React.useRef(false);
 
@@ -68,7 +70,7 @@ const ItemPriceField: React.FC<{ value: number; onCommit: (n: number) => void }>
         if (v !== '' && v !== '-' && !Number.isNaN(n)) onCommit(n);
       }}
       startAdornment={
-        <Typography component="span" sx={{ fontSize: 13.5, color: 'text.secondary', mr: 0.25 }}>$</Typography>
+        <Typography component="span" sx={{ fontSize: 13.5, color: 'text.secondary', mr: 0.25 }}>{currencySymbol(currency)}</Typography>
       }
       inputProps={{ style: { textAlign: 'right' }, inputMode: 'decimal' }}
       sx={{ width: 68, fontSize: 13.5, ...tabularNums }}
@@ -90,6 +92,7 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
   tax = 0,
   discount = 0,
   currentAmount,
+  currency = 'USD',
 }) => {
   const [expanded, setExpanded] = React.useState(true);
   const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
@@ -130,7 +133,7 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
           {items.length} item{items.length === 1 ? '' : 's'} scanned{merchant ? ` · ${merchant}` : ''}
         </Typography>
         <Typography component="span" sx={{ ...typeScale.amount, color: 'text.secondary' }}>
-          {formatMoney(subtotal)}
+          {formatMoney(subtotal, currency)}
         </Typography>
         <ExpandMoreRoundedIcon
           fontSize="small"
@@ -158,6 +161,7 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
                 <ItemPriceField
                   value={item.line_total}
                   onCommit={(n) => updateItem(item.line_no, { line_total: n })}
+                  currency={currency}
                 />
                 <IconButton size="small" onClick={() => removeItem(item.line_no)} aria-label="Remove item" sx={{ p: 0.5 }}>
                   <CloseRoundedIcon sx={{ fontSize: 15 }} />
@@ -181,13 +185,13 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
               {tax > 0 && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="caption" color="text.secondary">Tax</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={tabularNums}>{formatMoney(tax)}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={tabularNums}>{formatMoney(tax, currency)}</Typography>
                 </Box>
               )}
               {discount > 0 && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="caption" color="text.secondary">Discount</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={tabularNums}>-{formatMoney(discount)}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={tabularNums}>-{formatMoney(discount, currency)}</Typography>
                 </Box>
               )}
             </Box>
@@ -197,7 +201,7 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
             variant="caption"
             sx={{ display: 'block', mt: 0.75, textAlign: 'right', color: reconciled ? 'success.main' : 'warning.main' }}
           >
-            {reconciled ? 'Matches total' : `Items total ${formatMoney(computedTotal)} — off by ${formatMoney(Math.abs(delta))}`}
+            {reconciled ? 'Matches total' : `Items total ${formatMoney(computedTotal, currency)} — off by ${formatMoney(Math.abs(delta), currency)}`}
           </Typography>
         </Box>
       )}

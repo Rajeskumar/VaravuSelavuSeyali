@@ -15,6 +15,9 @@ import InsightsRoundedIcon from '@mui/icons-material/InsightsRounded';
 import DocumentScannerRoundedIcon from '@mui/icons-material/DocumentScannerRounded';
 import EventRepeatRoundedIcon from '@mui/icons-material/EventRepeatRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import LockRoundedIcon from '@mui/icons-material/LockRounded';
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { useNavigate } from 'react-router-dom';
 import { keyframes, useTheme } from '@mui/material/styles';
 import PageContainer from '../components/layout/PageContainer';
@@ -131,6 +134,24 @@ const STEPS = [
   { n: 1, title: 'Log it', body: 'Type a line, tap the keypad, or scan a receipt. Personal or group — one flow.' },
   { n: 2, title: 'It sorts itself', body: 'Your share joins your personal total; the rest lands on the right people in the right group.' },
   { n: 3, title: 'Settle in one tap', body: 'One payment per person clears every group you share — recorded per-group underneath.' },
+];
+
+const TRUST_POINTS = [
+  {
+    icon: <LockRoundedIcon fontSize="small" />,
+    title: 'Your session, not your scripts',
+    body: 'Login tokens live in HttpOnly cookies — invisible to any JavaScript on the page, browser extension, or XSS payload — with CSRF protection and automatic rotation on every refresh.',
+  },
+  {
+    icon: <ShieldRoundedIcon fontSize="small" />,
+    title: 'One tap ends every session',
+    body: "Logging out — or a stolen token getting reused — instantly revokes every device tied to that login, not just the one you're on.",
+  },
+  {
+    icon: <DownloadRoundedIcon fontSize="small" />,
+    title: 'Your data, on your terms',
+    body: 'Export your full ledger to CSV whenever you want, or delete your account outright — no support ticket, no waiting.',
+  },
 ];
 
 const FAQS = [
@@ -402,11 +423,24 @@ const HomePage: React.FC = () => {
         </Box>
       </PageContainer>
 
+      {/* ===== Trust & Privacy ===== */}
+      <PageContainer id="trust" maxWidth="lg" sx={{ py: { xs: 8, md: 9 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
+        <ScrollReveal>
+          <Typography sx={eyebrowSx}>03 / TRUST & PRIVACY</Typography>
+          <Typography sx={sectionHeadingSx}>Your money data, held the way it should be.</Typography>
+        </ScrollReveal>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.25, mt: 5.5 }}>
+          {TRUST_POINTS.map(({ icon, title, body }, i) => (
+            <FeatureCard key={title} index={i} icon={icon} title={title} body={body} />
+          ))}
+        </Box>
+      </PageContainer>
+
       {/* ===== FAQ ===== */}
       <Box id="faq" sx={{ bgcolor: 'background.paper', borderTop: '1px solid', borderBottom: '1px solid', borderColor: 'divider', scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <PageContainer maxWidth={false} sx={{ maxWidth: 760, mx: 'auto', py: { xs: 8, md: 9 } }}>
           <ScrollReveal>
-            <Typography sx={eyebrowSx}>03 / FAQ</Typography>
+            <Typography sx={eyebrowSx}>04 / FAQ</Typography>
             <Typography sx={sectionHeadingSx}>Questions, answered.</Typography>
           </ScrollReveal>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mt: 4.5 }}>

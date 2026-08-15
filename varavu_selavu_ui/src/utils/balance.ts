@@ -3,6 +3,7 @@
  * Nets arrive as floats from the API, so an exact `=== 0` test can render a
  * rounding artifact as "you owe $0.00". Anything under half a cent is settled.
  */
+import { formatMoney } from './money';
 
 export const SETTLED_EPSILON = 0.005;
 
@@ -17,6 +18,6 @@ export function isSettled(net: number): boolean {
   return balanceDirection(net) === 'settled';
 }
 
-export function formatBalanceAmount(net: number): string {
-  return `$${Math.abs(net).toFixed(2)}`;
+export function formatBalanceAmount(net: number, currency: string = 'USD'): string {
+  return formatMoney(net, currency);
 }

@@ -8,18 +8,16 @@ import { cerebro, typeScale, tabularNums } from '../../theme';
 import { GroupSummary } from '../../api/groups';
 import { AnalysisGroupSummary } from '../../api/analysis';
 import { isSettled } from '../../utils/balance';
+import { formatMoney } from '../../utils/money';
 
 interface StripGroup {
   group_id: string;
   name: string;
   member_count: number;
+  currency: string;
   /** Settled = no outstanding balance either way, matching TrueTotalHero's rule. */
   settled: boolean;
   pendingAmount: number;
-}
-
-function formatMoney(n: number): string {
-  return `$${Math.abs(n).toFixed(2)}`;
 }
 
 function mergeGroups(groups: GroupSummary[], summaries: AnalysisGroupSummary[]): StripGroup[] {
@@ -32,6 +30,7 @@ function mergeGroups(groups: GroupSummary[], summaries: AnalysisGroupSummary[]):
       group_id: g.group_id,
       name: g.name,
       member_count: g.member_count,
+      currency: g.currency,
       settled: isSettled(balance),
       pendingAmount,
     };
@@ -92,7 +91,7 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
               </Box>
             ) : (
               <Typography variant="caption" sx={{ fontWeight: 600, color: negativeColor, ...tabularNums }}>
-                {formatMoney(g.pendingAmount)} pending
+                {formatMoney(g.pendingAmount, g.currency)} pending
               </Typography>
             )}
           </Box>

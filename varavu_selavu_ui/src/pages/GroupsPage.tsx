@@ -40,6 +40,7 @@ import {
   listGroupExpenses,
   getBalances,
   createGroup,
+  createGroupExpense,
   deleteGroupExpense,
   addMember,
   ApiError,
@@ -47,6 +48,8 @@ import {
   GroupExpenseRow,
 } from '../api/groups';
 import { typeScale, tabularNums } from '../theme';
+import { formatMoney } from '../utils/money';
+import ConfirmDialog from '../components/common/ConfirmDialog';
 
 type TabKey = 'expenses' | 'balances' | 'activity';
 type RailTab = 'active' | 'archived';
@@ -81,7 +84,12 @@ const GroupsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const rootTab: RootTab = searchParams.get('tab') === 'people' ? 'people' : 'groups';
   const setRootTab = (next: RootTab) => setSearchParams(next === 'people' ? { tab: 'people' } : {}, { replace: true });
-  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'info' }>({
+  const [toast, setToast] = React.useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info';
+    action?: { label: string; onClick: () => void };
+  }>({
     open: false,
     message: '',
     severity: 'success',
@@ -186,16 +194,56 @@ const GroupsPage: React.FC = () => {
   // --- Settle up dialog ---
   const [settleOpen, setSettleOpen] = React.useState(false);
 
-  const handleQuickDeleteExpense = async (row: GroupExpenseRow) => {
+  const [confirmDeleteExpense, setConfirmDeleteExpense] = React.useState<GroupExpenseRow | null>(null);
+  const [deletingExpense, setDeletingExpense] = React.useState(false);
+
+  const handleQuickDeleteExpense = (row: GroupExpenseRow) => setConfirmDeleteExpense(row);
+
+  // Deletion has no server-side undo (unlike groups, which soft-delete for 30 days), so "Undo"
+  // re-creates the expense from the row's own data instead — same description/amount/category/
+  // payers/split, via the same create endpoint a user would use to re-log it by hand. It lands as
+  // a new row (new id, new activity-log entry), not a byte-for-byte restore, but is indistinguishable
+  // in the UI and is the standard pattern for undo-without-soft-delete.
+  const undoDeleteExpense = async (row: GroupExpenseRow) => {
     if (!groupId) return;
-    if (!window.confirm(`Delete "${row.description}"?`)) return;
+    try {
+      await createGroupExpense(groupId, {
+        date: row.date,
+        description: row.description,
+        category: row.category,
+        amount: row.cost,
+        merchant_name: row.merchant_name || undefined,
+        payers: row.payer_summary.map((p) => ({ member_id: p.member_id, amount_paid: p.amount_paid })),
+        split: { type: 'exact', entries: row.splits.map((s) => ({ member_id: s.member_id, value: s.share })) },
+        currency: row.currency || undefined,
+      });
+      queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+      setToast({ open: true, message: 'Expense restored', severity: 'success' });
+    } catch (e) {
+      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to restore expense', severity: 'error' });
+    }
+  };
+
+  const confirmDeleteExpenseNow = async () => {
+    if (!groupId || !confirmDeleteExpense) return;
+    const row = confirmDeleteExpense;
+    setDeletingExpense(true);
     try {
       await deleteGroupExpense(groupId, row.row_id);
       queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
       queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
-      setToast({ open: true, message: 'Expense deleted', severity: 'success' });
+      setToast({
+        open: true,
+        message: 'Expense deleted',
+        severity: 'success',
+        action: { label: 'Undo', onClick: () => undoDeleteExpense(row) },
+      });
+      setConfirmDeleteExpense(null);
     } catch (e) {
       setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to delete expense', severity: 'error' });
+    } finally {
+      setDeletingExpense(false);
     }
   };
 
@@ -214,9 +262,10 @@ const GroupsPage: React.FC = () => {
         amount: row.my_share,
         groupAmount: row.cost,
         groupName: group?.name,
+        currency: row.currency || group?.currency,
         payerSummary: row.payer_summary,
       })),
-    [expensesQuery.data, groupId, group?.name]
+    [expensesQuery.data, groupId, group?.name, group?.currency]
   );
 
   const resolveGroupExpense = (feedRow: FeedExpense): GroupExpenseRow | undefined =>
@@ -319,7 +368,7 @@ const GroupsPage: React.FC = () => {
           <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', px: { xs: 1.5, sm: 3 }, py: 3 }}>
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-                <IconButton onClick={() => navigate('/groups')} size="small" sx={{ display: { xs: 'inline-flex', md: 'none' } }}>
+                <IconButton onClick={() => navigate('/groups')} aria-label="Back to groups" size="small" sx={{ display: { xs: 'inline-flex', md: 'none' } }}>
                   <ArrowBackIcon />
                 </IconButton>
                 <GroupAvatar seed={group.group_id} groupType={group.group_type} size={40} />
@@ -345,7 +394,7 @@ const GroupsPage: React.FC = () => {
                 >
                   Add Member
                 </Button>
-                <IconButton onClick={() => setSettingsOpen(true)} size="small">
+                <IconButton onClick={() => setSettingsOpen(true)} aria-label="Group settings" size="small">
                   <SettingsRoundedIcon />
                 </IconButton>
               </Box>
@@ -369,7 +418,7 @@ const GroupsPage: React.FC = () => {
                 <Typography sx={{ ...typeScale.label, color: 'text.secondary', mt: 1.5 }}>{balanceDirectionLabel}</Typography>
                 {myBalance !== 0 && (
                   <Typography component="div" sx={{ ...typeScale.display, ...tabularNums, color: balanceColor, mt: 0.5 }}>
-                    ${Math.abs(myBalance).toFixed(2)}
+                    {formatMoney(myBalance, group.currency)}
                   </Typography>
                 )}
                 {invitedMembers.length > 0 && (
@@ -438,7 +487,7 @@ const GroupsPage: React.FC = () => {
                       <CircularProgress />
                     </Box>
                   )}
-                  {balancesQuery.data && <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} />}
+                  {balancesQuery.data && <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} currency={group.currency} />}
                 </Box>
               )}
 
@@ -453,7 +502,7 @@ const GroupsPage: React.FC = () => {
       </Box>
 
         {groupId && group && balancesQuery.data && (
-          <GroupBalancesPanel members={balancesQuery.data.members} myMemberId={myMember?.member_id} onSettleUp={() => setSettleOpen(true)} disabled={members.length < 2} />
+          <GroupBalancesPanel members={balancesQuery.data.members} myMemberId={myMember?.member_id} onSettleUp={() => setSettleOpen(true)} disabled={members.length < 2} currency={group.currency} />
         )}
       </Box>
 
@@ -532,6 +581,7 @@ const GroupsPage: React.FC = () => {
           members={balancesQuery.data.members}
           transfers={balancesQuery.data.transfers}
           myMemberId={myMember?.member_id}
+          currency={group?.currency}
           onClose={() => setSettleOpen(false)}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
@@ -571,8 +621,43 @@ const GroupsPage: React.FC = () => {
         />
       )}
 
-      <Snackbar open={toast.open} autoHideDuration={2500} onClose={() => setToast((t) => ({ ...t, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert onClose={() => setToast((t) => ({ ...t, open: false }))} severity={toast.severity} variant="filled" sx={{ width: '100%' }}>
+      <ConfirmDialog
+        open={!!confirmDeleteExpense}
+        title="Delete expense?"
+        message={`Delete "${confirmDeleteExpense?.description}"? You can undo this from the confirmation toast.`}
+        confirmLabel="Delete"
+        destructive
+        loading={deletingExpense}
+        onConfirm={confirmDeleteExpenseNow}
+        onCancel={() => setConfirmDeleteExpense(null)}
+      />
+
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={toast.action ? 6000 : 2500}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setToast((t) => ({ ...t, open: false }))}
+          severity={toast.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+          action={
+            toast.action ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  toast.action?.onClick();
+                  setToast((t) => ({ ...t, open: false }));
+                }}
+              >
+                {toast.action.label}
+              </Button>
+            ) : undefined
+          }
+        >
           {toast.message}
         </Alert>
       </Snackbar>

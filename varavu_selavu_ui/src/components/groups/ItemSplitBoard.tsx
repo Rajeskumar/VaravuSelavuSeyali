@@ -10,6 +10,7 @@ import InputAdornment from '@mui/material/InputAdornment';
 import { useTheme } from '@mui/material/styles';
 import { MemberDTO, GroupExpenseItemEntry, SplitSuggestionDTO, suggestItemAssignment } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
+import { formatMoney } from '../../utils/money';
 
 interface ItemSplitBoardProps {
   items: GroupExpenseItemEntry[];
@@ -20,6 +21,7 @@ interface ItemSplitBoardProps {
    * history ("Alice usually buys the oat milk") and a suggestion chip is
    * offered — clicking it only pre-fills the assignment, never auto-submits. */
   groupId?: string;
+  currency?: string;
 }
 
 const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
@@ -28,6 +30,7 @@ const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
   onChange,
   onValidityChange,
   groupId,
+  currency = 'USD',
 }) => {
   const theme = useTheme();
   const [suggestions, setSuggestions] = React.useState<Record<string, SplitSuggestionDTO[]>>({});
@@ -108,7 +111,7 @@ const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
                 {item.item_name}
               </Typography>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                ${item.line_total.toFixed(2)}
+                {formatMoney(item.line_total, currency)}
               </Typography>
             </Box>
 

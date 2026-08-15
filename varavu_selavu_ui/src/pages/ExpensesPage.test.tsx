@@ -101,7 +101,7 @@ test('scope filter switches the queried data and shows the group badge column', 
   });
   jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: true, entity_resolution_enabled: false, budgets_enabled: true });
   jest.spyOn(groupsApi, 'listGroups').mockResolvedValue([
-    { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', member_count: 2, my_balance: 0, status: 'active', archived_at: null, deleted_at: null },
+    { group_id: 'g1', name: 'Apartment 4B', group_type: 'home', currency: 'USD', member_count: 2, my_balance: 0, status: 'active', archived_at: null, deleted_at: null },
   ]);
   // ExpensesPage calls the composed listAllMyGroupExpenses() (which internally
   // calls listGroups/listGroupExpenses as local, un-mockable intra-module refs),

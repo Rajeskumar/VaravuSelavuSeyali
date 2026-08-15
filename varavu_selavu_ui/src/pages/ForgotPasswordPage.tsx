@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import TextField from '@mui/material/TextField';
@@ -14,30 +13,22 @@ import PageContainer from '../components/layout/PageContainer';
 
 const ForgotPasswordPage: React.FC = () => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
     setLoading(true);
     setError(null);
     setSuccess(null);
     try {
-      await forgotPassword({ email, password });
-      setSuccess('Password has been reset successfully. Please login.');
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
+      await forgotPassword({ email });
+      // Deliberately identical whether or not the address is registered — an
+      // "email not found" message here would let an attacker enumerate accounts.
+      setSuccess("If that email is registered, we've sent a link to reset your password.");
     } catch {
-      setError('Failed to reset password. Please check if the email is correct.');
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -56,6 +47,9 @@ const ForgotPasswordPage: React.FC = () => {
           <Typography variant="h6" gutterBottom align="center">
             Forgot Password
           </Typography>
+          <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
+            Enter your email and we'll send you a link to reset your password.
+          </Typography>
           <Box component="form" onSubmit={handleForgotPassword} noValidate>
             <Grid container spacing={2}>
               {error && (
@@ -65,7 +59,7 @@ const ForgotPasswordPage: React.FC = () => {
               )}
               {success && (
                 <Grid size={12}>
-                  <Typography color="success" align="center">{success}</Typography>
+                  <Typography color="success.main" align="center">{success}</Typography>
                 </Grid>
               )}
               <Grid size={12}>
@@ -76,31 +70,12 @@ const ForgotPasswordPage: React.FC = () => {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
+                  disabled={loading || !!success}
                 />
               </Grid>
               <Grid size={12}>
-                <TextField
-                  fullWidth
-                  label="New Password"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid size={12}>
-                <TextField
-                  fullWidth
-                  label="Confirm New Password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  required
-                />
-              </Grid>
-              <Grid size={12}>
-                <Button type="submit" variant="contained" fullWidth disabled={loading}>
-                  {loading ? 'Resetting...' : 'Reset Password'}
+                <Button type="submit" variant="contained" fullWidth disabled={loading || !!success}>
+                  {loading ? 'Sending...' : 'Send reset link'}
                 </Button>
               </Grid>
               <Grid size={12} sx={{ display: 'flex', justifyContent: 'center' }}>

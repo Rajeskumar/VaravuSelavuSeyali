@@ -331,8 +331,9 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
             }
           }}
         />
-        <IconButton 
-          onClick={handleSubmit} 
+        <IconButton
+          onClick={handleSubmit}
+          aria-label="Send message"
           disabled={!query.trim() || loading}
           sx={{ 
             bgcolor: 'primary.main', 

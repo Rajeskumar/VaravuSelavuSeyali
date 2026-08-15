@@ -11,7 +11,7 @@ import Link from '@mui/material/Link';
 import Divider from '@mui/material/Divider';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
-import { login, loginWithGoogle } from '../api/auth';
+import { login, loginWithGoogle, ApiError } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import PageContainer from '../components/layout/PageContainer';
@@ -100,7 +100,17 @@ const LoginPage: React.FC = () => {
       window.dispatchEvent(new Event('vs_auth_changed'));
       navigate(postLoginDestination());
     } catch (err) {
-      setError('Invalid credentials or server error');
+      if (err instanceof ApiError) {
+        if (err.status === 429) {
+          setError('Too many attempts — wait a minute and try again.');
+        } else if (err.status === 401 || err.status === 400) {
+          setError('Incorrect email or password.');
+        } else {
+          setError('Something went wrong on our end. Please try again.');
+        }
+      } else {
+        setError("Can't reach the server — check your connection and try again.");
+      }
     } finally {
       setLoading(false);
     }

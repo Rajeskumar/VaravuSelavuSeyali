@@ -113,3 +113,53 @@ def send_email(
         raise
 
     return True
+
+
+def send_transactional_email(*, to_email: str, subject: str, heading: str, body_html: str, cta_label: str, cta_url: str) -> bool:
+    """Sends an email directly to a user's own address (verification links, password
+    resets) — distinct from `send_email`, which always sends TO the admin inbox with the
+    user only as Reply-To (the contact-us/feedback shape). `cta_url` is never escaped since
+    it's always a same-origin link this service built itself, not user input.
+    """
+    sender = _settings.MAIL_FROM
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = Header(subject, "utf-8")
+    msg["From"] = formataddr((str(Header("TrackSpense", "utf-8")), sender))
+    msg["To"] = to_email
+
+    text_part = MIMEText(f"{heading}\n\n{cta_label}: {cta_url}\n\nIf you didn't request this, you can safely ignore this email.", "plain", "utf-8")
+
+    e_heading = html.escape(heading)
+    e_body_html = body_html  # caller-controlled static copy, not user input
+    e_cta_label = html.escape(cta_label)
+    html_body = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px">
+        <h2 style="color:#5E48C8">{e_heading}</h2>
+        <div style="margin-top:8px;color:#334155">{e_body_html}</div>
+        <div style="margin-top:24px">
+            <a href="{cta_url}" style="background:#5E48C8;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block">{e_cta_label}</a>
+        </div>
+        <p style="margin-top:24px;font-size:12px;color:#94a3b8">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+    """
+    html_part = MIMEText(html_body, "html", "utf-8")
+
+    msg.attach(text_part)
+    msg.attach(html_part)
+
+    if not _settings.MAIL_USERNAME or not _settings.MAIL_PASSWORD:
+        logger.warning("MAIL_USERNAME or MAIL_PASSWORD not configured. Skipping actual email send.")
+        logger.info("Mock Email Output:\n%s", msg.as_string())
+        return True
+
+    try:
+        with smtplib.SMTP(_settings.MAIL_SERVER, _settings.MAIL_PORT) as server:
+            server.starttls()
+            server.login(_settings.MAIL_USERNAME, _settings.MAIL_PASSWORD)
+            server.sendmail(sender, [to_email], msg.as_string())
+    except Exception:
+        logger.error("Failed to send transactional email via SMTP.", exc_info=True)
+        raise
+
+    return True

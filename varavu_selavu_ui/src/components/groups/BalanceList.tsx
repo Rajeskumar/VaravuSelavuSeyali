@@ -9,13 +9,15 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import { useTheme } from '@mui/material/styles';
 import { BalanceResponse } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
+import { formatMoney } from '../../utils/money';
 
 interface BalanceListProps {
   balances: BalanceResponse;
   simplifyDebts?: boolean;
+  currency?: string;
 }
 
-const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts }) => {
+const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts, currency = 'USD' }) => {
   const theme = useTheme();
   const nameFor = (memberId: string) =>
     balances.members.find((m) => m.member_id === memberId)?.display_name || 'Unknown';
@@ -25,7 +27,7 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts }) =>
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       <Paper sx={{ borderRadius: 1, overflow: 'hidden' }}>
         {balances.members.map((m, idx) => {
-          const label = m.net > 0 ? `is owed $${m.net.toFixed(2)}` : m.net < 0 ? `owes $${Math.abs(m.net).toFixed(2)}` : 'is settled up';
+          const label = m.net > 0 ? `is owed ${formatMoney(m.net, currency)}` : m.net < 0 ? `owes ${formatMoney(m.net, currency)}` : 'is settled up';
           const color = m.net > 0 ? theme.palette.success.main : m.net < 0 ? theme.palette.error.main : theme.palette.text.secondary;
           return (
             <Box
@@ -89,7 +91,7 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts }) =>
                 <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', flex: 1 }}>
                   {nameFor(t.to_member_id)}
                 </Typography>
-                <Chip size="small" label={`$${t.amount.toFixed(2)}`} sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
+                <Chip size="small" label={formatMoney(t.amount, currency)} sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
               </Box>
             ))}
           </Paper>

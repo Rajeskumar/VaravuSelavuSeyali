@@ -58,7 +58,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
       }}
     >
       <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
-        <IconButton size="small" onClick={handleMenuClick}>
+        <IconButton size="small" onClick={handleMenuClick} aria-label="Template options">
           <MoreVertIcon fontSize="small" />
         </IconButton>
         <Menu

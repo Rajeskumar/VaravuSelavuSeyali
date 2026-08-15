@@ -9,6 +9,7 @@ import { useTheme } from '@mui/material/styles';
 import { typeScale, tabularNums } from '../../theme';
 import { categoryTint } from './categoryColors';
 import { parseAppDate } from '../../utils/date';
+import { formatMoney as formatMoneyShared } from '../../utils/money';
 
 // Row edit/delete icon buttons measured 31×31px — below the 44×44 WCAG touch-target minimum.
 // Rather than growing the icon buttons themselves (which would crowd the compact row and push
@@ -51,6 +52,10 @@ export interface FeedExpense {
   /** Only set for group rows — the full/group amount, rendered as a secondary caption. */
   groupAmount?: number;
   groupName?: string;
+  /** Only set for group rows — the group's currency, so a non-USD group's feed doesn't render
+   * every row with a dollar sign. Absent (personal rows, or a combined multi-group feed where a
+   * single currency can't represent every row) falls back to `formatMoney`'s own USD default. */
+  currency?: string;
   notes?: string;
   /** Only set for group rows — the original payer(s), preserved as-is when an
    * edit re-submits the (Phase-1, always-equal) split. See ExpensesPage's
@@ -69,6 +74,10 @@ interface DayGroup {
   label: string;
   items: FeedExpense[];
   subtotal: number;
+  /** Only set when every row that day shares one currency — a mixed day (combined feed
+   * spanning groups in different currencies) falls back to formatMoney's own USD default
+   * rather than mislabeling the sum. */
+  currency?: string;
 }
 
 /**
@@ -97,17 +106,24 @@ function groupByDay(expenses: FeedExpense[]): DayGroup[] {
     if (!map.has(dateKey)) map.set(dateKey, { d, items: [] });
     map.get(dateKey)!.items.push(e);
   }
-  return Array.from(map.entries()).map(([dateKey, { d, items }]) => ({
-    dateKey,
-    label: Number.isNaN(d.getTime()) ? 'UNDATED' : dayLabel(d),
-    items,
-    subtotal: items.reduce((s, e) => s + e.amount, 0),
-  }));
+  return Array.from(map.entries()).map(([dateKey, { d, items }]) => {
+    const currencies = new Set(items.map((e) => e.currency || 'USD'));
+    return {
+      dateKey,
+      label: Number.isNaN(d.getTime()) ? 'UNDATED' : dayLabel(d),
+      items,
+      subtotal: items.reduce((s, e) => s + e.amount, 0),
+      currency: currencies.size === 1 ? items[0].currency : undefined,
+    };
+  });
 }
 
-export function formatMoney(n: number): string {
+/** Re-exported for the many existing callers of this module's `formatMoney` — delegates
+ * to the shared `utils/money` formatter (currency-aware, `Intl.NumberFormat`-based) while
+ * preserving this function's own sign-prefix convention (unicode minus, no explicit plus). */
+export function formatMoney(n: number, currency: string = 'USD'): string {
   const sign = n < 0 ? '−' : '';
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return `${sign}${formatMoneyShared(n, currency)}`;
 }
 
 interface ExpenseRowProps {
@@ -178,7 +194,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
         className="expense-row-amount"
       >
         <Typography sx={{ ...typeScale.amount, fontSize: '0.8125rem', color: theme.palette.text.primary }}>
-          {formatMoney(expense.amount)}
+          {formatMoney(expense.amount, expense.currency)}
         </Typography>
         {expense.kind === 'group' && (
           <Typography
@@ -188,7 +204,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
           >
             <span aria-hidden>◐</span> my expense
             {typeof expense.groupAmount === 'number' && (
-              <span style={tabularNums as React.CSSProperties}>· {formatMoney(expense.groupAmount)} total</span>
+              <span style={tabularNums as React.CSSProperties}>· {formatMoney(expense.groupAmount, expense.currency)} total</span>
             )}
           </Typography>
         )}
@@ -337,7 +353,7 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
           >
             <Typography sx={{ ...typeScale.label, color: theme.palette.text.secondary }}>{group.label}</Typography>
             <Typography variant="caption" sx={{ ...tabularNums, fontWeight: 600, color: theme.palette.text.secondary }}>
-              {formatMoney(group.subtotal)}
+              {formatMoney(group.subtotal, group.currency)}
             </Typography>
           </Box>
           {group.items.map((expense) => (

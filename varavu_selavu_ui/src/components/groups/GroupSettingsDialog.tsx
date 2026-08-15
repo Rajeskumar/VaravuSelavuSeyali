@@ -29,12 +29,18 @@ import {
 } from '../../api/groups';
 import SplitEditor, { SplitEditorValue } from './SplitEditor';
 import { useQueryClient } from '@tanstack/react-query';
+import ConfirmDialog from '../common/ConfirmDialog';
 
 interface GroupSettingsDialogProps {
   open: boolean;
   onClose: () => void;
   group: GroupDetailResponse;
-  setToast: (toast: { open: boolean; message: string; severity: 'success' | 'error' }) => void;
+  setToast: (toast: {
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+    action?: { label: string; onClick: () => void };
+  }) => void;
 }
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD', 'JPY', 'CNY', 'SGD', 'MXN'];
@@ -90,6 +96,11 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
   const [splitValue, setSplitValue] = useState<SplitEditorValue>(defaultSplitVal);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Balance guard (group_service.delete_group) returns 409 when the group isn't settled —
+  // this holds the confirmed 409 error message so the "delete anyway" confirm can quote it.
+  const [confirmForceDelete, setConfirmForceDelete] = useState<string | null>(null);
 
   const handleSave = async () => {
     setSaving(true);
@@ -211,6 +222,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
               members={group.members}
               value={splitValue}
               onChange={setSplitValue}
+              currency={currency}
             />
           </Box>
         </Box>
@@ -222,25 +234,11 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
           
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 2 }}>
             {group.status === 'active' && (
-              <Button 
-                variant="outlined" 
-                color="warning" 
+              <Button
+                variant="outlined"
+                color="warning"
                 disabled={saving}
-                onClick={async () => {
-                  if (window.confirm('Are you sure you want to archive this group?')) {
-                    setSaving(true);
-                    try {
-                      await archiveGroup(group.group_id);
-                      queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
-                      setToast({ open: true, message: 'Group archived', severity: 'success' });
-                      onClose();
-                    } catch(e) {
-                      setError(e instanceof ApiError ? e.message : 'Failed to archive');
-                    } finally {
-                      setSaving(false);
-                    }
-                  }
-                }}
+                onClick={() => setConfirmArchive(true)}
               >
                 Archive Group
               </Button>
@@ -297,43 +295,151 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                 variant="outlined"
                 color="error"
                 disabled={saving}
-                onClick={async () => {
-                  if (!window.confirm('Are you sure you want to delete this group? This will permanently delete it after 30 days.')) {
-                    return;
-                  }
-                  setSaving(true);
-                  try {
-                    await deleteGroup(group.group_id);
-                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
-                    setToast({ open: true, message: 'Group deleted', severity: 'success' });
-                    onClose();
-                  } catch (e) {
-                    // Balance guard (group_service.delete_group) returns 409 when the group
-                    // isn't settled — offer force delete instead of leaving the user stuck.
-                    if (e instanceof ApiError && e.status === 409 && window.confirm(`${e.message}\n\nDelete anyway?`)) {
-                      try {
-                        await deleteGroup(group.group_id, true);
-                        queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
-                        setToast({ open: true, message: 'Group deleted', severity: 'success' });
-                        onClose();
-                      } catch (e2) {
-                        setToast({ open: true, message: e2 instanceof ApiError ? e2.message : 'Failed to delete', severity: 'error' });
-                      }
-                    } else if (!(e instanceof ApiError && e.status === 409)) {
-                      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to delete', severity: 'error' });
-                    }
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
+                onClick={() => setConfirmDelete(true)}
               >
                 Delete Group
               </Button>
             )}
           </Box>
         </Box>
-        
+
       </DialogContent>
+
+      <ConfirmDialog
+        open={confirmArchive}
+        title="Archive this group?"
+        message="Existing balances and history stay intact — you can unarchive it any time from this same Settings panel."
+        confirmLabel="Archive"
+        loading={saving}
+        onCancel={() => setConfirmArchive(false)}
+        onConfirm={async () => {
+          setSaving(true);
+          try {
+            await archiveGroup(group.group_id);
+            queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+            setToast({
+              open: true,
+              message: 'Group archived',
+              severity: 'success',
+              action: {
+                label: 'Undo',
+                onClick: async () => {
+                  try {
+                    await unarchiveGroup(group.group_id);
+                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    setToast({ open: true, message: 'Group unarchived', severity: 'success' });
+                  } catch (e) {
+                    setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to unarchive', severity: 'error' });
+                  }
+                },
+              },
+            });
+            setConfirmArchive(false);
+            onClose();
+          } catch (e) {
+            setError(e instanceof ApiError ? e.message : 'Failed to archive');
+            setConfirmArchive(false);
+          } finally {
+            setSaving(false);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete this group?"
+        message="This will permanently delete it after 30 days. You can undo this from the confirmation toast in the meantime."
+        confirmLabel="Delete"
+        destructive
+        loading={saving}
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          setSaving(true);
+          try {
+            await deleteGroup(group.group_id);
+            queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+            setToast({
+              open: true,
+              message: 'Group deleted',
+              severity: 'success',
+              action: {
+                label: 'Undo',
+                onClick: async () => {
+                  try {
+                    await restoreGroup(group.group_id);
+                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    setToast({ open: true, message: 'Group restored', severity: 'success' });
+                  } catch (e) {
+                    setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to restore', severity: 'error' });
+                  }
+                },
+              },
+            });
+            setConfirmDelete(false);
+            onClose();
+          } catch (e) {
+            // Balance guard (group_service.delete_group) returns 409 when the group isn't
+            // settled — offer force delete instead of leaving the user stuck.
+            if (e instanceof ApiError && e.status === 409) {
+              setConfirmForceDelete(e.message);
+            } else {
+              setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to delete', severity: 'error' });
+            }
+            setConfirmDelete(false);
+          } finally {
+            setSaving(false);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!confirmForceDelete}
+        title="Group isn't settled up"
+        message={
+          <>
+            {confirmForceDelete}
+            <br />
+            <br />
+            Delete anyway? This will permanently delete it after 30 days.
+          </>
+        }
+        confirmLabel="Delete anyway"
+        destructive
+        loading={saving}
+        onCancel={() => setConfirmForceDelete(null)}
+        onConfirm={async () => {
+          setSaving(true);
+          try {
+            await deleteGroup(group.group_id, true);
+            queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+            setToast({
+              open: true,
+              message: 'Group deleted',
+              severity: 'success',
+              action: {
+                label: 'Undo',
+                onClick: async () => {
+                  try {
+                    await restoreGroup(group.group_id);
+                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    setToast({ open: true, message: 'Group restored', severity: 'success' });
+                  } catch (e2) {
+                    setToast({ open: true, message: e2 instanceof ApiError ? e2.message : 'Failed to restore', severity: 'error' });
+                  }
+                },
+              },
+            });
+            setConfirmForceDelete(null);
+            onClose();
+          } catch (e2) {
+            setToast({ open: true, message: e2 instanceof ApiError ? e2.message : 'Failed to delete', severity: 'error' });
+            setConfirmForceDelete(null);
+          } finally {
+            setSaving(false);
+          }
+        }}
+      />
+
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Cancel</Button>
         <Button onClick={handleSave} variant="contained" disabled={saving || isArchived}>

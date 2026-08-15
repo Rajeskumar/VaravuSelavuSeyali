@@ -61,7 +61,7 @@ const BudgetCard: React.FC<BudgetCardProps> = ({ budget, onEdit, onDelete }) => 
       }}
     >
       <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
-        <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)}>
+        <IconButton size="small" onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="Budget options">
           <MoreVertIcon fontSize="small" />
         </IconButton>
         <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>

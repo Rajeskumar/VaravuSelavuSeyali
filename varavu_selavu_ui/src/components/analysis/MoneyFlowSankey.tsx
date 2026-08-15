@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from '../common/LazyPlot';
 import { Card, CardContent, Typography, Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { motion } from 'framer-motion';

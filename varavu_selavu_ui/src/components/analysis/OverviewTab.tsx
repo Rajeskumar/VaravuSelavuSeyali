@@ -198,7 +198,7 @@ const OverviewTab: React.FC = () => {
           <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary' }}>
             {isYearMode ? year : `${monthNames[month - 1]} ${year}`}
           </Typography>
-          <IconButton size="small" onClick={handleYearMonthClick} sx={{ p: 0.25, color: 'text.secondary' }}>
+          <IconButton size="small" onClick={handleYearMonthClick} aria-label="Choose month or year" sx={{ p: 0.25, color: 'text.secondary' }}>
             <CalendarMonthIcon sx={{ fontSize: 16 }} />
           </IconButton>
 

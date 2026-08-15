@@ -10,6 +10,7 @@ import PersonRemoveRoundedIcon from '@mui/icons-material/PersonRemoveRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import HandshakeRoundedIcon from '@mui/icons-material/HandshakeRounded';
 import AddCircleOutlineRoundedIcon from '@mui/icons-material/AddCircleOutlineRounded';
+import { formatMoney } from '../../utils/money';
 
 interface ActivityFeedProps {
   groupId: string;
@@ -65,7 +66,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ groupId, group }) =>
         return { icon: <SettingsRoundedIcon color="action" />, text: `${actor} updated the group settings.` };
       case 'expense_created':
       case 'itemized_expense_created':
-        return { icon: <ReceiptLongRoundedIcon color="info" />, text: `${actor} added an expense: "${p.description}" for $${p.amount?.toFixed(2) || '0.00'}.` };
+        return { icon: <ReceiptLongRoundedIcon color="info" />, text: `${actor} added an expense: "${p.description}" for ${formatMoney(p.amount || 0, group.currency)}.` };
       case 'expense_updated':
         return { icon: <ReceiptLongRoundedIcon color="warning" />, text: `${actor} updated the expense "${p.description}".` };
       case 'expense_deleted':
@@ -77,7 +78,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ groupId, group }) =>
       case 'member_left':
         return { icon: <PersonRemoveRoundedIcon color="error" />, text: `${p.display_name} left the group.` };
       case 'settlement_created':
-        return { icon: <HandshakeRoundedIcon color="success" />, text: `${actor} recorded a settlement of $${p.amount?.toFixed(2) || '0.00'}.` };
+        return { icon: <HandshakeRoundedIcon color="success" />, text: `${actor} recorded a settlement of ${formatMoney(p.amount || 0, group.currency)}.` };
       case 'settlement_deleted':
         return { icon: <HandshakeRoundedIcon color="action" />, text: `${actor} deleted a settlement.` };
       default:

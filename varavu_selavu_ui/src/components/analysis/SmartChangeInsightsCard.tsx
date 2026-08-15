@@ -103,7 +103,7 @@ export default function SmartChangeInsightsCard({ userId, year, month }: SmartCh
                 </Typography>
               </Box>
               {(insight.time_scope === 'merchant' || insight.time_scope === 'item') && (
-                <IconButton size="small" onClick={() => handleNavigate(insight)} sx={{ mt: -0.5, mr: -0.5 }}>
+                <IconButton size="small" onClick={() => handleNavigate(insight)} aria-label="View details" sx={{ mt: -0.5, mr: -0.5 }}>
                   <ArrowForwardIcon fontSize="small" />
                 </IconButton>
               )}

@@ -96,7 +96,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
         <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
           Ask
         </Typography>
-        <IconButton onClick={onClose} sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
+        <IconButton onClick={onClose} aria-label="Close" sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
@@ -167,7 +167,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
             }
           }}
         />
-        <IconButton onClick={handleFollowUp} color="primary" disabled={!draft.trim() || thinking}>
+        <IconButton onClick={handleFollowUp} aria-label="Send question" color="primary" disabled={!draft.trim() || thinking}>
           <SendIcon fontSize="small" />
         </IconButton>
       </Box>

@@ -10,6 +10,7 @@ import { MemberDTO } from '../../api/groups';
 import { previewEqualSplit, previewPercentageSplit, previewSharesSplit, previewAdjustmentSplit } from '../../utils/splitPreview';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import SegmentedTabs from '../common/SegmentedTabs';
+import { formatMoney, currencySymbol } from '../../utils/money';
 
 export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
 
@@ -37,6 +38,7 @@ interface SplitEditorProps {
    * per spec §10.1's Phase-1 scope for that entry point; the tab bar is hidden entirely
    * when there's nothing to choose between. */
   allowedTypes?: SplitType[];
+  currency?: string;
 }
 
 const TOLERANCE = 0.02;
@@ -63,6 +65,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
   onValidityChange,
   serverError,
   allowedTypes = ALL_TYPES,
+  currency = 'USD',
 }) => {
   const selectedIds = React.useMemo(() => new Set(value.entries.map((e) => e.member_id)), [value.entries]);
 
@@ -242,7 +245,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
                   inputProps={{ 'aria-label': `${value.type} for ${m.display_name}` }}
                   InputProps={
                     value.type === 'exact' || value.type === 'adjustment'
-                      ? { startAdornment: <InputAdornment position="start">{value.type === 'adjustment' ? '±$' : '$'}</InputAdornment> }
+                      ? { startAdornment: <InputAdornment position="start">{value.type === 'adjustment' ? `±${currencySymbol(currency)}` : currencySymbol(currency)}</InputAdornment> }
                       : value.type === 'percentage'
                       ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
                       : {}
@@ -251,7 +254,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
               )}
               {checked && (
                 <Typography variant="body2" color="text.secondary" sx={{ minWidth: 72, textAlign: 'right', fontWeight: 600 }}>
-                  ${(preview[m.member_id] ?? 0).toFixed(2)}
+                  {formatMoney(preview[m.member_id] ?? 0, currency)}
                 </Typography>
               )}
             </Box>
@@ -268,7 +271,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
         <Typography color="error" variant="body2" sx={{ mt: 1 }}>
           {value.type === 'percentage'
             ? `Percentages must total 100 (currently ${totalEntered.toFixed(2)})`
-            : `Exact amounts must total $${amount.toFixed(2)} (currently $${totalEntered.toFixed(2)})`}
+            : `Exact amounts must total ${formatMoney(amount, currency)} (currently ${formatMoney(totalEntered, currency)})`}
         </Typography>
       )}
       {isValid && (

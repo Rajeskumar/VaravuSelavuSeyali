@@ -49,6 +49,7 @@ import ItemSplitBoard from '../groups/ItemSplitBoard';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
 import EntityAutocomplete from './EntityAutocomplete';
+import { formatMoney, currencySymbol } from '../../utils/money';
 
 // Exported for reuse by the ExpenseFeed/ExpenseDetailSheet (TS-DES-102) — the
 // feed's category tint-dot mapping and the detail sheet's inline category
@@ -198,6 +199,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [groupItems, setGroupItems] = useState<GroupExpenseItemEntry[]>([]);
   const [groupItemsValid, setGroupItemsValid] = useState(false);
   const [groupSubmitError, setGroupSubmitError] = useState<string | null>(null);
+  // The "Cost" field and every split/payer control below are shared between personal and
+  // group mode — once a group is selected, its currency (not USD) is what the amount actually
+  // means, so every $ sign on this form needs to track it.
+  const activeCurrency = mode === 'group' && groupDetail ? groupDetail.currency : 'USD';
 
   useEffect(() => {
     if (!groupsEnabled || existing) return;
@@ -603,6 +608,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                         payers={payers}
                         onChange={setPayers}
                         onValidityChange={setPayersValid}
+                        currency={activeCurrency}
                       />
                     </Grid>
                     <Grid size={12}>
@@ -618,6 +624,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                             onChange={setGroupItems}
                             onValidityChange={setGroupItemsValid}
                             groupId={groupDetail.group_id}
+                            currency={activeCurrency}
                           />
                         </>
                       ) : (
@@ -633,6 +640,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                             onValidityChange={setSplitValid}
                             allowedTypes={['equal']}
                             serverError={groupSubmitError}
+                            currency={activeCurrency}
                           />
                         </>
                       )}
@@ -724,7 +732,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 error={costError !== null}
                 helperText={costError ?? ' '}
                 inputProps={{ maxLength: MAX_AMOUNT_LENGTH, 'aria-label': 'Cost' }}
-                InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }}
+                InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol(activeCurrency)}</InputAdornment> }}
               />
             </Grid>
             {/* Recurring toggle — personal only; group recurring templates are Phase 2 (spec §11.2 RecurringPage). */}

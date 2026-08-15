@@ -24,6 +24,9 @@ import UserMenu from './components/layout/UserMenu';
 import FeedbackDialog from './components/layout/FeedbackDialog';
 import AccountPage from './pages/AccountPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import EmailVerificationBanner from './components/common/EmailVerificationBanner';
 import AskPage from './pages/AskPage';
 import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
 import AmbientBackground from './components/common/AmbientBackground';
@@ -87,6 +90,8 @@ const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const [user, setUser] = React.useState<string | null>(() => localStorage.getItem('vs_user'));
   const [feedbackOpen, setFeedbackOpen] = React.useState(false);
+  const [emailVerified, setEmailVerified] = React.useState<boolean | null>(null);
+  const [verifyBannerDismissed, setVerifyBannerDismissed] = React.useState(false);
   const { isDark, toggleMode } = useThemeMode();
   const { openQuickCapture } = useQuickCapture();
   const { openAsk } = useAsk();
@@ -111,9 +116,21 @@ const AppContent: React.FC = () => {
   // request after a reload (not a fresh login) 403s. Failure is fine to ignore: an
   // actually-dead session surfaces the normal way, via fetchWithAuth's 401 → logout.
   React.useEffect(() => {
-    if (!localStorage.getItem('vs_user')) return;
-    fetchMe().catch(() => {});
-  }, []);
+    if (!user) {
+      setEmailVerified(null);
+      return;
+    }
+    const refreshVerifiedStatus = () => {
+      fetchMe()
+        .then((data) => setEmailVerified(data.email_verified ?? null))
+        .catch(() => {});
+    };
+    refreshVerifiedStatus();
+    // Fired by VerifyEmailPage on success — lets the banner clear mid-session instead of
+    // needing a reload/relogin to notice the account is now verified.
+    window.addEventListener('vs_email_verified', refreshVerifiedStatus);
+    return () => window.removeEventListener('vs_email_verified', refreshVerifiedStatus);
+  }, [user]);
 
   // Migrates sessions created before tokens moved into HttpOnly cookies: trade the
   // refresh token still in localStorage for cookies once, then erase it. Users stay
@@ -158,6 +175,28 @@ const AppContent: React.FC = () => {
 
   return (
     <>
+      {/* Keyboard-only until focused — lets a screen-reader/keyboard user jump straight past
+          the fixed header/nav instead of tabbing through every nav item on every page. */}
+      <Box
+        component="a"
+        href="#main-content"
+        sx={{
+          position: 'absolute',
+          left: -9999,
+          top: 'auto',
+          zIndex: theme => theme.zIndex.tooltip + 1,
+          p: 1.5,
+          bgcolor: 'background.paper',
+          color: 'text.primary',
+          borderRadius: 1,
+          '&:focus': {
+            left: 8,
+            top: 8,
+          },
+        }}
+      >
+        Skip to main content
+      </Box>
       <AmbientBackground />
       <AppBar
         position="fixed"
@@ -273,6 +312,9 @@ const AppContent: React.FC = () => {
       {/* Spacer — must match the AppBar Toolbar's own height exactly (HEADER_HEIGHT at desktop) so
           routed content starts right below the fixed header with no gap/overlap. */}
       <Toolbar sx={{ minHeight: { xs: 56, md: HEADER_HEIGHT } }} />
+      {user && emailVerified === false && !verifyBannerDismissed && (
+        <EmailVerificationBanner onDismiss={() => setVerifyBannerDismissed(true)} />
+      )}
       {user && quickLog.parsed && (
         <Box sx={{ display: { xs: 'none', md: 'block' } }}>
           <WillLogPreview
@@ -291,11 +333,16 @@ const AppContent: React.FC = () => {
           </Typography>
         </Box>
       )}
+      <Box component="main" id="main-content">
       <Routes>
         <Route path="/" element={<Root />} />
         <Route path="/login" element={<RequireGuest><LoginPage /></RequireGuest>} />
         <Route path="/register" element={<RequireGuest><RegisterPage /></RequireGuest>} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        {/* Public — reached from an emailed link, not app navigation; works whether or not
+            the visitor currently has a session. */}
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         {/* Public: logged-out visitors' only path to support — /email/send itself has no auth
             requirement either. Logged-in users get a faster path via the avatar menu's Feedback
             dialog (FeedbackDialog, opened from UserMenu) instead of this page. */}
@@ -322,6 +369,7 @@ const AppContent: React.FC = () => {
             default Profile tab. Redirect shim so no existing bookmark/link 404s. */}
         <Route path="/profile" element={<Navigate to="/account" replace />} />
       </Routes>
+      </Box>
       {/* Recurring expenses prompt appears after login */}
       {user && <RecurringPrompt />}
       {user && <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />}

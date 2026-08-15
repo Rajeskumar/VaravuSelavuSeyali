@@ -61,7 +61,7 @@ const GroupCard: React.FC<GroupCardProps> = ({ group, onClick }) => {
           </Typography>
           {direction !== 'settled' && (
             <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: balanceColor, ...tabularNums }}>
-              {formatBalanceAmount(group.my_balance)}
+              {formatBalanceAmount(group.my_balance, group.currency)}
             </Typography>
           )}
         </Box>
