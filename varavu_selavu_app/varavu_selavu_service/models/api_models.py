@@ -151,6 +151,9 @@ class FeatureFlagsResponse(BaseModel):
     # integrations — defaults True (see Settings.BUDGETS_ENABLED), but still client-checked
     # for consistency with every other feature surface.
     budgets_enabled: bool
+    # TS-CARD-101: same pattern, for the Analysis "Cards" tab and its Dashboard/AI Analyst
+    # integrations — defaults False until the curated card_catalog (TS-CARD-102) is populated.
+    card_coach_enabled: bool
 
 
 class DashboardResponse(BaseModel):
@@ -892,4 +895,103 @@ class BudgetAskWhyResponse(BaseModel):
     figures plus its contributing transactions (BudgetService.build_ask_why_prompt), reusing
     the same chat model dispatch as /analysis/chat rather than a second AI integration path."""
     response: str
+
+
+# ---------------------- Card Coach (TS-CARD series) ---------------------- #
+
+class CardEarningRuleDTO(BaseModel):
+    id: str
+    category_id: str  # bare sub-category string (matches Expense.category_id), or "All Purchases"
+    multiplier: float
+    cap_amount: Optional[float] = None
+    cap_period: Optional[str] = None
+    exclusions_note: Optional[str] = None
+    rotation_start: Optional[str] = None  # YYYY-MM-DD
+    rotation_end: Optional[str] = None  # YYYY-MM-DD
+
+
+class CardCatalogSummary(BaseModel):
+    """Lightweight shape for catalog search results — no earning rules (spec §7 GET /cards/catalog)."""
+    id: str
+    issuer: str
+    card_name: str
+    reward_type: str
+    annual_fee: float
+
+
+class CardCatalogDetail(BaseModel):
+    """Full catalog card detail per spec Appendix, including provenance (§9.4)."""
+    id: str
+    issuer: str
+    card_name: str
+    reward_type: str
+    points_currency_name: Optional[str] = None
+    point_value_estimate_usd: Optional[float] = None
+    annual_fee: float
+    earning_rules: List[CardEarningRuleDTO]
+    source_url: str
+    last_verified_at: str  # ISO datetime
+    is_active: bool
+
+
+class UserCardDTO(BaseModel):
+    """A held card, joined with its catalog summary so the UI doesn't need a second fetch."""
+    id: str  # user_cards.id
+    card_id: str
+    issuer: str
+    card_name: str
+    reward_type: str
+    is_default: bool
+    added_at: str  # ISO datetime
+
+
+class AddUserCardRequest(BaseModel):
+    card_id: str
+
+
+class CardCorrectionRequest(BaseModel):
+    """POST /cards/corrections — spec §5 item 6, §9.4."""
+    card_id: str
+    note: DescriptionStr
+
+
+class CardCorrectionDTO(BaseModel):
+    id: str
+    card_id: str
+    note: str
+    status: str
+    created_at: str
+
+
+class CardCoachPeriod(BaseModel):
+    year: Optional[int] = None
+    month: Optional[int] = None
+
+
+class CardCoachCategoryDTO(BaseModel):
+    category: str
+    actual_spend: float
+    # "personal_plus_group_paid" when GROUPS_ENABLED (spec §8.2 — full paid amount, not "my
+    # share"), else "personal_only". Same for every row in one response.
+    spend_source: str
+    actual_earned_estimate: Optional[float] = None
+    held_card_used: Optional[str] = None
+    optimal_in_wallet_card: Optional[str] = None
+    optimal_in_wallet_earned_estimate: Optional[float] = None
+    optimal_catalog_card: Optional[str] = None
+    optimal_catalog_earned_estimate: Optional[float] = None
+    cap_note: Optional[str] = None
+
+
+class CardCoachFilterInfo(BaseModel):
+    year: Optional[int] = None
+    month: Optional[int] = None
+    group_share_included: bool
+
+
+class CardCoachResponse(BaseModel):
+    period: CardCoachPeriod
+    total_estimated_gap: float
+    by_category: List[CardCoachCategoryDTO]
+    filter_info: CardCoachFilterInfo
 

@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     # blast radius, so there's no reason to gate them behind an explicit opt-in.
     BUDGETS_ENABLED: bool = True
 
+    # Card Coach (TS-CARD series) — same staged-rollout pattern as GROUPS_ENABLED: off by
+    # default until the curated card_catalog dataset (TS-CARD-102) is populated and reviewed.
+    # See docs/features/card_coach/TrackSpense_Card_Rewards_Product_Spec.md.
+    CARD_COACH_ENABLED: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

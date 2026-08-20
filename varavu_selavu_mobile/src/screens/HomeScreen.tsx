@@ -22,6 +22,8 @@ import { AddExpenseContext } from './AddExpenseScreen';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import { listBudgets } from '../api/budgets';
 import BudgetsSummaryCard from '../components/BudgetsSummaryCard';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
+import CardCoachSummaryCard from '../components/CardCoachSummaryCard';
 
 // ─── Category icon map ───────────────────────────────────────────────────────
 const categoryEmojis: Record<string, string> = {
@@ -376,6 +378,7 @@ export default function HomeScreen() {
   });
 
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const { data: budgetsData } = useQuery({
     queryKey: ['budgets'],
     queryFn: () => listBudgets(),
@@ -486,6 +489,11 @@ export default function HomeScreen() {
             budgets={budgetsData || []}
             onPress={() => navigation.navigate('Analysis', { initialTab: 'budgets' })}
           />
+        )}
+
+        {/* ── Card Coach (TS-CARD-108) ──────────────────────── */}
+        {cardCoachEnabled && (
+          <CardCoachSummaryCard onPress={() => navigation.navigate('Analysis', { initialTab: 'cards' })} />
         )}
 
         {/* ── Recent Activity ───────────────────────────────── */}

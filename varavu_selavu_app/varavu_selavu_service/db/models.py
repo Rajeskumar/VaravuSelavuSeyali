@@ -498,3 +498,83 @@ class RefreshToken(Base):
     # this one, for tracing a session's lineage during troubleshooting.
     replaced_by = Column(UUID(as_uuid=True), nullable=True)
 
+
+class CardCatalog(Base):
+    """TS-CARD-101: one curated credit/charge card, manually sourced and human-reviewed per
+    docs/features/card_coach/TrackSpense_Card_Rewards_Product_Spec.md §5 — never populated by
+    an automated scrape. `source_url`/`last_verified_at` are surfaced in the UI alongside every
+    figure derived from this row (spec §9.4) so TrackSpense never asserts more confidence in a
+    reward rate than it actually has."""
+    __tablename__ = "card_catalog"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    issuer = Column(String(255), nullable=False)
+    card_name = Column(String(255), nullable=False)
+    reward_type = Column(String(20), nullable=False)  # cashback | points | miles
+    points_currency_name = Column(String(255), nullable=True)
+    # Editorial dollar-per-point estimate for points/miles cards (spec §8.3) — set by whoever
+    # curates the catalog entry, not derived from any live redemption-value feed.
+    point_value_estimate_usd = Column(Numeric(6, 4), nullable=True)
+    annual_fee = Column(Numeric(8, 2), nullable=False, default=0)
+    source_url = Column(String(500), nullable=False)
+    last_verified_at = Column(DateTime(timezone=True), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CardEarningRule(Base):
+    """TS-CARD-101: one reward-rate rule for a CardCatalog card — a flat 'All Purchases' rate,
+    a capped/bonused category rate, or a time-boxed rotating-category rate. One-to-many per card
+    (spec §6) so e.g. Chase Freedom Flex can carry both its flat rate and several rotating rules."""
+    __tablename__ = "card_earning_rules"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    card_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.card_catalog.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Matches the existing expense category taxonomy's sub-category id, or the literal
+    # "All Purchases" sentinel for a card's flat/base rate (spec §6, §8.3).
+    category_id = Column(String(100), nullable=False)
+    multiplier = Column(Numeric(5, 2), nullable=False)
+    cap_amount = Column(Numeric(10, 2), nullable=True)
+    cap_period = Column(String(20), nullable=True)  # quarterly | annual
+    exclusions_note = Column(Text, nullable=True)
+    rotation_start = Column(Date, nullable=True)
+    rotation_end = Column(Date, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class UserCard(Base):
+    """TS-CARD-101: a user's claim to hold a CardCatalog card. Deliberately carries nothing about
+    the user's actual card account — no numbers, no issuer credentials, no balances — matching
+    the feature's no-new-PII goal (spec §2, §6).
+
+    `is_default` (TS-CARD-104 follow-up): there's no per-expense card tracking and
+    `Expense.payment_method` is free text, not linked to any UserCard, so §8.3's "actual earned"
+    figure has no reliable way to attribute spend to a specific held card per expense. Exactly
+    one held card can be flagged default (CardService enforces this) and CardRewardsEngine uses
+    it as the sole basis for "actual earned" — see docs/features/card_coach/...Spec.md §8.3."""
+    __tablename__ = "user_cards"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    card_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.card_catalog.id", ondelete="CASCADE"), nullable=False, index=True)
+    is_default = Column(Boolean, nullable=False, default=False)
+    added_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CardDataCorrection(Base):
+    """TS-CARD-101: a user-filed report that a CardCatalog record looks stale/wrong (spec §5
+    item 6, §9.4) — crowdsources freshness without any bot traffic against issuer sites. Purely
+    a manual-review queue; nothing here is auto-applied back onto the catalog."""
+    __tablename__ = "card_data_corrections"
+    __table_args__ = {"schema": "trackspense"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    card_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.card_catalog.id", ondelete="CASCADE"), nullable=False, index=True)
+    note = Column(Text, nullable=False)
+    status = Column(String(50), nullable=False, default="open")  # open | reviewed | resolved
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+

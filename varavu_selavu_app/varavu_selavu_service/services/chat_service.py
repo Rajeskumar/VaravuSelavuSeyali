@@ -240,6 +240,43 @@ def _create_personal_expense_from_agent(
         return f"Error creating expense: {str(e)}"
 
 
+def _format_card_coach_summary(gaps: list, group_share_included: bool) -> str:
+    """Formats CardRewardsEngine's per-category gap objects into prose for the
+    `get_card_coach_summary` chat tool. Extracted (same pattern as
+    `_create_personal_expense_from_agent`) so the formatting logic is unit-testable without a
+    LangGraph agent/real LLM — the tool closure is just this plus a `CardService.compute_coach_gaps`
+    call."""
+    spend_rows = [g for g in gaps if g.actual_spend > 0]
+    if not spend_rows:
+        return "No categorized spend found for this period."
+
+    lines = []
+    for g in spend_rows:
+        actual = (
+            f"{g.actual.card_name} earned ${g.actual.earned_usd:.2f}"
+            if g.actual and g.actual.earned_usd is not None
+            else "no default card set, so actual earnings are unknown"
+        )
+        best_held = (
+            f"{g.optimal_in_wallet.card_name} would have earned ${g.optimal_in_wallet.earned_usd:.2f}"
+            if g.optimal_in_wallet and g.optimal_in_wallet.earned_usd is not None
+            else "no comparable held card"
+        )
+        catalog = (
+            f"; best in the full catalog: {g.optimal_catalog.card_name} (${g.optimal_catalog.earned_usd:.2f})"
+            if g.optimal_catalog and g.optimal_catalog.earned_usd is not None
+            else ""
+        )
+        lines.append(
+            f"{g.category}: spent ${g.actual_spend:.2f} — actual: {actual}; "
+            f"best held card: {best_held}{catalog}; estimated gap: ${g.gap_usd:.2f}"
+        )
+
+    total_gap = round(sum(g.gap_usd for g in gaps), 2)
+    source_note = " (includes the full amount paid on group expenses, not just the user's split share)" if group_share_included else ""
+    return f"Estimated total reward gap this period: ${total_gap:.2f}{source_note}.\n" + "\n".join(lines)
+
+
 def _resolve_payer(members: list[dict], my_member: dict, paid_by: Optional[str]) -> tuple[Optional[dict], Optional[str]]:
     """
     Resolves who paid for a group expense from the agent's free-text `paid_by` param — unset
@@ -397,6 +434,8 @@ def call_chat_model(
     expense_service=None,
     group_expense_service=None,
     groups_enabled: bool = False,
+    card_service=None,
+    card_coach_enabled: bool = False,
     model: str | None = None,
     provider: str | None = None,
     year: int | None = None,
@@ -547,6 +586,30 @@ def call_chat_model(
                 )
 
             tools.append(create_group_expense)
+
+    # TS-CARD-109: independent of Groups being enabled — Card Coach works for personal-only
+    # spend too, it just gates the group-share input the same way get_card_coach does.
+    if card_coach_enabled and card_service is not None:
+        @tool
+        def get_card_coach_summary() -> str:
+            """Get Card Coach's per-category reward analysis: how much the user's spend actually
+            earned with their default held card vs. the best card they hold vs. the best card in
+            the full curated catalog, plus the estimated dollar gap for each category. Use this
+            for questions like "how much would I have earned with a different card on groceries?"
+            or "am I leaving rewards on the table?". Uses the same resolved period as the rest of
+            this conversation turn — no date arguments needed."""
+            try:
+                gaps, group_share_included = card_service.compute_coach_gaps(
+                    user_id,
+                    start_date=resolved_period.start_date,
+                    end_date=resolved_period.end_date,
+                    groups_enabled=groups_enabled,
+                )
+                return _format_card_coach_summary(gaps, group_share_included)
+            except Exception as e:
+                return f"Error computing card coach summary: {str(e)}"
+
+        tools.append(get_card_coach_summary)
 
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"

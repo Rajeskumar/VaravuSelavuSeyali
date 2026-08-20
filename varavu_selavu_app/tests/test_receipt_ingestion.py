@@ -1,8 +1,10 @@
 import pytest
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.api.routes import get_receipt_service
 from varavu_selavu_service.db.models import Expense, ExpenseItem
+from varavu_selavu_service.repo.postgres_repo import PostgresRepo
 
 SAMPLE_TEXT = (
     "Merchant: Test Store\n"
@@ -77,3 +79,65 @@ def test_create_expense_with_items(test_client, db_session):
     # Idempotency
     resp2 = test_client.post("/api/v1/expenses/with_items", json=payload)
     assert resp2.status_code == 409
+
+
+# --- TS-BUG-101 regression: itemized/receipt-scan expense dates must not roll
+# back a day. See docs/engineering/tickets/TS-BUG-101-date-off-by-one.md.
+
+def test_create_expense_with_items_date_round_trip(test_client, db_session):
+    """The MM/DD/YYYY string both clients now send must land on the exact
+    intended calendar date — this is the literal repro for symptom #1."""
+    payload = {
+        "user_email": "test@user.com",
+        "header": {
+            "purchased_at": "07/15/2026",
+            "merchant_name": "Date Test Store",
+            "amount": 10.0,
+            "category_id": "Shopping",
+            "fingerprint": "date-rt-mdy",
+        },
+        "items": [{"line_no": 1, "item_name": "Widget", "line_total": 10.0}],
+    }
+    resp = test_client.post("/api/v1/expenses/with_items", json=payload)
+    assert resp.status_code == 201, resp.text
+
+    expense = db_session.query(Expense).filter(Expense.fingerprint == "date-rt-mdy").one()
+    assert expense.purchased_at.strftime("%m/%d/%Y") == "07/15/2026"
+
+
+def test_create_expense_with_items_iso_date_round_trip(test_client, db_session):
+    """A bare YYYY-MM-DD string (e.g. what a receipt-parser response's
+    header.purchased_at looks like) must also round-trip unchanged."""
+    payload = {
+        "user_email": "test@user.com",
+        "header": {
+            "purchased_at": "2026-07-15",
+            "merchant_name": "Date Test Store 2",
+            "amount": 5.0,
+            "category_id": "Shopping",
+            "fingerprint": "date-rt-iso",
+        },
+        "items": [{"line_no": 1, "item_name": "Gadget", "line_total": 5.0}],
+    }
+    resp = test_client.post("/api/v1/expenses/with_items", json=payload)
+    assert resp.status_code == 201, resp.text
+
+    expense = db_session.query(Expense).filter(Expense.fingerprint == "date-rt-iso").one()
+    assert expense.purchased_at.strftime("%m/%d/%Y") == "07/15/2026"
+
+
+def test_normalize_purchased_at_uses_date_part_only():
+    """Direct unit coverage for PostgresRepo._normalize_purchased_at: only the
+    calendar-date portion is ever trusted, regardless of input shape — a
+    full ISO datetime/offset (the shape a client's `Date.toISOString()`
+    would produce) must never shift which day gets stored."""
+    noon_utc = lambda y, m, d: datetime(y, m, d, 12, tzinfo=timezone.utc)
+
+    assert PostgresRepo._normalize_purchased_at("07/15/2026") == noon_utc(2026, 7, 15)
+    assert PostgresRepo._normalize_purchased_at("2026-07-15") == noon_utc(2026, 7, 15)
+    assert PostgresRepo._normalize_purchased_at("2026-07-15T23:59:59+05:30") == noon_utc(2026, 7, 15)
+    assert PostgresRepo._normalize_purchased_at("2026-07-15T00:00:00.000Z") == noon_utc(2026, 7, 15)
+    assert PostgresRepo._normalize_purchased_at(datetime(2026, 7, 15, 3, 0)) == noon_utc(2026, 7, 15)
+    assert PostgresRepo._normalize_purchased_at(date(2026, 7, 15)) == noon_utc(2026, 7, 15)
+    assert PostgresRepo._normalize_purchased_at(None) is None
+    assert PostgresRepo._normalize_purchased_at("not-a-date") is None
