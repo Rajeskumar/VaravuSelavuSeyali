@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     # Card Coach (TS-CARD series) — same staged-rollout pattern as GROUPS_ENABLED: off by
     # default until the curated card_catalog dataset (TS-CARD-102) is populated and reviewed.
     # See docs/features/card_coach/TrackSpense_Card_Rewards_Product_Spec.md.
-    CARD_COACH_ENABLED: bool = False
+    CARD_COACH_ENABLED: bool = True
 
     class Config:
         env_file = ".env"
