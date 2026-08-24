@@ -3,7 +3,25 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
-import { getCardCoach } from '../api/cards';
+import { getCardCoach, CardCoachCategoryDTO } from '../api/cards';
+
+/** The single category with the biggest actionable "switch to a card you already hold" gap, or
+ * null if none exists (either no gaps, or the only gaps need a card not in the wallet). Mirrors
+ * CardsTabContent.tsx's GapCard gap computation. */
+function biggestSwitchOpportunity(byCategory: CardCoachCategoryDTO[]): CardCoachCategoryDTO | null {
+  let best: CardCoachCategoryDTO | null = null;
+  let bestGap = 0;
+  for (const row of byCategory) {
+    if (row.is_using_best_held_card) continue;
+    if (row.optimal_in_wallet_earned_estimate == null || row.actual_earned_estimate == null) continue;
+    const gap = row.optimal_in_wallet_earned_estimate - row.actual_earned_estimate;
+    if (gap > bestGap) {
+      bestGap = gap;
+      best = row;
+    }
+  }
+  return best;
+}
 
 interface Props {
   onPress: () => void;
@@ -27,12 +45,15 @@ export default function CardCoachSummaryCard({ onPress }: Props) {
 
   if (!coach || coach.total_estimated_gap <= 0) return null;
 
+  const switchRow = biggestSwitchOpportunity(coach.by_category);
+  const headline = switchRow
+    ? `Switch to ${switchRow.optimal_in_wallet_card} for ${switchRow.category} to earn $${(switchRow.optimal_in_wallet_earned_estimate! - switchRow.actual_earned_estimate!).toFixed(2)} more this month`
+    : `You left an estimated $${coach.total_estimated_gap.toFixed(2)} in rewards on the table this month`;
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={styles.title}>
-          You left an estimated ${coach.total_estimated_gap.toFixed(2)} in rewards on the table this month
-        </Text>
+        <Text style={styles.title}>{headline}</Text>
         <Text style={styles.subtitle}>Ask about it →</Text>
       </View>
     </TouchableOpacity>

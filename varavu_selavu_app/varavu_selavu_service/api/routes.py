@@ -81,13 +81,15 @@ from varavu_selavu_service.models.api_models import (
     CardCoachResponse,
     CardCoachPeriod,
     CardCoachCategoryDTO,
+    CardCoachMerchantDTO,
     CardCoachFilterInfo,
     CardCorrectionRequest,
     CardCorrectionDTO,
+    CreateCustomCardRequest,
 )
 from varavu_selavu_service.services.budget_service import BudgetService
 from varavu_selavu_service.services.card_service import CardService
-from varavu_selavu_service.services.card_rewards_engine import CategoryRewardGap
+from varavu_selavu_service.services.card_rewards_engine import CategoryRewardGap, MerchantRewardGap
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.notification_service import NotificationService
@@ -1304,12 +1306,26 @@ def _earning_rule_to_dto(rule) -> CardEarningRuleDTO:
     return CardEarningRuleDTO(
         id=str(rule.id),
         category_id=rule.category_id,
+        merchant_name=rule.merchant_name,
         multiplier=float(rule.multiplier),
         cap_amount=float(rule.cap_amount) if rule.cap_amount is not None else None,
         cap_period=rule.cap_period,
         exclusions_note=rule.exclusions_note,
         rotation_start=rule.rotation_start.isoformat() if rule.rotation_start else None,
         rotation_end=rule.rotation_end.isoformat() if rule.rotation_end else None,
+    )
+
+
+def _user_card_to_dto(user_card, catalog_card) -> UserCardDTO:
+    return UserCardDTO(
+        id=str(user_card.id),
+        card_id=str(catalog_card.id),
+        issuer=catalog_card.issuer,
+        card_name=catalog_card.card_name,
+        reward_type=catalog_card.reward_type,
+        is_default=user_card.is_default,
+        is_custom=catalog_card.created_by_user_email is not None,
+        added_at=user_card.added_at.isoformat(),
     )
 
 
@@ -1325,9 +1341,12 @@ def search_card_catalog(
     user_id: str = Depends(auth_required),
     _: None = Depends(require_card_coach_enabled),
 ):
-    cards = svc.search_catalog(query=q)
+    cards = svc.search_catalog(user_id, query=q)
     return [
-        CardCatalogSummary(id=str(c.id), issuer=c.issuer, card_name=c.card_name, reward_type=c.reward_type, annual_fee=float(c.annual_fee))
+        CardCatalogSummary(
+            id=str(c.id), issuer=c.issuer, card_name=c.card_name, reward_type=c.reward_type,
+            annual_fee=float(c.annual_fee), is_custom=c.created_by_user_email is not None,
+        )
         for c in cards
     ]
 
@@ -1344,7 +1363,7 @@ def get_card_catalog_detail(
     user_id: str = Depends(auth_required),
     _: None = Depends(require_card_coach_enabled),
 ):
-    card = svc.get_catalog_detail(card_id)
+    card = svc.get_catalog_detail(card_id, require_visible_to=user_id)
     rules = svc.get_earning_rules(card_id)
     return CardCatalogDetail(
         id=str(card.id),
@@ -1356,8 +1375,9 @@ def get_card_catalog_detail(
         annual_fee=float(card.annual_fee),
         earning_rules=[_earning_rule_to_dto(r) for r in rules],
         source_url=card.source_url,
-        last_verified_at=card.last_verified_at.isoformat(),
+        last_verified_at=card.last_verified_at.isoformat() if card.last_verified_at else None,
         is_active=card.is_active,
+        is_custom=card.created_by_user_email is not None,
     )
 
 
@@ -1373,18 +1393,7 @@ def list_my_cards(
     _: None = Depends(require_card_coach_enabled),
 ):
     rows = svc.list_user_cards(user_id)
-    return [
-        UserCardDTO(
-            id=str(user_card.id),
-            card_id=str(catalog_card.id),
-            issuer=catalog_card.issuer,
-            card_name=catalog_card.card_name,
-            reward_type=catalog_card.reward_type,
-            is_default=user_card.is_default,
-            added_at=user_card.added_at.isoformat(),
-        )
-        for user_card, catalog_card in rows
-    ]
+    return [_user_card_to_dto(user_card, catalog_card) for user_card, catalog_card in rows]
 
 
 @router.post(
@@ -1402,15 +1411,7 @@ def add_my_card(
 ):
     user_card = svc.add_user_card(user_id, data.card_id)
     catalog_card = svc.get_catalog_detail(str(user_card.card_id))
-    return UserCardDTO(
-        id=str(user_card.id),
-        card_id=str(catalog_card.id),
-        issuer=catalog_card.issuer,
-        card_name=catalog_card.card_name,
-        reward_type=catalog_card.reward_type,
-        is_default=user_card.is_default,
-        added_at=user_card.added_at.isoformat(),
-    )
+    return _user_card_to_dto(user_card, catalog_card)
 
 
 @router.delete(
@@ -1443,26 +1444,49 @@ def set_my_default_card(
 ):
     user_card = svc.set_default_card(user_id, user_card_id)
     catalog_card = svc.get_catalog_detail(str(user_card.card_id))
-    return UserCardDTO(
-        id=str(user_card.id),
-        card_id=str(catalog_card.id),
-        issuer=catalog_card.issuer,
-        card_name=catalog_card.card_name,
-        reward_type=catalog_card.reward_type,
-        is_default=user_card.is_default,
-        added_at=user_card.added_at.isoformat(),
+    return _user_card_to_dto(user_card, catalog_card)
+
+
+@router.post(
+    "/cards/custom",
+    response_model=UserCardDTO,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Card Coach"],
+    summary="Add a user-created custom card (outside the curated catalog) and hold it in one call",
+)
+def create_custom_card(
+    data: CreateCustomCardRequest,
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    card, user_card = svc.create_custom_card(
+        user_id, card_name=data.card_name, issuer=data.issuer, annual_fee=float(data.annual_fee),
+        rules=[{"category_id": r.category_id, "multiplier": r.multiplier} for r in data.rules],
     )
+    return _user_card_to_dto(user_card, card)
+
+
+def _cap_note_for(gap) -> str | None:
+    # Prefer the catalog-optimal card's cap note (the aspirational suggestion, spec Appendix
+    # example) — fall back to the in-wallet-optimal card's note if the catalog has none.
+    if gap.optimal_catalog and gap.optimal_catalog.cap_note:
+        return gap.optimal_catalog.cap_note
+    if gap.optimal_in_wallet and gap.optimal_in_wallet.cap_note:
+        return gap.optimal_in_wallet.cap_note
+    return None
+
+
+def _is_using_best_held_card(gap) -> bool:
+    """Phase 2 'better card' nudge: compares by card_id, not display name — two different cards
+    (e.g. a custom card and a catalog card) can share a card_name. Defaults True (no nudge) when
+    there's nothing to compare, same "never fabricate" rule as gap_usd."""
+    if not gap.actual or not gap.optimal_in_wallet:
+        return True
+    return gap.actual.card_id == gap.optimal_in_wallet.card_id
 
 
 def _gap_to_dto(gap: CategoryRewardGap) -> CardCoachCategoryDTO:
-    # Prefer the catalog-optimal card's cap note (the aspirational suggestion, spec Appendix
-    # example) — fall back to the in-wallet-optimal card's note if the catalog has none.
-    cap_note = None
-    if gap.optimal_catalog and gap.optimal_catalog.cap_note:
-        cap_note = gap.optimal_catalog.cap_note
-    elif gap.optimal_in_wallet and gap.optimal_in_wallet.cap_note:
-        cap_note = gap.optimal_in_wallet.cap_note
-
     return CardCoachCategoryDTO(
         category=gap.category,
         actual_spend=gap.actual_spend,
@@ -1473,7 +1497,24 @@ def _gap_to_dto(gap: CategoryRewardGap) -> CardCoachCategoryDTO:
         optimal_in_wallet_earned_estimate=gap.optimal_in_wallet.earned_usd if gap.optimal_in_wallet else None,
         optimal_catalog_card=gap.optimal_catalog.card_name if gap.optimal_catalog else None,
         optimal_catalog_earned_estimate=gap.optimal_catalog.earned_usd if gap.optimal_catalog else None,
-        cap_note=cap_note,
+        cap_note=_cap_note_for(gap),
+        is_using_best_held_card=_is_using_best_held_card(gap),
+    )
+
+
+def _merchant_gap_to_dto(gap: MerchantRewardGap) -> CardCoachMerchantDTO:
+    return CardCoachMerchantDTO(
+        merchant=gap.merchant,
+        actual_spend=gap.actual_spend,
+        spend_source="",  # filled in by the caller — same value for every row in one response
+        actual_earned_estimate=gap.actual.earned_usd if gap.actual else None,
+        held_card_used=gap.actual.card_name if gap.actual else None,
+        optimal_in_wallet_card=gap.optimal_in_wallet.card_name if gap.optimal_in_wallet else None,
+        optimal_in_wallet_earned_estimate=gap.optimal_in_wallet.earned_usd if gap.optimal_in_wallet else None,
+        optimal_catalog_card=gap.optimal_catalog.card_name if gap.optimal_catalog else None,
+        optimal_catalog_earned_estimate=gap.optimal_catalog.earned_usd if gap.optimal_catalog else None,
+        cap_note=_cap_note_for(gap),
+        is_using_best_held_card=_is_using_best_held_card(gap),
     )
 
 
@@ -1481,7 +1522,7 @@ def _gap_to_dto(gap: CategoryRewardGap) -> CardCoachCategoryDTO:
     "/cards/coach",
     response_model=CardCoachResponse,
     tags=["Card Coach"],
-    summary="Card Coach analysis: per-category actual vs. optimal reward estimate for the given period",
+    summary="Card Coach analysis: per-category and per-merchant actual vs. optimal reward estimate for the given period",
 )
 def get_card_coach(
     year: int | None = Query(default=None, ge=1970, le=2100),
@@ -1494,24 +1535,34 @@ def get_card_coach(
 ):
     # Same GROUPS_ENABLED gate as the plain /analysis route — group data must not leak through
     # here if Groups itself is off, regardless of what a client requests.
-    gaps, group_share_included = card_service.compute_coach_gaps(
+    category_gaps, merchant_gaps, group_share_included = card_service.compute_coach_gaps(
         user_id, year=year, month=month, start_date=start_date, end_date=end_date,
         groups_enabled=Settings().GROUPS_ENABLED,
     )
 
     spend_source = "personal_plus_group_paid" if group_share_included else "personal_only"
     by_category = []
-    for gap in gaps:
+    for gap in category_gaps:
         dto = _gap_to_dto(gap)
         dto.spend_source = spend_source
         by_category.append(dto)
 
-    total_gap = round(sum(g.gap_usd for g in gaps), 2)
+    by_merchant = []
+    for gap in merchant_gaps:
+        dto = _merchant_gap_to_dto(gap)
+        dto.spend_source = spend_source
+        by_merchant.append(dto)
+
+    # Deliberately category-only (spec discussion, Option B) — merchant gaps are a supplementary,
+    # precedence-correct view, never summed into the headline number, since a merchant's spend is
+    # already included in its category's own gap and summing both would double-count it.
+    total_gap = round(sum(g.gap_usd for g in category_gaps), 2)
 
     return CardCoachResponse(
         period=CardCoachPeriod(year=year, month=month),
         total_estimated_gap=total_gap,
         by_category=by_category,
+        by_merchant=by_merchant,
         filter_info=CardCoachFilterInfo(year=year, month=month, group_share_included=group_share_included),
     )
 

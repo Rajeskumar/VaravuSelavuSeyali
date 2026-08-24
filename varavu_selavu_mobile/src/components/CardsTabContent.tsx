@@ -6,15 +6,17 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   listMyCards, addMyCard, removeMyCard, setMyDefaultCard, searchCardCatalog, getCardCoach,
   getCardCatalogDetail, fileCardCorrection,
-  UserCardDTO, CardCatalogSummary, CardCoachCategoryDTO, CardCatalogDetail,
+  UserCardDTO, CardCatalogSummary, CardCoachCategoryDTO, CardCoachMerchantDTO, CardCatalogDetail,
 } from '../api/cards';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { ListSkeleton } from './SkeletonLoader';
+import CustomCardForm from './CustomCardForm';
 
 function formatMoney(n: number): string {
   return `$${n.toFixed(2)}`;
@@ -32,10 +34,12 @@ export default function CardsTabContent() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const qc = useQueryClient();
+  const navigation = useNavigation<any>();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [detailCardId, setDetailCardId] = useState<string | null>(null);
+  const [customFormOpen, setCustomFormOpen] = useState(false);
 
   const { data: myCards = [], isLoading: cardsLoading } = useQuery({ queryKey: ['cards-mine'], queryFn: listMyCards });
   const { data: searchResults = [], isFetching: searching } = useQuery({
@@ -94,6 +98,18 @@ export default function CardsTabContent() {
           </View>
         ))}
       </View>
+
+      {!customFormOpen && (
+        <TouchableOpacity onPress={() => setCustomFormOpen(true)} style={{ marginTop: 12 }}>
+          <Text style={styles.addBtnSmallText}>Can't find your card? Add your own</Text>
+        </TouchableOpacity>
+      )}
+      {customFormOpen && (
+        <CustomCardForm
+          onDone={() => { setCustomFormOpen(false); setPickerOpen(false); }}
+          onCancel={() => setCustomFormOpen(false)}
+        />
+      )}
     </View>
   );
 
@@ -160,6 +176,14 @@ export default function CardsTabContent() {
 
       {picker}
 
+      <TouchableOpacity
+        onPress={() => navigation.navigate('AI Analyst', { initialQuery: 'Which card should I use for a purchase?' })}
+        activeOpacity={0.7}
+        style={{ marginBottom: 4 }}
+      >
+        <Text style={styles.askPromptText}>💬 Ask: which card should I use for a purchase? →</Text>
+      </TouchableOpacity>
+
       {coachLoading && <ActivityIndicator style={{ marginVertical: 16 }} color={theme.colors.primary} />}
       {coach && (
         <>
@@ -177,9 +201,23 @@ export default function CardsTabContent() {
 
           <View style={{ gap: 12, marginTop: 4 }}>
             {coach.by_category.map((row) => (
-              <CategoryGapCard key={row.category} row={row} theme={theme} />
+              <GapCard key={row.category} label={row.category} row={row} theme={theme} />
             ))}
           </View>
+
+          {coach.by_merchant.length > 0 && (
+            <>
+              <Text style={styles.byMerchantHeading}>By merchant</Text>
+              <Text style={styles.byMerchantHint}>
+                A merchant-specific rate always beats a card's general category rate — shown here separately since it's already included in the category totals above.
+              </Text>
+              <View style={{ gap: 12, marginTop: 4 }}>
+                {coach.by_merchant.map((row) => (
+                  <GapCard key={row.merchant} label={row.merchant} row={row} theme={theme} />
+                ))}
+              </View>
+            </>
+          )}
         </>
       )}
 
@@ -188,7 +226,7 @@ export default function CardsTabContent() {
   );
 }
 
-function CategoryGapCard({ row, theme }: { row: CardCoachCategoryDTO; theme: AppTheme }) {
+function GapCard({ label, row, theme }: { label: string; row: CardCoachCategoryDTO | CardCoachMerchantDTO; theme: AppTheme }) {
   const styles = createStyles(theme);
   const gap = row.optimal_in_wallet_earned_estimate != null && row.actual_earned_estimate != null
     ? Math.max(row.optimal_in_wallet_earned_estimate - row.actual_earned_estimate, 0)
@@ -197,7 +235,7 @@ function CategoryGapCard({ row, theme }: { row: CardCoachCategoryDTO; theme: App
   return (
     <View style={styles.gapCard}>
       <View style={styles.gapCardHeader}>
-        <Text style={styles.cardTitle}>{row.category}</Text>
+        <Text style={styles.cardTitle}>{label}</Text>
         <Text style={styles.footerText}>{formatMoney(row.actual_spend)} spent</Text>
       </View>
       <Text style={styles.gapLine}>
@@ -210,9 +248,15 @@ function CategoryGapCard({ row, theme }: { row: CardCoachCategoryDTO; theme: App
         <Text style={styles.gapLine}>Best in catalog: {row.optimal_catalog_card} — {formatMoney(row.optimal_catalog_earned_estimate ?? 0)}</Text>
       )}
       {gap != null && gap > 0 && (
-        <View style={styles.gapChip}>
-          <Text style={styles.gapChipText}>{formatMoney(gap)} left on the table</Text>
-        </View>
+        row.is_using_best_held_card ? (
+          <View style={styles.gapChip}>
+            <Text style={styles.gapChipText}>{formatMoney(gap)} left on the table</Text>
+          </View>
+        ) : (
+          <View style={styles.switchChip}>
+            <Text style={styles.switchChipText}>Switch to {row.optimal_in_wallet_card} — save {formatMoney(gap)}, you already own it</Text>
+          </View>
+        )
       )}
       {row.cap_note && <Text style={styles.capNote}>{row.cap_note}</Text>}
     </View>
@@ -266,7 +310,7 @@ function CardDetailModal({ cardId, onClose, theme }: { cardId: string | null; on
                 <View style={{ marginTop: 10, gap: 4 }}>
                   {card.earning_rules.map((r) => (
                     <Text key={r.id} style={styles.gapLine}>
-                      {r.multiplier}x/% — {r.category_id}
+                      {r.multiplier}x/% — {r.merchant_name ? `at ${r.merchant_name}` : r.category_id}
                       {r.cap_amount ? ` (up to $${r.cap_amount.toLocaleString()}/${r.cap_period})` : ''}
                     </Text>
                   ))}
@@ -276,7 +320,9 @@ function CardDetailModal({ cardId, onClose, theme }: { cardId: string | null; on
                 <View style={styles.divider} />
 
                 <Text style={styles.provenance}>
-                  Source: {card.issuer} rates & terms · Verified {formatDate(card.last_verified_at)}
+                  {card.is_custom
+                    ? 'Added by you — no issuer source to verify against.'
+                    : `Source: ${card.issuer} rates & terms · Verified ${formatDate(card.last_verified_at as string)}`}
                 </Text>
 
                 {filed && (
@@ -285,14 +331,14 @@ function CardDetailModal({ cardId, onClose, theme }: { cardId: string | null; on
                   </View>
                 )}
 
-                {!filed && !reporting && (
+                {!card.is_custom && !filed && !reporting && (
                   <TouchableOpacity style={styles.reportBtn} onPress={() => setReporting(true)} activeOpacity={0.7}>
                     <Ionicons name="flag-outline" size={14} color={theme.colors.textSecondary} />
                     <Text style={styles.reportBtnText}>Report incorrect info</Text>
                   </TouchableOpacity>
                 )}
 
-                {!filed && reporting && (
+                {!card.is_custom && !filed && reporting && (
                   <View style={{ marginTop: 12 }}>
                     <TextInput
                       style={[styles.input, { minHeight: 70, textAlignVertical: 'top' }]}
@@ -369,6 +415,9 @@ const createStyles = (theme: AppTheme) =>
     emptyTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.text, marginBottom: 4, textAlign: 'center' },
     emptySubtitle: { fontSize: 12.5, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 24 },
 
+    askPromptText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.primary },
+    byMerchantHeading: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.textSecondary, marginTop: 20, marginBottom: 4 },
+    byMerchantHint: { fontFamily: 'InstrumentSans-Regular', fontSize: 11, color: theme.colors.textTertiary, marginBottom: 8, lineHeight: 15 },
     banner: { borderRadius: 12, padding: 12, marginTop: 12, marginBottom: 8 },
     bannerInfo: { backgroundColor: theme.colors.primarySurface },
     bannerSuccess: { backgroundColor: theme.colors.successSurface },
@@ -384,6 +433,8 @@ const createStyles = (theme: AppTheme) =>
     footerText: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
     gapChip: { alignSelf: 'flex-start', backgroundColor: theme.colors.warningSurface, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 8 },
     gapChipText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11.5, color: theme.colors.warning },
+    switchChip: { alignSelf: 'flex-start', backgroundColor: theme.colors.primarySurface, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 8 },
+    switchChipText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11.5, color: theme.colors.primary },
     capNote: { fontFamily: 'InstrumentSans-Regular', fontStyle: 'italic', fontSize: 10.5, color: theme.colors.textTertiary, marginTop: 8 },
 
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },

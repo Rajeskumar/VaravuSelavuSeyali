@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Button, TextField, Chip, CircularProgress, Alert, IconButton, Tooltip,
@@ -9,15 +10,30 @@ import StarIcon from '@mui/icons-material/StarRounded';
 import StarBorderIcon from '@mui/icons-material/StarBorderRounded';
 import {
   listMyCards, addMyCard, removeMyCard, setMyDefaultCard, searchCardCatalog, getCardCoach,
-  UserCardDTO, CardCatalogSummary, CardCoachCategoryDTO,
+  UserCardDTO, CardCatalogSummary, CardCoachCategoryDTO, CardCoachMerchantDTO,
 } from '../../api/cards';
 import CardDetailDialog from './CardDetailDialog';
+import CustomCardForm from './CustomCardForm';
 
 function formatMoney(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-const CategoryGapCard: React.FC<{ row: CardCoachCategoryDTO }> = ({ row }) => {
+interface GapRowShape {
+  actual_spend: number;
+  actual_earned_estimate: number | null;
+  held_card_used: string | null;
+  optimal_in_wallet_card: string | null;
+  optimal_in_wallet_earned_estimate: number | null;
+  optimal_catalog_card: string | null;
+  optimal_catalog_earned_estimate: number | null;
+  cap_note: string | null;
+  is_using_best_held_card: boolean;
+}
+
+/** Shared row shell for both category and merchant gap rows (CardCoachCategoryDTO/
+ * CardCoachMerchantDTO) — same fields, just a different label (category name vs. merchant name). */
+const GapCard: React.FC<{ label: string; row: GapRowShape }> = ({ label, row }) => {
   const gap = row.optimal_in_wallet_earned_estimate != null && row.actual_earned_estimate != null
     ? Math.max(row.optimal_in_wallet_earned_estimate - row.actual_earned_estimate, 0)
     : null;
@@ -25,7 +41,7 @@ const CategoryGapCard: React.FC<{ row: CardCoachCategoryDTO }> = ({ row }) => {
   return (
     <Box sx={{ backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 1.2, p: 2, mb: 1.5 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: 1 }}>
-        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{row.category}</Typography>
+        <Typography sx={{ fontWeight: 700, fontSize: 14 }}>{label}</Typography>
         <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>{formatMoney(row.actual_spend)} spent</Typography>
       </Box>
 
@@ -46,12 +62,21 @@ const CategoryGapCard: React.FC<{ row: CardCoachCategoryDTO }> = ({ row }) => {
       </Box>
 
       {gap != null && gap > 0 && (
-        <Chip
-          size="small"
-          color="warning"
-          label={`${formatMoney(gap)} left on the table`}
-          sx={{ mt: 1, fontWeight: 600 }}
-        />
+        row.is_using_best_held_card ? (
+          <Chip
+            size="small"
+            color="warning"
+            label={`${formatMoney(gap)} left on the table`}
+            sx={{ mt: 1, fontWeight: 600 }}
+          />
+        ) : (
+          <Chip
+            size="small"
+            color="info"
+            label={`Switch to ${row.optimal_in_wallet_card} — save ${formatMoney(gap)}, you already own it`}
+            sx={{ mt: 1, fontWeight: 600 }}
+          />
+        )
       )}
       {row.cap_note && (
         <Typography sx={{ fontSize: 11, color: 'text.secondary', mt: 1, fontStyle: 'italic' }}>
@@ -84,10 +109,12 @@ const HeldCardRow: React.FC<{ card: UserCardDTO; onRemove: () => void; onSetDefa
  * per-category actual-vs-optimal breakdown (spec §9.1). Mirrors BudgetsTab.tsx's shell/patterns.
  */
 const CardsTab: React.FC = () => {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = React.useState('');
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const [detailCardId, setDetailCardId] = React.useState<string | null>(null);
+  const [customFormOpen, setCustomFormOpen] = React.useState(false);
 
   const { data: myCards = [], isLoading: cardsLoading } = useQuery({
     queryKey: ['cards-mine'],
@@ -171,6 +198,18 @@ const CardsTab: React.FC = () => {
               </Box>
             ))}
           </Box>
+
+          {!customFormOpen && (
+            <Button size="small" sx={{ mt: 1.5 }} onClick={() => setCustomFormOpen(true)}>
+              Can't find your card? Add your own
+            </Button>
+          )}
+          {customFormOpen && (
+            <CustomCardForm
+              onDone={() => { setCustomFormOpen(false); setPickerOpen(false); }}
+              onCancel={() => setCustomFormOpen(false)}
+            />
+          )}
         </>
       )}
     </Box>
@@ -225,6 +264,19 @@ const CardsTab: React.FC = () => {
         {picker}
       </Box>
 
+      <Box
+        component="button"
+        onClick={() => navigate(`/ask?q=${encodeURIComponent('Which card should I use for a purchase?')}`)}
+        sx={{
+          display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none',
+          p: 0, mb: 2, cursor: 'pointer', font: 'inherit',
+        }}
+      >
+        <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
+          💬 Ask: which card should I use for a purchase? →
+        </Typography>
+      </Box>
+
       {coachLoading && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress />
@@ -248,8 +300,22 @@ const CardsTab: React.FC = () => {
             </Typography>
           )}
           {coach.by_category.map((row) => (
-            <CategoryGapCard key={row.category} row={row} />
+            <GapCard key={row.category} label={row.category} row={row} />
           ))}
+
+          {coach.by_merchant.length > 0 && (
+            <>
+              <Typography sx={{ fontSize: 13, fontWeight: 700, color: 'text.secondary', mt: 3, mb: 1 }}>
+                By merchant
+              </Typography>
+              <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 1.5 }}>
+                A merchant-specific rate always beats a card's general category rate — shown here separately since it's already included in the category totals above.
+              </Typography>
+              {coach.by_merchant.map((row) => (
+                <GapCard key={row.merchant} label={row.merchant} row={row} />
+              ))}
+            </>
+          )}
         </>
       )}
 

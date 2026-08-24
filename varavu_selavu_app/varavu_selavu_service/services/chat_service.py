@@ -240,41 +240,112 @@ def _create_personal_expense_from_agent(
         return f"Error creating expense: {str(e)}"
 
 
-def _format_card_coach_summary(gaps: list, group_share_included: bool) -> str:
-    """Formats CardRewardsEngine's per-category gap objects into prose for the
+def _describe_gap_row(label: str, g) -> str:
+    actual = (
+        f"{g.actual.card_name} earned ${g.actual.earned_usd:.2f}"
+        if g.actual and g.actual.earned_usd is not None
+        else "no default card set, so actual earnings are unknown"
+    )
+    best_held = (
+        f"{g.optimal_in_wallet.card_name} would have earned ${g.optimal_in_wallet.earned_usd:.2f}"
+        if g.optimal_in_wallet and g.optimal_in_wallet.earned_usd is not None
+        else "no comparable held card"
+    )
+    catalog = (
+        f"; best in the full catalog: {g.optimal_catalog.card_name} (${g.optimal_catalog.earned_usd:.2f})"
+        if g.optimal_catalog and g.optimal_catalog.earned_usd is not None
+        else ""
+    )
+    # Phase 2 "better card" nudge: only when a DIFFERENT held card (by id, not name) would have
+    # done better — actionable today, no new card needed, distinct from the aspirational catalog
+    # comparison above.
+    switch_tip = ""
+    if (
+        g.gap_usd > 0 and g.actual and g.optimal_in_wallet
+        and g.actual.card_id != g.optimal_in_wallet.card_id
+    ):
+        switch_tip = f" Tip: switch to {g.optimal_in_wallet.card_name} for this — you already own it, no new card needed."
+    return (
+        f"{label}: spent ${g.actual_spend:.2f} — actual: {actual}; "
+        f"best held card: {best_held}{catalog}; estimated gap: ${g.gap_usd:.2f}.{switch_tip}"
+    )
+
+
+def _format_card_coach_summary(category_gaps: list, merchant_gaps: list, group_share_included: bool) -> str:
+    """Formats CardRewardsEngine's per-category and per-merchant gap objects into prose for the
     `get_card_coach_summary` chat tool. Extracted (same pattern as
     `_create_personal_expense_from_agent`) so the formatting logic is unit-testable without a
     LangGraph agent/real LLM — the tool closure is just this plus a `CardService.compute_coach_gaps`
-    call."""
-    spend_rows = [g for g in gaps if g.actual_spend > 0]
+    call. The total gap figure is category-only (never sums merchant gaps too) to avoid double-
+    counting the same dollars twice — a merchant's spend is already included in its category."""
+    spend_rows = [g for g in category_gaps if g.actual_spend > 0]
     if not spend_rows:
         return "No categorized spend found for this period."
 
-    lines = []
-    for g in spend_rows:
-        actual = (
-            f"{g.actual.card_name} earned ${g.actual.earned_usd:.2f}"
-            if g.actual and g.actual.earned_usd is not None
-            else "no default card set, so actual earnings are unknown"
-        )
-        best_held = (
-            f"{g.optimal_in_wallet.card_name} would have earned ${g.optimal_in_wallet.earned_usd:.2f}"
-            if g.optimal_in_wallet and g.optimal_in_wallet.earned_usd is not None
-            else "no comparable held card"
-        )
-        catalog = (
-            f"; best in the full catalog: {g.optimal_catalog.card_name} (${g.optimal_catalog.earned_usd:.2f})"
-            if g.optimal_catalog and g.optimal_catalog.earned_usd is not None
-            else ""
-        )
-        lines.append(
-            f"{g.category}: spent ${g.actual_spend:.2f} — actual: {actual}; "
-            f"best held card: {best_held}{catalog}; estimated gap: ${g.gap_usd:.2f}"
+    lines = [_describe_gap_row(g.category, g) for g in spend_rows]
+
+    total_gap = round(sum(g.gap_usd for g in category_gaps), 2)
+    source_note = " (includes the full amount paid on group expenses, not just the user's split share)" if group_share_included else ""
+    result = f"Estimated total reward gap this period: ${total_gap:.2f}{source_note}.\n" + "\n".join(lines)
+
+    merchant_rows = [g for g in merchant_gaps if g.actual_spend > 0]
+    if merchant_rows:
+        merchant_lines = [_describe_gap_row(f"At {g.merchant}", g) for g in merchant_rows]
+        result += (
+            "\n\nMerchant-specific card rates (these take precedence over the category rate above "
+            "when a card has one for that merchant):\n" + "\n".join(merchant_lines)
         )
 
-    total_gap = round(sum(g.gap_usd for g in gaps), 2)
-    source_note = " (includes the full amount paid on group expenses, not just the user's split share)" if group_share_included else ""
-    return f"Estimated total reward gap this period: ${total_gap:.2f}{source_note}.\n" + "\n".join(lines)
+    return result
+
+
+def _format_card_suggestion(result, category: Optional[str], merchant: Optional[str]) -> str:
+    """Formats a `CardSuggestion` (from `CardService.suggest_best_card_for_purchase`) into prose.
+    Extracted for the same testability reason as `_format_card_coach_summary` — pure function, no
+    LLM needed to exercise it. Deliberately only ever describes the user's OWN held cards (see
+    `CardService.suggest_best_card_for_purchase`'s docstring) — never a catalog card, since that
+    would be an acquisition suggestion, out of scope until the spec's affiliate-model decision."""
+    scope = f"at {merchant}" if merchant else f"on {category}" if category else "for this purchase"
+    if result.held_card_count == 0:
+        return "You haven't added any cards yet — add one in the Cards tab first so I can recommend from what you actually hold."
+
+    if result.estimate is None:
+        if result.unpriced is not None:
+            est = result.unpriced
+            points_note = f", about {est.earned_raw:g} points" if result.amount else ""
+            return (
+                f"Your {est.card_name} earns {est.multiplier:g}x {scope}{points_note}, but I don't have "
+                f"a stored dollar value for its points/miles, so I can't say exactly how that compares."
+            )
+        return f"None of your held cards has a bonus rate {scope} — they'll all earn their standard rate."
+
+    est = result.estimate
+    rate = f"{est.multiplier:g}%" if est.reward_type == "cashback" else f"{est.multiplier:g}x"
+    amount_note = ""
+    if result.amount and est.earned_usd is not None:
+        points_note = f", about {est.earned_raw:g} points" if est.reward_type != "cashback" else ""
+        amount_note = f"{points_note}, about ${est.earned_usd:.2f} on a ${result.amount:.2f} purchase"
+
+    # Only compared when BOTH sides are dollar-priced, so a points card with no stored value is
+    # never numerically compared against a cashback rate (different units, not comparable). A
+    # dollar delta is quoted only with a real user-given amount — the internal $100 nominal basis
+    # used for ranking otherwise isn't a number worth surfacing as fact; the plain rate is used
+    # instead, which is still useful without implying a specific real total.
+    vs_default = ""
+    default_est = result.default_estimate
+    if (
+        default_est is not None and default_est.card_id != est.card_id
+        and est.earned_usd is not None and default_est.earned_usd is not None
+        and est.earned_usd > default_est.earned_usd
+    ):
+        if result.amount:
+            vs_default = f" — about ${est.earned_usd - default_est.earned_usd:.2f} more than your default {default_est.card_name}"
+        else:
+            default_rate = f"{default_est.multiplier:g}%" if default_est.reward_type == "cashback" else f"{default_est.multiplier:g}x"
+            vs_default = f" (your default {default_est.card_name} only earns {default_rate} here)"
+
+    cap_note = f" {est.cap_note}" if est.cap_note else ""
+    return f"Use your {est.card_name} {scope} — it earns {rate}{amount_note}{vs_default}.{cap_note}"
 
 
 def _resolve_payer(members: list[dict], my_member: dict, paid_by: Optional[str]) -> tuple[Optional[dict], Optional[str]]:
@@ -592,24 +663,48 @@ def call_chat_model(
     if card_coach_enabled and card_service is not None:
         @tool
         def get_card_coach_summary() -> str:
-            """Get Card Coach's per-category reward analysis: how much the user's spend actually
-            earned with their default held card vs. the best card they hold vs. the best card in
-            the full curated catalog, plus the estimated dollar gap for each category. Use this
-            for questions like "how much would I have earned with a different card on groceries?"
-            or "am I leaving rewards on the table?". Uses the same resolved period as the rest of
+            """Get Card Coach's per-category and per-merchant reward analysis: how much the
+            user's spend actually earned with their default held card vs. the best card they
+            hold vs. the best card in the full curated catalog, plus the estimated dollar gap.
+            Also surfaces merchant-specific card rates (e.g. "3% at Apple") separately from
+            category rates, since a merchant rate always takes precedence over a category rate
+            when a card has one. Use this for questions like "how much would I have earned with
+            a different card on groceries?", "does my card have a special rate at Apple?", or
+            "am I leaving rewards on the table?". Uses the same resolved period as the rest of
             this conversation turn — no date arguments needed."""
             try:
-                gaps, group_share_included = card_service.compute_coach_gaps(
+                category_gaps, merchant_gaps, group_share_included = card_service.compute_coach_gaps(
                     user_id,
                     start_date=resolved_period.start_date,
                     end_date=resolved_period.end_date,
                     groups_enabled=groups_enabled,
                 )
-                return _format_card_coach_summary(gaps, group_share_included)
+                return _format_card_coach_summary(category_gaps, merchant_gaps, group_share_included)
             except Exception as e:
                 return f"Error computing card coach summary: {str(e)}"
 
         tools.append(get_card_coach_summary)
+
+        @tool
+        def suggest_best_card_for_purchase(category: str, merchant: str = None, amount: float = None) -> str:
+            """Recommend which of the user's OWN held cards to use for a specific upcoming or
+            hypothetical purchase — e.g. "which card should I use for a flight?" or "what card is
+            best at Whole Foods?". Only ever recommends among cards the user already holds —
+            never suggests getting a new card. `category` should be the closest matching
+            subcategory from the app's taxonomy — see the category guide in your system prompt.
+            `merchant` is optional — pass it when the user names a specific store/vendor (e.g.
+            "Apple", "Chase Travel"), since some cards have a merchant-specific rate that beats
+            their general category rate. `amount` is optional — the purchase's dollar amount, if
+            mentioned, to show an estimated dollar reward."""
+            try:
+                result = card_service.suggest_best_card_for_purchase(
+                    user_id, category, merchant=merchant, amount=amount,
+                )
+                return _format_card_suggestion(result, category, merchant)
+            except Exception as e:
+                return f"Error suggesting a card: {str(e)}"
+
+        tools.append(suggest_best_card_for_purchase)
 
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"

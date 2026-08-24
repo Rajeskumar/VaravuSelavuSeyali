@@ -504,7 +504,13 @@ class CardCatalog(Base):
     docs/features/card_coach/TrackSpense_Card_Rewards_Product_Spec.md §5 — never populated by
     an automated scrape. `source_url`/`last_verified_at` are surfaced in the UI alongside every
     figure derived from this row (spec §9.4) so TrackSpense never asserts more confidence in a
-    reward rate than it actually has."""
+    reward rate than it actually has.
+
+    TS-CARD-112: `created_by_user_email` NULL means this row is curated as above; non-null means
+    it's one user's private, self-reported "custom card" (source_url/last_verified_at are then
+    also NULL — no issuer source to cite). CardRewardsEngine and the held-cards join work
+    unchanged either way; callers that must not leak a custom card across users (catalog search,
+    "optimal in catalog") filter on this column explicitly."""
     __tablename__ = "card_catalog"
     __table_args__ = {"schema": "trackspense"}
 
@@ -517,24 +523,38 @@ class CardCatalog(Base):
     # curates the catalog entry, not derived from any live redemption-value feed.
     point_value_estimate_usd = Column(Numeric(6, 4), nullable=True)
     annual_fee = Column(Numeric(8, 2), nullable=False, default=0)
-    source_url = Column(String(500), nullable=False)
-    last_verified_at = Column(DateTime(timezone=True), nullable=False)
+    source_url = Column(String(500), nullable=True)
+    last_verified_at = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    created_by_user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class CardEarningRule(Base):
     """TS-CARD-101: one reward-rate rule for a CardCatalog card — a flat 'All Purchases' rate,
     a capped/bonused category rate, or a time-boxed rotating-category rate. One-to-many per card
-    (spec §6) so e.g. Chase Freedom Flex can carry both its flat rate and several rotating rules."""
+    (spec §6) so e.g. Chase Freedom Flex can carry both its flat rate and several rotating rules.
+
+    TS-CARD-113: a rule is either category-scoped (merchant_name NULL, category_id set — every
+    row before this) or merchant-scoped (category_id NULL, merchant_name set, e.g. "5% via Chase
+    Travel", "3% at Apple") — never both. Enforced in CardService/route validation, not a DB
+    constraint, matching how category_id's taxonomy validation already works. Merchant rules take
+    precedence over category rules when both could apply to the same spend (CardRewardsEngine) —
+    a merchant is always the more specific, deliberately-targeted selector an issuer carved out,
+    whether the carve-out rate is higher or lower than the general category rate."""
     __tablename__ = "card_earning_rules"
     __table_args__ = {"schema": "trackspense"}
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     card_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.card_catalog.id", ondelete="CASCADE"), nullable=False, index=True)
     # Matches the existing expense category taxonomy's sub-category id, or the literal
-    # "All Purchases" sentinel for a card's flat/base rate (spec §6, §8.3).
-    category_id = Column(String(100), nullable=False)
+    # "All Purchases" sentinel for a card's flat/base rate (spec §6, §8.3). NULL for a
+    # merchant-scoped rule.
+    category_id = Column(String(100), nullable=True)
+    # Matched case-insensitively against Expense.merchant_name (raw as-entered text — no
+    # canonical/entity-resolution matching yet, a known v1 accuracy limitation). NULL for a
+    # category-scoped rule.
+    merchant_name = Column(String(255), nullable=True, index=True)
     multiplier = Column(Numeric(5, 2), nullable=False)
     cap_amount = Column(Numeric(10, 2), nullable=True)
     cap_period = Column(String(20), nullable=True)  # quarterly | annual

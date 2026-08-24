@@ -78,7 +78,7 @@ const CardDetailDialog: React.FC<Props> = ({ cardId, onClose }) => {
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, mb: 1.5 }}>
               {card.earning_rules.map((r) => (
                 <Typography key={r.id} sx={{ fontSize: 13 }}>
-                  {r.multiplier}x/% — {r.category_id}
+                  {r.multiplier}x/% — {r.merchant_name ? `at ${r.merchant_name}` : r.category_id}
                   {r.cap_amount ? ` (up to $${r.cap_amount.toLocaleString()}/${r.cap_period})` : ''}
                 </Typography>
               ))}
@@ -89,13 +89,19 @@ const CardDetailDialog: React.FC<Props> = ({ cardId, onClose }) => {
 
             <Divider sx={{ my: 1.5 }} />
 
-            <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
-              Source:{' '}
-              <MuiLink href={card.source_url} target="_blank" rel="noopener noreferrer">
-                {card.issuer} rates & terms
-              </MuiLink>
-              {' · '}Verified {formatDate(card.last_verified_at)}
-            </Typography>
+            {card.is_custom ? (
+              <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+                Added by you — no issuer source to verify against.
+              </Typography>
+            ) : (
+              <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
+                Source:{' '}
+                <MuiLink href={card.source_url ?? undefined} target="_blank" rel="noopener noreferrer">
+                  {card.issuer} rates & terms
+                </MuiLink>
+                {card.last_verified_at && <>{' · '}Verified {formatDate(card.last_verified_at)}</>}
+              </Typography>
+            )}
 
             {filed && (
               <Alert severity="success" sx={{ mt: 2 }}>
@@ -103,7 +109,7 @@ const CardDetailDialog: React.FC<Props> = ({ cardId, onClose }) => {
               </Alert>
             )}
 
-            {!filed && !reporting && (
+            {!card.is_custom && !filed && !reporting && (
               <Button
                 size="small"
                 startIcon={<FlagOutlinedIcon fontSize="small" />}
@@ -114,7 +120,7 @@ const CardDetailDialog: React.FC<Props> = ({ cardId, onClose }) => {
               </Button>
             )}
 
-            {!filed && reporting && (
+            {!card.is_custom && !filed && reporting && (
               <Box sx={{ mt: 2 }}>
                 <TextField
                   fullWidth
