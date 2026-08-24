@@ -151,6 +151,9 @@ class FeatureFlagsResponse(BaseModel):
     # integrations — defaults True (see Settings.BUDGETS_ENABLED), but still client-checked
     # for consistency with every other feature surface.
     budgets_enabled: bool
+    # TS-CARD-101: same pattern, for the Analysis "Cards" tab and its Dashboard/AI Analyst
+    # integrations — defaults False until the curated card_catalog (TS-CARD-102) is populated.
+    card_coach_enabled: bool
 
 
 class DashboardResponse(BaseModel):
@@ -892,4 +895,157 @@ class BudgetAskWhyResponse(BaseModel):
     figures plus its contributing transactions (BudgetService.build_ask_why_prompt), reusing
     the same chat model dispatch as /analysis/chat rather than a second AI integration path."""
     response: str
+
+
+# ---------------------- Card Coach (TS-CARD series) ---------------------- #
+
+class CardEarningRuleDTO(BaseModel):
+    id: str
+    # Exactly one of category_id/merchant_name is set (TS-CARD-113) — category_id is a bare
+    # sub-category string (matches Expense.category_id) or "All Purchases"; merchant_name is
+    # matched case-insensitively against Expense.merchant_name and always takes precedence over
+    # a category rule when both could apply to the same spend.
+    category_id: Optional[str] = None
+    merchant_name: Optional[str] = None
+    multiplier: float
+    cap_amount: Optional[float] = None
+    cap_period: Optional[str] = None
+    exclusions_note: Optional[str] = None
+    rotation_start: Optional[str] = None  # YYYY-MM-DD
+    rotation_end: Optional[str] = None  # YYYY-MM-DD
+
+
+class CardCatalogSummary(BaseModel):
+    """Lightweight shape for catalog search results — no earning rules (spec §7 GET /cards/catalog)."""
+    id: str
+    issuer: str
+    card_name: str
+    reward_type: str
+    annual_fee: float
+    is_custom: bool = False
+
+
+class CardCatalogDetail(BaseModel):
+    """Full catalog card detail per spec Appendix, including provenance (§9.4). source_url/
+    last_verified_at are None for a custom card (TS-CARD-112) — no issuer source to cite."""
+    id: str
+    issuer: str
+    card_name: str
+    reward_type: str
+    points_currency_name: Optional[str] = None
+    point_value_estimate_usd: Optional[float] = None
+    annual_fee: float
+    earning_rules: List[CardEarningRuleDTO]
+    source_url: Optional[str] = None
+    last_verified_at: Optional[str] = None  # ISO datetime
+    is_active: bool
+    is_custom: bool = False
+
+
+class UserCardDTO(BaseModel):
+    """A held card, joined with its catalog summary so the UI doesn't need a second fetch."""
+    id: str  # user_cards.id
+    card_id: str
+    issuer: str
+    card_name: str
+    reward_type: str
+    is_default: bool
+    is_custom: bool = False
+    added_at: str  # ISO datetime
+
+
+class AddUserCardRequest(BaseModel):
+    card_id: str
+
+
+class CustomCardEarningRuleInput(BaseModel):
+    """TS-CARD-112 — category_id is validated against the app's real taxonomy in
+    CardService.create_custom_card, same categories a curated card's rules use."""
+    category_id: str
+    multiplier: float = Field(gt=0, le=100)
+
+
+class CreateCustomCardRequest(BaseModel):
+    """POST /cards/custom — self-reported card, cashback-only for v1 (spec follow-up decision).
+    Creates the catalog row and adds it to the user's held cards in one call, since a custom
+    card only ever belongs to its creator."""
+    issuer: Optional[str] = None
+    card_name: DescriptionStr
+    annual_fee: NonNegativeMoney = 0
+    rules: List[CustomCardEarningRuleInput] = Field(default_factory=list)
+
+
+class CardCorrectionRequest(BaseModel):
+    """POST /cards/corrections — spec §5 item 6, §9.4."""
+    card_id: str
+    note: DescriptionStr
+
+
+class CardCorrectionDTO(BaseModel):
+    id: str
+    card_id: str
+    note: str
+    status: str
+    created_at: str
+
+
+class CardCoachPeriod(BaseModel):
+    year: Optional[int] = None
+    month: Optional[int] = None
+
+
+class CardCoachCategoryDTO(BaseModel):
+    category: str
+    actual_spend: float
+    # "personal_plus_group_paid" when GROUPS_ENABLED (spec §8.2 — full paid amount, not "my
+    # share"), else "personal_only". Same for every row in one response.
+    spend_source: str
+    actual_earned_estimate: Optional[float] = None
+    held_card_used: Optional[str] = None
+    # TS-CARD-113: deliberately a simple, category-only, single-card comparison — never
+    # merchant-aware, since "which card is optimal" can be genuinely ambiguous once a category
+    # mixes merchant and non-merchant spend across multiple cards. That's exactly what the
+    # separate by_merchant view (CardCoachResponse) exists to resolve precisely instead.
+    optimal_in_wallet_card: Optional[str] = None
+    optimal_in_wallet_earned_estimate: Optional[float] = None
+    optimal_catalog_card: Optional[str] = None
+    optimal_catalog_earned_estimate: Optional[float] = None
+    cap_note: Optional[str] = None
+    # Phase 2 "better card" nudge: True when the card used for "actual" is already the same card
+    # as "optimal_in_wallet" (by id, not display name — two cards, e.g. a custom card and a
+    # catalog card, can share a name). Defaults True (no nudge) whenever there's nothing to
+    # compare, matching gap_usd's "never fabricate a gap when uncertain" rule.
+    is_using_best_held_card: bool = True
+
+
+class CardCoachMerchantDTO(BaseModel):
+    """TS-CARD-113 — only present for merchants at least one held/catalog card has an explicit
+    rule for; unlike the category view, all three figures here (actual/optimal-in-wallet/
+    optimal-catalog) are merchant-precedence-aware and unambiguous, since a single merchant is
+    never "mixed" the way a category can be."""
+    merchant: str
+    actual_spend: float
+    spend_source: str
+    actual_earned_estimate: Optional[float] = None
+    held_card_used: Optional[str] = None
+    optimal_in_wallet_card: Optional[str] = None
+    optimal_in_wallet_earned_estimate: Optional[float] = None
+    optimal_catalog_card: Optional[str] = None
+    optimal_catalog_earned_estimate: Optional[float] = None
+    cap_note: Optional[str] = None
+    is_using_best_held_card: bool = True
+
+
+class CardCoachFilterInfo(BaseModel):
+    year: Optional[int] = None
+    month: Optional[int] = None
+    group_share_included: bool
+
+
+class CardCoachResponse(BaseModel):
+    period: CardCoachPeriod
+    total_estimated_gap: float
+    by_category: List[CardCoachCategoryDTO]
+    by_merchant: List[CardCoachMerchantDTO] = Field(default_factory=list)
+    filter_info: CardCoachFilterInfo
 

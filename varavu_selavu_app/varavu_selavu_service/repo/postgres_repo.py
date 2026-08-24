@@ -1,6 +1,6 @@
 import uuid
 import json
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy.orm import Session
@@ -38,6 +38,30 @@ class PostgresRepo:
             }
         return None
 
+    @staticmethod
+    def _normalize_purchased_at(value: Any) -> Optional[datetime]:
+        """Anchor to noon UTC using only the calendar-date portion of ``value``.
+
+        Any embedded time-of-day or UTC offset (e.g. from a client's
+        ``Date.toISOString()``) is discarded rather than trusted, since it can
+        encode a timezone-shifted calendar day rather than the day the user
+        actually picked. Mirrors ExpenseService's noon-UTC anchor so a date can
+        never roll across a UTC day boundary during storage.
+        """
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.replace(hour=12, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
+        if isinstance(value, date):
+            return datetime(value.year, value.month, value.day, hour=12, tzinfo=timezone.utc)
+        date_part = str(value).strip().split("T")[0]
+        for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+            try:
+                return datetime.strptime(date_part, fmt).replace(hour=12, tzinfo=timezone.utc)
+            except ValueError:
+                continue
+        return None
+
     def append_expense(self, header: Dict[str, Any]) -> str:
         expense_id = str(uuid.uuid4())
         
@@ -57,16 +81,7 @@ class PostgresRepo:
         notes = header.get("notes")
         fingerprint = header.get("fingerprint")
         
-        has_purchased_tz = False
-        if isinstance(purchased_at, str):
-            try:
-                purchased_at = datetime.fromisoformat(purchased_at.replace("Z", "+00:00"))
-                has_purchased_tz = True
-            except ValueError:
-                pass
-
-        if not has_purchased_tz and isinstance(purchased_at, datetime) and purchased_at.tzinfo is None:
-            purchased_at = purchased_at.replace(tzinfo=timezone.utc)
+        purchased_at = self._normalize_purchased_at(purchased_at)
 
         expense = Expense(
             id=uuid.UUID(expense_id),

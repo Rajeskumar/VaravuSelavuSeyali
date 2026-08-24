@@ -337,6 +337,67 @@ class AnalysisService:
         return summaries
 
     # --------------------------------------------------------------------------------
+    # TS-CARD-113: (category, merchant) cross-tab for Card Coach's merchant-rule precedence.
+    # Deliberately NOT built on category_totals/merchant totals as two independent single-
+    # dimension sums — CardRewardsEngine needs to know how much of a given category's spend
+    # happened at a specific merchant to resolve merchant-vs-category rule precedence correctly
+    # per dollar, not per whole-category or whole-merchant total (spec discussion: a $100 Apple
+    # purchase must use Apple's own rule even when rolled up into the "Electronics" category
+    # view, not silently fall back to Electronics' rate). Reuses the same i_paid group-share
+    # handling as analyze() (spec §8.2) rather than MerchantInsight/MerchantAggregate, which
+    # record each member's split share for group expenses, not the full amount paid.
+    # --------------------------------------------------------------------------------
+
+    def compute_category_merchant_buckets(
+        self,
+        user_id: str,
+        year: Optional[int] = None,
+        month: Optional[int] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        include_group_i_paid: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Returns [{"category": str, "merchant": Optional[str], "total": float}, ...] — one row
+        per distinct (category, merchant) combination with nonzero spend. `merchant` is None for
+        expenses with no merchant captured (matches Expense.merchant_name being nullable)."""
+        is_sqlite = "sqlite" in str(self.db.bind.url)
+        buckets: Dict[Tuple[str, Optional[str]], float] = {}
+
+        personal_filters = [Expense.user_email == user_id, Expense.group_id.is_(None)]
+        personal_filters += self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
+        personal_rows = (
+            self.db.query(Expense.category_id, Expense.merchant_name, func.sum(Expense.amount))
+            .filter(*personal_filters)
+            .group_by(Expense.category_id, Expense.merchant_name)
+            .all()
+        )
+        for cat, merchant, amt in personal_rows:
+            key = (cat or "Uncategorized", merchant or None)
+            buckets[key] = buckets.get(key, 0.0) + float(amt or 0)
+
+        if include_group_i_paid:
+            group_filters = [Expense.group_id.isnot(None)]
+            group_filters += self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
+            group_rows = (
+                self.db.query(Expense.category_id, Expense.merchant_name, func.sum(ExpensePayer.amount_paid))
+                .join(ExpensePayer, ExpensePayer.expense_id == Expense.id)
+                .join(GroupMember, GroupMember.id == ExpensePayer.member_id)
+                .filter(GroupMember.user_email == user_id)
+                .filter(*group_filters)
+                .group_by(Expense.category_id, Expense.merchant_name)
+                .all()
+            )
+            for cat, merchant, amt in group_rows:
+                key = (cat or "Uncategorized", merchant or None)
+                buckets[key] = buckets.get(key, 0.0) + float(amt or 0)
+
+        return [
+            {"category": cat, "merchant": merchant, "total": round(total, 2)}
+            for (cat, merchant), total in buckets.items()
+            if total > 0
+        ]
+
+    # --------------------------------------------------------------------------------
     # Public entrypoint
     # --------------------------------------------------------------------------------
 
