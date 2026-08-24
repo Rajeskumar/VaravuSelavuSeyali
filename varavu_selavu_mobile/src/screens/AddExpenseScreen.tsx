@@ -237,8 +237,12 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setScannedDiscount(Number(hdr.discount) || 0);
     setScannedPurchasedAt(hdr.purchased_at || null);
     if (hdr.purchased_at) {
-      const parsed = new Date(hdr.purchased_at);
-      if (!isNaN(parsed.getTime())) setExpenseDate(startOfDay(parsed));
+      // Parse the "YYYY-MM-DD" calendar date directly rather than via `new
+      // Date(string)`, which JS treats as UTC midnight — reading that back
+      // through local getters (what startOfDay/formatMMDDYYYY do) rolls the
+      // date back a day in any negative-UTC-offset timezone.
+      const [y, m, d] = String(hdr.purchased_at).split('T')[0].split('-').map((n) => parseInt(n, 10));
+      if (y && m && d) setExpenseDate(new Date(y, m - 1, d));
     }
     setScannedFingerprint(res.fingerprint || null);
     // The itemized save path only supports an equal split (member_ratios per item, no
@@ -375,7 +379,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
       if (!isGroup && itemsToSave.length > 0) {
         const header = {
           merchant_name: merchantName || undefined,
-          purchased_at: expenseDate.toISOString(),
+          // MM/DD/YYYY, not toISOString() — matches the plain addExpense() call
+          // below and avoids shifting the date a day via UTC conversion for
+          // users in a positive UTC-offset timezone.
+          purchased_at: formatMMDDYYYY(expenseDate),
           amount: numAmount,
           tax: scannedTax || 0,
           tip: 0,

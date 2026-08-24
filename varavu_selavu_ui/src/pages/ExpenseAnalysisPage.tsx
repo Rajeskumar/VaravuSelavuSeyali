@@ -8,9 +8,11 @@ import OverviewTab from '../components/analysis/OverviewTab';
 import ItemsTab from '../components/analysis/ItemsTab';
 import MerchantsTab from '../components/analysis/MerchantsTab';
 import BudgetsTab from '../components/analysis/BudgetsTab';
+import CardsTab from '../components/analysis/CardsTab';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 
-type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets';
+type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets' | 'cards';
 
 /**
  * ExpenseAnalysisPage (TS-DES-106 rebuild, TS-DES-205 tab host) — Overview/Items/Merchants now
@@ -25,11 +27,13 @@ type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets';
 const ExpenseAnalysisPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const tabParam = searchParams.get('tab');
   const tab: AnalysisTab =
     tabParam === 'items' ? 'items'
     : tabParam === 'merchants' ? 'merchants'
     : tabParam === 'budgets' && budgetsEnabled ? 'budgets'
+    : tabParam === 'cards' && cardCoachEnabled ? 'cards'
     : 'overview';
 
   const handleTabChange = (next: AnalysisTab) => {
@@ -53,7 +57,7 @@ const ExpenseAnalysisPage: React.FC = () => {
         <Typography sx={{ ...typeScale.display, fontSize: 28, color: 'text.primary' }}>
           Analysis
         </Typography>
-        <Box sx={{ maxWidth: budgetsEnabled ? 380 : 300 }}>
+        <Box sx={{ maxWidth: 300 + (budgetsEnabled ? 80 : 0) + (cardCoachEnabled ? 80 : 0) }}>
           <SegmentedTabs<AnalysisTab>
             value={tab}
             onChange={handleTabChange}
@@ -62,6 +66,7 @@ const ExpenseAnalysisPage: React.FC = () => {
               { value: 'items', label: 'Items' },
               { value: 'merchants', label: 'Merchants' },
               ...(budgetsEnabled ? [{ value: 'budgets' as const, label: 'Budgets' }] : []),
+              ...(cardCoachEnabled ? [{ value: 'cards' as const, label: 'Cards' }] : []),
             ]}
             fullWidth
             ariaLabel="Analysis section"
@@ -73,6 +78,7 @@ const ExpenseAnalysisPage: React.FC = () => {
       {tab === 'items' && <ItemsTab />}
       {tab === 'merchants' && <MerchantsTab />}
       {tab === 'budgets' && <BudgetsTab />}
+      {tab === 'cards' && <CardsTab />}
     </Box>
   );
 };

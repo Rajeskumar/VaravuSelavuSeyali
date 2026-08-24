@@ -4,7 +4,18 @@ user-supplied fields must be escaped at that sink (P0-1)."""
 from email import message_from_string
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from varavu_selavu_service.services import email_service
+
+
+@pytest.fixture(autouse=True)
+def _mock_email_sending():
+    """Overrides conftest's global autouse fixture of the same name — that one replaces
+    send_email wholesale (return_value=True) so no test accidentally performs a real SMTP send,
+    but this file deliberately exercises send_email's real HTML-escaping logic (P0-1). SMTP
+    itself is still mocked, just at the lower smtplib.SMTP level, in _sent_html below."""
+    yield
 
 
 def _sent_html(**kwargs):

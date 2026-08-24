@@ -92,9 +92,8 @@ class Settings(BaseSettings):
     # blast radius, so there's no reason to gate them behind an explicit opt-in.
     BUDGETS_ENABLED: bool = True
 
-    # Card Coach (TS-CARD series) — live as of Phase 2 (custom cards, merchant-specific rules,
-    # prospective card-for-purchase tool). The curated card_catalog has 8 cards seeded
-    # (TS-CARD-102); broader coverage is deferred and can be added incrementally later.
+    # Card Coach (TS-CARD series) — same staged-rollout pattern as GROUPS_ENABLED: off by
+    # default until the curated card_catalog dataset (TS-CARD-102) is populated and reviewed.
     # See docs/features/card_coach/TrackSpense_Card_Rewards_Product_Spec.md.
     CARD_COACH_ENABLED: bool = True
 

@@ -56,6 +56,19 @@ CATEGORY_GROUPS: Dict[str, List[str]] = {
     ],
 }
 
+CUSTOM_CARD_ALL_PURCHASES = "All Purchases"
+
+# Flat set of every valid category_id a custom card's earning rule can reference (TS-CARD-112) —
+# same bare sub-category strings Expense.category_id/CardEarningRule.category_id already use, so
+# a self-reported rule can never reference a category that doesn't exist. Note "Other" (and a few
+# others) appear under multiple main categories with the identical bare string — a pre-existing
+# taxonomy ambiguity (see docs/features/card_coach's category-mapping notes), not something custom
+# cards introduce; picking "Other" here is exactly as ambiguous as it already is for curated cards.
+VALID_CATEGORY_IDS = frozenset(
+    {sub for subs in CATEGORY_GROUPS.values() for sub in subs} | {CUSTOM_CARD_ALL_PURCHASES}
+)
+
+
 class CategorizationService:
     """Classify expense descriptions into categories and subcategories."""
 

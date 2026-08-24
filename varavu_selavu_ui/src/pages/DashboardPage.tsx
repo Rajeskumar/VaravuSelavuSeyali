@@ -23,6 +23,8 @@ import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import { listBudgets, BudgetDTO } from '../api/budgets';
 import BudgetsSummaryCard from '../components/dashboard/BudgetsSummaryCard';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
+import CardCoachSummaryCard from '../components/dashboard/CardCoachSummaryCard';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { cerebro, tabularNums } from '../theme';
 
@@ -111,6 +113,7 @@ const DashboardPage: React.FC = () => {
   const user = localStorage.getItem('vs_user') || '';
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const [showCombinedToast, setShowCombinedToast] = React.useState(false);
 
   // Everything below goes through react-query's cache instead of the plain useEffect-per-fetch
@@ -290,6 +293,7 @@ const DashboardPage: React.FC = () => {
       )}
 
       {budgetsEnabled && <BudgetsSummaryCard budgets={budgets} />}
+      {cardCoachEnabled && <CardCoachSummaryCard />}
 
       {/* DesktopDashboard.jsx puts "Where it went" and "My Groups" side by side
           (`grid-cols-2`); stacked full-width on mobile, same as before. When there's no groups

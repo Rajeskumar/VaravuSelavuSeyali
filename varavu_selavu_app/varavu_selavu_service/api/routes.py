@@ -73,8 +73,23 @@ from varavu_selavu_service.models.api_models import (
     BudgetBreakdownResponse,
     BudgetSuggestion,
     BudgetAskWhyResponse,
+    CardCatalogSummary,
+    CardCatalogDetail,
+    CardEarningRuleDTO,
+    UserCardDTO,
+    AddUserCardRequest,
+    CardCoachResponse,
+    CardCoachPeriod,
+    CardCoachCategoryDTO,
+    CardCoachMerchantDTO,
+    CardCoachFilterInfo,
+    CardCorrectionRequest,
+    CardCorrectionDTO,
+    CreateCustomCardRequest,
 )
 from varavu_selavu_service.services.budget_service import BudgetService
+from varavu_selavu_service.services.card_service import CardService
+from varavu_selavu_service.services.card_rewards_engine import CategoryRewardGap, MerchantRewardGap
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.notification_service import NotificationService
@@ -133,6 +148,13 @@ def require_budgets_enabled() -> None:
     if not Settings().BUDGETS_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
+def get_card_service(db: Session = Depends(get_db)) -> CardService:
+    return CardService(db)
+
+def require_card_coach_enabled() -> None:
+    if not Settings().CARD_COACH_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
 def get_insight_analytics_service(db: Session = Depends(get_db)) -> InsightAnalyticsService:
     return InsightAnalyticsService(db=db)
 
@@ -156,6 +178,7 @@ def get_config():
         "groups_enabled": settings_now.GROUPS_ENABLED,
         "entity_resolution_enabled": settings_now.ENTITY_RESOLUTION_ENABLED,
         "budgets_enabled": settings_now.BUDGETS_ENABLED,
+        "card_coach_enabled": settings_now.CARD_COACH_ENABLED,
     }
 
 
@@ -529,6 +552,7 @@ def analysis_chat(
     balance_service: BalanceService = Depends(get_balance_service),
     expense_service: ExpenseService = Depends(get_expense_service),
     group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
+    card_service: CardService = Depends(get_card_service),
     user_id: str = Depends(auth_required),
 ):
     """
@@ -547,6 +571,8 @@ def analysis_chat(
             expense_service=expense_service,
             group_expense_service=group_expense_service,
             groups_enabled=settings.GROUPS_ENABLED,
+            card_service=card_service,
+            card_coach_enabled=Settings().CARD_COACH_ENABLED,
             model=body.model,
             provider=body.provider,
             year=body.year,
@@ -1272,6 +1298,296 @@ def budget_ask_why(
             status_code=503,
             detail="The AI analyst is temporarily unavailable. Please try again later."
         )
+
+
+# ---------------------- Card Coach (TS-CARD-103) ---------------------- #
+
+def _earning_rule_to_dto(rule) -> CardEarningRuleDTO:
+    return CardEarningRuleDTO(
+        id=str(rule.id),
+        category_id=rule.category_id,
+        merchant_name=rule.merchant_name,
+        multiplier=float(rule.multiplier),
+        cap_amount=float(rule.cap_amount) if rule.cap_amount is not None else None,
+        cap_period=rule.cap_period,
+        exclusions_note=rule.exclusions_note,
+        rotation_start=rule.rotation_start.isoformat() if rule.rotation_start else None,
+        rotation_end=rule.rotation_end.isoformat() if rule.rotation_end else None,
+    )
+
+
+def _user_card_to_dto(user_card, catalog_card) -> UserCardDTO:
+    return UserCardDTO(
+        id=str(user_card.id),
+        card_id=str(catalog_card.id),
+        issuer=catalog_card.issuer,
+        card_name=catalog_card.card_name,
+        reward_type=catalog_card.reward_type,
+        is_default=user_card.is_default,
+        is_custom=catalog_card.created_by_user_email is not None,
+        added_at=user_card.added_at.isoformat(),
+    )
+
+
+@router.get(
+    "/cards/catalog",
+    response_model=list[CardCatalogSummary],
+    tags=["Card Coach"],
+    summary="Search the curated card catalog by issuer/name",
+)
+def search_card_catalog(
+    q: str | None = Query(None, description="Free-text issuer/card-name search"),
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    cards = svc.search_catalog(user_id, query=q)
+    return [
+        CardCatalogSummary(
+            id=str(c.id), issuer=c.issuer, card_name=c.card_name, reward_type=c.reward_type,
+            annual_fee=float(c.annual_fee), is_custom=c.created_by_user_email is not None,
+        )
+        for c in cards
+    ]
+
+
+@router.get(
+    "/cards/catalog/{card_id}",
+    response_model=CardCatalogDetail,
+    tags=["Card Coach"],
+    summary="Full detail for one catalog card, including earning rules and provenance",
+)
+def get_card_catalog_detail(
+    card_id: str,
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    card = svc.get_catalog_detail(card_id, require_visible_to=user_id)
+    rules = svc.get_earning_rules(card_id)
+    return CardCatalogDetail(
+        id=str(card.id),
+        issuer=card.issuer,
+        card_name=card.card_name,
+        reward_type=card.reward_type,
+        points_currency_name=card.points_currency_name,
+        point_value_estimate_usd=float(card.point_value_estimate_usd) if card.point_value_estimate_usd is not None else None,
+        annual_fee=float(card.annual_fee),
+        earning_rules=[_earning_rule_to_dto(r) for r in rules],
+        source_url=card.source_url,
+        last_verified_at=card.last_verified_at.isoformat() if card.last_verified_at else None,
+        is_active=card.is_active,
+        is_custom=card.created_by_user_email is not None,
+    )
+
+
+@router.get(
+    "/cards/mine",
+    response_model=list[UserCardDTO],
+    tags=["Card Coach"],
+    summary="List the current user's held cards",
+)
+def list_my_cards(
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    rows = svc.list_user_cards(user_id)
+    return [_user_card_to_dto(user_card, catalog_card) for user_card, catalog_card in rows]
+
+
+@router.post(
+    "/cards/mine",
+    response_model=UserCardDTO,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Card Coach"],
+    summary="Add a held card",
+)
+def add_my_card(
+    data: AddUserCardRequest,
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    user_card = svc.add_user_card(user_id, data.card_id)
+    catalog_card = svc.get_catalog_detail(str(user_card.card_id))
+    return _user_card_to_dto(user_card, catalog_card)
+
+
+@router.delete(
+    "/cards/mine/{user_card_id}",
+    response_model=dict,
+    tags=["Card Coach"],
+    summary="Remove a held card",
+)
+def remove_my_card(
+    user_card_id: str,
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    svc.remove_user_card(user_id, user_card_id)
+    return {"success": True}
+
+
+@router.post(
+    "/cards/mine/{user_card_id}/set_default",
+    response_model=UserCardDTO,
+    tags=["Card Coach"],
+    summary="Mark a held card as the default used for CardRewardsEngine's actual-earned figure",
+)
+def set_my_default_card(
+    user_card_id: str,
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    user_card = svc.set_default_card(user_id, user_card_id)
+    catalog_card = svc.get_catalog_detail(str(user_card.card_id))
+    return _user_card_to_dto(user_card, catalog_card)
+
+
+@router.post(
+    "/cards/custom",
+    response_model=UserCardDTO,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Card Coach"],
+    summary="Add a user-created custom card (outside the curated catalog) and hold it in one call",
+)
+def create_custom_card(
+    data: CreateCustomCardRequest,
+    svc: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    card, user_card = svc.create_custom_card(
+        user_id, card_name=data.card_name, issuer=data.issuer, annual_fee=float(data.annual_fee),
+        rules=[{"category_id": r.category_id, "multiplier": r.multiplier} for r in data.rules],
+    )
+    return _user_card_to_dto(user_card, card)
+
+
+def _cap_note_for(gap) -> str | None:
+    # Prefer the catalog-optimal card's cap note (the aspirational suggestion, spec Appendix
+    # example) — fall back to the in-wallet-optimal card's note if the catalog has none.
+    if gap.optimal_catalog and gap.optimal_catalog.cap_note:
+        return gap.optimal_catalog.cap_note
+    if gap.optimal_in_wallet and gap.optimal_in_wallet.cap_note:
+        return gap.optimal_in_wallet.cap_note
+    return None
+
+
+def _is_using_best_held_card(gap) -> bool:
+    """Phase 2 'better card' nudge: compares by card_id, not display name — two different cards
+    (e.g. a custom card and a catalog card) can share a card_name. Defaults True (no nudge) when
+    there's nothing to compare, same "never fabricate" rule as gap_usd."""
+    if not gap.actual or not gap.optimal_in_wallet:
+        return True
+    return gap.actual.card_id == gap.optimal_in_wallet.card_id
+
+
+def _gap_to_dto(gap: CategoryRewardGap) -> CardCoachCategoryDTO:
+    return CardCoachCategoryDTO(
+        category=gap.category,
+        actual_spend=gap.actual_spend,
+        spend_source="",  # filled in by the caller — same value for every row in one response
+        actual_earned_estimate=gap.actual.earned_usd if gap.actual else None,
+        held_card_used=gap.actual.card_name if gap.actual else None,
+        optimal_in_wallet_card=gap.optimal_in_wallet.card_name if gap.optimal_in_wallet else None,
+        optimal_in_wallet_earned_estimate=gap.optimal_in_wallet.earned_usd if gap.optimal_in_wallet else None,
+        optimal_catalog_card=gap.optimal_catalog.card_name if gap.optimal_catalog else None,
+        optimal_catalog_earned_estimate=gap.optimal_catalog.earned_usd if gap.optimal_catalog else None,
+        cap_note=_cap_note_for(gap),
+        is_using_best_held_card=_is_using_best_held_card(gap),
+    )
+
+
+def _merchant_gap_to_dto(gap: MerchantRewardGap) -> CardCoachMerchantDTO:
+    return CardCoachMerchantDTO(
+        merchant=gap.merchant,
+        actual_spend=gap.actual_spend,
+        spend_source="",  # filled in by the caller — same value for every row in one response
+        actual_earned_estimate=gap.actual.earned_usd if gap.actual else None,
+        held_card_used=gap.actual.card_name if gap.actual else None,
+        optimal_in_wallet_card=gap.optimal_in_wallet.card_name if gap.optimal_in_wallet else None,
+        optimal_in_wallet_earned_estimate=gap.optimal_in_wallet.earned_usd if gap.optimal_in_wallet else None,
+        optimal_catalog_card=gap.optimal_catalog.card_name if gap.optimal_catalog else None,
+        optimal_catalog_earned_estimate=gap.optimal_catalog.earned_usd if gap.optimal_catalog else None,
+        cap_note=_cap_note_for(gap),
+        is_using_best_held_card=_is_using_best_held_card(gap),
+    )
+
+
+@router.get(
+    "/cards/coach",
+    response_model=CardCoachResponse,
+    tags=["Card Coach"],
+    summary="Card Coach analysis: per-category and per-merchant actual vs. optimal reward estimate for the given period",
+)
+def get_card_coach(
+    year: int | None = Query(default=None, ge=1970, le=2100),
+    month: int | None = Query(default=None, ge=1, le=12),
+    start_date: str | None = None,
+    end_date: str | None = None,
+    card_service: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    # Same GROUPS_ENABLED gate as the plain /analysis route — group data must not leak through
+    # here if Groups itself is off, regardless of what a client requests.
+    category_gaps, merchant_gaps, group_share_included = card_service.compute_coach_gaps(
+        user_id, year=year, month=month, start_date=start_date, end_date=end_date,
+        groups_enabled=Settings().GROUPS_ENABLED,
+    )
+
+    spend_source = "personal_plus_group_paid" if group_share_included else "personal_only"
+    by_category = []
+    for gap in category_gaps:
+        dto = _gap_to_dto(gap)
+        dto.spend_source = spend_source
+        by_category.append(dto)
+
+    by_merchant = []
+    for gap in merchant_gaps:
+        dto = _merchant_gap_to_dto(gap)
+        dto.spend_source = spend_source
+        by_merchant.append(dto)
+
+    # Deliberately category-only (spec discussion, Option B) — merchant gaps are a supplementary,
+    # precedence-correct view, never summed into the headline number, since a merchant's spend is
+    # already included in its category's own gap and summing both would double-count it.
+    total_gap = round(sum(g.gap_usd for g in category_gaps), 2)
+
+    return CardCoachResponse(
+        period=CardCoachPeriod(year=year, month=month),
+        total_estimated_gap=total_gap,
+        by_category=by_category,
+        by_merchant=by_merchant,
+        filter_info=CardCoachFilterInfo(year=year, month=month, group_share_included=group_share_included),
+    )
+
+
+@router.post(
+    "/cards/corrections",
+    response_model=CardCorrectionDTO,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Card Coach"],
+    summary="File a data-correction report against a catalog card",
+)
+def file_card_correction(
+    data: CardCorrectionRequest,
+    card_service: CardService = Depends(get_card_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_card_coach_enabled),
+):
+    correction = card_service.file_correction(user_id, data.card_id, data.note)
+    return CardCorrectionDTO(
+        id=str(correction.id),
+        card_id=str(correction.card_id),
+        note=correction.note,
+        status=correction.status,
+        created_at=correction.created_at.isoformat(),
+    )
 
 
 # ---------------------- Email ---------------------- #

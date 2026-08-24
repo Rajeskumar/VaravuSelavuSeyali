@@ -2,6 +2,7 @@ import pytest
 import os
 import uuid
 from datetime import datetime
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -68,6 +69,25 @@ def _reset_rate_limiter():
     limiter.reset()
     yield
     limiter.reset()
+
+
+@pytest.fixture(autouse=True)
+def _mock_email_sending():
+    """No test should ever perform a real SMTP send — the local dev `.env` this Settings()
+    picks up has real Gmail credentials (MAIL_USERNAME/MAIL_PASSWORD), and email_service's
+    send_email/send_transactional_email will happily use them if not mocked. Every test that
+    hits /auth/register (or forgot-password) was doing exactly that. Patched at each *call*
+    site, not just the definition in services/email_service.py — auth/routers.py imports
+    send_transactional_email by name (`from ... import send_transactional_email`), which binds
+    a separate reference into that module's namespace at import time, so patching only
+    email_service.send_transactional_email would never reach it. api/routes.py's send_email
+    usage is a local `from ... import send_email` *inside* the route function, which re-resolves
+    against email_service's current attribute on every call, so patching it there is sufficient
+    for that one path."""
+    with patch("varavu_selavu_service.services.email_service.send_email", return_value=True), \
+         patch("varavu_selavu_service.services.email_service.send_transactional_email", return_value=True), \
+         patch("varavu_selavu_service.auth.routers.send_transactional_email", return_value=True):
+        yield
 
 
 @pytest.fixture(autouse=True)

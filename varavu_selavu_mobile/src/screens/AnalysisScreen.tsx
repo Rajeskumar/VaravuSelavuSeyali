@@ -35,8 +35,10 @@ import { onExpenseChanged } from '../utils/expenseEvents';
 import { AddExpenseContext } from './AddExpenseScreen';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import BudgetsTabContent from '../components/BudgetsTabContent';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
+import CardsTabContent from '../components/CardsTabContent';
 
-type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets';
+type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets' | 'cards';
 
 const formatCurrency = (amount: number) => `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -49,12 +51,14 @@ export default function AnalysisScreen() {
     const route = useRoute<any>();
 
     const { enabled: budgetsEnabled } = useBudgetsEnabled();
+    const { enabled: cardCoachEnabled } = useCardCoachEnabled();
     const [tab, setTab] = useState<AnalysisTab>('overview');
-    // Dashboard's Budgets summary card navigates here with `{ initialTab: 'budgets' }` — same
-    // pattern as GroupsScreen's own `initialTab` param handling.
+    // Dashboard's Budgets/Card Coach summary cards navigate here with `{ initialTab: '...' }` —
+    // same pattern as GroupsScreen's own `initialTab` param handling.
     React.useEffect(() => {
         if (route.params?.initialTab === 'budgets' && budgetsEnabled) setTab('budgets');
-    }, [route.params?.initialTab, budgetsEnabled]);
+        if (route.params?.initialTab === 'cards' && cardCoachEnabled) setTab('cards');
+    }, [route.params?.initialTab, budgetsEnabled, cardCoachEnabled]);
     const [includeGroups, setIncludeGroups] = useState(true);
     const scope = includeGroups ? 'combined' : 'personal';
     // TrackSpense v3 Mobile mock's category drill-down (`anCat`/`anHasCat`): tapping a category
@@ -150,6 +154,7 @@ export default function AnalysisScreen() {
                             { value: 'items', label: 'Items' },
                             { value: 'merchants', label: 'Merchants' },
                             ...(budgetsEnabled ? [{ value: 'budgets' as const, label: 'Budgets' }] : []),
+                            ...(cardCoachEnabled ? [{ value: 'cards' as const, label: 'Cards' }] : []),
                         ]}
                     />
                 </View>
@@ -334,6 +339,7 @@ export default function AnalysisScreen() {
                 )}
 
                 {tab === 'budgets' && budgetsEnabled && <BudgetsTabContent />}
+                {tab === 'cards' && cardCoachEnabled && <CardsTabContent />}
             </ScrollView>
         </ScreenWrapper>
     );
