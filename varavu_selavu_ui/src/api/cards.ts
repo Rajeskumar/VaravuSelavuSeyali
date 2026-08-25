@@ -34,6 +34,12 @@ export interface CardCatalogDetail extends CardCatalogSummary {
   is_active: boolean;
 }
 
+export interface CardRefDTO {
+  id: string;
+  card_name: string;
+  issuer: string;
+}
+
 export interface UserCardDTO {
   id: string; // user_cards.id
   card_id: string;

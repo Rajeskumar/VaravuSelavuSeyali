@@ -6,10 +6,13 @@ export interface AnalysisResponse {
   monthly_trend: { month: string; total: number }[];
   total_expenses: number;
   category_expense_details?: Record<string, { date: string; description: string; category: string; cost: number }[]>;
-  filter_info?: { applied_user_col?: string | null; year?: number | null; month?: number | null; row_count?: number };
+  filter_info?: { applied_user_col?: string | null; year?: number | null; month?: number | null; row_count?: number; tag_ids?: string[] | null };
   scope?: string | null;
   spend_breakdown?: { personal: number; group_share: number } | null;
   group_summaries?: { group_id: string; name: string; my_share: number; i_paid: number; group_total: number; my_balance: number }[] | null;
+  // TS-TAG-112 — share-aware totals, populated only when tag_ids is provided (PRD §10.4).
+  my_expenses_total?: number | null;
+  i_paid_total?: number | null;
 }
 
 export async function getAnalysis(
@@ -23,6 +26,7 @@ export async function getAnalysis(
     /** 'personal' (default) | 'combined' | 'groups' */
     scope?: string;
     group_id?: string;
+    tag_ids?: string[];
   },
 ): Promise<AnalysisResponse> {
   const params = new URLSearchParams();
@@ -33,6 +37,7 @@ export async function getAnalysis(
   if (opts?.end_date) params.set('end_date', opts.end_date);
   if (opts?.scope) params.set('scope', opts.scope);
   if (opts?.group_id) params.set('group_id', opts.group_id);
+  (opts?.tag_ids || []).forEach((id) => params.append('tag_ids', id));
   // Cache busting
   params.set('_ts', String(Date.now()));
 

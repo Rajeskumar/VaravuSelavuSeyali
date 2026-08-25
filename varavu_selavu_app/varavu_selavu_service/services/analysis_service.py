@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, Integer
-from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, Group, GroupMember
+from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, ExpenseTag, Group, GroupMember
 
 
 def _to_uuid(value) -> Optional[uuid.UUID]:
@@ -16,6 +16,8 @@ def _to_uuid(value) -> Optional[uuid.UUID]:
         return uuid.UUID(str(value))
     except (ValueError, AttributeError, TypeError):
         return None
+
+
 
 
 @dataclass
@@ -71,15 +73,35 @@ class AnalysisService:
             return func.strftime('%Y-%m', column)
         return func.to_char(func.date_trunc('month', column), 'YYYY-MM')
 
+    def _tag_filter_condition(self, user_id: str, tag_ids: Optional[List[str]]):
+        """TS-TAG-106: `Expense.id.in_(...)` predicate for OR-semantics tag filtering (PRD
+        §10.4/§7.4 — Overview/Items/Merchants all scope to this when a tag filter is active).
+        Filters `expense_tags` by `user_email` like every other tag read path (PRD §9.2) — a tag
+        filter can never surface an expense via someone else's private tag on a shared expense."""
+        if not tag_ids:
+            return None
+        parsed_ids = [t for t in (_to_uuid(t) for t in tag_ids) if t is not None]
+        if not parsed_ids:
+            return None
+        subq = (
+            self.db.query(ExpenseTag.expense_id)
+            .filter(ExpenseTag.tag_id.in_(parsed_ids), ExpenseTag.user_email == user_id)
+            .subquery()
+        )
+        return Expense.id.in_(subq)
+
     # --------------------------------------------------------------------------------
     # Personal leg — unchanged behavior for scope=personal, plus a group_id IS NULL
     # guard for personal/combined so group expenses (user_email=creator) aren't
     # double-counted the moment group_id exists (spec §9.1).
     # --------------------------------------------------------------------------------
 
-    def _compute_personal_leg(self, user_id, year, month, start_date, end_date, is_sqlite) -> Dict[str, Any]:
+    def _compute_personal_leg(self, user_id, year, month, start_date, end_date, is_sqlite, tag_ids=None) -> Dict[str, Any]:
         filters = [Expense.user_email == user_id, Expense.group_id.is_(None)]
         filters += self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
+        tag_condition = self._tag_filter_condition(user_id, tag_ids)
+        if tag_condition is not None:
+            filters.append(tag_condition)
 
         category_totals: List[Dict[str, Any]] = []
         monthly_trend: List[Dict[str, Any]] = []
@@ -157,7 +179,7 @@ class AnalysisService:
 
 
 
-    def _compute_group_leg(self, user_id, year, month, start_date, end_date, is_sqlite, group_id=None, mode="my_share") -> Dict[str, Any]:
+    def _compute_group_leg(self, user_id, year, month, start_date, end_date, is_sqlite, group_id=None, mode="my_share", tag_ids=None) -> Dict[str, Any]:
         from varavu_selavu_service.db.models import ExpensePayer, ExpenseSplit, Expense, GroupMember
         
         if mode == "my_share":
@@ -189,6 +211,10 @@ class AnalysisService:
             query = query.filter(Expense.group_id.isnot(None))
             
         query = query.filter(*self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite))
+
+        tag_condition = self._tag_filter_condition(user_id, tag_ids)
+        if tag_condition is not None:
+            query = query.filter(tag_condition)
 
         category_sums = {}
         month_sums = {}
@@ -357,43 +383,48 @@ class AnalysisService:
         end_date: str | None = None,
         include_group_i_paid: bool = False,
     ) -> List[Dict[str, Any]]:
-        """Returns [{"category": str, "merchant": Optional[str], "total": float}, ...] — one row
-        per distinct (category, merchant) combination with nonzero spend. `merchant` is None for
-        expenses with no merchant captured (matches Expense.merchant_name being nullable)."""
+        """Returns [{"category": str, "merchant": Optional[str], "card_id": Optional[str],
+        "total": float}, ...] — one row per distinct (category, merchant, card_id) combination
+        with nonzero spend. `merchant` is None for expenses with no merchant captured (matches
+        Expense.merchant_name being nullable). `card_id` (TS-CARD-114) is None for expenses with
+        no held-card attribution — CardRewardsEngine treats those as "assume the default card,"
+        never as "assume no card/no reward." Bucketing by card_id (not just category/merchant)
+        is what lets the engine apply each dollar's *actual* attributed card instead of blindly
+        crediting 100% of a category's spend to the default card."""
         is_sqlite = "sqlite" in str(self.db.bind.url)
-        buckets: Dict[Tuple[str, Optional[str]], float] = {}
+        buckets: Dict[Tuple[str, Optional[str], Optional[str]], float] = {}
 
         personal_filters = [Expense.user_email == user_id, Expense.group_id.is_(None)]
         personal_filters += self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
         personal_rows = (
-            self.db.query(Expense.category_id, Expense.merchant_name, func.sum(Expense.amount))
+            self.db.query(Expense.category_id, Expense.merchant_name, Expense.card_id, func.sum(Expense.amount))
             .filter(*personal_filters)
-            .group_by(Expense.category_id, Expense.merchant_name)
+            .group_by(Expense.category_id, Expense.merchant_name, Expense.card_id)
             .all()
         )
-        for cat, merchant, amt in personal_rows:
-            key = (cat or "Uncategorized", merchant or None)
+        for cat, merchant, card_id, amt in personal_rows:
+            key = (cat or "Uncategorized", merchant or None, str(card_id) if card_id else None)
             buckets[key] = buckets.get(key, 0.0) + float(amt or 0)
 
         if include_group_i_paid:
             group_filters = [Expense.group_id.isnot(None)]
             group_filters += self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
             group_rows = (
-                self.db.query(Expense.category_id, Expense.merchant_name, func.sum(ExpensePayer.amount_paid))
+                self.db.query(Expense.category_id, Expense.merchant_name, Expense.card_id, func.sum(ExpensePayer.amount_paid))
                 .join(ExpensePayer, ExpensePayer.expense_id == Expense.id)
                 .join(GroupMember, GroupMember.id == ExpensePayer.member_id)
                 .filter(GroupMember.user_email == user_id)
                 .filter(*group_filters)
-                .group_by(Expense.category_id, Expense.merchant_name)
+                .group_by(Expense.category_id, Expense.merchant_name, Expense.card_id)
                 .all()
             )
-            for cat, merchant, amt in group_rows:
-                key = (cat or "Uncategorized", merchant or None)
+            for cat, merchant, card_id, amt in group_rows:
+                key = (cat or "Uncategorized", merchant or None, str(card_id) if card_id else None)
                 buckets[key] = buckets.get(key, 0.0) + float(amt or 0)
 
         return [
-            {"category": cat, "merchant": merchant, "total": round(total, 2)}
-            for (cat, merchant), total in buckets.items()
+            {"category": cat, "merchant": merchant, "card_id": card_id, "total": round(total, 2)}
+            for (cat, merchant, card_id), total in buckets.items()
             if total > 0
         ]
 
@@ -411,6 +442,7 @@ class AnalysisService:
             use_cache: bool = True,
             scope: str = "personal",
             group_id: str | None = None,
+            tag_ids: List[str] | None = None,
     ) -> Dict[str, Any]:
         scope = scope or "personal"
         cache_key = (
@@ -421,6 +453,7 @@ class AnalysisService:
             end_date,
             scope,
             group_id,
+            tuple(sorted(tag_ids)) if tag_ids else None,
         )
 
         now_ts = time.time()
@@ -437,13 +470,13 @@ class AnalysisService:
         personal_leg = None
         group_leg = None
         if scope in ("personal", "combined", "i_paid", "group_total"):
-            personal_leg = self._compute_personal_leg(user_id, year, month, start_date, end_date, is_sqlite)
+            personal_leg = self._compute_personal_leg(user_id, year, month, start_date, end_date, is_sqlite, tag_ids=tag_ids)
         if scope in ("combined", "groups"):
-            group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "my_share")
+            group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "my_share", tag_ids=tag_ids)
         elif scope == "i_paid":
-            group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "i_paid")
+            group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "i_paid", tag_ids=tag_ids)
         elif scope == "group_total":
-            group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "group_total")
+            group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "group_total", tag_ids=tag_ids)
 
         if scope == "groups":
             merged = group_leg
@@ -470,6 +503,7 @@ class AnalysisService:
                 "row_count": merged["row_count"],
                 "scope": scope,
                 "group_id": group_id,
+                "tag_ids": tag_ids,
             },
             "scope": scope,
         }
@@ -487,6 +521,26 @@ class AnalysisService:
         else:
             result["spend_breakdown"] = None
             result["group_summaries"] = None
+
+        # TS-TAG-106 (PRD §10.4): when tag-filtered, always surface BOTH share-aware totals
+        # regardless of `scope` — reuses the exact same _compute_personal_leg/_compute_group_leg
+        # methods above (PRD §4.1: never reimplement the share-computation path), just called
+        # again with the mode the requested `scope` didn't already compute.
+        if tag_ids:
+            my_share_personal = personal_leg if personal_leg is not None else self._compute_personal_leg(
+                user_id, year, month, start_date, end_date, is_sqlite, tag_ids=tag_ids,
+            )
+            my_share_group = group_leg if scope in ("combined", "groups") else self._compute_group_leg(
+                user_id, year, month, start_date, end_date, is_sqlite, group_id, "my_share", tag_ids=tag_ids,
+            )
+            i_paid_group = group_leg if scope == "i_paid" else self._compute_group_leg(
+                user_id, year, month, start_date, end_date, is_sqlite, group_id, "i_paid", tag_ids=tag_ids,
+            )
+            result["my_expenses_total"] = round(my_share_personal["total"] + my_share_group["total"], 2)
+            result["i_paid_total"] = round(my_share_personal["total"] + i_paid_group["total"], 2)
+        else:
+            result["my_expenses_total"] = None
+            result["i_paid_total"] = None
 
         if use_cache:
             with self._CACHE_LOCK:

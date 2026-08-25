@@ -36,6 +36,17 @@ class ExpenseRequest(BaseModel):
     description: DescriptionStr
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
     merchant_name: OptionalMerchantStr = None
+    # TS-TAG-104 — full-replace on PUT (an omitted field leaves tags unchanged; an explicit
+    # empty list clears them — see the route handler's use of `model_fields_set`). On POST
+    # there's no prior state, so None/omitted and [] behave identically (no tags created).
+    tag_names: Optional[List[str]] = None
+    # TS-CARD-114: optional attribution of which held card was actually used. Must be one of
+    # the caller's own UserCard entries (route validates via CardService) — never an arbitrary
+    # catalog id. Always-replace on PUT, same semantics as merchant_name: the edit form always
+    # populates this from the expense's current attribution, so null here always means "no
+    # card attributed" rather than "leave unchanged" — no tag_names-style omitted/empty
+    # distinction is needed since there's no separate additive write path for a single value.
+    card_id: Optional[str] = None
 
 
 class ReceiptParseResponse(BaseModel):
@@ -64,6 +75,9 @@ class ExpenseWithItemsRequest(BaseModel):
     user_email: str
     header: Dict[str, Any]
     items: List[ExpenseItem]
+    tag_names: Optional[List[str]] = None
+    # TS-CARD-114: same optional held-card attribution as ExpenseRequest.card_id.
+    card_id: Optional[str] = None
 
 
 class ExpenseWithItemsResponse(BaseModel):
@@ -154,12 +168,33 @@ class FeatureFlagsResponse(BaseModel):
     # TS-CARD-101: same pattern, for the Analysis "Cards" tab and its Dashboard/AI Analyst
     # integrations — defaults False until the curated card_catalog (TS-CARD-102) is populated.
     card_coach_enabled: bool
+    # TS-TAG-101: same pattern, for TagInput/tag filter surfaces on web/mobile — defaults False
+    # until the retrieval surfaces (filter + bulk apply) ship (PRD §4.2).
+    tags_enabled: bool
 
 
 class DashboardResponse(BaseModel):
     total_expenses: float
     total_categories: int
     months_tracked: int
+
+
+class TagRefDTO(BaseModel):
+    """A tag as it appears embedded on an expense row (PRD §10.2's `tags: [{id, name, color}]`)
+    — deliberately not the full TagDTO (no status/usage stats needed at this granularity)."""
+    id: str
+    name: str
+    color: str
+
+
+class CardRefDTO(BaseModel):
+    """TS-CARD-114: the held card attributed to an expense, as embedded on an expense row.
+    Deliberately not the full CardCatalog shape (no earning_rules/annual_fee/etc. needed at
+    this granularity — a client that needs those already has the user's held-cards list
+    loaded to power the picker in the first place)."""
+    id: str
+    card_name: str
+    issuer: str
 
 
 class Expense(BaseModel):
@@ -175,6 +210,12 @@ class Expense(BaseModel):
     # item, so the UI should only treat item_count > 1 as "really itemized").
     item_count: int = 0
     split_type: Optional[str] = None
+    # TS-TAG-103 — filtered to the caller (PRD §9.2); never another user's tags on a shared
+    # group expense.
+    tags: List[TagRefDTO] = Field(default_factory=list)
+    # TS-CARD-114: which held card was actually used, if the user attributed one. None means
+    # unattributed — CardRewardsEngine then falls back to the user's default held card.
+    card: Optional[CardRefDTO] = None
 
 
 class ExpenseRow(Expense):
@@ -222,6 +263,7 @@ class AnalysisFilterInfo(BaseModel):
     end_date: Optional[str] = None
     scope: Optional[str] = None
     group_id: Optional[str] = None
+    tag_ids: Optional[List[str]] = None
 
 
 class SpendBreakdown(BaseModel):
@@ -248,6 +290,9 @@ class AnalysisResponse(BaseModel):
     scope: Optional[str] = None
     spend_breakdown: Optional[SpendBreakdown] = None
     group_summaries: Optional[List[AnalysisGroupSummary]] = None
+    # TS-TAG-106 (PRD §10.4) — share-aware totals, populated only when tag_ids is provided.
+    my_expenses_total: Optional[float] = None
+    i_paid_total: Optional[float] = None
 
 
 class ResolvedPeriod(BaseModel):
@@ -510,6 +555,10 @@ class GroupExpenseRequest(BaseModel):
     # TS-GRP-131: currency this expense was actually paid in. None/omitted means
     # "same as the group's currency" (the common case — no FX lookup needed).
     currency: Optional[str] = None
+    # TS-CARD-114: same optional held-card attribution as personal ExpenseRequest.card_id —
+    # group expenses use full-replace here too (no separate association model needed for a
+    # single nullable value the way tags needed one for a many-valued field).
+    card_id: Optional[str] = None
 
 
 class MoveToGroupRequest(BaseModel):
@@ -543,6 +592,8 @@ class GroupExpenseWithItemsRequest(BaseModel):
     payers: List[GroupExpensePayerEntry]
     items: List[GroupExpenseItemEntry]
     currency: Optional[str] = None
+    # TS-CARD-114: same optional held-card attribution as GroupExpenseRequest.card_id.
+    card_id: Optional[str] = None
 
 
 class GroupExpenseWithItemsResponse(BaseModel):
@@ -577,6 +628,15 @@ class GroupExpenseRow(BaseModel):
     currency: Optional[str] = None
     fx_rate_to_group_currency: Optional[float] = None
     split_type: Optional[str] = None
+    # TS-TAG-103 — filtered to the caller (PRD §9.2, load-bearing): a tag applied to a shared
+    # group expense is visible ONLY to the member who applied it, never other group members.
+    tags: List[TagRefDTO] = Field(default_factory=list)
+    # TS-CARD-114: which held card the payer attributed to this group expense, if any. Like
+    # tags, this is per-attributing-member data on a shared expense, but there's no privacy
+    # concern here the way tags had (spec never treated "which card I paid with" as private,
+    # and CardRewardsEngine's own group-expense buckets are already scoped to i_paid amounts
+    # the current user actually paid — see AnalysisService.compute_category_merchant_buckets).
+    card: Optional[CardRefDTO] = None
 
 
 class GroupExpenseCreatedResponse(BaseModel):
@@ -1048,4 +1108,61 @@ class CardCoachResponse(BaseModel):
     by_category: List[CardCoachCategoryDTO]
     by_merchant: List[CardCoachMerchantDTO] = Field(default_factory=list)
     filter_info: CardCoachFilterInfo
+
+
+# ---------------------- TS-TAG-102: Tag CRUD ---------------------- #
+
+class TagCreateRequest(BaseModel):
+    name: str
+    color: Optional[str] = None
+
+
+class TagUpdateRequest(BaseModel):
+    """All fields optional — PUT applies only what's provided. `status` is 'Active' | 'Archived'."""
+    name: Optional[str] = None
+    color: Optional[str] = None
+    status: Optional[str] = None
+
+
+class TagDTO(BaseModel):
+    id: str
+    name: str
+    color: str
+    status: str
+    created_at: datetime
+    # Derived, not stored (PRD §8.1) — computed from expense_tags in the same query that ranks
+    # autocomplete, never persisted on the tag row.
+    usage_count: int
+    last_used_at: Optional[datetime] = None
+
+
+class TagApplyRequest(BaseModel):
+    """PRD §10.2 — either or both may be given; tag_names are created-or-resolved."""
+    tag_ids: List[str] = Field(default_factory=list)
+    tag_names: List[str] = Field(default_factory=list)
+
+
+class TagBulkFilterDTO(BaseModel):
+    start_date: Optional[str] = None  # YYYY-MM-DD
+    end_date: Optional[str] = None
+    group_id: Optional[str] = None
+    category: Optional[str] = None
+    merchant_name: Optional[str] = None
+
+
+class TagBulkRequest(BaseModel):
+    """PRD §10.3 — exactly one of tag_id/tag_name, and exactly one of expense_ids/filter."""
+    tag_id: Optional[str] = None
+    tag_name: Optional[str] = None
+    expense_ids: Optional[List[str]] = None
+    filter: Optional[TagBulkFilterDTO] = None
+    dry_run: bool = True
+
+
+class TagBulkResponse(BaseModel):
+    matched_count: int
+    already_tagged_count: int
+    applied_count: int
+    my_expenses_total: float
+    i_paid_total: float
 

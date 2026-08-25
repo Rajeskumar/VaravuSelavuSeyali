@@ -42,6 +42,8 @@ import { showToast } from '../components/Toast';
 import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
 import TypeaheadInput from '../components/TypeaheadInput';
 import CategoryPickerField from '../components/CategoryPickerField';
+import CardPickerField from '../components/cards/CardPickerField';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import { suggestMerchants } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 import PaidBySplitSummary from '../components/PaidBySplitSummary';
@@ -118,6 +120,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [userPickedCategory, setUserPickedCategory] = useState(false);
   const [userPickedMerchant, setUserPickedMerchant] = useState(false);
   const [recurring, setRecurring] = useState(false);
+  const [cardId, setCardId] = useState<string | null>(null);
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
@@ -158,6 +162,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setUserPickedCategory(false);
     setUserPickedMerchant(false);
     setRecurring(false);
+    setCardId(null);
     setWho(initialWho);
     setScannedItems([]);
     setScannedTax(0);
@@ -400,7 +405,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
           unit_price: it.unit_price ?? null,
           line_total: it.line_total,
         }));
-        await addExpenseWithItems({ user_email: userEmail, header, items });
+        await addExpenseWithItems({ user_email: userEmail, header, items, card_id: cardCoachEnabled ? cardId : undefined });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notifyExpenseChanged();
         setSavedAmt(numAmount);
@@ -415,6 +420,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             date: formatMMDDYYYY(expenseDate),
             user_id: userEmail,
             merchant_name: merchantName || undefined,
+            card_id: cardCoachEnabled ? cardId : undefined,
           },
           accessToken
         );
@@ -477,6 +483,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             merchant_name: merchantName || undefined,
             payers,
             items,
+            card_id: cardCoachEnabled ? cardId : undefined,
           });
           myShare = row.my_share;
         } else {
@@ -488,6 +495,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             merchant_name: merchantName || undefined,
             payers,
             split: splitValue,
+            card_id: cardCoachEnabled ? cardId : undefined,
           });
           myShare = row.my_share;
         }
@@ -655,6 +663,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     label="Category ✨"
                     containerStyle={styles.categoryFieldWrap}
                   />
+
+                  <CardPickerField value={cardId} onChange={setCardId} />
 
                   {groupsEnabled && myGroups.length > 0 && (
                     <ScrollView

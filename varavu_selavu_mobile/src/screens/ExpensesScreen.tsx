@@ -23,11 +23,16 @@ import { listGroups, getGroupDetail, moveExpenseToGroup, listAllMyGroupExpenses,
 import { listRecurringTemplates, upsertRecurringTemplate, executeRecurringNow, RecurringTemplateDTO, UpsertRecurringPayload } from '../api/recurring';
 import { CATEGORY_GROUPS, MAIN_CATEGORIES, findMainCategory } from '../constants/categories';
 import { useAppTheme } from '../context/ThemeContext';
+import { useTagsEnabled } from '../hooks/useTagsEnabled';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
+import CardPickerField from '../components/cards/CardPickerField';
 import { AppTheme } from '../theme';
 import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
 import SegmentedTabs from '../components/SegmentedTabs';
 import SplitEditor, { SplitEditorValue } from '../components/SplitEditor';
+import TagFilterBar from '../components/tags/TagFilterBar';
+import TagPickerModal from '../components/tags/TagPickerModal';
 import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
@@ -69,6 +74,7 @@ interface FeedRow {
     amount: number;
     category: string;
     onPress?: () => void;
+    tagIds?: string[];
 }
 
 export default function ExpensesScreen() {
@@ -76,6 +82,7 @@ export default function ExpensesScreen() {
     const navigation = useNavigation<any>();
     const isFocused = useIsFocused();
     const { theme } = useAppTheme();
+    const { enabled: tagsEnabled } = useTagsEnabled();
     // useWindowDimensions (not Dimensions.get(), and not a module-level constant) — reading
     // window size at module load time returns 0/stale on native before the bridge is ready,
     // which made the edit sheet's maxHeight resolve to 0 and rendered nothing at all.
@@ -104,6 +111,13 @@ export default function ExpensesScreen() {
     const [editItemsTax, setEditItemsTax] = useState(0);
     const [editItemsDiscount, setEditItemsDiscount] = useState(0);
     const [editItemsLoaded, setEditItemsLoaded] = useState(false);
+    // TS-TAG-112 — personal expenses have the tag_names write-through field, so this is sent
+    // full-replace with the rest of the edit payload (no separate association calls needed).
+    const [editTagNames, setEditTagNames] = useState<string[]>([]);
+    const [tagPickerVisible, setTagPickerVisible] = useState(false);
+    const [editCardId, setEditCardId] = useState<string | null>(null);
+    const { enabled: cardCoachEnabled } = useCardCoachEnabled();
+    const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
 
     // TrackSpense v3 Mobile mock's recurring row expand/edit/run-now (`r.expanded`/`r.editing`) —
     // was previously a flat, non-interactive row.
@@ -162,7 +176,7 @@ export default function ExpensesScreen() {
 
         try {
             const currentOffset = reset ? 0 : offset;
-            const data = await listExpenses(accessToken, userEmail, currentOffset, 50);
+            const data = await listExpenses(accessToken, userEmail, currentOffset, 50, tagFilterIds);
 
             if (reset) {
                 setExpenses(data.items || []);
@@ -188,7 +202,7 @@ export default function ExpensesScreen() {
         if (isFocused && accessToken && userEmail) {
             fetchExpenses(true);
         }
-    }, [isFocused, accessToken, userEmail]);
+    }, [isFocused, accessToken, userEmail, tagFilterIds]);
 
     // TS-DES-112: the global "+" opens as a Modal overlay (not a navigator screen), so
     // useIsFocused() never toggles when it closes — refetch on the expense-changed signal too.
@@ -227,6 +241,8 @@ export default function ExpensesScreen() {
         setEditSubcategory(expense.category);
         setEditDate(expense.date);
         setEditMerchantName(expense.merchant_name || '');
+        setEditTagNames((expense.tags || []).map((t) => t.name));
+        setEditCardId(expense.card?.id || null);
         setEditItems([]);
         setEditItemsLoaded(false);
         setEditModalVisible(true);
@@ -307,6 +323,8 @@ export default function ExpensesScreen() {
                     sub_category: editSubcategory,
                     user_id: userEmail,
                     merchant_name: editMerchantName || undefined,
+                    tag_names: tagsEnabled ? editTagNames : undefined,
+                    card_id: cardCoachEnabled ? editCardId : undefined,
                 },
                 accessToken,
             );
@@ -335,20 +353,30 @@ export default function ExpensesScreen() {
             key: `p-${e.row_id}`,
             date: e.date,
             desc: e.description,
-            meta: `Personal · ${e.category}`,
+            meta: (e.tags || []).length > 0 ? `Personal · ${e.category} · ${e.tags!.map((t) => t.name).join(', ')}` : `Personal · ${e.category}`,
             amount: e.cost,
             category: e.category,
             onPress: () => showRowActions(e),
+            tagIds: (e.tags || []).map((t) => t.id),
         }));
-        const groupRows: FeedRow[] = (groupExpenses || []).map((e: UnifiedGroupExpenseRow) => ({
+        // TS-TAG-112 — personal rows are already server-filtered by tagFilterIds (GET /expenses
+        // supports tag_ids). Group rows have no such backend support (no tag_ids param on the
+        // per-group expenses list), so they're filtered client-side here after the fact.
+        const groupRowsAll: FeedRow[] = (groupExpenses || []).map((e: UnifiedGroupExpenseRow) => ({
             key: `g-${e.row_id}`,
             date: e.date,
             desc: e.description,
-            meta: `${e.group_name} · your share ${formatCurrency(e.my_share)}`,
+            meta: (e.tags || []).length > 0
+                ? `${e.group_name} · your share ${formatCurrency(e.my_share)} · ${e.tags!.map((t) => t.name).join(', ')}`
+                : `${e.group_name} · your share ${formatCurrency(e.my_share)}`,
             amount: e.my_share,
             category: e.category,
             onPress: () => navigation.navigate('GroupDetail', { groupId: e.group_id }),
+            tagIds: (e.tags || []).map((t) => t.id),
         }));
+        const groupRows = tagFilterIds.length > 0
+            ? groupRowsAll.filter((r) => (r.tagIds || []).some((id) => tagFilterIds.includes(id)))
+            : groupRowsAll;
         const all = [...personalRows, ...groupRows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
         const order: string[] = [];
@@ -358,7 +386,7 @@ export default function ExpensesScreen() {
             map[row.date].push(row);
         });
         return order.map((date) => ({ date, rows: map[date] }));
-    }, [expenses, groupExpenses]);
+    }, [expenses, groupExpenses, tagFilterIds]);
 
     // ── Recurring tab: simple day-of-month heuristic for due/active, matching the mock's pill. ──
     const recurringRows = useMemo(() => {
@@ -428,6 +456,12 @@ export default function ExpensesScreen() {
                     ]}
                 />
             </View>
+
+            {tab === 'transactions' && tagsEnabled && (
+                <View style={{ paddingHorizontal: 18 }}>
+                    <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />
+                </View>
+            )}
 
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                 {tab === 'transactions' ? (
@@ -688,6 +722,19 @@ export default function ExpensesScreen() {
                             />
                         )}
 
+                        {tagsEnabled && (
+                            <View style={{ marginTop: 12 }}>
+                                <Text style={styles.pickerLabel}>🏷️  Tags</Text>
+                                <TouchableOpacity onPress={() => setTagPickerVisible(true)}>
+                                    <Text style={[styles.pickerChipText, { color: theme.colors.primary, paddingVertical: 6 }]}>
+                                        {editTagNames.length > 0 ? editTagNames.join(', ') : '+ Add tag'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        <CardPickerField value={editCardId} onChange={setEditCardId} />
+
                         <View style={styles.modalButtons}>
                             <CustomButton
                                 title="Cancel"
@@ -719,6 +766,13 @@ export default function ExpensesScreen() {
                     </KeyboardAvoidingView>
                 </Pressable>
             </Modal>
+
+            <TagPickerModal
+                visible={tagPickerVisible}
+                value={editTagNames}
+                onChange={setEditTagNames}
+                onClose={() => setTagPickerVisible(false)}
+            />
 
             {/* Move to Group Modal (TS-GRP-121) */}
             <Modal visible={moveModalVisible} animationType="fade" transparent>

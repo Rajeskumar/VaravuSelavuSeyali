@@ -7,6 +7,8 @@
  */
 import { apiFetch } from './apiFetch';
 import { getConfig } from './config';
+import { TagRefDTO } from './tags';
+import { CardRefDTO } from './cards';
 
 // ---------------------------------------------------------------------------
 // Error type (mirrors the web client's ApiError for consistency)
@@ -142,6 +144,8 @@ export interface GroupExpenseRow {
   currency?: string | null;
   fx_rate_to_group_currency?: number | null;
   split_type?: string | null;
+  tags?: TagRefDTO[];
+  card?: CardRefDTO | null;
 }
 
 export interface GroupExpenseListResponse {
@@ -267,6 +271,8 @@ export interface AddGroupExpensePayload {
     entries?: { member_id: string; value?: number }[];
   };
   currency?: string;
+  // TS-CARD-114 — always-replace, same as personal ExpensePayload.card_id.
+  card_id?: string | null;
 }
 
 export interface GroupExpenseWithItemsPayload {
@@ -278,6 +284,7 @@ export interface GroupExpenseWithItemsPayload {
   payers: PayerSummaryItem[];
   items: GroupExpenseItemEntry[];
   currency?: string;
+  card_id?: string | null;
 }
 
 export interface RecordSettlementPayload {

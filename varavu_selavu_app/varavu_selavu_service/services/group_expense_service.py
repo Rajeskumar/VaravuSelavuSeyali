@@ -10,6 +10,8 @@ from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit,
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.split_engine import SplitError, resolve_split, validate_payers
 from varavu_selavu_service.services.item_split_engine import resolve_itemized_split
+from varavu_selavu_service.services.tag_service import get_tags_for_expenses
+from varavu_selavu_service.services.card_service import get_card_refs_for_expenses
 
 
 def _to_uuid(value) -> Optional[uuid.UUID]:
@@ -100,6 +102,11 @@ class GroupExpenseService:
         payer_rows = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == expense.id).all()
         payer_summary = [{"member_id": str(p.member_id), "amount_paid": float(p.amount_paid)} for p in payer_rows]
 
+        # TS-TAG-103: filtered to actor_email (PRD §9.2, load-bearing) — a tag applied to a
+        # shared group expense must never be visible to any member other than whoever applied it.
+        tags = get_tags_for_expenses(self.db, [expense.id], actor_email).get(str(expense.id), [])
+        card = get_card_refs_for_expenses(self.db, [expense.card_id]).get(str(expense.card_id)) if expense.card_id else None
+
         return {
             "row_id": str(expense.id),
             "date": expense.purchased_at.strftime("%m/%d/%Y") if expense.purchased_at else "01/01/1970",
@@ -113,6 +120,8 @@ class GroupExpenseService:
             "currency": expense.currency,
             "fx_rate_to_group_currency": float(expense.fx_rate_to_group_currency) if expense.fx_rate_to_group_currency is not None else None,
             "split_type": expense.split_type,
+            "tags": tags,
+            "card": card,
         }
 
     # ------------------------------------------------------------------
@@ -132,6 +141,7 @@ class GroupExpenseService:
         split_type: str,
         split_entries: List[dict],
         currency: Optional[str] = None,
+        card_id: Optional[str] = None,
     ) -> Dict:
         self.group_service.require_membership(group_id, actor_email)
         gid = _to_uuid(group_id)
@@ -151,6 +161,7 @@ class GroupExpenseService:
             fx_rate_to_group_currency=fx_rate,
             merchant_name=merchant_name,
             description=description,
+            card_id=uuid.UUID(str(card_id)) if card_id else None,
         )
         self.db.add(expense)
         self.db.flush()
@@ -212,6 +223,7 @@ class GroupExpenseService:
         split_type: str,
         split_entries: List[dict],
         currency: Optional[str] = None,
+        card_id: Optional[str] = None,
     ) -> Dict:
         # Any group member may edit any group expense (spec §5.2, decision §17.2).
         self.group_service.require_membership(group_id, actor_email)
@@ -243,6 +255,7 @@ class GroupExpenseService:
         expense.fx_rate_to_group_currency = fx_rate
         expense.merchant_name = merchant_name
         expense.split_type = split_type
+        expense.card_id = uuid.UUID(str(card_id)) if card_id else None
 
         # Atomic rewrite: replace payers/splits (E2 — allowed even after a settlement;
         # no settlement is auto-modified).
@@ -390,6 +403,7 @@ class GroupExpenseService:
         items: List[dict],
         fingerprint: Optional[str] = None,
         currency: Optional[str] = None,
+        card_id: Optional[str] = None,
     ) -> Dict:
         self.group_service.require_membership(group_id, actor_email)
         gid = _to_uuid(group_id)
@@ -436,7 +450,8 @@ class GroupExpenseService:
             fx_rate_to_group_currency=fx_rate,
             merchant_name=merchant_name,
             description=description,
-            fingerprint=fingerprint
+            fingerprint=fingerprint,
+            card_id=uuid.UUID(str(card_id)) if card_id else None,
         )
         self.db.add(expense)
         self.db.flush()

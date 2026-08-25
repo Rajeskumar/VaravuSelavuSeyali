@@ -19,6 +19,19 @@ interface PayerPickerProps {
   onChange: (payers: PayerSummaryItem[]) => void;
   onValidityChange?: (valid: boolean) => void;
   currency?: string;
+  /** Fired the instant a single payer is tapped in "single" mode — lets a caller like
+   * PaidBySplitSummary commit and close its dialog immediately for the common one-payer case,
+   * instead of requiring a separate Save click just to confirm a tap that already fully
+   * determined the answer. "Multiple people" mode has no equivalent — several interdependent
+   * amount fields need to reconcile before there's a valid state to commit, so that path keeps
+   * the staged onChange + explicit Save. */
+  onSingleSelect?: (memberId: string) => void;
+  /** Reports "single" vs. "multiple" mode (including the initial mode on mount) — lets a caller
+   * like PaidBySplitSummary know whether its own Save/Cancel actions are still needed. "single"
+   * commits per-tap via onSingleSelect with nothing left to confirm; "multiple" has no such
+   * per-click commit (several amount fields have to reconcile first), so that mode still needs
+   * an explicit Save. */
+  onModeChange?: (mode: 'single' | 'multiple') => void;
 }
 
 const TOLERANCE = 0.01;
@@ -47,6 +60,8 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
   onChange,
   onValidityChange,
   currency = 'USD',
+  onSingleSelect,
+  onModeChange,
 }) => {
   const theme = useTheme();
   const [mode, setMode] = React.useState<'single' | 'multiple'>(payers.length > 1 ? 'multiple' : 'single');
@@ -60,8 +75,14 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isValid]);
 
+  React.useEffect(() => {
+    onModeChange?.(mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   const selectSinglePayer = (memberId: string) => {
     onChange([{ member_id: memberId, amount_paid: amount }]);
+    onSingleSelect?.(memberId);
   };
 
   const toggleMember = (memberId: string, checked: boolean) => {

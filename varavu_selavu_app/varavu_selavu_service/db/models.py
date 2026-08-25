@@ -70,6 +70,14 @@ class Expense(Base):
     tip = Column(Numeric(12, 2), default=0)
     discount = Column(Numeric(12, 2), default=0)
     payment_method = Column(String(100))
+    # TS-CARD-114: which CardCatalog card was actually used for this expense — optional, set
+    # only when the user explicitly picks one of their held cards at add/edit time. NULL means
+    # "not attributed"; CardRewardsEngine falls back to the user's default held card for
+    # "actual earned" math on unattributed spend rather than requiring this on every expense
+    # (spec's original friction concern — see docs/features/card_coach's Add Expense scope
+    # note). SET NULL (not CASCADE) on delete: removing a held/custom card must never delete
+    # the expense it paid for, it should just drop back to "unattributed".
+    card_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.card_catalog.id", ondelete="SET NULL"), nullable=True, index=True)
     description = Column(Text)
     notes = Column(Text)
     fingerprint = Column(String(255))
@@ -596,5 +604,60 @@ class CardDataCorrection(Base):
     card_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.card_catalog.id", ondelete="CASCADE"), nullable=False, index=True)
     note = Column(Text, nullable=False)
     status = Column(String(50), nullable=False, default="open")  # open | reviewed | resolved
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Tag(Base):
+    """TS-TAG-101: a user-defined, cross-cutting label (PRD §8) — orthogonal to Category (what
+    kind of spend) and Group (who shares it). Private to the user who created it; there is no
+    shared/group-visible tag (PRD §5.1, §9.2).
+
+    `normalized_name` is the dedupe key (PRD §9.1, revised in v0.2.0): lowercase, trimmed,
+    internal whitespace collapsed to a single space — deliberately NOT stripped of punctuation,
+    so "Trip 1" and "Trip-1" stay distinct tags. This is an intentionally weak normalization;
+    catching near-duplicate variants ("Trip1" vs "Trip 1") is a client-side fuzzy-match
+    *suggestion* at input time (PRD §7.1), not a storage-level merge — a wrong hint is
+    recoverable, a wrong merge is not.
+
+    Usage stats (`usage_count`/`last_used_at`) are deliberately NOT stored here (PRD §8.1) — at
+    the 100-tag-per-user cap, both are cheap to derive from `expense_tags` in the same query that
+    powers autocomplete, and storing them would need correct maintenance across four mutation
+    paths (apply/remove/bulk apply/bulk remove) for no measurable benefit."""
+    __tablename__ = "tags"
+    __table_args__ = (
+        UniqueConstraint("user_email", "normalized_name", name="uq_tags_user_normalized"),
+        Index("idx_tags_user_status", "user_email", "status"),
+        {"schema": "trackspense"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(50), nullable=False)
+    normalized_name = Column(String(50), nullable=False)
+    color = Column(String(7), nullable=True)  # hex; null = assigned from palette
+    status = Column(String(20), nullable=False, default="Active")  # Active | Archived
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ExpenseTag(Base):
+    """TS-TAG-101: link row between a Tag and an Expense (PRD §8). `user_email` is denormalized
+    from `tags.user_email` — derivable via a join, but carrying it here makes the G7 privacy
+    guarantee (a tag applied to a shared group expense is visible ONLY to the tagger, never other
+    group members) enforceable with a single predicate on every read path, without a join. Given
+    this column is the actual mechanism protecting that guarantee, the redundancy is deliberate
+    (PRD §8, §9.2) — every read path returning tags for an expense MUST filter on it."""
+    __tablename__ = "expense_tags"
+    __table_args__ = (
+        UniqueConstraint("tag_id", "expense_id", name="uq_expense_tags"),
+        Index("idx_expense_tags_expense", "expense_id"),
+        Index("idx_expense_tags_tag", "tag_id"),
+        Index("idx_expense_tags_user", "user_email"),
+        {"schema": "trackspense"},
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tag_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.tags.id", ondelete="CASCADE"), nullable=False)
+    expense_id = Column(UUID(as_uuid=True), ForeignKey("trackspense.expenses.id", ondelete="CASCADE"), nullable=False)
+    user_email = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

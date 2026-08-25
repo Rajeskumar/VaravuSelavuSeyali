@@ -13,6 +13,7 @@ import { ChangeInsight } from '../../api/analytics';
 import { glassCardSx } from '../../theme';
 import { useBudgetsEnabled } from '../../hooks/useBudgetsEnabled';
 import { listBudgets, BudgetDTO } from '../../api/budgets';
+import { useTagsEnabled } from '../../hooks/useTagsEnabled';
 
 import SegmentedTabs from '../common/SegmentedTabs';
 import { TrendNavigator } from './TrendNavigator';
@@ -20,6 +21,7 @@ import { WhatChangedRail } from './WhatChangedRail';
 import { CategorySpectrum } from './CategorySpectrum';
 import { AskSheet } from './AskSheet';
 import MoneyFlowSankey from './MoneyFlowSankey';
+import TagFilterSelect from '../tags/TagFilterSelect';
 
 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -59,6 +61,8 @@ const OverviewTab: React.FC = () => {
   const isYearMode = periodMode === 'year';
 
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
+  const { enabled: tagsEnabled } = useTagsEnabled();
+  const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
 
   // Year/Month dropdown anchor
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -67,10 +71,10 @@ const OverviewTab: React.FC = () => {
 
   // 1. Fetch data for the specific selected month
   const { data: monthData, isLoading: monthLoading, isError: monthIsError, error: monthError } = useQuery({
-    queryKey: ['analysis', user, year, month, scope],
+    queryKey: ['analysis', user, year, month, scope, tagFilterIds],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      return getAnalysis({ year, month, scope });
+      return getAnalysis({ year, month, scope, tag_ids: tagFilterIds.length ? tagFilterIds : undefined });
     },
     enabled: !!user,
   });
@@ -79,10 +83,10 @@ const OverviewTab: React.FC = () => {
   // `periodMode === 'year'`, is the category-breakdown data source itself (answers "how much did
   // I spend in 2026 on rent/groceries/dining out", not just a single month at a time).
   const { data: yearData, isLoading: yearLoading } = useQuery({
-    queryKey: ['analysis', user, year, null, scope],
+    queryKey: ['analysis', user, year, null, scope, tagFilterIds],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      return getAnalysis({ year, scope });
+      return getAnalysis({ year, scope, tag_ids: tagFilterIds.length ? tagFilterIds : undefined });
     },
     enabled: !!user,
   });
@@ -134,6 +138,28 @@ const OverviewTab: React.FC = () => {
   // reference rather than thread a condition through every consumer.
   const periodData = isYearMode ? yearData : monthData;
   const periodDescriptor = isYearMode ? `${year}` : monthNames[month - 1];
+
+  // TS-TAG-111 — share-aware totals (PRD §5.2/§9.6): "My Expenses" is the primary figure (personal
+  // spend + my computed share of tagged group expenses), "I Paid" is secondary (what I actually
+  // paid out). Both come pre-computed from the backend — never reimplement split math here.
+  const tagScopedTotals =
+    tagFilterIds.length > 0 && periodData.my_expenses_total != null ? (
+      <Paper sx={{ ...glassCardSx(theme), p: 2, mb: 2, borderRadius: 1, display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'baseline' }}>
+        <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
+          Tag-scoped
+        </Typography>
+        <Box>
+          <Typography variant="h6" fontWeight={700}>${periodData.my_expenses_total.toFixed(2)}</Typography>
+          <Typography variant="caption" color="text.secondary">My Expenses</Typography>
+        </Box>
+        {periodData.i_paid_total != null && (
+          <Box>
+            <Typography variant="h6" fontWeight={700}>${periodData.i_paid_total.toFixed(2)}</Typography>
+            <Typography variant="caption" color="text.secondary">I Paid</Typography>
+          </Box>
+        )}
+      </Paper>
+    ) : null;
 
   const trendNavigator = (
     <TrendNavigator
@@ -219,6 +245,15 @@ const OverviewTab: React.FC = () => {
         </Box>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          {/* TS-TAG-111 — scopes the breakdown below to expenses carrying any of the selected
+              tags (OR semantics), AND'd against the month/year and Include-group-shares filters
+              already on this page. Only the Overview tab gets this: Items/Merchants read from a
+              separate pre-aggregated pipeline with no tag_ids support (PRD §10.4 only covers
+              /analysis and /expenses). */}
+          {tagsEnabled && (
+            <TagFilterSelect value={tagFilterIds} onChange={setTagFilterIds} />
+          )}
+
           {/* TrackSpense v3 Prototype's one proposed Analysis addition — whether group shares
               count at all in the breakdowns below, not a spend-interpretation lens (see the
               component doc comment above for why this is a different question from that one). */}
@@ -245,6 +280,8 @@ const OverviewTab: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      {tagScopedTotals}
 
       {isDesktop ? (
         // TS-DES-210 desktop fix: DesktopAnalysis.jsx places the trend/category column and

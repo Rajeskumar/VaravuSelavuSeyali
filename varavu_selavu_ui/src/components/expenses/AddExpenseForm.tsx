@@ -26,6 +26,10 @@ import {
   ReceiptParseDraft,
 } from '../../api/expenses';
 import { isoToMMDDYYYY, mmddyyyyToISO } from '../../utils/date';
+import TagInput from './TagInput';
+import CardPickerField from './CardPickerField';
+import { useTagsEnabled } from '../../hooks/useTagsEnabled';
+import { useCardCoachEnabled } from '../../hooks/useCardCoachEnabled';
 import { MAX_AMOUNT_LENGTH, amountError, isValidAmount, sanitizeAmountInput } from '../../utils/amount';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
@@ -155,6 +159,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   // stays the numeric source of truth for validation and submission.
   const [costText, setCostText] = useState(existing?.cost ? String(existing.cost) : '');
   const [merchantName, setMerchantName] = useState(existing?.merchant_name || '');
+  const [tagNames, setTagNames] = useState<string[]>(existing?.tags?.map((t) => t.name) || []);
+  const { enabled: tagsEnabled } = useTagsEnabled();
+  const [cardId, setCardId] = useState<string | null>(existing?.card?.id || null);
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const [userPickedMerchant, setUserPickedMerchant] = useState(!!existing?.merchant_name);
   const [mainCategory, setMainCategory] = useState(initialMain);
   const [subcategory, setSubcategory] = useState(initialSub);
@@ -433,6 +441,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               merchant_name: merchantName || undefined,
               payers,
               items: groupItems,
+              card_id: cardCoachEnabled ? cardId : undefined,
             });
           } else {
             await createGroupExpense(selectedGroupId, {
@@ -443,6 +452,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               merchant_name: merchantName || undefined,
               payers,
               split: { type: 'equal', entries: splitEntries },
+              card_id: cardCoachEnabled ? cardId : undefined,
             });
           }
           setMessage('Group expense added successfully.');
@@ -471,6 +481,11 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           category: subcategory,
           cost,
           merchant_name: merchantName || undefined,
+          // Explicit array always sent (never omitted) — this form always shows the expense's
+          // current tags, so "unchanged" and "edited to the same set" are indistinguishable here
+          // anyway; full-replace semantics (PRD §10.2) are exactly right either way.
+          tag_names: tagsEnabled ? tagNames : undefined,
+          card_id: cardCoachEnabled ? cardId : undefined,
         };
         await updateExpense(existing.row_id, payload);
         setMessage('Expense updated successfully.');
@@ -497,6 +512,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             merchant_name: merchantName || undefined,
           },
           items: draft.items.map((i: any) => ({ ...i })),
+          tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
+          card_id: cardCoachEnabled ? cardId : undefined,
         };
         await addExpenseWithItems(payload);
       } else {
@@ -507,6 +524,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           category: subcategory,
           cost,
           merchant_name: merchantName || undefined,
+          tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
+          card_id: cardCoachEnabled ? cardId : undefined,
         });
         setMessage('Expense added successfully.');
         if (recurring) {
@@ -814,6 +833,16 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 ))}
               </Menu>
             </Grid>
+            {tagsEnabled && mode === 'personal' && (
+              <Grid size={12}>
+                <TagInput value={tagNames} onChange={setTagNames} />
+              </Grid>
+            )}
+            {cardCoachEnabled && (
+              <Grid size={12}>
+                <CardPickerField value={cardId} onChange={setCardId} />
+              </Grid>
+            )}
             <Divider sx={{ width: '100%', my: 0.5 }} />
             <Grid size={12}>
               <Typography variant="subtitle2" sx={{ mb: 0.25 }}>

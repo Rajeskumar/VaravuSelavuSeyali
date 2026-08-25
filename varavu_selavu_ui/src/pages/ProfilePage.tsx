@@ -3,6 +3,7 @@ import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dia
 import { logout as apiLogout } from '../api/auth';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 import { motion } from 'framer-motion';
+import TagManagementSection from '../components/tags/TagManagementSection';
 
 const ProfilePage: React.FC = () => {
   const [email, setEmail] = React.useState('');
@@ -158,6 +159,7 @@ const ProfilePage: React.FC = () => {
 
         </CardContent>
       </Card>
+      <TagManagementSection />
       <Box sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
           <Link href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>

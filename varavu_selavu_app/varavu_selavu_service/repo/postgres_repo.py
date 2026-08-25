@@ -80,7 +80,8 @@ class PostgresRepo:
         description = header.get("description")
         notes = header.get("notes")
         fingerprint = header.get("fingerprint")
-        
+        card_id = header.get("card_id")
+
         purchased_at = self._normalize_purchased_at(purchased_at)
 
         expense = Expense(
@@ -99,6 +100,7 @@ class PostgresRepo:
             notes=notes,
             fingerprint=fingerprint,
             split_type=header.get("split_type"),
+            card_id=uuid.UUID(str(card_id)) if card_id else None,
         )
         self.db.add(expense)
         self.db.commit()

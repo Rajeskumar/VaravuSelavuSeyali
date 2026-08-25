@@ -29,11 +29,15 @@ export interface AnalysisResponse {
     row_count?: number;
     scope?: string | null;
     group_id?: string | null;
+    tag_ids?: string[] | null;
   };
   // Optional — absent/null for scope=personal (matches backend TS-GRP-106; old-client responses stay valid).
   scope?: AnalysisScope;
   spend_breakdown?: SpendBreakdown | null;
   group_summaries?: AnalysisGroupSummary[] | null;
+  // TS-TAG-106 — share-aware totals, populated only when tag_ids is provided (PRD §10.4).
+  my_expenses_total?: number | null;
+  i_paid_total?: number | null;
 }
 
 export async function getAnalysis(opts?: {
@@ -41,12 +45,14 @@ export async function getAnalysis(opts?: {
   month?: number;
   scope?: AnalysisScope;
   group_id?: string;
+  tag_ids?: string[];
 }): Promise<AnalysisResponse> {
   const params = new URLSearchParams();
   if (opts?.year !== undefined) params.set('year', String(opts.year));
   if (opts?.month !== undefined) params.set('month', String(opts.month));
   if (opts?.scope !== undefined) params.set('scope', opts.scope);
   if (opts?.group_id !== undefined) params.set('group_id', opts.group_id);
+  (opts?.tag_ids || []).forEach((id) => params.append('tag_ids', id));
   // Cache busting to ensure we always get fresh data when filters change
   params.set('_ts', String(Date.now()));
   const res = await fetchWithAuth(`/api/v1/analysis?${params.toString()}`, {

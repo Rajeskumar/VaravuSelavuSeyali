@@ -1,5 +1,7 @@
 import { apiFetch } from './apiFetch';
 import API_BASE_URL from './apiconfig';
+import { TagRefDTO } from './tags';
+import { CardRefDTO } from './cards';
 
 export interface ExpensePayload {
   description: string;
@@ -9,6 +11,12 @@ export interface ExpensePayload {
   cost: number;
   user_id?: string;
   merchant_name?: string;
+  // TS-TAG-112 — on PUT, omitted leaves tags unchanged; an explicit [] clears them (matches
+  // web's write-through semantics, PRD §10.2). Mobile only ever sends names of EXISTING tags.
+  tag_names?: string[];
+  // TS-CARD-114 — always-replace, same as merchant_name (this reduced mobile picker always
+  // shows the expense's current attribution, so there's no omitted/unchanged case to support).
+  card_id?: string | null;
 }
 
 export interface ExpenseRecord {
@@ -21,6 +29,8 @@ export interface ExpenseRecord {
   merchant_name?: string;
   item_count?: number;
   split_type?: string | null;
+  tags?: TagRefDTO[];
+  card?: CardRefDTO | null;
 }
 
 export interface ExpenseListResponse {
@@ -46,12 +56,13 @@ export async function addExpense(payload: ExpensePayload, token: string): Promis
   }
 }
 
-export async function listExpenses(token: string, userId: string, offset = 0, limit = 30): Promise<ExpenseListResponse> {
+export async function listExpenses(token: string, userId: string, offset = 0, limit = 30, tagIds?: string[]): Promise<ExpenseListResponse> {
   const params = new URLSearchParams({
     user_id: userId,
     offset: offset.toString(),
     limit: limit.toString(),
   });
+  (tagIds || []).forEach((id) => params.append('tag_ids', id));
 
   const response = await apiFetch(`/api/v1/expenses?${params.toString()}`, {
     method: 'GET',
@@ -193,6 +204,7 @@ export async function addExpenseWithItems(payload: {
   user_email: string;
   header: Record<string, any>;
   items: Record<string, any>[];
+  card_id?: string | null;
 }): Promise<{ expense_id: string; item_ids: string[] }> {
   const response = await apiFetch(`/api/v1/expenses/with_items`, {
     method: 'POST',

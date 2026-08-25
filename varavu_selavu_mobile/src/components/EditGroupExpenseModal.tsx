@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Pressable, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { updateGroupExpense, getGroupExpenseItems, updateGroupExpenseItems, GroupExpenseRow, MemberDTO, PayerSummaryItem } from '../api/groups';
+import { applyTagsToExpense, removeTagFromExpense } from '../api/tags';
 import { useAppTheme } from '../context/ThemeContext';
+import { useTagsEnabled } from '../hooks/useTagsEnabled';
 import { AppTheme } from '../theme';
 import CustomInput from './CustomInput';
 import CustomButton from './CustomButton';
@@ -10,6 +12,10 @@ import { MAIN_CATEGORIES, CATEGORY_GROUPS, findMainCategory } from '../constants
 import SplitEditor, { SplitEntry as SplitEditorEntry, SplitType } from './SplitEditor';
 import PayerPicker from './PayerPicker';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
+import TagChipsDisplay from './tags/TagChipsDisplay';
+import TagPickerModal from './tags/TagPickerModal';
+import CardPickerField from './cards/CardPickerField';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import { showToast } from './Toast';
 
 interface EditGroupExpenseModalProps {
@@ -30,6 +36,8 @@ export default function EditGroupExpenseModal({
   onUpdated,
 }: EditGroupExpenseModalProps) {
   const { theme } = useAppTheme();
+  const { enabled: tagsEnabled } = useTagsEnabled();
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   // useWindowDimensions (not Dimensions.get(), and not a module-level constant) — reading
   // window size at module load time returns 0/stale on native before the bridge is ready,
   // which made the sheet's maxHeight resolve to 0 and rendered nothing at all.
@@ -58,6 +66,13 @@ export default function EditGroupExpenseModal({
   const [itemsDiscount, setItemsDiscount] = useState(0);
   const [itemsLoaded, setItemsLoaded] = useState(false);
 
+  // TS-TAG-112 — group expenses have no tag_names write-through field (personal-only by
+  // design), so a changed selection here is synced via the association endpoints in
+  // handleSave rather than sent as part of the updateGroupExpense payload.
+  const [tagNames, setTagNames] = useState<string[]>([]);
+  const [tagPickerVisible, setTagPickerVisible] = useState(false);
+  const [cardId, setCardId] = useState<string | null>(null);
+
   // Seeded from `expense.splits` (each member's actual current dollar share, as an 'exact'
   // split) so editing starts from what's really on the expense instead of resetting to an
   // equal-split guess — matches the web app's `ExpenseDetailDialog.tsx` `startEdit`. Keyed only
@@ -78,6 +93,8 @@ export default function EditGroupExpenseModal({
       setPayers(expense.payer_summary.map((p) => ({ ...p })));
       setSplitType('exact');
       setSplitEntries(expense.splits.map((s) => ({ member_id: s.member_id, value: s.share })));
+      setTagNames((expense.tags || []).map((t) => t.name));
+      setCardId(expense.card?.id || null);
 
       setItems([]);
       setItemsLoaded(false);
@@ -133,7 +150,18 @@ export default function EditGroupExpenseModal({
           entries: splitEntries.map(e => ({ member_id: e.member_id, value: e.value })),
         },
         payers: payers.map(p => ({ member_id: p.member_id, amount_paid: p.amount_paid })),
+        card_id: cardCoachEnabled ? cardId : undefined,
       });
+      if (tagsEnabled) {
+        const before = new Set((expense.tags || []).map((t) => t.name.toLowerCase()));
+        const after = new Set(tagNames.map((n) => n.toLowerCase()));
+        const toAdd = tagNames.filter((n) => !before.has(n.toLowerCase()));
+        const toRemove = (expense.tags || []).filter((t) => !after.has(t.name.toLowerCase()));
+        if (toAdd.length > 0) {
+          await applyTagsToExpense(expense.row_id, { tag_names: toAdd });
+        }
+        await Promise.all(toRemove.map((t) => removeTagFromExpense(expense.row_id, t.id)));
+      }
       showToast({ message: 'Expense updated!', type: 'success' });
       onUpdated();
       onClose();
@@ -233,6 +261,25 @@ export default function EditGroupExpenseModal({
                   currentAmount={parseFloat(amount) || 0}
                 />
               )}
+
+              {tagsEnabled && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Tags</Text>
+                  <TouchableOpacity onPress={() => setTagPickerVisible(true)}>
+                    {tagNames.length > 0 ? (
+                      <TagChipsDisplay tags={tagNames.map((n) => ({ id: n, name: n, color: theme.colors.primary }))} />
+                    ) : (
+                      <Text style={{ fontFamily: theme.typography.fontFamily.regular, fontSize: 14, color: theme.colors.textSecondary }}>
+                        + Add tag
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.section}>
+                <CardPickerField value={cardId} onChange={setCardId} />
+              </View>
             </ScrollView>
             <View style={styles.footer}>
               <CustomButton title={loading ? 'Saving...' : 'Save Changes'} onPress={handleSave} disabled={loading} />
@@ -240,6 +287,13 @@ export default function EditGroupExpenseModal({
           </Pressable>
         </KeyboardAvoidingView>
       </Pressable>
+
+      <TagPickerModal
+        visible={tagPickerVisible}
+        value={tagNames}
+        onChange={setTagNames}
+        onClose={() => setTagPickerVisible(false)}
+      />
     </Modal>
   );
 }

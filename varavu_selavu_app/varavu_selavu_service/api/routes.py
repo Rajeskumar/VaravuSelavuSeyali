@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks, Request
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import List, Optional
 
 from fastapi.responses import StreamingResponse
 
@@ -86,9 +86,18 @@ from varavu_selavu_service.models.api_models import (
     CardCorrectionRequest,
     CardCorrectionDTO,
     CreateCustomCardRequest,
+    TagCreateRequest,
+    TagUpdateRequest,
+    TagDTO,
+    TagRefDTO,
+    TagApplyRequest,
+    TagBulkRequest,
+    TagBulkResponse,
 )
 from varavu_selavu_service.services.budget_service import BudgetService
-from varavu_selavu_service.services.card_service import CardService
+from varavu_selavu_service.services.card_service import CardService, get_card_refs_for_expenses
+from varavu_selavu_service.services.tag_service import TagService, get_tags_for_expenses
+from varavu_selavu_service.services.tag_bulk_service import TagBulkService, BulkFilter
 from varavu_selavu_service.services.card_rewards_engine import CategoryRewardGap, MerchantRewardGap
 from varavu_selavu_service.services.insight_analytics_service import InsightAnalyticsService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
@@ -155,6 +164,13 @@ def require_card_coach_enabled() -> None:
     if not Settings().CARD_COACH_ENABLED:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
 
+def get_tag_service(db: Session = Depends(get_db)) -> TagService:
+    return TagService(db)
+
+def require_tags_enabled() -> None:
+    if not Settings().TAGS_ENABLED:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+
 def get_insight_analytics_service(db: Session = Depends(get_db)) -> InsightAnalyticsService:
     return InsightAnalyticsService(db=db)
 
@@ -179,6 +195,7 @@ def get_config():
         "entity_resolution_enabled": settings_now.ENTITY_RESOLUTION_ENABLED,
         "budgets_enabled": settings_now.BUDGETS_ENABLED,
         "card_coach_enabled": settings_now.CARD_COACH_ENABLED,
+        "tags_enabled": settings_now.TAGS_ENABLED,
     }
 
 
@@ -212,8 +229,13 @@ def create_expense(
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
+    tag_service: TagService = Depends(get_tag_service),
+    card_service: CardService = Depends(get_card_service),
     user_id: str = Depends(auth_required),
 ):
+    # TS-CARD-114: must be one of the caller's own held cards — never an arbitrary catalog id.
+    if data.card_id:
+        card_service.assert_card_is_held(user_id, data.card_id)
     saved = expense_service.add_expense(
         user_id=user_id,
         date=data.date,
@@ -221,10 +243,11 @@ def create_expense(
         category=data.category,
         cost=data.cost,
         merchant_name=data.merchant_name,
+        card_id=data.card_id,
     )
     # Invalidate analysis cache on writes
     analysis_service.invalidate_cache()
-    
+
     # Asynchronous insight aggregation
     background_tasks.add_task(
         aggregation_svc.on_simple_expense_created,
@@ -233,7 +256,16 @@ def create_expense(
         purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y"),
         amount=data.cost
     )
-    
+
+    # TS-TAG-104 — no prior state on create, so a None/omitted vs. empty tag_names distinction
+    # doesn't matter here (both mean "no tags"); only skip the call entirely when there's nothing
+    # to apply, since apply_tags_to_expense 422s on an empty tag set.
+    tags = tag_service.apply_tags_to_expense(user_id, saved["row_id"], tag_names=data.tag_names) if data.tag_names else []
+    card = None
+    if data.card_id:
+        cid = _uuid.UUID(data.card_id)
+        card = get_card_refs_for_expenses(expense_service.db, [cid]).get(str(cid))
+
     # Normalize to response model shape
     expense_payload = {
         "user_id": saved.get("User ID", user_id),
@@ -242,6 +274,8 @@ def create_expense(
         "category": saved.get("category", data.category),
         "cost": float(saved.get("cost", data.cost)),
         "merchant_name": saved.get("merchant_name"),
+        "tags": tags,
+        "card": card,
     }
     return {"success": True, "expense": expense_payload}
 
@@ -274,10 +308,17 @@ def export_personal_expenses_csv(
 def list_expenses(
     limit: int = Query(30, ge=1),
     offset: int = Query(0, ge=0),
+    tag_ids: List[str] | None = Query(default=None),
     expense_service: ExpenseService = Depends(get_expense_service),
     user_id: str = Depends(auth_required),
 ):
     expenses = expense_service.get_expenses_for_user(user_id)
+    # TS-TAG-106 (PRD §10.4/§7.4) — OR semantics within tag_ids, AND against other active
+    # filters. `tags` is always already scoped to this user (get_tags_for_expenses, PRD §9.2),
+    # so this is a plain in-memory filter, not a fresh access check.
+    if tag_ids and Settings().TAGS_ENABLED:
+        wanted = set(tag_ids)
+        expenses = [e for e in expenses if wanted & {t["id"] for t in e.get("tags", [])}]
     expenses.sort(key=lambda r: datetime.strptime(r["date"], "%m/%d/%Y"), reverse=True)
     sliced = expenses[offset : offset + limit]
     next_offset = offset + limit if offset + limit < len(expenses) else None
@@ -297,8 +338,12 @@ def update_expense(
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
+    tag_service: TagService = Depends(get_tag_service),
+    card_service: CardService = Depends(get_card_service),
     user_id: str = Depends(auth_required),
 ):
+    if data.card_id:
+        card_service.assert_card_is_held(user_id, data.card_id)
     saved, old_data = expense_service.update_expense(
         row_id=row_id,
         user_id=user_id,
@@ -307,9 +352,10 @@ def update_expense(
         category=data.category,
         cost=data.cost,
         merchant_name=data.merchant_name,
+        card_id=data.card_id,
     )
     analysis_service.invalidate_cache()
-    
+
     if old_data:
         background_tasks.add_task(
             aggregation_svc.on_simple_expense_updated,
@@ -321,7 +367,20 @@ def update_expense(
             new_amount=data.cost,
             new_purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y")
         )
-        
+
+    # TS-TAG-104 — full-replace, but ONLY when the client explicitly sent the field (PRD §10.2:
+    # "an omitted field leaves tags unchanged; an explicit empty array clears them").
+    if "tag_names" in data.model_fields_set:
+        tags = tag_service.set_tags_for_expense(user_id, saved["row_id"], data.tag_names or [])
+    else:
+        eid = _uuid.UUID(saved["row_id"])
+        tags = get_tags_for_expenses(tag_service.db, [eid], user_id).get(str(eid), [])
+
+    card = None
+    if data.card_id:
+        cid = _uuid.UUID(data.card_id)
+        card = get_card_refs_for_expenses(expense_service.db, [cid]).get(str(cid))
+
     expense_payload = {
         "user_id": saved.get("User ID", user_id),
         "date": data.date,
@@ -329,6 +388,8 @@ def update_expense(
         "category": saved.get("category", data.category),
         "cost": float(saved.get("cost", data.cost)),
         "merchant_name": saved.get("merchant_name"),
+        "tags": tags,
+        "card": card,
     }
     return {"success": True, "expense": expense_payload}
 
@@ -506,6 +567,7 @@ def analysis(
     end_date: str | None = None,
     scope: str = Query(default="personal", pattern="^(personal|combined|groups|i_paid|group_total)$"),
     group_id: str | None = None,
+    tag_ids: List[str] | None = Query(default=None),
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
     user_id: str = Depends(auth_required),
@@ -518,6 +580,8 @@ def analysis(
         # /analysis with the flag off, regardless of what a client requests.
         scope = "personal"
         group_id = None
+    if not Settings().TAGS_ENABLED:
+        tag_ids = None
     result = analysis_service.analyze(
         user_id=user_id,
         year=year,
@@ -527,6 +591,7 @@ def analysis(
         use_cache=True,
         scope=scope,
         group_id=group_id,
+        tag_ids=tag_ids,
     )
     if response is not None:
         # Align Cache-Control header with service TTL
@@ -553,6 +618,7 @@ def analysis_chat(
     expense_service: ExpenseService = Depends(get_expense_service),
     group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
     card_service: CardService = Depends(get_card_service),
+    tag_service: TagService = Depends(get_tag_service),
     user_id: str = Depends(auth_required),
 ):
     """
@@ -573,6 +639,8 @@ def analysis_chat(
             groups_enabled=settings.GROUPS_ENABLED,
             card_service=card_service,
             card_coach_enabled=Settings().CARD_COACH_ENABLED,
+            tag_service=tag_service,
+            tags_enabled=Settings().TAGS_ENABLED,
             model=body.model,
             provider=body.provider,
             year=body.year,
@@ -629,10 +697,14 @@ def create_expense_with_items(
     payload: ExpenseWithItemsRequest,
     repo: PostgresRepo = Depends(get_postgres_repo),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
+    tag_service: TagService = Depends(get_tag_service),
+    card_service: CardService = Depends(get_card_service),
     user_id: str = Depends(auth_required),
     force: bool = Query(False),
 ):
-    header = payload.header
+    if payload.card_id:
+        card_service.assert_card_is_held(user_id, payload.card_id)
+    header = {**payload.header, "card_id": payload.card_id} if payload.card_id else payload.header
     items = [i.dict(exclude_unset=True) for i in payload.items]
     required_header = ["purchased_at", "amount"]
     for field in required_header:
@@ -673,6 +745,10 @@ def create_expense_with_items(
     except Exception as exc:
         import logging as _log
         _log.getLogger("varavu_selavu.routes").warning("Insights aggregation failed: %s", exc)
+
+    # TS-TAG-104 — same "nothing to apply" guard as create_expense (no prior state on create).
+    if payload.tag_names:
+        tag_service.apply_tags_to_expense(user_id, expense_id, tag_names=payload.tag_names)
 
     return {"expense_id": expense_id, "item_ids": item_ids}
 
@@ -1588,6 +1664,192 @@ def file_card_correction(
         status=correction.status,
         created_at=correction.created_at.isoformat(),
     )
+
+
+# ---------------------- Tags (TS-TAG-102) ---------------------- #
+
+def _tag_to_dto(stats) -> TagDTO:
+    return TagDTO(
+        id=str(stats.tag.id),
+        name=stats.tag.name,
+        color=stats.tag.color,
+        status=stats.tag.status,
+        created_at=stats.tag.created_at,
+        usage_count=stats.usage_count,
+        last_used_at=stats.last_used_at,
+    )
+
+
+@router.get(
+    "/tags",
+    response_model=List[TagDTO],
+    tags=["Tags"],
+    summary="List / autocomplete the caller's own tags, ranked most-recently-used then most-used",
+)
+def list_tags(
+    q: Optional[str] = Query(default=None),
+    status: Optional[str] = Query(default="active"),
+    limit: int = Query(default=20, ge=1, le=100),
+    tag_service: TagService = Depends(get_tag_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    return [_tag_to_dto(s) for s in tag_service.list_tags(user_id, q=q, status_filter=status, limit=limit)]
+
+
+@router.post(
+    "/tags",
+    response_model=TagDTO,
+    tags=["Tags"],
+    summary="Create a tag — returns the existing tag (HTTP 200) on an exact-normalized-name collision",
+)
+def create_tag(
+    data: TagCreateRequest,
+    response: Response,
+    tag_service: TagService = Depends(get_tag_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    tag, created = tag_service.create_tag(user_id, data.name, color=data.color)
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return _tag_to_dto(tag_service.get_stats(tag))
+
+
+@router.put(
+    "/tags/{tag_id}",
+    response_model=TagDTO,
+    tags=["Tags"],
+    summary="Rename, recolor, or archive/unarchive a tag",
+)
+def update_tag(
+    tag_id: str,
+    data: TagUpdateRequest,
+    tag_service: TagService = Depends(get_tag_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    tag = tag_service.update_tag(user_id, tag_id, name=data.name, color=data.color, status_value=data.status)
+    return _tag_to_dto(tag_service.get_stats(tag))
+
+
+@router.delete(
+    "/tags/{tag_id}",
+    tags=["Tags"],
+    summary="Delete a tag and cascade its expense links",
+)
+def delete_tag(
+    tag_id: str,
+    tag_service: TagService = Depends(get_tag_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    tag_service.delete_tag(user_id, tag_id)
+    return {"success": True}
+
+
+def _verify_expense_tag_access(db: Session, group_service: GroupService, expense_id: str, user_id: str) -> None:
+    """TS-TAG-103 — an expense's tags may only be modified by someone with legitimate access to
+    the expense itself: its own owner for a personal expense, or any member for a group expense
+    (any member may tag their own private view of a shared expense, same as any member may edit
+    a group expense per spec §5.2). 404 (not 403) on a personal expense the caller doesn't own,
+    to avoid confirming the expense exists to a non-owner."""
+    try:
+        eid = _uuid.UUID(str(expense_id))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    expense = db.query(Expense).filter(Expense.id == eid).first()
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    if expense.group_id is None:
+        if expense.user_email != user_id:
+            raise HTTPException(status_code=404, detail="Expense not found")
+    else:
+        group_service.require_membership(str(expense.group_id), user_id)
+
+
+@router.post(
+    "/expenses/{expense_id}/tags",
+    response_model=List[TagRefDTO],
+    tags=["Tags"],
+    summary="Apply one or more tags to an expense (idempotent)",
+)
+def apply_tags_to_expense(
+    expense_id: str,
+    data: TagApplyRequest,
+    db: Session = Depends(get_db),
+    tag_service: TagService = Depends(get_tag_service),
+    group_service: GroupService = Depends(get_group_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    _verify_expense_tag_access(db, group_service, expense_id, user_id)
+    return tag_service.apply_tags_to_expense(user_id, expense_id, tag_ids=data.tag_ids, tag_names=data.tag_names)
+
+
+@router.delete(
+    "/expenses/{expense_id}/tags/{tag_id}",
+    tags=["Tags"],
+    summary="Remove one tag from one expense (idempotent)",
+)
+def remove_tag_from_expense(
+    expense_id: str,
+    tag_id: str,
+    db: Session = Depends(get_db),
+    tag_service: TagService = Depends(get_tag_service),
+    group_service: GroupService = Depends(get_group_service),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    _verify_expense_tag_access(db, group_service, expense_id, user_id)
+    tag_service.remove_tag_from_expense(user_id, expense_id, tag_id)
+    return {"success": True}
+
+
+def _to_bulk_filter(dto) -> Optional[BulkFilter]:
+    if dto is None:
+        return None
+    return BulkFilter(
+        start_date=dto.start_date, end_date=dto.end_date,
+        group_id=dto.group_id, category=dto.category, merchant_name=dto.merchant_name,
+    )
+
+
+@router.post(
+    "/tags/bulk_apply",
+    response_model=TagBulkResponse,
+    tags=["Tags"],
+    summary="Apply one tag to many expenses at once — explicit id list or a date-range+narrowing filter (§7.3 'tag a trip')",
+)
+def bulk_apply_tags(
+    data: TagBulkRequest,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    result = TagBulkService(db).bulk_apply(
+        user_id, tag_id=data.tag_id, tag_name=data.tag_name,
+        expense_ids=data.expense_ids, filter_=_to_bulk_filter(data.filter), dry_run=data.dry_run,
+    )
+    return TagBulkResponse(**result.__dict__)
+
+
+@router.post(
+    "/tags/bulk_remove",
+    response_model=TagBulkResponse,
+    tags=["Tags"],
+    summary="Remove one tag from many expenses at once — same shape as bulk_apply",
+)
+def bulk_remove_tags(
+    data: TagBulkRequest,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(auth_required),
+    _: None = Depends(require_tags_enabled),
+):
+    result = TagBulkService(db).bulk_remove(
+        user_id, tag_id=data.tag_id, tag_name=data.tag_name,
+        expense_ids=data.expense_ids, filter_=_to_bulk_filter(data.filter), dry_run=data.dry_run,
+    )
+    return TagBulkResponse(**result.__dict__)
 
 
 # ---------------------- Email ---------------------- #

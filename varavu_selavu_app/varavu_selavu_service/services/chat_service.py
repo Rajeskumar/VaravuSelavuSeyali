@@ -299,6 +299,48 @@ def _format_card_coach_summary(category_gaps: list, merchant_gaps: list, group_s
     return result
 
 
+def _resolve_tag_by_name(tag_service, user_email: str, name: str):
+    """TS-TAG-113 — exact-normalized match first, then a forgiving case-insensitive substring
+    match among the user's own tags (same spirit as `_fetch_group_balance_summary`'s group-name
+    resolution), so "trip" reasonably finds "Trip 1". Never searches another user's tags."""
+    from varavu_selavu_service.db.models import Tag
+    from varavu_selavu_service.services.tag_utils import normalize_tag_name
+
+    normalized = normalize_tag_name(name)
+    exact = (
+        tag_service.db.query(Tag)
+        .filter(Tag.user_email == user_email, Tag.normalized_name == normalized)
+        .first()
+    )
+    if exact:
+        return exact
+    name_lower = name.strip().lower()
+    for stats in tag_service.list_tags(user_email, status_filter="all", limit=100):
+        if name_lower in stats.tag.name.lower():
+            return stats.tag
+    return None
+
+
+def _format_tag_summary(tag_name: str, analysis_result: dict, group_share_included: bool) -> str:
+    """Formats the tag-filtered /analysis result into prose for the `get_tag_summary` chat tool.
+    Pure function (no LLM) for the same testability reason as the other chat formatters here.
+    My Expenses (share-aware) is the primary figure per PRD §5.2; I Paid is secondary and only
+    mentioned when it actually differs from My Expenses (nothing to add otherwise)."""
+    my_total = analysis_result.get("my_expenses_total")
+    i_paid = analysis_result.get("i_paid_total")
+    # Deliberately not gated on filter_info.row_count — that only reflects whichever single leg
+    # `scope` requested, while my_expenses_total/i_paid_total are always personal+group combined
+    # (see AnalysisService.analyze), so a tag applied only to a group expense would otherwise be
+    # misreported as "no expenses found" under the default scope="personal".
+    if my_total is None or (my_total == 0 and (i_paid or 0) == 0):
+        return f"No expenses found tagged '{tag_name}' in this period."
+
+    result = f"'{tag_name}' cost you ${my_total:.2f} this period (My Expenses — your personal spend plus your share of any tagged group expenses)."
+    if group_share_included and i_paid is not None and abs(i_paid - my_total) > 0.005:
+        result += f" You actually paid out ${i_paid:.2f} total (I Paid), including amounts fronted for others."
+    return result
+
+
 def _format_card_suggestion(result, category: Optional[str], merchant: Optional[str]) -> str:
     """Formats a `CardSuggestion` (from `CardService.suggest_best_card_for_purchase`) into prose.
     Extracted for the same testability reason as `_format_card_coach_summary` — pure function, no
@@ -507,6 +549,8 @@ def call_chat_model(
     groups_enabled: bool = False,
     card_service=None,
     card_coach_enabled: bool = False,
+    tag_service=None,
+    tags_enabled: bool = False,
     model: str | None = None,
     provider: str | None = None,
     year: int | None = None,
@@ -705,6 +749,34 @@ def call_chat_model(
                 return f"Error suggesting a card: {str(e)}"
 
         tools.append(suggest_best_card_for_purchase)
+
+    # TS-TAG-113: independent of Groups/Card Coach being enabled — tags work for personal-only
+    # spend too, gating the group-share input the same way get_card_coach_summary does.
+    if tags_enabled and tag_service is not None:
+        @tool
+        def get_tag_summary(tag_name: str) -> str:
+            """Get how much a specific tag (a trip, project, or anything else the user tagged
+            expenses with) cost them, using the group-share-aware "My Expenses" figure as the
+            primary number and "I Paid" as a secondary one when they differ. Use this for
+            questions like "how much did Trip 1 cost me?" or "what's my Kitchen reno total?".
+            `tag_name` should be the tag name as close as possible to how the user said it —
+            near matches (e.g. "trip" for "Trip 1") are resolved against the user's own tags."""
+            try:
+                tag = _resolve_tag_by_name(tag_service, user_id, tag_name)
+                if tag is None:
+                    existing = [s.tag.name for s in tag_service.list_tags(user_id, status_filter="all", limit=100)]
+                    names = ", ".join(existing) if existing else "you have no tags yet"
+                    return f"No tag found matching '{tag_name}'. Your tags: {names}."
+                result = analysis_service.analyze(
+                    user_id=user_id,
+                    start_date=resolved_period.start_date, end_date=resolved_period.end_date,
+                    use_cache=False, tag_ids=[str(tag.id)],
+                )
+                return _format_tag_summary(tag.name, result, groups_enabled)
+            except Exception as e:
+                return f"Error computing tag summary: {str(e)}"
+
+        tools.append(get_tag_summary)
 
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"

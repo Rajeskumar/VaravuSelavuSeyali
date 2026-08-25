@@ -42,6 +42,7 @@ from varavu_selavu_service.models.api_models import (
     UpdateNotificationPreferenceRequest,
 )
 from varavu_selavu_service.services.balance_service import BalanceService
+from varavu_selavu_service.services.card_service import CardService
 from varavu_selavu_service.services.expense_comment_service import ExpenseCommentService
 from varavu_selavu_service.services.friend_balance_service import FriendBalanceService
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
@@ -123,6 +124,10 @@ def get_settlement_service(db: Session = Depends(get_db)) -> SettlementService:
 
 def get_group_expense_service(db: Session = Depends(get_db)) -> GroupExpenseService:
     return GroupExpenseService(db)
+
+
+def get_card_service(db: Session = Depends(get_db)) -> CardService:
+    return CardService(db)
 
 
 def get_balance_service(db: Session = Depends(get_db)) -> BalanceService:
@@ -408,9 +413,12 @@ def create_group_expense(
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     notification_service: NotificationService = Depends(get_notification_service),
+    card_service: CardService = Depends(get_card_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
+    if data.card_id:
+        card_service.assert_card_is_held(user_email, data.card_id)
     row = svc.create_expense(
         group_id=group_id,
         actor_email=user_email,
@@ -423,6 +431,7 @@ def create_group_expense(
         split_type=data.split.type,
         split_entries=[e.model_dump() for e in data.split.entries],
         currency=data.currency,
+        card_id=data.card_id,
     )
     analysis_service.invalidate_cache()
     eid = _to_uuid(row["row_id"])
@@ -470,9 +479,12 @@ def create_itemized_group_expense(
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     notification_service: NotificationService = Depends(get_notification_service),
+    card_service: CardService = Depends(get_card_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
+    if data.card_id:
+        card_service.assert_card_is_held(user_email, data.card_id)
     row = svc.create_itemized_expense(
         group_id=group_id,
         actor_email=user_email,
@@ -484,6 +496,7 @@ def create_itemized_group_expense(
         payers=[p.model_dump() for p in data.payers],
         items=[i.model_dump() for i in data.items],
         currency=data.currency,
+        card_id=data.card_id,
     )
     analysis_service.invalidate_cache()
     eid = _to_uuid(row["row_id"])
@@ -545,9 +558,12 @@ def update_group_expense(
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     notification_service: NotificationService = Depends(get_notification_service),
+    card_service: CardService = Depends(get_card_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
+    if data.card_id:
+        card_service.assert_card_is_held(user_email, data.card_id)
     # Capture the pre-edit shares now — GroupExpenseService.update_expense replaces
     # (deletes + re-inserts) expense_splits atomically, so the "old" values are gone
     # from the DB by the time the fire-and-forget notification runs. A malformed
@@ -586,6 +602,7 @@ def update_group_expense(
         split_type=data.split.type,
         split_entries=[e.model_dump() for e in data.split.entries],
         currency=data.currency,
+        card_id=data.card_id,
     )
     analysis_service.invalidate_cache()
     new_shares = {

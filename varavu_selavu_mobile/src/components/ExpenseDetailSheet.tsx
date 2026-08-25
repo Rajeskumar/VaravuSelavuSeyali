@@ -19,7 +19,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
+import { useTagsEnabled } from '../hooks/useTagsEnabled';
 import CustomButton from './CustomButton';
+import TagChipsDisplay from './tags/TagChipsDisplay';
 import { showToast } from './Toast';
 import {
   ApiError,
@@ -67,6 +69,7 @@ function formatFieldValue(field: string, value: any): string {
 export default function ExpenseDetailSheet({ visible, onClose, groupId, expense, members, myMemberId, readOnly, onSettled, onDeleted }: Props) {
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { enabled: tagsEnabled } = useTagsEnabled();
 
   const [comments, setComments] = useState<ExpenseCommentDTO[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
@@ -193,6 +196,18 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
               <Text style={[styles.amountText, { color: theme.colors.text }]}>${expense.my_share.toFixed(2)}</Text>
             </View>
           </View>
+
+          {tagsEnabled && (expense.tags?.length ?? 0) > 0 && (
+            <View style={{ marginBottom: 16 }}>
+              <TagChipsDisplay tags={expense.tags} />
+            </View>
+          )}
+
+          {expense.card && (
+            <Text style={[styles.metaText, { color: theme.colors.textSecondary, marginBottom: 16 }]}>
+              Paid with {expense.card.card_name}
+            </Text>
+          )}
 
           {canSettle && (
             <CustomButton

@@ -6,12 +6,17 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.models import Expense
+from varavu_selavu_service.services.tag_service import get_tags_for_expenses
+from varavu_selavu_service.services.card_service import get_card_refs_for_expenses
 
 class ExpenseService:
     def __init__(self, db: Session):
         self.db = db
 
-    def add_expense(self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float, merchant_name: Optional[str] = None) -> Dict:
+    def add_expense(
+        self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float,
+        merchant_name: Optional[str] = None, card_id: Optional[str] = None,
+    ) -> Dict:
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
         else:
@@ -32,6 +37,7 @@ class ExpenseService:
             amount=cost,
             description=description,
             merchant_name=merchant_name,
+            card_id=uuid.UUID(str(card_id)) if card_id else None,
         )
         self.db.add(db_expense)
         
@@ -59,6 +65,7 @@ class ExpenseService:
             "category": category,
             "cost": cost,
             "merchant_name": merchant_name,
+            "card_id": card_id,
         }
 
     def delete_expense(self, row_id: Union[int, str]) -> Optional[Dict]:
@@ -108,6 +115,9 @@ class ExpenseService:
             )
             item_counts = {str(expense_id): count for expense_id, count in counts}
 
+        tags_by_expense = get_tags_for_expenses(self.db, expense_ids, user_id)
+        card_refs = get_card_refs_for_expenses(self.db, [r.card_id for r in expenses])
+
         results = []
         for r in expenses:
             dt = r.purchased_at
@@ -122,6 +132,8 @@ class ExpenseService:
                 "merchant_name": r.merchant_name,
                 "item_count": item_counts.get(str(r.id), 0),
                 "split_type": r.split_type,
+                "tags": tags_by_expense.get(str(r.id), []),
+                "card": card_refs.get(str(r.card_id)) if r.card_id else None,
             })
         return results
 
@@ -134,6 +146,7 @@ class ExpenseService:
         category: str,
         cost: float,
         merchant_name: Optional[str] = None,
+        card_id: Optional[str] = None,
     ) -> tuple[Dict, Optional[Dict]]:
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
@@ -164,7 +177,8 @@ class ExpenseService:
             expense.category_id = category
             expense.amount = cost
             expense.merchant_name = merchant_name
-            
+            expense.card_id = uuid.UUID(str(card_id)) if card_id else None
+
             from varavu_selavu_service.db.models import ExpenseItem
             items = self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == parsed_id).all()
             if len(items) == 1:
@@ -199,4 +213,5 @@ class ExpenseService:
             "category": category,
             "cost": cost,
             "merchant_name": merchant_name,
+            "card_id": card_id,
         }, old_expense_data

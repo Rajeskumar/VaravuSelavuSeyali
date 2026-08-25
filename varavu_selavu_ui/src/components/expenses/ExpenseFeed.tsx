@@ -2,12 +2,15 @@ import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
+import Checkbox from '@mui/material/Checkbox';
 import CircularProgress from '@mui/material/CircularProgress';
 import EditIcon from '@mui/icons-material/EditRounded';
 import DeleteIcon from '@mui/icons-material/DeleteRounded';
 import { useTheme } from '@mui/material/styles';
 import { typeScale, tabularNums } from '../../theme';
 import { categoryTint } from './categoryColors';
+import { TagRefDTO } from '../../api/tags';
+import { CardRefDTO } from '../../api/cards';
 import { parseAppDate } from '../../utils/date';
 import { formatMoney as formatMoneyShared } from '../../utils/money';
 
@@ -67,6 +70,8 @@ export interface FeedExpense {
    * has >=1 synthesized proxy item, so only itemCount > 1 means "really itemized"). */
   itemCount?: number;
   splitType?: string | null;
+  tags?: TagRefDTO[];
+  card?: CardRefDTO | null;
 }
 
 interface DayGroup {
@@ -135,19 +140,25 @@ interface ExpenseRowProps {
   /** Archived-group lockdown: hides the edit/delete row actions, keeping
    * `onSelect` (view) usable so history stays browsable. */
   readOnly?: boolean;
+  /** TS-TAG-108 — bulk-tagging select mode: a row click toggles the checkbox
+   * instead of opening the detail sheet, and edit/delete hover actions hide. */
+  selectable?: boolean;
+  checked?: boolean;
+  onToggleSelect?: (expense: FeedExpense) => void;
 }
 
-const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDelete, deleting, readOnly }) => {
+const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDelete, deleting, readOnly, selectable, checked, onToggleSelect }) => {
   const theme = useTheme();
   const dot = categoryTint(expense.mainCategory);
+  const handleRowClick = () => (selectable ? onToggleSelect?.(expense) : onSelect(expense));
 
   return (
     <Box
       role="button"
       tabIndex={0}
-      onClick={() => onSelect(expense)}
+      onClick={handleRowClick}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onSelect(expense);
+        if (e.key === 'Enter' || e.key === ' ') handleRowClick();
       }}
       sx={{
         position: 'relative',
@@ -164,6 +175,15 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
         '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
       }}
     >
+      {selectable && (
+        <Checkbox
+          checked={!!checked}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect?.(expense)}
+          size="small"
+          sx={{ p: 0.5, flexShrink: 0 }}
+        />
+      )}
       <Box
         sx={{
           width: 8,
@@ -209,7 +229,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
           </Typography>
         )}
       </Box>
-      {!readOnly && (
+      {!readOnly && !selectable && (
         <Box
           className="expense-row-actions"
           sx={{
@@ -269,6 +289,10 @@ interface ExpenseFeedProps {
   /** Archived-group lockdown: hides edit/delete row actions across the whole
    * feed, keeping viewing (`onSelect`) usable. */
   readOnly?: boolean;
+  /** TS-TAG-108 — bulk-tagging select mode across the whole feed. */
+  selectable?: boolean;
+  selectedKeys?: Set<string>;
+  onToggleSelect?: (expense: FeedExpense) => void;
 }
 
 /**
@@ -291,6 +315,9 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
   hasMore,
   loadingMore,
   readOnly,
+  selectable,
+  selectedKeys,
+  onToggleSelect,
 }) => {
   const theme = useTheme();
   const groups = React.useMemo(() => groupByDay(expenses), [expenses]);
@@ -365,6 +392,9 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
               onDelete={onDelete}
               deleting={deletingKey === expense.key}
               readOnly={readOnly}
+              selectable={selectable}
+              checked={selectedKeys?.has(expense.key)}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </Box>

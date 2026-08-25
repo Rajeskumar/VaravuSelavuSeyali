@@ -97,6 +97,15 @@ class Settings(BaseSettings):
     # See docs/features/card_coach/TrackSpense_Card_Rewards_Product_Spec.md.
     CARD_COACH_ENABLED: bool = True
 
+    # Tags (TS-TAG series) — same staged-rollout pattern as GROUPS_ENABLED: off by default
+    # until the retrieval surfaces (filter + bulk apply) actually ship, since a tag field with
+    # no working filter/bulk-apply is dead weight per the PRD's own §4.2 finding.
+    # See docs/features/custom_tags/tags-prd-v0.2.0.md.
+    TAGS_ENABLED: bool = False
+    TAG_MAX_PER_EXPENSE: int = 5
+    TAG_MAX_PER_USER: int = 100
+    TAG_BULK_MAX: int = 1000
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

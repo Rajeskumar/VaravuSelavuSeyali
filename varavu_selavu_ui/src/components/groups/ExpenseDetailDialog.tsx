@@ -46,6 +46,11 @@ import { computePayersValid } from './PayerPicker';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import ScannedItemsCard, { ScannedItem } from '../expenses/ScannedItemsCard';
 import CategoryPickerField from '../expenses/CategoryPickerField';
+import TagInput from '../expenses/TagInput';
+import CardPickerField from '../expenses/CardPickerField';
+import { useTagsEnabled } from '../../hooks/useTagsEnabled';
+import { useCardCoachEnabled } from '../../hooks/useCardCoachEnabled';
+import { applyTagsToExpense, removeTagFromExpense } from '../../api/tags';
 import { findMainCategory } from '../expenses/AddExpenseForm';
 import { formatMoney } from '../expenses/ExpenseFeed';
 import { typeScale, tabularNums } from '../../theme';
@@ -146,6 +151,10 @@ const ExpenseDetailDialog: React.FC<Props> = ({
   const [editDate, setEditDate] = useState('');
   const [editPayers, setEditPayers] = useState<PayerSummaryItem[]>([]);
   const [editSplitValue, setEditSplitValue] = useState<SplitEditorValue>({ type: 'equal', entries: [] });
+  const [editTagNames, setEditTagNames] = useState<string[]>([]);
+  const { enabled: tagsEnabled } = useTagsEnabled();
+  const [editCardId, setEditCardId] = useState<string | null>(null);
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   // Derived directly from editPayers/editSplitValue/editAmount rather than tracked via a
   // callback from the picker — see the matching fix in GroupsPage's Add Expense form for why
   // (Save must reflect the real current state even if the user never opens the popover).
@@ -196,6 +205,8 @@ const ExpenseDetailDialog: React.FC<Props> = ({
     setEditDate(mmddyyyyToISO(expense.date));
     setEditPayers(expense.payer_summary.map((p) => ({ ...p })));
     setEditSplitValue({ type: 'exact', entries: expense.splits.map((s) => ({ member_id: s.member_id, value: s.share })) });
+    setEditTagNames((expense.tags || []).map((t) => t.name));
+    setEditCardId(expense.card?.id ?? null);
     setEditError(null);
     setEditing(true);
   }, [expense]);
@@ -239,7 +250,21 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         payers: editPayers,
         split: { type: editSplitValue.type, entries: editSplitValue.entries },
         currency: expense.currency || groupCurrency || undefined,
+        card_id: editCardId,
       });
+      if (tagsEnabled) {
+        // Group expenses don't get the tag_names write-through field (TS-TAG-104 is
+        // personal-only by design — the group-expense update endpoint has no such field) — sync
+        // via the association endpoints instead, applying/removing just what actually changed.
+        const before = new Set((expense.tags || []).map((t) => t.name.toLowerCase()));
+        const after = new Set(editTagNames.map((n) => n.toLowerCase()));
+        const toAdd = editTagNames.filter((n) => !before.has(n.toLowerCase()));
+        const toRemove = (expense.tags || []).filter((t) => !after.has(t.name.toLowerCase()));
+        if (toAdd.length > 0) {
+          await applyTagsToExpense(expense.row_id, { tag_names: toAdd });
+        }
+        await Promise.all(toRemove.map((t) => removeTagFromExpense(expense.row_id, t.id)));
+      }
       setEditing(false);
       onUpdated?.();
     } catch (e) {
@@ -393,6 +418,18 @@ const ExpenseDetailDialog: React.FC<Props> = ({
             onChange={(_main, sub) => setEditCategory(sub)}
           />
 
+          {tagsEnabled && (
+            <Box sx={{ mt: 1 }}>
+              <TagInput value={editTagNames} onChange={setEditTagNames} />
+            </Box>
+          )}
+
+          {cardCoachEnabled && (
+            <Box sx={{ mt: 1 }}>
+              <CardPickerField value={editCardId} onChange={setEditCardId} />
+            </Box>
+          )}
+
           <Box sx={sectionCardSx}>
             <PaidBySplitSummary
               amount={editAmount}
@@ -445,6 +482,18 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         </Box>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {tagsEnabled && (expense.tags?.length ?? 0) > 0 && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {expense.tags!.map((t) => (
+                <Chip key={t.id} label={t.name} size="small" sx={{ bgcolor: t.color, color: '#fff' }} />
+              ))}
+            </Box>
+          )}
+          {cardCoachEnabled && expense.card && (
+            <Typography variant="caption" color="text.secondary">
+              Paid with {expense.card.card_name}
+            </Typography>
+          )}
           <Box sx={sectionCardSx}>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
               Paid by {expense.payer_summary.map((p) => `${nameFor(p.member_id)} (${formatMoney(p.amount_paid, displayCurrency)})`).join(', ')}

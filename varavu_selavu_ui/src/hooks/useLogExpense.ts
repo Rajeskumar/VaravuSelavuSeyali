@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { addExpense, addExpenseWithItems, AddExpensePayload } from '../api/expenses';
+import { applyTagsToExpense } from '../api/tags';
 import {
   createGroupExpense,
   createGroupExpenseWithItems,
@@ -28,6 +29,15 @@ export interface QuickLogInput {
   payers?: PayerSummaryItem[];
   /** Overrides the default "split equally among every member". */
   split?: SplitEditorValue;
+  /** TS-TAG-107 — tag names to apply on save. Personal expenses get these write-through
+   * (PRD §10.2); group expenses apply them in a follow-up call after creation, since the
+   * group-expense create endpoint doesn't carry a tag_names field (TS-TAG-104 is personal-only
+   * by design). */
+  tagNames?: string[];
+  /** TS-CARD-114 — optional "which held card did I use" attribution. Unlike tags, both the
+   * personal and group create endpoints carry `card_id` directly, so no create-then-apply
+   * follow-up call is needed for the group path. */
+  cardId?: string | null;
 }
 
 export interface QuickLogItemInput {
@@ -84,6 +94,8 @@ export function useLogExpense() {
       category: input.category,
       cost: input.amount,
       merchant_name: input.merchantName || undefined,
+      tag_names: input.tagNames?.length ? input.tagNames : undefined,
+      card_id: input.cardId || undefined,
     };
     const result = await addExpense(payload);
     afterSave();
@@ -103,8 +115,12 @@ export function useLogExpense() {
       merchant_name: input.merchantName || undefined,
       payers: input.payers ?? [{ member_id: myMember.member_id, amount_paid: input.amount }],
       split: input.split ?? { type: 'equal', entries: group.members.map((m) => ({ member_id: m.member_id })) },
+      card_id: input.cardId || undefined,
     };
     const row = await createGroupExpense(groupId, payload);
+    if (input.tagNames?.length) {
+      await applyTagsToExpense(row.row_id, { tag_names: input.tagNames });
+    }
     afterSave();
     // GroupsPage's own Add Expense flow invalidates these same two keys after
     // createGroupExpense — this entry point bypasses that page's handler, so it
@@ -141,7 +157,11 @@ export function useLogExpense() {
       unit_price: it.unit_price ?? null,
       line_total: it.line_total,
     }));
-    const result = await addExpenseWithItems({ user_email: user, header, items });
+    const result = await addExpenseWithItems({
+      user_email: user, header, items,
+      tag_names: input.tagNames?.length ? input.tagNames : undefined,
+      card_id: input.cardId || undefined,
+    });
     afterSave();
     return result;
   };
@@ -182,8 +202,12 @@ export function useLogExpense() {
       merchant_name: input.merchantName || undefined,
       payers: input.payers ?? [{ member_id: myMember.member_id, amount_paid: input.amount }],
       items,
+      card_id: input.cardId || undefined,
     };
     const result = await createGroupExpenseWithItems(groupId, payload);
+    if (input.tagNames?.length) {
+      await applyTagsToExpense(result.row_id, { tag_names: input.tagNames });
+    }
     afterSave();
     queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
     queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });

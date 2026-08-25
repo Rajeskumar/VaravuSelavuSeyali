@@ -1,4 +1,6 @@
 import { fetchWithAuth } from './api';
+import { TagRefDTO } from './tags';
+import { CardRefDTO } from './cards';
 
 /** Thrown by every function in this module on a non-2xx response. Preserves the
  * backend's JSON `detail` (which for split-validation failures carries per-field
@@ -243,6 +245,7 @@ export interface GroupExpenseWithItemsPayload {
   payers: { member_id: string; amount_paid: number }[];
   items: GroupExpenseItemEntry[];
   currency?: string;
+  card_id?: string | null;
 }
 
 export interface GroupExpenseWithItemsResponse extends GroupExpenseRow {}
@@ -256,6 +259,8 @@ export interface GroupExpensePayload {
   payers: { member_id: string; amount_paid: number }[];
   split: { type: 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment'; entries: SplitEntryPayload[] };
   currency?: string;
+  // TS-CARD-114 — always-replace, same as personal expenses' card_id.
+  card_id?: string | null;
 }
 
 export interface PayerSummaryItem {
@@ -281,6 +286,11 @@ export interface GroupExpenseRow {
   currency?: string | null;
   fx_rate_to_group_currency?: number | null;
   split_type?: string | null;
+  // TS-TAG-103 — filtered to the caller (PRD §9.2): a tag applied to a shared group expense is
+  // visible ONLY to the member who applied it, never other group members.
+  tags?: TagRefDTO[];
+  // TS-CARD-114 — which held card the payer attributed to this expense, if any.
+  card?: CardRefDTO | null;
 }
 
 export interface GroupExpenseItemDTO {

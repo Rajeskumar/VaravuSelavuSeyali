@@ -344,8 +344,14 @@ def test_legacy_no_scope_analysis_call_matches_pre_feature_shape_and_values(test
         "scope",
         "spend_breakdown",
         "group_summaries",
+        "my_expenses_total",
+        "i_paid_total",
     }
     assert body["total_expenses"] == 25.0
     assert body["scope"] == "personal"
     assert body["spend_breakdown"] is None
     assert body["group_summaries"] is None
+    # TS-TAG-106 — None (not fabricated) when no tag_ids filter is present, matching the
+    # "legacy/no-scope call is unaffected" contract this test enforces.
+    assert body["my_expenses_total"] is None
+    assert body["i_paid_total"] is None

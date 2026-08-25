@@ -26,6 +26,10 @@ import { useReceiptScan } from '../../hooks/useReceiptScan';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
 import EntityAutocomplete from './EntityAutocomplete';
 import CategoryPickerField from './CategoryPickerField';
+import TagInput from './TagInput';
+import CardPickerField from './CardPickerField';
+import { useTagsEnabled } from '../../hooks/useTagsEnabled';
+import { useCardCoachEnabled } from '../../hooks/useCardCoachEnabled';
 import PaidBySplitSummary from '../groups/PaidBySplitSummary';
 import { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
 import { computePayersValid } from '../groups/PayerPicker';
@@ -75,6 +79,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
+  const { enabled: tagsEnabled } = useTagsEnabled();
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const { logPersonal, logToGroup, logPersonalWithItems, logToGroupWithItems } = useLogExpense();
   const fetchMerchantSuggestions = React.useCallback(
     (q: string) => (entityResolutionEnabled ? suggestMerchants(q) : Promise.resolve([])),
@@ -100,6 +106,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [groupDetail, setGroupDetail] = React.useState<GroupDetailResponse | null>(null);
   const [payers, setPayers] = React.useState<PayerSummaryItem[]>([]);
   const [splitValue, setSplitValue] = React.useState<SplitEditorValue>({ type: 'equal', entries: [] });
+  const [tagNames, setTagNames] = React.useState<string[]>([]);
+  const [cardId, setCardId] = React.useState<string | null>(null);
   // Tracks whether the user has explicitly saved a change out of PaidBySplitSummary's payer or
   // split picker — while false, payers/splitValue auto-track the live amount/group so the fast
   // "just me, split equally" default needs no interaction; once true, amount edits stop
@@ -165,6 +173,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setGroupDetail(null);
     setPayers([]);
     setSplitValue({ type: 'equal', entries: [] });
+    setTagNames([]);
+    setCardId(null);
     setCustomized(false);
     setError(null);
     scan.reset();
@@ -303,6 +313,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               discount: scannedDiscount,
               payers,
               participantMemberIds: splitValue.entries.map((e) => e.member_id),
+              tagNames,
+              cardId,
             })
           : await logToGroup(selectedGroup.group_id, {
               description: description.trim(),
@@ -312,6 +324,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               date: expenseDate,
               payers,
               split: splitValue,
+              tagNames,
+              cardId,
             });
         setSavedLine(`Logged to ${selectedGroup.name} — your share ${formatMoney(myShare, activeCurrency)} joins your personal total automatically.`);
       } else if (itemsToSave.length > 0) {
@@ -326,6 +340,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
           discount: scannedDiscount,
           purchasedAtIso: `${expenseDate}T00:00:00`,
           fingerprint: scannedFingerprint || undefined,
+          tagNames,
+          cardId,
         });
         setSavedLine('Logged to your personal ledger.');
       } else {
@@ -335,6 +351,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
           amount: amountNum,
           merchantName: scannedMerchant || undefined,
           date: expenseDate,
+          tagNames,
+          cardId,
         });
         setSavedLine('Logged to your personal ledger.');
       }
@@ -548,6 +566,18 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               />
             </Box>
 
+            {tagsEnabled && (
+              <Box sx={{ mt: 1.25 }}>
+                <TagInput value={tagNames} onChange={setTagNames} />
+              </Box>
+            )}
+
+            {cardCoachEnabled && (
+              <Box sx={{ mt: 1.25 }}>
+                <CardPickerField value={cardId} onChange={setCardId} />
+              </Box>
+            )}
+
             {scannedItems.length > 0 && (
               <ScannedItemsCard
                 items={scannedItems}
@@ -663,6 +693,18 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               label="Category ✨"
             />
           </Box>
+
+          {tagsEnabled && (
+            <Box sx={{ mt: 1 }}>
+              <TagInput value={tagNames} onChange={setTagNames} />
+            </Box>
+          )}
+
+          {cardCoachEnabled && (
+            <Box sx={{ mt: 1 }}>
+              <CardPickerField value={cardId} onChange={setCardId} />
+            </Box>
+          )}
 
           {scannedItems.length > 0 && (
             <ScannedItemsCard

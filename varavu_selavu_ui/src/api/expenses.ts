@@ -1,4 +1,6 @@
 import { fetchWithAuth } from './api';
+import { TagRefDTO } from './tags';
+import { CardRefDTO } from './cards';
 
 export interface AddExpensePayload {
   user_id: string;
@@ -7,6 +9,11 @@ export interface AddExpensePayload {
   category: string; // subcategory string
   cost: number;
   merchant_name?: string;
+  // TS-TAG-104 — on PUT, omitted leaves tags unchanged; an explicit [] clears them.
+  tag_names?: string[];
+  // TS-CARD-114 — always-replace, same semantics as merchant_name (unlike tag_names, there's
+  // no separate additive write path for this single value, so no omitted/empty distinction).
+  card_id?: string | null;
 }
 
 export interface AddExpenseResponse {
@@ -33,6 +40,8 @@ export interface ExpenseRecord {
   merchant_name?: string;
   item_count?: number;
   split_type?: string | null;
+  tags?: TagRefDTO[];
+  card?: CardRefDTO | null;
 }
 
 export interface ExpenseListResponse {
@@ -42,12 +51,14 @@ export interface ExpenseListResponse {
 
 export async function listExpenses(
   offset = 0,
-  limit = 30
+  limit = 30,
+  tagIds?: string[],
 ): Promise<ExpenseListResponse> {
   const params = new URLSearchParams({
     offset: offset.toString(),
     limit: limit.toString(),
   });
+  (tagIds || []).forEach((id) => params.append('tag_ids', id));
   const res = await fetchWithAuth(`/api/v1/expenses?${params.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch expenses');
   return res.json();

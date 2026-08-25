@@ -170,30 +170,55 @@ def estimate_reward(
     )
 
 
-def _sum_card_earning_across_buckets(card: Dict[str, Any], buckets: List[Dict[str, Any]]) -> Optional[CardRewardEstimate]:
-    """One card's earnings summed across (category, merchant, total) buckets, resolving
-    merchant-vs-category precedence independently per bucket. Correct and unambiguous — this is
-    always evaluated for exactly one specific card, never a search across cards, so there's no
-    "which card" ambiguity, only "which of this card's own rules applied to each dollar."""
-    _validate_card(card)
+def _sum_card_earning_across_buckets(
+    default_card: Optional[Dict[str, Any]],
+    buckets: List[Dict[str, Any]],
+    cards_by_id: Optional[Dict[str, Dict[str, Any]]] = None,
+) -> Optional[CardRewardEstimate]:
+    """"Actual earned" summed across (category, merchant, card_id) buckets, resolving
+    merchant-vs-category precedence independently per bucket.
+
+    TS-CARD-114: each bucket carries its own attributed card_id (None means unattributed).
+    `cards_by_id` resolves an attributed bucket to the specific card the user said they used;
+    unattributed buckets fall back to `default_card`, exactly matching pre-TS-CARD-114 behavior
+    for a user who never uses the picker (every bucket unattributed -> every bucket uses
+    `default_card` -> identical output to the old single-card-only version of this function).
+
+    When buckets resolve to more than one distinct actual card, summing raw point/mile units
+    across heterogeneous reward currencies would be meaningless (Chase points + cashback dollars
+    aren't the same unit) — so a multi-card blend only ever reports the dollar-comparable total
+    (`earned_usd`, safe to sum since USD is USD regardless of source card) under a "Multiple
+    cards" label, dropping `earned_raw`'s single-currency meaning entirely rather than fabricate
+    a number in a made-up shared unit. A bucket with no resolvable card (no attribution and no
+    default) contributes nothing, same as an unmatched rule always has — "actual" has always
+    tolerated partial coverage without a separate "how much did we actually price" signal."""
+    cards_by_id = cards_by_id or {}
     total_spend = round(sum(b["total"] for b in buckets), 2)
     if total_spend <= 0:
         return None
 
-    has_usd = card["reward_type"] == "cashback" or card.get("point_value_estimate_usd") is not None
     total_earned_raw = 0.0
     total_earned_usd = 0.0
+    has_usd = False
     cap_notes: List[str] = []
     matched_any = False
+    distinct_cards: Dict[str, Dict[str, Any]] = {}
 
     for b in buckets:
+        bucket_card_id = b.get("card_id")
+        card = cards_by_id.get(bucket_card_id) if bucket_card_id else default_card
+        if card is None:
+            continue
+        _validate_card(card)
         est = estimate_reward(card, b.get("category"), b["total"], merchant=b.get("merchant"))
         if est is None:
             continue
         matched_any = True
+        distinct_cards[card["card_id"]] = card
         total_earned_raw += est.earned_raw
         if est.earned_usd is not None:
             total_earned_usd += est.earned_usd
+            has_usd = True
         if est.cap_note and est.cap_note not in cap_notes:
             cap_notes.append(est.cap_note)
 
@@ -201,21 +226,34 @@ def _sum_card_earning_across_buckets(card: Dict[str, Any], buckets: List[Dict[st
         return None
 
     earned_usd = round(total_earned_usd, 2) if has_usd else None
-    # Blended effective rate — always recoverable as earned/spend, honest even when multiple
-    # underlying rules contributed (no single rule's literal multiplier applies to the whole sum).
-    if has_usd:
-        multiplier = round((total_earned_usd / total_spend) * 100.0, 2) if total_spend else 0.0
+    mixed = len(distinct_cards) > 1
+
+    if mixed:
+        # Only the dollar total is honest across heterogeneous reward currencies (see docstring).
+        if earned_usd is None:
+            return None
+        card_id, card_name, reward_type = "", "Multiple cards", "cashback"
+        earned_raw = earned_usd
+        multiplier = round((earned_usd / total_spend) * 100.0, 2) if total_spend else 0.0
     else:
-        multiplier = round(total_earned_raw / total_spend, 4) if total_spend else 0.0
+        only_card = next(iter(distinct_cards.values()))
+        card_id, card_name, reward_type = only_card["card_id"], only_card.get("card_name", ""), only_card["reward_type"]
+        earned_raw = round(total_earned_raw, 2)
+        # Blended effective rate — always recoverable as earned/spend, honest even when multiple
+        # underlying rules contributed (no single rule's literal multiplier applies to the sum).
+        if has_usd:
+            multiplier = round((total_earned_usd / total_spend) * 100.0, 2) if total_spend else 0.0
+        else:
+            multiplier = round(total_earned_raw / total_spend, 4) if total_spend else 0.0
 
     return CardRewardEstimate(
-        card_id=card["card_id"],
-        card_name=card.get("card_name", ""),
-        reward_type=card["reward_type"],
+        card_id=card_id,
+        card_name=card_name,
+        reward_type=reward_type,
         matched_category_id=None,
         matched_merchant_name=None,
         multiplier=multiplier,
-        earned_raw=round(total_earned_raw, 2),
+        earned_raw=earned_raw,
         earned_usd=earned_usd,
         cap_note="; ".join(cap_notes) if cap_notes else None,
     )
@@ -240,10 +278,15 @@ def compute_category_gap(
     held_cards: List[Dict[str, Any]],
     catalog_cards: List[Dict[str, Any]],
     default_card_id: Optional[str],
+    cards_by_id: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> CategoryRewardGap:
     total_spend = round(sum(b["total"] for b in buckets), 2)
     default_card = next((c for c in held_cards if c["card_id"] == default_card_id), None) if default_card_id else None
-    actual = _sum_card_earning_across_buckets(default_card, buckets) if default_card else None
+    # TS-CARD-114: computed whenever ANY bucket resolves to a real card — either its own
+    # attribution or, absent that, the default — not only when a default card exists (a user
+    # with no default but some explicitly-attributed spend still gets a real, if partial,
+    # actual figure instead of an unconditional None).
+    actual = _sum_card_earning_across_buckets(default_card, buckets, cards_by_id)
     # Deliberately simple/category-only — see module docstring for why "optimal" doesn't chase
     # merchant precedence the way "actual" does.
     optimal_in_wallet = best_card_for_category(held_cards, category, total_spend) if held_cards else None
@@ -264,6 +307,7 @@ def compute_merchant_gap(
     held_cards: List[Dict[str, Any]],
     catalog_cards: List[Dict[str, Any]],
     default_card_id: Optional[str],
+    cards_by_id: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> MerchantRewardGap:
     total_spend = round(sum(b["total"] for b in buckets), 2)
     # Fallback category for cards with no rule for this merchant at all — the merchant's largest
@@ -272,7 +316,7 @@ def compute_merchant_gap(
     dominant_category = max(buckets, key=lambda b: b["total"])["category"] if buckets else None
 
     default_card = next((c for c in held_cards if c["card_id"] == default_card_id), None) if default_card_id else None
-    actual = _sum_card_earning_across_buckets(default_card, buckets) if default_card else None
+    actual = _sum_card_earning_across_buckets(default_card, buckets, cards_by_id)
     optimal_in_wallet = best_card_for_category(held_cards, dominant_category, total_spend, merchant=merchant) if held_cards else None
     optimal_catalog = best_card_for_category(catalog_cards, dominant_category, total_spend, merchant=merchant) if catalog_cards else None
 
@@ -290,18 +334,28 @@ def compute_coach_summary(
     held_cards: List[Dict[str, Any]],
     catalog_cards: List[Dict[str, Any]],
     default_card_id: Optional[str],
+    attributed_cards: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[CategoryRewardGap], List[MerchantRewardGap]]:
-    """buckets: [{"category": str, "merchant": Optional[str], "total": float}, ...] —
-    AnalysisService.compute_category_merchant_buckets's shape.
+    """buckets: [{"category": str, "merchant": Optional[str], "card_id": Optional[str],
+    "total": float}, ...] — AnalysisService.compute_category_merchant_buckets's shape.
+
+    `attributed_cards` (TS-CARD-114): engine-shape cards for any card_id appearing on a bucket
+    that isn't necessarily still in `held_cards` (the user may have removed it since) — "actual
+    earned" reflects the card genuinely used at the time, independent of whether it's still held
+    today. Held cards are included automatically; this only needs to cover the gap.
 
     Returns (category_gaps, merchant_gaps). A merchant only gets its own gap row when at least
     one held or catalog card has an explicit rule for it — otherwise the row would just repeat
     the category view with nothing new to say."""
+    cards_by_id = {c["card_id"]: c for c in held_cards}
+    for c in attributed_cards or []:
+        cards_by_id.setdefault(c["card_id"], c)
+
     by_category: Dict[str, List[Dict[str, Any]]] = {}
     for b in buckets:
         by_category.setdefault(b["category"], []).append(b)
     category_gaps = [
-        compute_category_gap(cat, cat_buckets, held_cards, catalog_cards, default_card_id)
+        compute_category_gap(cat, cat_buckets, held_cards, catalog_cards, default_card_id, cards_by_id)
         for cat, cat_buckets in by_category.items()
     ]
 
@@ -318,7 +372,7 @@ def compute_coach_summary(
         if merchant and merchant.strip().lower() in merchants_with_rules:
             by_merchant.setdefault(merchant, []).append(b)
     merchant_gaps = [
-        compute_merchant_gap(m, m_buckets, held_cards, catalog_cards, default_card_id)
+        compute_merchant_gap(m, m_buckets, held_cards, catalog_cards, default_card_id, cards_by_id)
         for m, m_buckets in by_merchant.items()
     ]
 

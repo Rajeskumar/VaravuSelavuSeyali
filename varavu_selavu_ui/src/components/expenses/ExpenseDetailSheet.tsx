@@ -19,6 +19,10 @@ import { getExpenseItems, updateExpenseItems } from '../../api/expenses';
 import { getGroupExpenseItems, updateGroupExpenseItems } from '../../api/groups';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
 import CategoryPickerField from './CategoryPickerField';
+import TagInput from './TagInput';
+import CardPickerField from './CardPickerField';
+import { useTagsEnabled } from '../../hooks/useTagsEnabled';
+import { useCardCoachEnabled } from '../../hooks/useCardCoachEnabled';
 
 export interface ExpenseDetailForm {
   merchantName: string;
@@ -29,6 +33,13 @@ export interface ExpenseDetailForm {
    * converting back to the MM/DD/YYYY the update endpoints expect should use
    * `isoToMMDDYYYY` from `utils/date`. */
   date: string;
+  /** TS-TAG-107 — always the full current set when tags are enabled (this sheet always shows
+   * an expense's existing tags), undefined when the feature flag is off. Full-replace on save. */
+  tagNames?: string[];
+  /** TS-CARD-114 — always-replace, same as merchantName: this sheet always shows the
+   * expense's current attribution, so null here always means "no card," never "leave
+   * unchanged." undefined when Card Coach is off. */
+  cardId?: string | null;
 }
 
 interface ExpenseDetailSheetProps {
@@ -61,6 +72,8 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
 }) => {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('sm'));
+  const { enabled: tagsEnabled } = useTagsEnabled();
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const [form, setForm] = React.useState<ExpenseDetailForm | null>(null);
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
 
@@ -85,6 +98,8 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
         // source — `parseAppDate` handles both; `mmddyyyyToISO` alone would mis-parse an
         // already-ISO date.
         date: toISODate(parseAppDate(expense.date)),
+        tagNames: tagsEnabled ? (expense.tags || []).map((t) => t.name) : undefined,
+        cardId: cardCoachEnabled ? (expense.card?.id ?? null) : undefined,
       });
       setConfirmingDelete(false);
     } else {
@@ -92,7 +107,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
     }
     setItems([]);
     setItemsLoaded(false);
-  }, [expense]);
+  }, [expense, tagsEnabled, cardCoachEnabled]);
 
   React.useEffect(() => {
     if (!expense || !isItemized) return;
@@ -210,6 +225,18 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
           subcategory={form.category}
           onChange={(_main, sub) => setForm({ ...form, category: sub })}
         />
+        {tagsEnabled && (
+          <TagInput
+            value={form.tagNames || []}
+            onChange={(tagNames) => setForm({ ...form, tagNames })}
+          />
+        )}
+        {cardCoachEnabled && (
+          <CardPickerField
+            value={form.cardId ?? null}
+            onChange={(cardId) => setForm({ ...form, cardId })}
+          />
+        )}
         <Box sx={{ display: 'flex', gap: 1.5 }}>
           <TextField
             label="Date"

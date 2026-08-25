@@ -37,6 +37,8 @@ import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import BudgetsTabContent from '../components/BudgetsTabContent';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import CardsTabContent from '../components/CardsTabContent';
+import { useTagsEnabled } from '../hooks/useTagsEnabled';
+import TagFilterBar from '../components/tags/TagFilterBar';
 
 type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets' | 'cards';
 
@@ -52,6 +54,8 @@ export default function AnalysisScreen() {
 
     const { enabled: budgetsEnabled } = useBudgetsEnabled();
     const { enabled: cardCoachEnabled } = useCardCoachEnabled();
+    const { enabled: tagsEnabled } = useTagsEnabled();
+    const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
     const [tab, setTab] = useState<AnalysisTab>('overview');
     // Dashboard's Budgets/Card Coach summary cards navigate here with `{ initialTab: '...' }` —
     // same pattern as GroupsScreen's own `initialTab` param handling.
@@ -77,8 +81,8 @@ export default function AnalysisScreen() {
     });
 
     const { data, isLoading: loadingAnalysis } = useQuery({
-        queryKey: ['analysis', userEmail, year, month, scope],
-        queryFn: () => getAnalysis(accessToken!, userEmail!, { year, month, scope }),
+        queryKey: ['analysis', userEmail, year, month, scope, tagFilterIds],
+        queryFn: () => getAnalysis(accessToken!, userEmail!, { year, month, scope, tag_ids: tagFilterIds.length ? tagFilterIds : undefined }),
         enabled: !!accessToken && !!userEmail,
     });
 
@@ -158,6 +162,27 @@ export default function AnalysisScreen() {
                         ]}
                     />
                 </View>
+
+                {tab === 'overview' && tagsEnabled && (
+                    <View style={{ paddingHorizontal: 18, marginBottom: 4 }}>
+                        <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />
+                    </View>
+                )}
+
+                {tab === 'overview' && tagFilterIds.length > 0 && data?.my_expenses_total != null && (
+                    <View style={[styles.card, { flexDirection: 'row', gap: 24, alignItems: 'center', marginBottom: 12 }]}>
+                        <View>
+                            <Text style={styles.catHeaderTotal}>{formatCurrency(data.my_expenses_total)}</Text>
+                            <Text style={styles.toggleLabel}>My Expenses</Text>
+                        </View>
+                        {data.i_paid_total != null && (
+                            <View>
+                                <Text style={styles.catHeaderTotal}>{formatCurrency(data.i_paid_total)}</Text>
+                                <Text style={styles.toggleLabel}>I Paid</Text>
+                            </View>
+                        )}
+                    </View>
+                )}
 
                 {tab === 'overview' && (
                     loading ? (

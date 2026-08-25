@@ -66,9 +66,12 @@ type PickerType = 'payer' | 'split' | null;
 
 /**
  * Splitwise-style "Paid by X and split Y" summary line — the picker stays hidden behind a
- * click instead of always rendering expanded. Picker changes are staged locally and only
- * committed to the parent form on Save (Cancel discards them), which also means reopening
- * the picker always reflects whatever is currently selected rather than a reset default.
+ * click instead of always rendering expanded. Single-payer selection commits the instant you
+ * tap a name (no Save needed — see PayerPicker's onSingleSelect); split editing and
+ * "multiple people" payer mode still stage changes locally and only commit on an explicit
+ * Save (Cancel, the dialog's close icon, or clicking the backdrop all discard them), since
+ * those involve several interdependent fields with no single click that fully determines the
+ * answer.
  */
 const PaidBySplitSummary: React.FC<Props> = ({
   amount,
@@ -92,10 +95,18 @@ const PaidBySplitSummary: React.FC<Props> = ({
   const [localPayersValid, setLocalPayersValid] = React.useState(true);
   const [localSplit, setLocalSplit] = React.useState<SplitEditorValue>(splitValue);
   const [localSplitValid, setLocalSplitValid] = React.useState(true);
+  // "single" payer mode commits per-tap (via onSingleSelect below) with nothing left to
+  // confirm, so its dialog needs no Save/Cancel at all — the backdrop click/Escape MUI's
+  // Dialog already wires to onClose is the "cancel" affordance. "multiple" mode still has
+  // several amount fields to reconcile before there's anything valid to commit, so it keeps
+  // explicit actions. Derived from payers.length so the very first render (before PayerPicker
+  // mounts and reports its own mode) already guesses right instead of flashing buttons.
+  const [payerMode, setPayerMode] = React.useState<'single' | 'multiple'>(payers.length > 1 ? 'multiple' : 'single');
 
   const openPicker = (type: 'payer' | 'split') => {
     setLocalPayers(payers);
     setLocalSplit(splitValue);
+    setPayerMode(payers.length > 1 ? 'multiple' : 'single');
     setPickerType(type);
   };
 
@@ -179,7 +190,25 @@ const PaidBySplitSummary: React.FC<Props> = ({
         </DialogTitle>
         <DialogContent dividers>
           {pickerType === 'payer' && (
-            <PayerPicker amount={amount} members={members} payers={localPayers} onChange={setLocalPayers} onValidityChange={setLocalPayersValid} currency={currency} />
+            <PayerPicker
+              amount={amount}
+              members={members}
+              payers={localPayers}
+              onChange={setLocalPayers}
+              onValidityChange={setLocalPayersValid}
+              currency={currency}
+              // Tapping a single payer fully determines the answer on its own — commit and
+              // close immediately instead of making the user click Save to confirm a choice
+              // that one tap already made. "Multiple people" mode still stages via onChange
+              // above and needs its own explicit Save (per-person amounts must reconcile).
+              onSingleSelect={(memberId) => {
+                onPayersChange([{ member_id: memberId, amount_paid: amount }]);
+                onPayersValidityChange?.(true);
+                onCustomized?.();
+                setPickerType(null);
+              }}
+              onModeChange={setPayerMode}
+            />
           )}
           {pickerType === 'split' && (
             <SplitEditor
@@ -193,12 +222,14 @@ const PaidBySplitSummary: React.FC<Props> = ({
             />
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCancel}>Cancel</Button>
-          <Button variant="contained" disabled={saveDisabled} onClick={handleSave}>
-            Save
-          </Button>
-        </DialogActions>
+        {!(pickerType === 'payer' && payerMode === 'single') && (
+          <DialogActions>
+            <Button onClick={handleCancel}>Cancel</Button>
+            <Button variant="contained" disabled={saveDisabled} onClick={handleSave}>
+              Save
+            </Button>
+          </DialogActions>
+        )}
       </Dialog>
     </Box>
   );

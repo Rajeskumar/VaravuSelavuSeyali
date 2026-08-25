@@ -10,7 +10,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { motion } from 'framer-motion';
 import AddExpenseForm, { findMainCategory } from '../components/expenses/AddExpenseForm';
 import GroupScopeFilter from '../components/common/GroupScopeFilter';
-import ExpenseFeed, { FeedExpense } from '../components/expenses/ExpenseFeed';
+import ExpenseFeed, { FeedExpense, formatMoney } from '../components/expenses/ExpenseFeed';
 import ExpenseDetailSheet, { ExpenseDetailForm } from '../components/expenses/ExpenseDetailSheet';
 import MoveToGroupDialog from '../components/expenses/MoveToGroupDialog';
 import RecurringTab from '../components/expenses/RecurringTab';
@@ -24,7 +24,11 @@ import {
   UnifiedGroupExpenseRow,
 } from '../api/groups';
 import { AnalysisScope } from '../api/analysis';
+import { applyTagsToExpense, removeTagFromExpense } from '../api/tags';
+import TagFilterSelect from '../components/tags/TagFilterSelect';
+import BulkTagDialog from '../components/tags/BulkTagDialog';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
+import { useTagsEnabled } from '../hooks/useTagsEnabled';
 import { useQuickCapture } from '../context/QuickCaptureContext';
 import { isoToMMDDYYYY } from '../utils/date';
 
@@ -41,6 +45,7 @@ const ExpensesPage: React.FC = () => {
   const user = localStorage.getItem('vs_user') || '';
   const queryClient = useQueryClient();
   const { enabled: groupsEnabled } = useGroupsEnabled();
+  const { enabled: tagsEnabled } = useTagsEnabled();
   const { openQuickCapture } = useQuickCapture();
   const [scope, setScope] = React.useState<AnalysisScope>('combined');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -50,14 +55,20 @@ const ExpensesPage: React.FC = () => {
     setSearchParams(next === 'transactions' ? {} : { tab: next }, { replace: true });
   };
 
+  // TS-TAG-111 — declared here (not down by feedExpenses) since the personal queries below need
+  // it server-side: GET /expenses supports tag_ids natively (PRD §10.4), and filtering there
+  // (rather than only client-side after the fact) keeps results correct across pagination —
+  // client-side-only filtering would silently miss tagged expenses on pages not yet fetched.
+  const [tagFilterIds, setTagFilterIds] = React.useState<string[]>([]);
+
   const {
     data,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['expenses', user],
-    queryFn: ({ pageParam = 0 }) => listExpenses(pageParam),
+    queryKey: ['expenses', user, tagFilterIds],
+    queryFn: ({ pageParam = 0 }) => listExpenses(pageParam, 30, tagFilterIds),
     getNextPageParam: (lastPage) => lastPage.next_offset ?? undefined,
     enabled: !!user,
     initialPageParam: 0,
@@ -74,8 +85,8 @@ const ExpensesPage: React.FC = () => {
     enabled: groupsEnabled && scope !== 'personal',
   });
   const combinedPersonalQuery = useQuery({
-    queryKey: ['expenses-full-for-combined', user],
-    queryFn: () => listExpenses(0, 500),
+    queryKey: ['expenses-full-for-combined', user, tagFilterIds],
+    queryFn: () => listExpenses(0, 500, tagFilterIds),
     enabled: !!user && scope === 'combined',
   });
 
@@ -100,14 +111,15 @@ const ExpensesPage: React.FC = () => {
       groupName: e.group_name,
       payerSummary: e.payer_summary,
       splitType: e.split_type,
+      tags: e.tags,
+      card: e.card,
     }));
 
+    let result: FeedExpense[];
     if (scope === 'groups') {
-      return groupRows;
-    }
-
-    if (scope === 'personal') {
-      return personalExpenses.map((e) => ({
+      result = groupRows;
+    } else if (scope === 'personal') {
+      result = personalExpenses.map((e) => ({
         key: `personal-${e.row_id}`,
         kind: 'personal',
         id: e.row_id,
@@ -119,25 +131,40 @@ const ExpensesPage: React.FC = () => {
         amount: e.cost,
         itemCount: e.item_count,
         splitType: e.split_type,
+        tags: e.tags,
+        card: e.card,
       }));
+    } else {
+      // combined
+      const personalRows: FeedExpense[] = (combinedPersonalQuery.data?.items || []).map((e) => ({
+        key: `personal-${e.row_id}`,
+        kind: 'personal',
+        id: e.row_id,
+        date: e.date,
+        description: e.description,
+        merchantName: e.merchant_name || undefined,
+        category: e.category,
+        mainCategory: findMainCategory(e.category),
+        amount: e.cost,
+        itemCount: e.item_count,
+        splitType: e.split_type,
+        tags: e.tags,
+        card: e.card,
+      }));
+      result = [...personalRows, ...groupRows];
     }
 
-    // combined
-    const personalRows: FeedExpense[] = (combinedPersonalQuery.data?.items || []).map((e) => ({
-      key: `personal-${e.row_id}`,
-      kind: 'personal',
-      id: e.row_id,
-      date: e.date,
-      description: e.description,
-      merchantName: e.merchant_name || undefined,
-      category: e.category,
-      mainCategory: findMainCategory(e.category),
-      amount: e.cost,
-      itemCount: e.item_count,
-      splitType: e.split_type,
-    }));
-    return [...personalRows, ...groupRows];
-  }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data]);
+    // TS-TAG-111 — the primary retrieval surface (PRD §5.2). Personal rows are already
+    // server-filtered above (GET /expenses supports tag_ids, PRD §10.4) — this second pass is a
+    // no-op for them but is what actually filters group rows, which come from a client-composed
+    // unified list with no backend tag_ids support of its own (§10.4 only covers GET /expenses
+    // and GET /analysis).
+    if (tagFilterIds.length > 0) {
+      const wanted = new Set(tagFilterIds);
+      result = result.filter((r) => (r.tags || []).some((t) => wanted.has(t.id)));
+    }
+    return result;
+  }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data, tagFilterIds]);
 
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ExpenseRecord | null>(null);
@@ -148,6 +175,34 @@ const ExpensesPage: React.FC = () => {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<ExpenseRecord | null>(null);
   const [exporting, setExporting] = React.useState(false);
+
+  // TS-TAG-108 — bulk tagging select mode. Selection is keyed by FeedExpense.key so it survives
+  // scope switches cleanly (a stale key just selects nothing rather than the wrong row).
+  const [selectMode, setSelectMode] = React.useState(false);
+  const [selectedKeys, setSelectedKeys] = React.useState<Set<string>>(new Set());
+  const [bulkDialogMode, setBulkDialogMode] = React.useState<'apply' | 'remove' | null>(null);
+
+  const selectedExpenses = React.useMemo(
+    () => feedExpenses.filter((e) => selectedKeys.has(e.key)),
+    [feedExpenses, selectedKeys]
+  );
+  const selectedTotal = selectedExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const selectedCurrencies = new Set(selectedExpenses.map((e) => e.currency || 'USD'));
+  const selectedCurrency = selectedCurrencies.size === 1 ? selectedExpenses[0]?.currency : undefined;
+
+  const toggleSelect = (expense: FeedExpense) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(expense.key)) next.delete(expense.key);
+      else next.add(expense.key);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedKeys(new Set());
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -274,6 +329,11 @@ const ExpensesPage: React.FC = () => {
           category: patch.category,
           cost: amount,
           merchant_name: patch.merchantName || undefined,
+          // Explicit array always sent — this sheet always shows the expense's current tags,
+          // so full-replace semantics (PRD §10.2) are correct whether or not they changed.
+          tag_names: patch.tagNames,
+          // TS-CARD-114 — always-replace, same reasoning as tag_names above.
+          card_id: patch.cardId,
         });
       } else if (expense.groupId) {
         // Phase-1 group expenses are always equal-split (AddExpenseForm never
@@ -297,7 +357,24 @@ const ExpensesPage: React.FC = () => {
           merchant_name: patch.merchantName || undefined,
           payers,
           split: { type: 'equal', entries: payers.map((p) => ({ member_id: p.member_id })) },
+          // TS-CARD-114 — unlike tags, the group create/update endpoint carries card_id
+          // directly (no separate association model needed for a single nullable value),
+          // so this is always-replace with no diff-and-sync step required.
+          card_id: patch.cardId,
         });
+        if (patch.tagNames) {
+          // Group expenses have no tag_names write-through field (TS-TAG-104 is personal-only
+          // by design) — sync via the association endpoints instead, applying/removing just
+          // what actually changed.
+          const before = new Set((expense.tags || []).map((t) => t.name.toLowerCase()));
+          const after = new Set(patch.tagNames.map((n) => n.toLowerCase()));
+          const toAdd = patch.tagNames.filter((n) => !before.has(n.toLowerCase()));
+          const toRemove = (expense.tags || []).filter((t) => !after.has(t.name.toLowerCase()));
+          if (toAdd.length > 0) {
+            await applyTagsToExpense(String(expense.id), { tag_names: toAdd });
+          }
+          await Promise.all(toRemove.map((t) => removeTagFromExpense(String(expense.id), t.id)));
+        }
       }
       invalidateForScope();
       setToast({ open: true, message: 'Expense updated', severity: 'success' });
@@ -337,11 +414,21 @@ const ExpensesPage: React.FC = () => {
             Expenses
           </Typography>
           {tab === 'transactions' && groupsEnabled && <GroupScopeFilter value={scope} onChange={setScope} />}
+          {tab === 'transactions' && tagsEnabled && <TagFilterSelect value={tagFilterIds} onChange={setTagFilterIds} />}
           {/* TrackSpense v3 Prototype — this now opens the shared Quick Capture sheet/dialog
               instead of AddExpenseForm; the Dialog+AddExpenseForm below is still used, but only
               reached via a row's Edit icon (handleRowEdit) now. */}
           {tab === 'transactions' && (
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {/* TS-TAG-108 — bulk tagging entry point; only meaningful when tags exist to apply. */}
+              {tagsEnabled && (
+                <Button
+                  variant={selectMode ? 'contained' : 'outlined'}
+                  onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+                >
+                  {selectMode ? 'Cancel' : 'Select'}
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 startIcon={<FileDownloadOutlinedIcon />}
@@ -356,6 +443,44 @@ const ExpensesPage: React.FC = () => {
             </Box>
           )}
         </Box>
+
+        {/* TS-TAG-108 — sticky bulk action bar, shown only in select mode so it doesn't compete
+            with the page's normal chrome the rest of the time. */}
+        {tab === 'transactions' && selectMode && (
+          <Box
+            sx={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+              flexWrap: 'wrap',
+              p: 1.5,
+              mb: 2,
+              borderRadius: 1,
+              bgcolor: 'background.paper',
+              border: '1px solid',
+              borderColor: 'divider',
+              boxShadow: 2,
+            }}
+          >
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {selectedKeys.size} selected
+              {selectedKeys.size > 0 ? ` · ${formatMoney(selectedTotal, selectedCurrency)}` : ''}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button size="small" variant="outlined" disabled={selectedKeys.size === 0} onClick={() => setBulkDialogMode('apply')}>
+                Tag
+              </Button>
+              <Button size="small" variant="outlined" disabled={selectedKeys.size === 0} onClick={() => setBulkDialogMode('remove')}>
+                Untag
+              </Button>
+              <Button size="small" onClick={exitSelectMode}>Clear</Button>
+            </Box>
+          </Box>
+        )}
 
         {/* TS-DES-204 — Transactions/Recurring sub-tab host; Recurring folds in the former
             standalone /recurring page. */}
@@ -383,6 +508,9 @@ const ExpensesPage: React.FC = () => {
             onLoadMore={scope === 'personal' ? () => fetchNextPage() : undefined}
             hasMore={scope === 'personal' ? !!hasNextPage : false}
             loadingMore={isFetchingNextPage}
+            selectable={selectMode}
+            selectedKeys={selectedKeys}
+            onToggleSelect={toggleSelect}
           />
         ) : (
           <RecurringTab />
@@ -405,6 +533,19 @@ const ExpensesPage: React.FC = () => {
         }
         saving={detailSaving}
         deleting={detailDeleting}
+      />
+
+      <BulkTagDialog
+        open={bulkDialogMode !== null}
+        mode={bulkDialogMode || 'apply'}
+        expenseIds={selectedExpenses.map((e) => String(e.id))}
+        onClose={() => setBulkDialogMode(null)}
+        onDone={(message) => {
+          setBulkDialogMode(null);
+          exitSelectMode();
+          invalidateForScope();
+          setToast({ open: true, message, severity: 'success' });
+        }}
       />
 
       <MoveToGroupDialog

@@ -27,6 +27,21 @@ def _to_uuid(value: str, not_found_detail: str) -> uuid.UUID:
         raise HTTPException(status_code=404, detail=not_found_detail)
 
 
+def get_card_refs_for_expenses(db: Session, card_ids: List[Any]) -> Dict[str, Dict[str, str]]:
+    """TS-CARD-114: batch-resolves `{id, card_name, issuer}` for embedding `CardRefDTO` on
+    expense rows — mirrors tag_service.get_tags_for_expenses' batch-fetch shape (one query for
+    however many distinct cards appear on a page of expenses, not a per-row round trip). A
+    module-level function, not a CardService method, so expense_service/group_expense_service
+    don't have to instantiate CardService (which itself constructs an AnalysisService) just to
+    resolve card names. Keyed by str(card_id) since callers already key their own per-expense
+    dicts by str(expense.id) the same way tags does."""
+    ids = [cid for cid in card_ids if cid is not None]
+    if not ids:
+        return {}
+    cards = db.query(CardCatalog).filter(CardCatalog.id.in_(ids)).all()
+    return {str(c.id): {"id": str(c.id), "card_name": c.card_name, "issuer": c.issuer} for c in cards}
+
+
 def _card_to_engine_dict(card: CardCatalog, rules: List[CardEarningRule]) -> Dict[str, Any]:
     """CardCatalog + its rules -> the plain-dict shape card_rewards_engine expects — the engine
     stays DB-agnostic (spec §13.3), so this conversion lives here, not there."""
@@ -143,6 +158,21 @@ class CardService:
             .order_by(UserCard.added_at)
             .all()
         )
+
+    def assert_card_is_held(self, user_email: str, card_id: str) -> None:
+        """TS-CARD-114: an expense's attributed card must be one of the caller's own held
+        cards — never an arbitrary catalog id, and never another user's card. Called from the
+        expense create/update routes whenever a `card_id` is supplied; raises 400 rather than
+        404 since the id itself may well exist in the catalog, just not (yet) held by this
+        user — a distinct, more actionable error than "not found"."""
+        cid = _to_uuid(card_id, "Card not found")
+        held = (
+            self.db.query(UserCard)
+            .filter(UserCard.user_email == user_email, UserCard.card_id == cid)
+            .first()
+        )
+        if not held:
+            raise HTTPException(status_code=400, detail="You can only attribute an expense to a card you've added in the Cards tab")
 
     def add_user_card(self, user_email: str, card_id: str) -> UserCard:
         self._get_active_catalog_card(card_id, user_email)  # 404/400 if missing/inactive/not-visible
@@ -331,7 +361,23 @@ class CardService:
         )
         held_cards, default_card_id = self.get_engine_ready_held_cards(user_id)
         catalog_cards = self.get_engine_ready_catalog()
-        category_gaps, merchant_gaps = compute_coach_summary(buckets, held_cards, catalog_cards, default_card_id)
+
+        # TS-CARD-114: any bucket's attributed card_id that isn't already one of held_cards —
+        # e.g. the user has since removed it — still needs to resolve to real earning rules for
+        # "actual earned" to reflect the card genuinely used at the time. Held cards already
+        # cover the common case, so this only fills the gap, not a full re-fetch.
+        held_ids = {c["card_id"] for c in held_cards}
+        missing_ids = {b["card_id"] for b in buckets if b.get("card_id") and b["card_id"] not in held_ids}
+        attributed_cards: List[Dict[str, Any]] = []
+        if missing_ids:
+            missing_uuids = [uuid.UUID(cid) for cid in missing_ids]
+            missing_cards = self.db.query(CardCatalog).filter(CardCatalog.id.in_(missing_uuids)).all()
+            rules_by_card = self._rules_by_card_id([c.id for c in missing_cards])
+            attributed_cards = [_card_to_engine_dict(c, rules_by_card.get(c.id, [])) for c in missing_cards]
+
+        category_gaps, merchant_gaps = compute_coach_summary(
+            buckets, held_cards, catalog_cards, default_card_id, attributed_cards=attributed_cards,
+        )
         return category_gaps, merchant_gaps, groups_enabled
 
     # ------------------------------------------------------------------

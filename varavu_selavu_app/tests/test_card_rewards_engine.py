@@ -287,3 +287,103 @@ def test_compute_coach_summary_no_merchant_rows_when_no_card_has_merchant_rules(
     category_gaps, merchant_gaps = compute_coach_summary(buckets, [CASHBACK_CARD], [CASHBACK_CARD], default_card_id="c1")
     assert len(category_gaps) == 1
     assert merchant_gaps == []
+
+
+# --- TS-CARD-114: per-expense card attribution in "actual earned" ---
+
+def test_unattributed_buckets_fall_back_to_default_card_unchanged():
+    """A user who never uses the card picker (every bucket unattributed) must get byte-identical
+    output to the pre-TS-CARD-114 default-card-only behavior."""
+    buckets = [{"category": "Groceries", "merchant": None, "card_id": None, "total": 100.0}]
+    gap = compute_category_gap("Groceries", buckets, [CASHBACK_CARD], [CASHBACK_CARD], default_card_id="c1")
+    assert gap.actual.card_id == "c1"
+    assert gap.actual.earned_usd == 6.0
+
+
+def test_bucket_attribution_overrides_default_card():
+    # Default is the 1.5% flat card, but this $100 of Groceries was actually put on the 6% card.
+    buckets = [{"category": "Groceries", "merchant": None, "card_id": "c1", "total": 100.0}]
+    cards_by_id = {"c1": CASHBACK_CARD, "c2": FLAT_CASHBACK_CARD}
+    gap = compute_category_gap("Groceries", buckets, [CASHBACK_CARD, FLAT_CASHBACK_CARD], [], default_card_id="c2", cards_by_id=cards_by_id)
+    assert gap.actual.card_id == "c1"
+    assert gap.actual.earned_usd == 6.0  # 6% of $100 on the attributed card, not 1.5% of the default
+
+
+def test_partial_attribution_without_any_default_card():
+    """No default card set at all, but one bucket is explicitly attributed — actual should still
+    be computed from just that attributed spend, not unconditionally None."""
+    buckets = [{"category": "Groceries", "merchant": None, "card_id": "c1", "total": 100.0}]
+    cards_by_id = {"c1": CASHBACK_CARD}
+    gap = compute_category_gap("Groceries", buckets, [CASHBACK_CARD], [], default_card_id=None, cards_by_id=cards_by_id)
+    assert gap.actual is not None
+    assert gap.actual.card_id == "c1"
+    assert gap.actual.earned_usd == 6.0
+
+
+def test_unattributed_bucket_with_no_default_contributes_nothing_but_attributed_ones_still_count():
+    buckets = [
+        {"category": "Groceries", "merchant": None, "card_id": "c1", "total": 100.0},
+        {"category": "Groceries", "merchant": None, "card_id": None, "total": 900.0},
+    ]
+    cards_by_id = {"c1": CASHBACK_CARD}
+    gap = compute_category_gap("Groceries", buckets, [CASHBACK_CARD], [], default_card_id=None, cards_by_id=cards_by_id)
+    # Only the $100 attributed bucket contributes — the $900 unattributed bucket has nothing to
+    # fall back on (no default) and is silently skipped, same tolerance "actual" always had for
+    # partial rule coverage.
+    assert gap.actual.earned_usd == 6.0
+    assert gap.actual_spend == 1000.0  # the gap's own total spend is still the full, true amount
+
+
+def test_mixed_card_attribution_reports_blended_usd_under_multiple_cards_label():
+    buckets = [
+        {"category": "Groceries", "merchant": None, "card_id": "c1", "total": 100.0},  # 6% -> $6
+        {"category": "Groceries", "merchant": None, "card_id": "c2", "total": 100.0},  # 1.5% -> $1.5
+    ]
+    cards_by_id = {"c1": CASHBACK_CARD, "c2": FLAT_CASHBACK_CARD}
+    gap = compute_category_gap("Groceries", buckets, [CASHBACK_CARD, FLAT_CASHBACK_CARD], [], default_card_id="c1", cards_by_id=cards_by_id)
+    assert gap.actual.card_name == "Multiple cards"
+    assert gap.actual.earned_usd == pytest.approx(7.5)
+    # earned_raw aliases to the dollar total for a mixed blend — raw points/cashback units
+    # aren't comparable across different physical cards, so no other number would be honest.
+    assert gap.actual.earned_raw == pytest.approx(7.5)
+
+
+def test_mixed_attribution_with_no_dollar_comparable_card_returns_none():
+    """Both attributed cards are points/miles with no point_value_estimate_usd — nothing
+    comparable can be summed across them, so the blend must be None, not a fabricated raw sum."""
+    other_points_card_no_value = {
+        "card_id": "c8", "card_name": "Other Miles Card", "reward_type": "miles",
+        "point_value_estimate_usd": None,
+        "earning_rules": [{"category_id": ALL_PURCHASES, "multiplier": 2.0, "cap_amount": None, "cap_period": None, "exclusions_note": None}],
+    }
+    buckets = [
+        {"category": "Travel", "merchant": None, "card_id": "c4", "total": 100.0},
+        {"category": "Travel", "merchant": None, "card_id": "c8", "total": 100.0},
+    ]
+    cards_by_id = {"c4": POINTS_CARD_NO_VALUE, "c8": other_points_card_no_value}
+    gap = compute_category_gap("Travel", buckets, [POINTS_CARD_NO_VALUE, other_points_card_no_value], [], default_card_id=None, cards_by_id=cards_by_id)
+    assert gap.actual is None
+
+
+def test_attributed_card_no_longer_held_still_resolves_via_cards_by_id():
+    """The user removed this card from their wallet since the expense was logged — held_cards no
+    longer contains it, but cards_by_id (which compute_coach_gaps fills from a direct catalog
+    lookup for exactly this case) still resolves it. "Actual earned" reflects history, not the
+    current wallet."""
+    buckets = [{"category": "Groceries", "merchant": None, "card_id": "c1", "total": 100.0}]
+    cards_by_id = {"c1": CASHBACK_CARD}  # not in held_cards below
+    gap = compute_category_gap("Groceries", buckets, [FLAT_CASHBACK_CARD], [], default_card_id="c2", cards_by_id=cards_by_id)
+    assert gap.actual.card_id == "c1"
+    assert gap.actual.earned_usd == 6.0
+
+
+def test_compute_coach_summary_builds_cards_by_id_from_held_and_attributed():
+    buckets = [{"category": "Groceries", "merchant": None, "card_id": "c1", "total": 100.0}]
+    # c1 (CASHBACK_CARD) isn't held — only reachable via attributed_cards.
+    category_gaps, _ = compute_coach_summary(
+        buckets, held_cards=[FLAT_CASHBACK_CARD], catalog_cards=[], default_card_id="c2",
+        attributed_cards=[CASHBACK_CARD],
+    )
+    groceries_gap = next(g for g in category_gaps if g.category == "Groceries")
+    assert groceries_gap.actual.card_id == "c1"
+    assert groceries_gap.actual.earned_usd == 6.0
