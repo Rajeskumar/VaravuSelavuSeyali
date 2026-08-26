@@ -406,21 +406,22 @@ def delete_expense(
     expense_service: ExpenseService = Depends(get_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
     aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
-    _: str = Depends(auth_required),
+    user_id: str = Depends(auth_required),
 ):
-    deleted_data = expense_service.delete_expense(row_id)
+    deleted_data = expense_service.delete_expense(row_id, user_id)
+    if not deleted_data:
+        raise HTTPException(status_code=404, detail="Expense not found")
     analysis_service.invalidate_cache()
-    
-    if deleted_data:
-        background_tasks.add_task(
-            aggregation_svc.on_expense_deleted,
-            user_email=deleted_data["user_email"],
-            merchant_name=deleted_data["merchant_name"],
-            amount=deleted_data["amount"],
-            purchased_at=deleted_data["purchased_at"],
-            items=deleted_data.get("items", [])
-        )
-        
+
+    background_tasks.add_task(
+        aggregation_svc.on_expense_deleted,
+        user_email=deleted_data["user_email"],
+        merchant_name=deleted_data["merchant_name"],
+        amount=deleted_data["amount"],
+        purchased_at=deleted_data["purchased_at"],
+        items=deleted_data.get("items", [])
+    )
+
     return {"success": True}
 
 
@@ -678,10 +679,22 @@ def parse_receipt(
     receipt_service: ReceiptService = Depends(get_receipt_service),
     _: str = Depends(auth_required),
 ):
-    data = file.file.read()
+    content_type = file.content_type or "image/png"
+    allowed_mimes = {m.strip() for m in settings.ALLOWED_MIME.split(",")}
+    if content_type not in allowed_mimes:
+        raise HTTPException(status_code=415, detail=f"Unsupported file type: {content_type}")
+
+    # Bounded read: caps memory use at MAX_UPLOAD_MB regardless of how large the underlying
+    # upload actually is, instead of pulling an arbitrarily large file fully into memory and
+    # only then noticing it was too big.
+    max_bytes = settings.MAX_UPLOAD_MB * 1024 * 1024
+    data = file.file.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"File too large (max {settings.MAX_UPLOAD_MB} MB)")
+
     return receipt_service.parse(
         data,
-        content_type=file.content_type or "image/png",
+        content_type=content_type,
         save_ocr_text=save_ocr_text,
     )
 

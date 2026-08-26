@@ -12,13 +12,13 @@ def test_register_login_and_me(test_client, db_session):
     try:
         resp = test_client.post(
             "/api/v1/auth/register",
-            json={"name": "Alice", "phone": "123", "email": "alice@test.com", "password": "pw"},
+            json={"name": "Alice", "phone": "123", "email": "alice@test.com", "password": "test-pw-123"},
         )
         assert resp.status_code == 200
 
         login_resp = test_client.post(
             "/api/v1/auth/login",
-            data={"username": "alice@test.com", "password": "pw"},
+            data={"username": "alice@test.com", "password": "test-pw-123"},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         assert login_resp.status_code == 200
@@ -47,11 +47,11 @@ def test_refresh_and_logout(test_client, db_session):
     try:
         test_client.post(
             "/api/v1/auth/register",
-            json={"name": "Bob", "phone": "999", "email": "bob@test.com", "password": "pw"},
+            json={"name": "Bob", "phone": "999", "email": "bob@test.com", "password": "test-pw-123"},
         )
         login_resp = test_client.post(
             "/api/v1/auth/login",
-            data={"username": "bob@test.com", "password": "pw"},
+            data={"username": "bob@test.com", "password": "test-pw-123"},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         tokens = login_resp.json()

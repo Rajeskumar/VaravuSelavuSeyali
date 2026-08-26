@@ -46,14 +46,12 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-0M1N9KSEW5"></script>
+    <!-- Google tag (gtag.js) — queue stub only; nothing is sent over the network from here.
+         The actual gtag.js script + 'config' call only happen after the visitor consents,
+         via utils/analyticsConsent.ts (src/components/common/ConsentBanner.tsx). -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      gtag('config', 'G-0M1N9KSEW5');
     </script>
     <!--
       Notice the use of %PUBLIC_URL% in the tags above.

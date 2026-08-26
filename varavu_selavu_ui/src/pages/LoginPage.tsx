@@ -5,8 +5,6 @@ import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
-import Checkbox from '@mui/material/Checkbox';
-import FormControlLabel from '@mui/material/FormControlLabel';
 import Link from '@mui/material/Link';
 import Divider from '@mui/material/Divider';
 import Backdrop from '@mui/material/Backdrop';
@@ -37,7 +35,6 @@ const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [remember, setRemember] = useState(false);
   const navigate = useNavigate();
   const googleDiv = useRef<HTMLDivElement>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -159,11 +156,6 @@ const LoginPage: React.FC = () => {
                 required
                 disabled={googleLoading || loading}
               />
-              <FormControlLabel
-                control={<Checkbox size="small" checked={remember} onChange={e => setRemember(e.target.checked)} />}
-                label="Remember me"
-                sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-              />
               <Button type="submit" variant="contained" fullWidth disabled={loading}>
                 {loading ? 'Logging in...' : 'Login'}
               </Button>
@@ -173,9 +165,9 @@ const LoginPage: React.FC = () => {
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', mt: 1 }}>
                 By logging in, you agree to our{' '}
-                <Link href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+                <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
                 {' '}and{' '}
-                <Link href={`${process.env.REACT_APP_API_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+                <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
               </Typography>
             </Box>
           </CardContent>

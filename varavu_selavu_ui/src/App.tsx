@@ -39,6 +39,10 @@ import RecurringPrompt from './components/expenses/RecurringPrompt';
 import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
 import JoinGroupPage from './pages/JoinGroupPage';
+import NotFoundPage from './pages/NotFoundPage';
+import ErrorBoundary from './components/common/ErrorBoundary';
+import ConsentBanner from './components/common/ConsentBanner';
+import { initAnalyticsFromStoredConsent } from './utils/analyticsConsent';
 import Box from '@mui/material/Box';
 import { HEADER_HEIGHT } from './components/layout/layoutConstants';
 
@@ -98,6 +102,10 @@ const AppContent: React.FC = () => {
   // Desktop-only header equivalent of the mobile Dashboard's TypeToLogBar (TrackSpense v3
   // Prototype) — same shared parsing/submit hook, just a different input/preview shell.
   const quickLog = useQuickLogBar();
+
+  React.useEffect(() => {
+    initAnalyticsFromStoredConsent();
+  }, []);
 
   React.useEffect(() => {
     const onStorage = () => setUser(localStorage.getItem('vs_user'));
@@ -334,6 +342,7 @@ const AppContent: React.FC = () => {
         </Box>
       )}
       <Box component="main" id="main-content">
+      <ErrorBoundary>
       <Routes>
         <Route path="/" element={<Root />} />
         <Route path="/login" element={<RequireGuest><LoginPage /></RequireGuest>} />
@@ -368,11 +377,14 @@ const AppContent: React.FC = () => {
         {/* TS-DES-202: /profile is no longer a primary nav destination — folds into /account's
             default Profile tab. Redirect shim so no existing bookmark/link 404s. */}
         <Route path="/profile" element={<Navigate to="/account" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </ErrorBoundary>
       </Box>
       {/* Recurring expenses prompt appears after login */}
       {user && <RecurringPrompt />}
       {user && <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />}
+      <ConsentBanner />
     </>
   );
 };

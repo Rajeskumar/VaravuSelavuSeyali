@@ -24,7 +24,7 @@ def _restore_auth_override(old_override):
         app.dependency_overrides[auth_required] = old_override
 
 
-def _register_and_login(test_client, email: str, password: str = "pw"):
+def _register_and_login(test_client, email: str, password: str = "test-pw-123"):
     test_client.post(
         "/api/v1/auth/register",
         json={"name": "User", "email": email, "password": password},
@@ -181,27 +181,27 @@ class TestPasswordResetVulnerabilityFix:
         old = _drop_auth_override()
         try:
             with patch("varavu_selavu_service.auth.routers._send_verification_email"):
-                _register_and_login(test_client, "victim@test.com", password="original-pw")
+                _register_and_login(test_client, "victim@test.com", password="original-pw-123")
 
             with patch("varavu_selavu_service.auth.routers._send_password_reset_email"):
                 # Old exploit payload — email + attacker-chosen new password, no token.
                 resp = test_client.post(
                     "/api/v1/auth/forgot-password",
-                    json={"email": "victim@test.com", "password": "attacker-chosen-pw"},
+                    json={"email": "victim@test.com", "password": "attacker-chosen-pw-123"},
                 )
             assert resp.status_code == 200  # still reports success (anti-enumeration)
 
             # The password must be UNCHANGED — the original still logs in.
             still_original = test_client.post(
                 "/api/v1/auth/login",
-                data={"username": "victim@test.com", "password": "original-pw"},
+                data={"username": "victim@test.com", "password": "original-pw-123"},
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             assert still_original.status_code == 200
 
             attacker_pw_rejected = test_client.post(
                 "/api/v1/auth/login",
-                data={"username": "victim@test.com", "password": "attacker-chosen-pw"},
+                data={"username": "victim@test.com", "password": "attacker-chosen-pw-123"},
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             assert attacker_pw_rejected.status_code == 401
@@ -220,7 +220,7 @@ class TestPasswordResetVulnerabilityFix:
         old = _drop_auth_override()
         try:
             with patch("varavu_selavu_service.auth.routers._send_verification_email"):
-                tokens = _register_and_login(test_client, "resetme@test.com", password="old-pw")
+                tokens = _register_and_login(test_client, "resetme@test.com", password="old-pw-12345")
             refresh_token = tokens["refresh_token"]
 
             captured = {}
@@ -231,20 +231,20 @@ class TestPasswordResetVulnerabilityFix:
 
             reset = test_client.post(
                 "/api/v1/auth/reset-password",
-                json={"token": captured["token"], "password": "new-pw"},
+                json={"token": captured["token"], "password": "new-pw-12345"},
             )
             assert reset.status_code == 200
 
             # Old password no longer works, new one does.
             old_pw = test_client.post(
                 "/api/v1/auth/login",
-                data={"username": "resetme@test.com", "password": "old-pw"},
+                data={"username": "resetme@test.com", "password": "old-pw-12345"},
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             assert old_pw.status_code == 401
             new_pw = test_client.post(
                 "/api/v1/auth/login",
-                data={"username": "resetme@test.com", "password": "new-pw"},
+                data={"username": "resetme@test.com", "password": "new-pw-12345"},
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             assert new_pw.status_code == 200
@@ -261,7 +261,7 @@ class TestPasswordResetVulnerabilityFix:
         old = _drop_auth_override()
         try:
             with patch("varavu_selavu_service.auth.routers._send_verification_email"):
-                _register_and_login(test_client, "onetimereset@test.com", password="old-pw")
+                _register_and_login(test_client, "onetimereset@test.com", password="old-pw-12345")
 
             captured = {}
             with patch("varavu_selavu_service.auth.routers._send_password_reset_email", side_effect=lambda email, token: captured.update(token=token)):
@@ -279,19 +279,19 @@ class TestPasswordResetVulnerabilityFix:
         old = _drop_auth_override()
         try:
             with patch("varavu_selavu_service.auth.routers._send_verification_email"):
-                _register_and_login(test_client, "expiredreset@test.com", password="old-pw")
+                _register_and_login(test_client, "expiredreset@test.com", password="old-pw-12345")
 
             captured = {}
             with patch("varavu_selavu_service.auth.routers._send_password_reset_email", side_effect=lambda email, token: captured.update(token=token)):
                 test_client.post("/api/v1/auth/forgot-password", json={"email": "expiredreset@test.com"})
 
             _backdate_token(db_session, "reset_password", by=timedelta(hours=2))
-            resp = test_client.post("/api/v1/auth/reset-password", json={"token": captured["token"], "password": "new-pw"})
+            resp = test_client.post("/api/v1/auth/reset-password", json={"token": captured["token"], "password": "new-pw-12345"})
             assert resp.status_code == 400
         finally:
             test_client.cookies.clear()
             _restore_auth_override(old)
 
     def test_reset_password_rejects_garbage_token(self, test_client, db_session):
-        resp = test_client.post("/api/v1/auth/reset-password", json={"token": "garbage", "password": "new-pw"})
+        resp = test_client.post("/api/v1/auth/reset-password", json={"token": "garbage", "password": "new-pw-12345"})
         assert resp.status_code == 400

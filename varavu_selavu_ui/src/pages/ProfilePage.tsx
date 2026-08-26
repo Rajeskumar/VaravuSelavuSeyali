@@ -162,9 +162,9 @@ const ProfilePage: React.FC = () => {
       <TagManagementSection />
       <Box sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
         <Typography variant="body2" color="text.secondary">
-          <Link href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+          <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
           {' '}•{' '}
-          <Link href={`${process.env.REACT_APP_API_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>
+          <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>
         </Typography>
       </Box>
       </motion.div>

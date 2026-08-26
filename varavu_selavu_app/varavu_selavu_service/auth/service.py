@@ -7,7 +7,7 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.models import User, Expense, GroupMember, RefreshToken, EmailToken
-from .security import hash_password, verify_password
+from .security import hash_password, verify_password, UNUSABLE_PASSWORD_HASH
 
 # Verification links are low-stakes (a stale one just means "request a new one"), so a
 # generous window avoids nagging a user who doesn't check email same-day. Reset links
@@ -56,8 +56,12 @@ class AuthService:
     def register_user(self, name: str, phone: Optional[str], email: str, password: str) -> bool:
         if self.get_user(email):
             return False
-        hashed = hash_password(password)
-        
+        # Google SSO creates accounts with password="" (there is no password to hash — the
+        # user authenticated via Google, not a credential we own). Storing a sentinel instead
+        # of hash_password("") means no candidate password can ever match this account until
+        # the user sets a real one via password reset.
+        hashed = hash_password(password) if password else UNUSABLE_PASSWORD_HASH
+
         db_user = User(
             id=uuid.uuid4(),
             email=email,
@@ -74,6 +78,10 @@ class AuthService:
             return False
 
     def authenticate_user(self, email: str, password: str) -> bool:
+        # Belt-and-suspenders on top of UNUSABLE_PASSWORD_HASH: an empty candidate must never
+        # authenticate anyone, regardless of what's stored.
+        if not password:
+            return False
         user = self.get_user(email)
         if not user:
             return False
@@ -85,7 +93,7 @@ class AuthService:
         )
         if stored is None:
             return False
-        return verify_password(password, stored) or stored == password
+        return verify_password(password, stored)
 
     def reset_password(self, email: str, password: str) -> bool:
         user = self.db.query(User).filter(User.email == email).first()

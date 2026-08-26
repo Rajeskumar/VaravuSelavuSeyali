@@ -68,13 +68,15 @@ class ExpenseService:
             "card_id": card_id,
         }
 
-    def delete_expense(self, row_id: Union[int, str]) -> Optional[Dict]:
+    def delete_expense(self, row_id: Union[int, str], user_id: str) -> Optional[Dict]:
         try:
             parsed_id = uuid.UUID(str(row_id))
         except ValueError:
             parsed_id = row_id # Fallback if someone passed an int ID before migrations
-        
-        expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.group_id.is_(None)).first()
+
+        expense = self.db.query(Expense).filter(
+            Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None)
+        ).first()
         if expense:
             deleted_data = {
                 "user_email": expense.user_email,

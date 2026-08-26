@@ -39,6 +39,13 @@ def assert_signing_secret_is_safe(env: str, secret: str) -> None:
         )
 
 
+# Not a valid bcrypt hash (bcrypt hashes always start with "$2"), so bcrypt.checkpw against
+# this raises ValueError for *any* candidate password, which verify_password below turns into
+# a plain `False`. Used for accounts (e.g. Google SSO) that were never given a real password,
+# so no candidate — including an empty string — can ever authenticate as them.
+UNUSABLE_PASSWORD_HASH = "!"
+
+
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 

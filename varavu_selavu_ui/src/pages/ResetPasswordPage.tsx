@@ -83,6 +83,8 @@ const ResetPasswordPage: React.FC = () => {
                       onChange={e => setPassword(e.target.value)}
                       required
                       disabled={loading}
+                      inputProps={{ minLength: 8 }}
+                      helperText="At least 8 characters"
                     />
                   </Grid>
                   <Grid size={12}>

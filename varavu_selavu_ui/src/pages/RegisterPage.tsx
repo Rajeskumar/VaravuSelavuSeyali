@@ -167,6 +167,8 @@ const RegisterPage: React.FC = () => {
                     onChange={e => setPassword(e.target.value)}
                     required
                     disabled={googleLoading || loading}
+                    inputProps={{ minLength: 8 }}
+                    helperText="At least 8 characters"
                   />
                 </Grid>
                 <Grid size={12}>
@@ -177,9 +179,9 @@ const RegisterPage: React.FC = () => {
                 <Grid size={12} sx={{ textAlign: 'center', mt: 2 }}>
                   <Typography variant="caption" color="text.secondary">
                     By registering, you agree to our{' '}
-                    <Link href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+                    <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
                     {' '}and{' '}
-                    <Link href={`${process.env.REACT_APP_API_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
+                    <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>.
                   </Typography>
                 </Grid>
               </Grid>

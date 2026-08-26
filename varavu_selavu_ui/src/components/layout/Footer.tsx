@@ -37,7 +37,7 @@ const Footer: React.FC = () => (
     </Typography>
     <Box sx={{ display: 'flex', gap: 2.5 }}>
       <Link
-        href={`${process.env.REACT_APP_API_URL || ''}/privacy-policy`}
+        href={`${process.env.REACT_APP_API_BASE_URL || ''}/privacy-policy`}
         target="_blank"
         rel="noopener noreferrer"
         variant="caption"
@@ -47,7 +47,7 @@ const Footer: React.FC = () => (
         Privacy
       </Link>
       <Link
-        href={`${process.env.REACT_APP_API_URL || ''}/terms-of-service`}
+        href={`${process.env.REACT_APP_API_BASE_URL || ''}/terms-of-service`}
         target="_blank"
         rel="noopener noreferrer"
         variant="caption"

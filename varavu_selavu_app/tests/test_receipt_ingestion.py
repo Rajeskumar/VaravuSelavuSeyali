@@ -29,7 +29,10 @@ def test_parse_endpoint(test_client):
     
     resp = test_client.post(
         "/api/v1/ingest/receipt/parse",
-        files={"file": ("r.txt", SAMPLE_TEXT.encode(), "text/plain")},
+        # Content-type must be one of ALLOWED_MIME — the mock engine decodes the body as
+        # text regardless of the declared type, so this only exercises the MIME allowlist,
+        # not real image parsing.
+        files={"file": ("r.txt", SAMPLE_TEXT.encode(), "image/png")},
     )
     assert resp.status_code == 200
     data = resp.json()
