@@ -101,7 +101,7 @@ class Settings(BaseSettings):
     # until the retrieval surfaces (filter + bulk apply) actually ship, since a tag field with
     # no working filter/bulk-apply is dead weight per the PRD's own §4.2 finding.
     # See docs/features/custom_tags/tags-prd-v0.2.0.md.
-    TAGS_ENABLED: bool = False
+    TAGS_ENABLED: bool = True
     TAG_MAX_PER_EXPENSE: int = 5
     TAG_MAX_PER_USER: int = 100
     TAG_BULK_MAX: int = 1000
