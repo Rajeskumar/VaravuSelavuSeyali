@@ -30,7 +30,14 @@ MAX_NOTES = 500
 def _strip_control_chars(value: str) -> str:
     # Drop C0/C1 control and format characters (Cc/Cf), which includes the
     # zero-width and bidi-override characters used to spoof display text.
-    return "".join(ch for ch in value if unicodedata.category(ch) not in ("Cc", "Cf"))
+    # Also drop lone/unpaired UTF-16 surrogates (Cs): JSON can carry a bare
+    # \uXXXX escape (a truncated emoji, corrupted paste, a client-side
+    # substring that split a surrogate pair) into a Python str just fine, but
+    # that str can never be encoded as UTF-8 — psycopg raises UnicodeEncodeError
+    # deep inside the DB write, well past any normal 422 validation path,
+    # surfacing as a bare 500 (confirmed: POST /recurring/upsert 500 with a
+    # merchant_name containing "\ud83d" with no matching low surrogate).
+    return "".join(ch for ch in value if unicodedata.category(ch) not in ("Cc", "Cf", "Cs"))
 
 
 def sanitize_text(value):

@@ -48,6 +48,15 @@ class TestSanitizeText:
         assert sanitize_text(None) is None
         assert sanitize_text(42) == 42
 
+    def test_strips_lone_surrogate(self):
+        """A bare \\uXXXX escape (truncated emoji, corrupted paste, a client-side
+        substring that split a surrogate pair) decodes into a valid Python str,
+        but one that can never be encoded as UTF-8 -- left in, it reaches the DB
+        write and blows up as an unhandled UnicodeEncodeError (bare 500) instead
+        of a clean 422, since it's syntactically valid at every validation step
+        before that. Reproduced live via POST /recurring/upsert."""
+        assert sanitize_text("Bad\ud83dName") == "BadName"
+
 
 class TestRequestModelSanitization:
     def test_expense_request_sanitizes_description_and_merchant(self):
