@@ -65,7 +65,15 @@ CategoryStr = Annotated[str, *_sanitized(MAX_CATEGORY)]
 NameStr = Annotated[str, *_sanitized(MAX_NAME)]
 DisplayNameStr = Annotated[str, *_sanitized(MAX_NAME)]
 
-OptionalNameStr = Annotated[Optional[str], *_sanitized(MAX_NAME)]
-OptionalDisplayNameStr = Annotated[Optional[str], *_sanitized(MAX_NAME)]
-OptionalMerchantStr = Annotated[Optional[str], *_sanitized(MAX_NAME)]
-OptionalNotesStr = Annotated[Optional[str], *_sanitized(MAX_NOTES)]
+# The validator/constraint must sit on the inner `str`, with `Optional[...]` wrapping the
+# whole annotated type -- NOT `Annotated[Optional[str], BeforeValidator(...), Field(max_length=...)]`.
+# Pydantic v2 applies a Field constraint that shares an Annotated slot with a BeforeValidator
+# to the validator's raw output rather than scoping it to just the `str` arm of the union, so
+# an explicit `null` (any cleared optional field, or any value round-tripped from a prior GET
+# response) crashes with a raw TypeError instead of the ordinary "None is a valid Optional[str]"
+# pass-through you get without a BeforeValidator in the chain. Confirmed live: this shape 500'd
+# POST /recurring/upsert on a template whose merchant_name was null.
+OptionalNameStr = Optional[Annotated[str, *_sanitized(MAX_NAME)]]
+OptionalDisplayNameStr = Optional[Annotated[str, *_sanitized(MAX_NAME)]]
+OptionalMerchantStr = Optional[Annotated[str, *_sanitized(MAX_NAME)]]
+OptionalNotesStr = Optional[Annotated[str, *_sanitized(MAX_NOTES)]]

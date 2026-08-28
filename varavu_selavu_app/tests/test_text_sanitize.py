@@ -108,3 +108,17 @@ class TestRequestModelSanitization:
     def test_over_long_group_name_is_rejected(self):
         with pytest.raises(ValidationError):
             CreateGroupRequest(name="x" * (MAX_NAME + 1))
+
+    def test_explicit_null_on_an_optional_sanitized_field_is_accepted(self):
+        """Regression: combining BeforeValidator with Field(max_length=...) on the same
+        Annotated[Optional[str], ...] slot made pydantic apply the length constraint to
+        the validator's raw output instead of scoping it to the `str` arm of the union --
+        an explicit JSON `null` (not just an omitted key) crashed with a raw TypeError
+        instead of validating as a normal None. Reproduced live via
+        POST /recurring/upsert with `"merchant_name": null`."""
+        req = ExpenseRequest(
+            user_id="u", cost=10.0, category="Food",
+            description="Dinner", date="01/15/2026",
+            merchant_name=None,
+        )
+        assert req.merchant_name is None
