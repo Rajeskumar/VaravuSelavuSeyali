@@ -15,7 +15,6 @@ from varavu_selavu_service.models.api_models import (
     ChatRequest,
     HealthResponse,
     FeatureFlagsResponse,
-    DashboardResponse,
     ExpenseCreatedResponse,
     ExpenseRow,
     AnalysisResponse,
@@ -44,6 +43,7 @@ from varavu_selavu_service.services.insights_aggregation_service import Insights
 from varavu_selavu_service.services.categorization_service import CategorizationService
 from varavu_selavu_service.services.recurring_service import RecurringService
 from varavu_selavu_service.core.config import Settings
+from varavu_selavu_service.core.upload_safety import content_type_matches
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.auth.routers import router as auth_router
@@ -425,15 +425,6 @@ def delete_expense(
     return {"success": True}
 
 
-@router.get("/dashboard", response_model=DashboardResponse, tags=["Dashboard"], summary="Basic dashboard metrics")
-def dashboard():
-    # Dummy dashboard data
-    return {
-        "total_expenses": 1234.56,
-        "total_categories": 12,
-        "months_tracked": 5
-    }
-
 # ---------------------- Analytics ---------------------- #
 
 @router.get("/analytics/changes", response_model=list[ChangeInsight], tags=["Analytics"], summary="Get spend change insights")
@@ -692,6 +683,14 @@ def parse_receipt(
     if len(data) > max_bytes:
         raise HTTPException(status_code=413, detail=f"File too large (max {settings.MAX_UPLOAD_MB} MB)")
 
+    # The Content-Type above is a client-supplied header; confirm the bytes agree with it
+    # before handing the payload to the OCR provider (security audit VS-14).
+    if not content_type_matches(content_type, data):
+        raise HTTPException(
+            status_code=415,
+            detail="File content does not match its declared type",
+        )
+
     return receipt_service.parse(
         data,
         content_type=content_type,
@@ -850,8 +849,12 @@ def update_expense_items(
     tags=["Models"],
     summary="List available LLM models",
 )
-def list_models():
-    """Return provider and available model ids based on environment."""
+def list_models(_: str = Depends(auth_required)):
+    """Return provider and available model ids based on environment.
+
+    Authenticated: the response enumerates which LLM providers have credentials configured,
+    and each call fans out to those providers' APIs — not something to expose anonymously.
+    """
     models_list = []
     
     # Try to load Gemini models
@@ -1877,6 +1880,7 @@ def bulk_remove_tags(
 def send_email_route(
     request: Request,
     data: SendEmailRequest,
+    user_id: str = Depends(auth_required),
 ):
     from varavu_selavu_service.services.email_service import send_email
     try:
@@ -1891,4 +1895,6 @@ def send_email_route(
     except Exception as exc:
         import logging
         logging.getLogger("varavu_selavu_service.api.routes").error(f"Error in send_email_route: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {exc}")
+        # Fixed message: the exception text here is raw SMTP//transport detail (server names,
+        # auth failures) and has no business reaching the caller.
+        raise HTTPException(status_code=500, detail="Failed to send email")

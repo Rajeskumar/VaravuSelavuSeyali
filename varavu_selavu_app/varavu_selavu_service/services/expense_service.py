@@ -3,6 +3,8 @@ from datetime import date as date_type
 from datetime import datetime, timezone
 import uuid
 
+from fastapi import HTTPException
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.models import Expense
@@ -167,6 +169,13 @@ class ExpenseService:
             parsed_id = row_id
         
         expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None)).first()
+        if expense is None:
+            # The scoped lookup missing means the expense does not exist, belongs to someone
+            # else, or is a group expense. Previously this fell straight through to the return
+            # below and reported success while writing nothing -- a silent data loss that made
+            # a real bug indistinguishable from a successful save. Matches delete_expense.
+            raise HTTPException(status_code=404, detail="Expense not found")
+
         old_expense_data = None
         if expense:
             old_expense_data = {

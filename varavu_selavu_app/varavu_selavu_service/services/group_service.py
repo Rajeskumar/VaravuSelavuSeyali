@@ -137,6 +137,22 @@ class GroupService:
             "members": [self._member_dto(m) for m in members],
         }
 
+    def require_verified_email(self, email: str) -> None:
+        """Group actions require a verified address (security audit VS-07).
+
+        Verification tokens were minted and emailed but never checked, so anyone could sign
+        up under someone else's address and then appear in that person's groups, expense
+        splits and balance sheets as them. The gate is deliberately scoped to the *group*
+        surface: personal expense tracking stays fully usable while unverified, so this
+        cannot lock an existing solo user out of their own data.
+        """
+        user = self.db.query(User).filter(User.email == email).first()
+        if user is None or not user.email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Verify your email address before joining or creating groups",
+            )
+
     # ------------------------------------------------------------------
     # Groups CRUD
     # ------------------------------------------------------------------
@@ -149,6 +165,8 @@ class GroupService:
         cover: Optional[str] = None,
         currency: str = "USD",
     ) -> Dict:
+        self.require_verified_email(creator_email)
+
         if group_type not in _VALID_GROUP_TYPES:
             raise HTTPException(status_code=400, detail=f"Invalid group_type: {group_type}")
 
@@ -351,6 +369,11 @@ class GroupService:
             # group_members.user_email is a FK to users.email — must correspond to a
             # real registered user, otherwise this is a placeholder (name-only, §3.1/E3).
             registered_user = self.db.query(User).filter(User.email == member_email).first()
+            if registered_user is not None and not registered_user.email_verified:
+                raise HTTPException(
+                    status_code=400,
+                    detail="That user has not verified their email address yet",
+                )
             if registered_user is None:
                 raise HTTPException(
                     status_code=400,
@@ -447,6 +470,21 @@ class GroupService:
         if member is None:
             raise HTTPException(status_code=404, detail="Member not found")
 
+        # An invite may only ever be minted for a *vacant placeholder* seat — one added by
+        # display_name only, which `add_member` creates as status="invited" with no
+        # user_email. Without this guard any member could mint an invite for a seat someone
+        # is currently sitting in, and `accept_invite` would then reassign that seat (role
+        # and all) to whoever redeemed the token: an ordinary member could hand the group
+        # admin's seat to an outside account and lock the real owner out of their own group,
+        # inheriting their splits and balance history. Seats that are "active" (a real user
+        # is in them) or "left" (a departed member whose historical splits still hang off the
+        # seat) are therefore never invitable.
+        if member.status != "invited" or member.user_email is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This member seat is already claimed — invites can only be created for a pending placeholder member",
+            )
+
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now(timezone.utc) + timedelta(days=_INVITE_TTL_DAYS)
 
@@ -468,6 +506,8 @@ class GroupService:
         }
 
     def accept_invite(self, token: str, acceptor_email: str) -> Dict:
+        self.require_verified_email(acceptor_email)
+
         invite = self.db.query(GroupInvitation).filter(GroupInvitation.token == token).first()
         if invite is None:
             raise HTTPException(status_code=404, detail="Invite not found")
@@ -494,6 +534,25 @@ class GroupService:
         member = self.db.query(GroupMember).filter(GroupMember.id == invite.member_id).first()
         if member is None:
             raise HTTPException(status_code=404, detail="Member seat no longer exists")
+
+        # Re-check the seat at redemption, not just at mint time: an invite is long-lived
+        # (see _INVITE_TTL_DAYS), so the seat it points at may have been claimed by someone
+        # else in the meantime. Redeeming then would silently evict whoever is now in it.
+        if member.status != "invited" or member.user_email is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This member seat has already been claimed",
+            )
+
+        # When an invite was addressed to a specific person, only that person may redeem it —
+        # a forwarded or intercepted link must not let a third party take the seat. Invites
+        # for anonymous placeholder seats carry no invited_email and stay freely shareable,
+        # which is the flow the join-link UX is built on.
+        if invite.invited_email and invite.invited_email != acceptor_email:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This invite was issued to a different email address",
+            )
 
         member.user_email = acceptor_email
         member.status = "active"

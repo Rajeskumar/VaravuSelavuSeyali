@@ -307,32 +307,19 @@ class TestRefreshRotation:
 
 
 class TestLegacySessionExchange:
-    def test_localstorage_refresh_token_exchanges_for_cookies(self, test_client, registered):
+    """The one-time /auth/session migration endpoint was removed (security audit VS-06).
+
+    It accepted any signed, unexpired refresh token with an untracked `jti` and minted a
+    brand-new session family for it — a standing bypass of the rotation/revocation design
+    for the sake of a migration that is long finished. This asserts it stays gone.
+    """
+
+    def test_legacy_session_endpoint_no_longer_exists(self, test_client, registered):
         legacy_refresh = _login(test_client).json()["refresh_token"]
         test_client.cookies.clear()
 
         res = test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh})
-        assert res.status_code == 200, res.text
-        assert ACCESS_COOKIE in {c.name for c in res.cookies.jar}
-
-    def test_exchange_reuse_within_grace_period_is_allowed(self, test_client, registered):
-        """Same grace-period leniency as ordinary rotation — see
-        AuthService.exchange_legacy_refresh_token."""
-        legacy_refresh = _login(test_client).json()["refresh_token"]
-        test_client.cookies.clear()
-
-        assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 200
-        assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 200
-
-    def test_exchange_reuse_outside_grace_period_is_rejected(self, test_client, db_session, registered):
-        legacy_refresh = _login(test_client).json()["refresh_token"]
-        test_client.cookies.clear()
-
-        assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 200
-
-        _backdate_latest_revocation(db_session, EMAIL, by=GRACE_PERIOD + timedelta(seconds=1))
-
-        assert test_client.post("/api/v1/auth/session", json={"refresh_token": legacy_refresh}).status_code == 401
+        assert res.status_code == 404
 
 
 class TestNoUserEnumeration:

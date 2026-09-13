@@ -23,16 +23,20 @@ def test_receipt_service_parse():
     assert result["items"][0]["item_name"] == "Sample Item"
 
 
+# Eight-byte PNG signature. Enough for sniff_media_type; the rest of the body is payload.
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
 def test_parse_endpoint(test_client):
     app = test_client.app
     app.dependency_overrides[get_receipt_service] = lambda: ReceiptService(engine="mock")
     
     resp = test_client.post(
         "/api/v1/ingest/receipt/parse",
-        # Content-type must be one of ALLOWED_MIME — the mock engine decodes the body as
-        # text regardless of the declared type, so this only exercises the MIME allowlist,
-        # not real image parsing.
-        files={"file": ("r.txt", SAMPLE_TEXT.encode(), "image/png")},
+        # Content-type must be one of ALLOWED_MIME *and* the bytes must actually match it
+        # (security audit VS-14), hence the real PNG signature. The mock engine decodes the
+        # body as text regardless of type, so the sample text still drives the parse.
+        files={"file": ("r.png", PNG_MAGIC + SAMPLE_TEXT.encode(), "image/png")},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -144,3 +148,32 @@ def test_normalize_purchased_at_uses_date_part_only():
     assert PostgresRepo._normalize_purchased_at(date(2026, 7, 15)) == noon_utc(2026, 7, 15)
     assert PostgresRepo._normalize_purchased_at(None) is None
     assert PostgresRepo._normalize_purchased_at("not-a-date") is None
+
+
+def test_parse_endpoint_rejects_bytes_that_do_not_match_declared_type(test_client):
+    """Security audit VS-14: Content-Type is a client-supplied header, so arbitrary bytes
+    must not pass simply by claiming to be a PNG."""
+    app = test_client.app
+    app.dependency_overrides[get_receipt_service] = lambda: ReceiptService(engine="mock")
+    try:
+        resp = test_client.post(
+            "/api/v1/ingest/receipt/parse",
+            files={"file": ("evil.png", b"MZ\x90\x00 not an image at all", "image/png")},
+        )
+        assert resp.status_code == 415
+        assert "does not match" in resp.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_receipt_service, None)
+
+
+def test_parse_endpoint_accepts_a_real_pdf(test_client):
+    app = test_client.app
+    app.dependency_overrides[get_receipt_service] = lambda: ReceiptService(engine="mock")
+    try:
+        resp = test_client.post(
+            "/api/v1/ingest/receipt/parse",
+            files={"file": ("r.pdf", b"%PDF-1.4\n" + SAMPLE_TEXT.encode(), "application/pdf")},
+        )
+        assert resp.status_code == 200
+    finally:
+        app.dependency_overrides.pop(get_receipt_service, None)

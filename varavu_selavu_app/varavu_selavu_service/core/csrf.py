@@ -32,7 +32,6 @@ EXEMPT_PATHS = frozenset(
         "/api/v1/auth/forgot-password",
         "/api/v1/auth/reset-password",
         "/api/v1/auth/verify-email",
-        "/api/v1/auth/session",
     }
 )
 

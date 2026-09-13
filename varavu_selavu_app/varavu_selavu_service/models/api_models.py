@@ -2,7 +2,9 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, EmailStr, Field, conint
+from typing import Annotated
+
+from pydantic import BaseModel, EmailStr, Field, StringConstraints, conint
 
 from varavu_selavu_service.core.money import (
     MAX_AMOUNT,
@@ -20,6 +22,18 @@ from varavu_selavu_service.core.text_sanitize import (
     OptionalNameStr,
     OptionalNotesStr,
 )
+
+# ISO-4217 alphabetic code. `currency` was a bare `str`, which meant two things: the value
+# is interpolated into the FX provider URL (FxRateService._fetch_rate), and an unrecognized
+# code makes that lookup fail and silently fall back to a 1:1 rate -- quietly mis-stating a
+# multi-currency group's balances. Security audit VS-15.
+CurrencyCode = Annotated[str, StringConstraints(pattern=r"^[A-Za-z]{3}$", strip_whitespace=True, to_upper=True)]
+
+# Venmo/PayPal/UPI handles are unbounded free text today. They decide where another member
+# sends money and are rendered to other people, so give them a conservative character set and
+# a ceiling. Security audit VS-16.
+PaymentHandle = Optional[Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._@+-]{1,64}$", strip_whitespace=True)]]
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -419,7 +433,7 @@ class CreateGroupRequest(BaseModel):
     name: NameStr
     group_type: str = "other"  # trip|home|couple|other
     cover: Optional[str] = None
-    currency: str = "USD"
+    currency: CurrencyCode = "USD"
 
 
 class UpdateGroupRequest(BaseModel):
@@ -428,7 +442,7 @@ class UpdateGroupRequest(BaseModel):
     cover: Optional[str] = None
     simplify_debts: Optional[bool] = None
     default_split: Optional["GroupSplitConfig"] = None
-    currency: Optional[str] = None
+    currency: Optional[CurrencyCode] = None
 
 
 class MemberDTO(BaseModel):
@@ -443,7 +457,7 @@ class GroupSummary(BaseModel):
     group_id: str
     name: str
     group_type: str
-    currency: str = "USD"
+    currency: CurrencyCode = "USD"
     member_count: int
     my_balance: float = 0.0
     status: str
@@ -554,7 +568,7 @@ class GroupExpenseRequest(BaseModel):
     split: GroupSplitConfig
     # TS-GRP-131: currency this expense was actually paid in. None/omitted means
     # "same as the group's currency" (the common case — no FX lookup needed).
-    currency: Optional[str] = None
+    currency: Optional[CurrencyCode] = None
     # TS-CARD-114: same optional held-card attribution as personal ExpenseRequest.card_id —
     # group expenses use full-replace here too (no separate association model needed for a
     # single nullable value the way tags needed one for a many-valued field).
@@ -591,7 +605,7 @@ class GroupExpenseWithItemsRequest(BaseModel):
     merchant_name: OptionalMerchantStr = None
     payers: List[GroupExpensePayerEntry]
     items: List[GroupExpenseItemEntry]
-    currency: Optional[str] = None
+    currency: Optional[CurrencyCode] = None
     # TS-CARD-114: same optional held-card attribution as GroupExpenseRequest.card_id.
     card_id: Optional[str] = None
 
@@ -625,7 +639,7 @@ class GroupExpenseRow(BaseModel):
     # who's involved directly on the expense, and lets Edit reconstruct the real current split
     # instead of resetting to an equal-split guess.
     splits: List[ExpenseSplitItem] = []
-    currency: Optional[str] = None
+    currency: Optional[CurrencyCode] = None
     fx_rate_to_group_currency: Optional[float] = None
     split_type: Optional[str] = None
     # TS-TAG-103 — filtered to the caller (PRD §9.2, load-bearing): a tag applied to a shared
@@ -655,9 +669,9 @@ class MemberBalance(BaseModel):
     net: float
     # TS-GRP-130: only populated for registered members, so the web/mobile
     # SettleUpDialog can offer a payment deep-link button.
-    venmo_handle: Optional[str] = None
-    paypal_handle: Optional[str] = None
-    upi_id: Optional[str] = None
+    venmo_handle: PaymentHandle = None
+    paypal_handle: PaymentHandle = None
+    upi_id: PaymentHandle = None
 
 
 class BalanceTransfer(BaseModel):
@@ -776,15 +790,15 @@ class SettleExpenseShareRequest(BaseModel):
 # ---------------------- Payment deep links (TS-GRP-130) ---------------------- #
 
 class PaymentHandlesDTO(BaseModel):
-    venmo_handle: Optional[str] = None
-    paypal_handle: Optional[str] = None
-    upi_id: Optional[str] = None
+    venmo_handle: PaymentHandle = None
+    paypal_handle: PaymentHandle = None
+    upi_id: PaymentHandle = None
 
 
 class UpdatePaymentHandlesRequest(BaseModel):
-    venmo_handle: Optional[str] = None
-    paypal_handle: Optional[str] = None
-    upi_id: Optional[str] = None
+    venmo_handle: PaymentHandle = None
+    paypal_handle: PaymentHandle = None
+    upi_id: PaymentHandle = None
 
 
 # ---------------------- AI split suggestions (TS-GRP-133) ---------------------- #
@@ -884,7 +898,7 @@ class CreateBudgetRequest(BaseModel):
     target_type: BudgetTargetType
     category: Optional[CategoryStr] = None
     amount: MoneyAmount
-    currency: str = "USD"
+    currency: CurrencyCode = "USD"
     rollover: bool = False
     alert_thresholds: List[int] = Field(default_factory=lambda: list(DEFAULT_ALERT_THRESHOLDS))
 

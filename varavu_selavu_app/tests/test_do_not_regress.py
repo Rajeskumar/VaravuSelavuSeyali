@@ -11,7 +11,7 @@ import os
 import uuid
 
 import pytest
-from jose import jwt
+import jwt
 
 from varavu_selavu_service.auth.cookies import CSRF_HEADER
 from varavu_selavu_service.auth.security import ALGORITHM, auth_required, create_access_token
@@ -47,7 +47,7 @@ def real_auth(test_client):
 
 
 def _forge_alg_none_token(email: str) -> str:
-    """Hand-rolled because python-jose refuses to *encode* alg:none — which is
+    """Hand-rolled because the JWT library refuses to *encode* alg:none — which is
     the point: the attacker's tooling has no such scruples."""
 
     def b64(obj: dict) -> str:

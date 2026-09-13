@@ -7,8 +7,12 @@ WORKDIR /app
 # Copy the Poetry files
 COPY pyproject.toml poetry.lock /app/
 
-# Install Poetry
-RUN pip install poetry && poetry config virtualenvs.create false && poetry install
+# Install Poetry. `--only main` keeps the test/dev toolchain (pytest, testing-postgresql)
+# out of the runtime image: it is not needed to serve traffic and only widens the image's
+# dependency surface. `--no-root` because package-mode is off -- the app is copied in below,
+# not pip-installed.
+RUN pip install poetry && poetry config virtualenvs.create false \
+    && poetry install --only main --no-root
 
 # Copy the application code
 COPY . /app

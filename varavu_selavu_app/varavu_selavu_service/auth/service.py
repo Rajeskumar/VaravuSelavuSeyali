@@ -67,7 +67,11 @@ class AuthService:
             email=email,
             name=name,
             phone=phone,
-            password_hash=hashed
+            password_hash=hashed,
+            # Explicit rather than relying on the column default: a new account is unverified
+            # until it redeems its emailed token, and group actions now depend on this flag
+            # (GroupService.require_verified_email), so it should not be left implicit.
+            email_verified=False,
         )
         try:
             self.db.add(db_user)
@@ -290,47 +294,6 @@ class AuthService:
             self.db.commit()
 
         return row.family_id
-
-    def exchange_legacy_refresh_token(self, jti: uuid.UUID, user_email: str, expires_at: datetime) -> uuid.UUID:
-        """One-time upgrade path for sessions that predate this table (P0-1 migration): unlike
-        `rotate_refresh_token`, an unknown `jti` here is the *expected* case — the token was
-        minted before refresh-token tracking existed, not a sign of forgery (its signature
-        already proved authenticity via `decode_token` before this is called). Registers the
-        legacy token as pre-spent (it authorizes exactly one exchange) and starts a fresh
-        family for the cookie-based session that replaces it. A second exchange attempt with
-        the same legacy token follows the identical reuse/grace-period rule as normal rotation.
-
-        A `jti` that turns out to *already* be tracked (e.g. a client calling this endpoint
-        with a token straight from `/login`, not an actually-legacy one — not a real-world
-        path, but not forbidden either) is handled too: if it was never used, it's simply spent
-        under its existing family, same as any other one-time exchange; if it was already used,
-        the normal reuse/grace-period rule applies.
-        """
-        invalid = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-        now = datetime.now(timezone.utc)
-
-        row = self.db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
-        if row is not None:
-            if row.revoked_at is None:
-                row.revoked_at = now
-                row.revoked_reason = "exchanged"
-                self.db.commit()
-                return row.family_id
-            if self._family_hard_killed(row.family_id) or not self._is_reuse_within_grace(row, now):
-                self.revoke_family(row.family_id, reason="reuse_detected")
-                raise invalid
-            return row.family_id
-
-        # Genuinely unknown — the expected case for a real pre-migration token: mint a new
-        # family, and record this token as already-exchanged (it authorizes exactly one
-        # exchange, never rotates further under its own jti).
-        family_id = uuid.uuid4()
-        self.db.add(RefreshToken(
-            jti=jti, family_id=family_id, user_email=user_email,
-            expires_at=expires_at, revoked_at=now, revoked_reason="exchanged",
-        ))
-        self.db.commit()
-        return family_id
 
     def revoke_family(self, family_id: uuid.UUID, reason: str = "logout") -> None:
         self.db.query(RefreshToken).filter(

@@ -10,10 +10,14 @@ import PageContainer from '../components/layout/PageContainer';
 
 export const PENDING_INVITE_KEY = 'vs_pending_invite_token';
 
+// 409 now covers two cases — the acceptor is already in the group, and the seat the invite
+// points at was claimed by someone else before this link was opened — so the copy has to fit
+// both. 403 means the invite was addressed to a different email than the one signed in.
 const STATUS_MESSAGES: Record<number, string> = {
+  403: 'This invite was sent to a different email address. Sign in with that address to join.',
   404: 'This invite link is invalid.',
   410: 'This invite has expired or already been used.',
-  409: "You're already a member of this group.",
+  409: "This invite can't be used — you're already in this group, or someone else has already taken this spot.",
 };
 
 const JoinGroupPage: React.FC = () => {

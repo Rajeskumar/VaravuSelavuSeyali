@@ -52,6 +52,19 @@ def override_auth():
 app.dependency_overrides[get_db] = override_get_db
 app.dependency_overrides[auth_required] = override_auth
 
+# Group actions require a verified email address (security audit VS-07,
+# GroupService.require_verified_email). Test users are created directly as User rows all over
+# this suite and would otherwise default to email_verified=False, making every group test
+# assert against an onboarding state no real group member is ever in. Default the flag to True
+# at insert time so the fixtures model a normal onboarded user; a test that specifically
+# exercises the unverified path sets email_verified=False explicitly and this leaves it alone
+# (see tests/test_email_verification.py).
+@event.listens_for(User, "before_insert", propagate=True)
+def _default_test_users_to_verified(mapper, connection, target):
+    if target.email_verified is None:
+        target.email_verified = True
+
+
 @pytest.fixture(scope="session")
 def test_app():
     return app

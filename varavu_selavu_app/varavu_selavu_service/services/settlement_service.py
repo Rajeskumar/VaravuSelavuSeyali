@@ -128,6 +128,19 @@ class SettlementService:
         )
         if row is None:
             raise HTTPException(status_code=404, detail="Settlement not found")
+
+        # Only the person who recorded the settlement, or a group admin, may delete it
+        # (security audit VS-08). Recording a payment on a shared ledger is a deliberate
+        # product choice, but membership alone must not let one member erase the record
+        # proving they were paid -- that is the receipt, and its subject is the one person
+        # with a motive to remove it.
+        actor = self.group_service.require_membership(group_id, actor_email)
+        if row.created_by != actor_email and actor.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the member who recorded this settlement, or a group admin, can delete it",
+            )
+
         self.db.delete(row)
         self.db.commit()
         

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.core.config import Settings
+from varavu_selavu_service.models.api_models import PaymentHandle
 from varavu_selavu_service.services.email_service import send_transactional_email
 
 router = APIRouter(tags=["Auth"])
@@ -58,11 +59,17 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(db)
 
 
+# bcrypt hashes at most 72 bytes and silently ignores the rest, so a longer passphrase is
+# only ever as strong as its first 72 bytes. Reject rather than quietly truncate, so nobody
+# believes they have more entropy than they do. Security audit VS-16.
+MAX_PASSWORD_BYTES = 72
+
+
 class RegisterRequest(BaseModel):
     name: str
     phone: Optional[str] = None
     email: EmailStr
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=8, max_length=MAX_PASSWORD_BYTES)
 
 
 class TokenResponse(BaseModel):
@@ -91,7 +98,7 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    password: str = Field(min_length=8)
+    password: str = Field(min_length=8, max_length=MAX_PASSWORD_BYTES)
 
 
 class VerifyEmailRequest(BaseModel):
@@ -110,8 +117,7 @@ def _issue_session(
 
     `family_id=None` starts a brand-new family (login, Google login, a legacy-session
     exchange's replacement token) — pass the family_id returned by
-    `AuthService.rotate_refresh_token`/`exchange_legacy_refresh_token` to continue an existing
-    one instead (refresh). `jti` lets a caller that already generated one (to pass into
+    `AuthService.rotate_refresh_token` to continue an existing one instead (refresh). `jti` lets a caller that already generated one (to pass into
     `rotate_refresh_token` for `replaced_by` tracking) reuse it here instead of minting a
     second, mismatched one.
     """
@@ -256,36 +262,6 @@ def logout(
     return {"success": True}
 
 
-@router.post("/session", response_model=TokenResponse)
-@limiter.limit("10/minute")
-def exchange_session(
-    request: Request,
-    response: Response,
-    data: RefreshRequest | None = None,
-    auth: AuthService = Depends(get_auth_service),
-):
-    """One-time migration for sessions created before cookies existed (P0-1).
-
-    The web client posts the refresh token it still holds in localStorage; we
-    validate it, issue cookies, and it clears localStorage. Remove this endpoint
-    once refresh-token lifetimes guarantee no legacy sessions remain.
-    """
-    presented = data.refresh_token if data else None
-    if not presented:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-
-    payload = decode_token(presented, "refresh")
-    email = payload.get("sub")
-    legacy_jti = uuid.UUID(payload["jti"])
-    legacy_expires_at = datetime.fromtimestamp(payload["exp"], tz=timezone.utc)
-
-    # Same reuse/grace-period rule as normal rotation, except an unknown jti here is the
-    # *expected* case (predates refresh-token tracking), not a sign of forgery. See
-    # AuthService.exchange_legacy_refresh_token.
-    family_id = auth.exchange_legacy_refresh_token(legacy_jti, email, legacy_expires_at)
-    return _issue_session(response, auth, email, family_id=family_id)
-
-
 @router.get("/me")
 def me(request: Request, user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
     """Also echoes the current `vs_csrf` cookie value in the body.
@@ -352,9 +328,11 @@ class UpdateProfileRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
     address: str | None = None
-    venmo_handle: str | None = None
-    paypal_handle: str | None = None
-    upi_id: str | None = None
+    # Constrained shape + ceiling: these decide where another member sends money and are
+    # rendered to other people. Security audit VS-16.
+    venmo_handle: PaymentHandle = None
+    paypal_handle: PaymentHandle = None
+    upi_id: PaymentHandle = None
 
 
 def _profile_dto(user: str, payload: Optional[UpdateProfileRequest], data: dict) -> dict:

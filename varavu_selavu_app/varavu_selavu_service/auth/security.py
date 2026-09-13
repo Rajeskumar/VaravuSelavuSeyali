@@ -5,7 +5,8 @@ from typing import Optional
 import bcrypt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 
 from varavu_selavu_service.core.config import Settings
 
@@ -85,8 +86,11 @@ def create_refresh_token(data: dict, expires_minutes: Optional[int] = None) -> s
 
 def decode_token(token: str, token_type: str) -> dict:
     try:
+        # `algorithms` is an allow-list, not a hint: it is what stops an attacker presenting a
+        # token whose own header claims alg:none (or an asymmetric alg, turning a public key
+        # into a signing key). Never widen it, and never read the algorithm off the token.
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGORITHM])
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     if payload.get("type") != token_type:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
