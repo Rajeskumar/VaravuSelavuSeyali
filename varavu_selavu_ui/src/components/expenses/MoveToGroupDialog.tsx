@@ -74,7 +74,9 @@ const MoveToGroupDialog: React.FC<MoveToGroupDialogProps> = ({ open, expenseId, 
       });
       onSuccess();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to move expense to group.');
+      // A non-ApiError means the request never got a response (offline, blocked, timed out) —
+      // say that, rather than implying the server rejected the move.
+      setError(e instanceof ApiError ? e.message : "Couldn't reach TrackSpense, so the expense wasn't moved. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }

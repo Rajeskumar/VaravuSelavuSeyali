@@ -9,6 +9,9 @@ export interface QuickLogParsed {
   groupId: string | null;
   groupName: string | null;
   personName: string | null;
+  /** The text explicitly asks to split ("split with …") — when no group matched, callers must
+   * not silently log it as a personal expense. */
+  splitRequested: boolean;
   category: string;
   description: string;
 }
@@ -32,7 +35,12 @@ export function parseQuickLog(text: string, groups: QuickLogGroupLike[]): QuickL
   const merchant = merchantMatch ? merchantMatch[1].trim() : null;
 
   const lower = text.toLowerCase();
-  const matchedGroup = groups.find((g) => g.name.trim() && lower.includes(g.name.toLowerCase())) || null;
+  // Longest name first, so "Weekend Trip" wins over a separate "Trip" group when both appear.
+  const matchedGroup =
+    [...groups]
+      .sort((a, b) => b.name.trim().length - a.name.trim().length)
+      .find((g) => g.name.trim() && lower.includes(g.name.trim().toLowerCase())) || null;
+  const splitRequested = /\bsplit\b/i.test(text);
 
   let personName: string | null = null;
   if (!matchedGroup) {
@@ -54,6 +62,7 @@ export function parseQuickLog(text: string, groups: QuickLogGroupLike[]): QuickL
     groupId: matchedGroup?.group_id ?? null,
     groupName: matchedGroup?.name ?? null,
     personName,
+    splitRequested,
     category,
     description,
   };

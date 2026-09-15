@@ -20,6 +20,7 @@ export const cerebro = {
   textSecondary: '#5B6172',
   textMuted: '#8B909E',
   surfaceBg: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
   surfaceBorder: 'rgba(0,0,0,0.08)',
   surfaceBorderStrong: 'rgba(0,0,0,0.15)',
   violetAccentHex: '#5E48C8',
@@ -34,6 +35,10 @@ export const cerebro = {
   textSecondaryDark: '#9aa0af',
   textMutedDark: '#6b7080',
   surfaceBgDark: 'rgba(255,255,255,0.03)',
+  // Opaque counterpart for floating surfaces (dialogs, menus, dropdowns). surfaceBgDark is a
+  // 3%-white wash meant for flat cards sitting on the ink canvas; on a dialog it let the page
+  // underneath show straight through the form.
+  surfaceElevatedDark: '#14151C',
   surfaceBorderDark: 'rgba(255,255,255,0.1)',
   surfaceBorderStrongDark: 'rgba(255,255,255,0.15)',
   violetAccentHexDark: '#9C93FF',
@@ -66,6 +71,7 @@ export function cerebroTokens(mode: PaletteMode) {
     textSecondary: isDark ? cerebro.textSecondaryDark : cerebro.textSecondary,
     textMuted: isDark ? cerebro.textMutedDark : cerebro.textMuted,
     surfaceBg: isDark ? cerebro.surfaceBgDark : cerebro.surfaceBg,
+    surfaceElevated: isDark ? cerebro.surfaceElevatedDark : cerebro.surfaceElevated,
     surfaceBorder: isDark ? cerebro.surfaceBorderDark : cerebro.surfaceBorder,
     surfaceBorderStrong: isDark ? cerebro.surfaceBorderStrongDark : cerebro.surfaceBorderStrong,
     violetAccentHex: isDark ? cerebro.violetAccentHexDark : cerebro.violetAccentHex,
@@ -244,6 +250,22 @@ export function getTheme(mode: PaletteMode = 'dark'): Theme {
             backgroundImage: 'none',
             border: `1px solid ${t.surfaceBorder}`,
           },
+        },
+      },
+      // Floating surfaces must be opaque — see surfaceElevatedDark.
+      MuiDialog: {
+        styleOverrides: {
+          paper: { backgroundColor: t.surfaceElevated },
+        },
+      },
+      MuiPopover: {
+        styleOverrides: {
+          paper: { backgroundColor: t.surfaceElevated },
+        },
+      },
+      MuiAutocomplete: {
+        styleOverrides: {
+          paper: { backgroundColor: t.surfaceElevated },
         },
       },
       MuiCard: {

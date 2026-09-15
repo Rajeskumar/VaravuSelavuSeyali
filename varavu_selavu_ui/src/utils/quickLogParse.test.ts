@@ -48,3 +48,32 @@ describe('parseQuickLog', () => {
     expect(parsed!.category).toBe('General');
   });
 });
+
+
+describe('parseQuickLog split intent', () => {
+  it('matches a multi-word group name and flags the split request', () => {
+    const groups = [{ group_id: 'g-ux', name: 'UX Audit Test' }];
+    const parsed = parseQuickLog('UX audit group test 20 at UX Test Store split with UX Audit Test', groups);
+    expect(parsed!.groupId).toBe('g-ux');
+    expect(parsed!.merchant).toBe('UX Test Store');
+    expect(parsed!.splitRequested).toBe(true);
+  });
+
+  it('flags an unmatched split so callers do not log it as personal', () => {
+    const parsed = parseQuickLog('pizza 30 split with Nonexistent Group', GROUPS);
+    expect(parsed!.groupId).toBeNull();
+    expect(parsed!.splitRequested).toBe(true);
+  });
+
+  it('does not flag a plain personal entry', () => {
+    expect(parseQuickLog('coffee 6.75 at Blue Bottle', GROUPS)!.splitRequested).toBe(false);
+  });
+
+  it('prefers the longest matching group name', () => {
+    const groups = [
+      { group_id: 'g-trip', name: 'Trip' },
+      { group_id: 'g-weekend', name: 'Weekend Trip' },
+    ];
+    expect(parseQuickLog('gas 40 split with weekend trip', groups)!.groupId).toBe('g-weekend');
+  });
+});

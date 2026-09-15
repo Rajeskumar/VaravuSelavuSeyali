@@ -25,6 +25,7 @@ import { useTagsEnabled } from '../../hooks/useTagsEnabled';
 import { useCardCoachEnabled } from '../../hooks/useCardCoachEnabled';
 
 export interface ExpenseDetailForm {
+  description: string;
   merchantName: string;
   category: string; // subcategory
   amount: string;
@@ -90,7 +91,11 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
   React.useEffect(() => {
     if (expense) {
       setForm({
-        merchantName: expense.merchantName || expense.description,
+        description: expense.description,
+        // Only the real merchant — never the description as a stand-in. Pre-filling the
+        // description here used to get saved back as merchant_name on any edit (even a notes-only
+        // one), which then surfaced in Analysis as a "new merchant" the user never entered.
+        merchantName: expense.merchantName || '',
         category: expense.category,
         amount: Math.abs(expense.groupAmount ?? expense.amount).toFixed(2),
         notes: expense.notes || '',
@@ -215,10 +220,18 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <TextField
-          label="Merchant"
+          label="Description"
+          fullWidth
+          value={form.description}
+          onChange={(e) => setForm({ ...form, description: e.target.value })}
+        />
+        <TextField
+          label="Merchant (optional)"
           fullWidth
           value={form.merchantName}
           onChange={(e) => setForm({ ...form, merchantName: e.target.value })}
+          placeholder="Merchant not provided"
+          InputLabelProps={{ shrink: true }}
         />
         <CategoryPickerField
           mainCategory={findMainCategory(form.category)}

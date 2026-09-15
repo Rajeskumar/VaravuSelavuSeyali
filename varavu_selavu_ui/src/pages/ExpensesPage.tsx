@@ -113,6 +113,7 @@ const ExpensesPage: React.FC = () => {
       splitType: e.split_type,
       tags: e.tags,
       card: e.card,
+      notes: e.notes || undefined,
     }));
 
     let result: FeedExpense[];
@@ -133,6 +134,7 @@ const ExpensesPage: React.FC = () => {
         splitType: e.split_type,
         tags: e.tags,
         card: e.card,
+        notes: e.notes || undefined,
       }));
     } else {
       // combined
@@ -150,6 +152,7 @@ const ExpensesPage: React.FC = () => {
         splitType: e.split_type,
         tags: e.tags,
         card: e.card,
+        notes: e.notes || undefined,
       }));
       result = [...personalRows, ...groupRows];
     }
@@ -226,6 +229,9 @@ const ExpensesPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['expenses', user] });
     queryClient.invalidateQueries({ queryKey: ['expenses-full-for-combined', user] });
     queryClient.invalidateQueries({ queryKey: ['all-group-expenses'] });
+    // An edit's tag_names can create brand-new tags server-side — without this the Filter by
+    // tag list kept showing the pre-save set until a full reload.
+    queryClient.invalidateQueries({ queryKey: ['tags'] });
   };
 
   const handleDeletePersonal = async (row_id: number) => {
@@ -314,18 +320,22 @@ const ExpensesPage: React.FC = () => {
     setDetailSaving(true);
     try {
       const amount = parseFloat(patch.amount) || 0;
-      // The detail sheet edits merchant/category/amount/date/notes — the underlying
-      // `description` field is preserved as-is rather than overwritten with the merchant
-      // name, so a personal expense's distinct description ("Coffee run") isn't clobbered
-      // just because its merchant field was edited ("Starbucks"). `patch.date` comes back
+      // The detail sheet edits description and merchant as separate fields, so a personal
+      // expense's distinct description ("Coffee run") isn't clobbered just because its merchant
+      // field was edited ("Starbucks"), and a blank merchant stays blank rather than inheriting
+      // the description. A description cleared to empty falls back to the stored one, since the
+      // API requires it. `patch.date` comes back
       // as ISO 'YYYY-MM-DD' (the native date input's shape) and needs converting to the
       // MM/DD/YYYY both update endpoints expect.
       const date = isoToMMDDYYYY(patch.date);
+      // Explicit null (not undefined) so clearing the field actually clears the stored note —
+      // an omitted `notes` means "leave unchanged" server-side.
+      const notes = patch.notes.trim() || null;
       if (expense.kind === 'personal') {
         await updateExpense(expense.id as number, {
           user_id: user,
           date,
-          description: expense.description,
+          description: patch.description.trim() || expense.description,
           category: patch.category,
           cost: amount,
           merchant_name: patch.merchantName || undefined,
@@ -334,6 +344,7 @@ const ExpensesPage: React.FC = () => {
           tag_names: patch.tagNames,
           // TS-CARD-114 — always-replace, same reasoning as tag_names above.
           card_id: patch.cardId,
+          notes,
         });
       } else if (expense.groupId) {
         // Phase-1 group expenses are always equal-split (AddExpenseForm never
@@ -351,7 +362,7 @@ const ExpensesPage: React.FC = () => {
           : [];
         await updateGroupExpense(expense.groupId, String(expense.id), {
           date,
-          description: expense.description,
+          description: patch.description.trim() || expense.description,
           category: patch.category,
           amount,
           merchant_name: patch.merchantName || undefined,
@@ -361,6 +372,7 @@ const ExpensesPage: React.FC = () => {
           // directly (no separate association model needed for a single nullable value),
           // so this is always-replace with no diff-and-sync step required.
           card_id: patch.cardId,
+          notes,
         });
         if (patch.tagNames) {
           // Group expenses have no tag_names write-through field (TS-TAG-104 is personal-only

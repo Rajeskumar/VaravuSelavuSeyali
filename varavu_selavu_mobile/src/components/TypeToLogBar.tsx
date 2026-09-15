@@ -37,7 +37,7 @@ export default function TypeToLogBar() {
           <Text style={styles.previewText} numberOfLines={1}>
             Will log: ${parsed.amount.toFixed(2)} · {parsed.category}
             {parsed.merchant ? ` · ${parsed.merchant}` : ''}
-            {parsed.groupName ? ` · ${parsed.groupName}` : ''}
+            {parsed.groupName ? ` · ${parsed.groupName}` : parsed.splitRequested ? ' · no matching group' : ''}
           </Text>
         </View>
       )}

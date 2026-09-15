@@ -1,6 +1,7 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { parseQuickLog, QuickLogParsed } from '../utils/quickLogParse';
-import { listGroups, GroupSummary } from '../api/groups';
+import { listGroups } from '../api/groups';
 import { useGroupsEnabled } from './useGroupsEnabled';
 import { useLogExpense } from './useLogExpense';
 import { useAsk } from '../context/AskContext';
@@ -36,23 +37,24 @@ export function useQuickLogBar(): QuickLogBarState {
   const { logPersonal, logToGroup } = useLogExpense();
   const { openAsk } = useAsk();
   const [text, setText] = React.useState('');
-  const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (!groupsEnabled) return;
-    let mounted = true;
-    (async () => {
-      try {
-        const g = await listGroups();
-        if (mounted) setGroups(g);
-      } catch {
-        if (mounted) setGroups([]);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [groupsEnabled]);
+  // Shares DashboardPage's ['groups', false] cache, so a group created mid-session (GroupsPage
+  // invalidates ['groups']) is matchable here right away. This used to be a one-shot fetch on
+  // mount — and since this hook lives in the always-mounted app header, any group created after
+  // login never matched, and "… split with <new group>" previewed and saved as Personal.
+  const { data: groups = [] } = useQuery({
+    queryKey: ['groups', false],
+    queryFn: () => listGroups(false),
+    enabled: groupsEnabled,
+  });
+
+  // Any edit supersedes the last submit's error (e.g. after fixing a mistyped group name).
+  const updateText = (next: string) => {
+    setText(next);
+    setError(null);
+  };
 
   const parsed = parseQuickLog(text, groups.map((g) => ({ group_id: g.group_id, name: g.name })));
   const matchedGroup = parsed?.groupId ? groups.find((g) => g.group_id === parsed.groupId) : undefined;
@@ -66,6 +68,11 @@ export function useQuickLogBar(): QuickLogBarState {
         openAsk(text.trim());
         setText('');
       }
+      return;
+    }
+    if (parsed.splitRequested && !parsed.groupId) {
+      // Never fall back to a personal expense when the text explicitly asked to split.
+      setError("Couldn't find a group with that name. Type the exact group name, or use + New expense to pick one.");
       return;
     }
     setSubmitting(true);
@@ -94,5 +101,5 @@ export function useQuickLogBar(): QuickLogBarState {
     }
   };
 
-  return { text, setText, parsed, memberCount, isQuestion, submitting, error, submit };
+  return { text, setText: updateText, parsed, memberCount, isQuestion, submitting, error, submit };
 }

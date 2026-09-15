@@ -45,6 +45,7 @@ from varavu_selavu_service.services.balance_service import BalanceService
 from varavu_selavu_service.services.card_service import CardService
 from varavu_selavu_service.services.expense_comment_service import ExpenseCommentService
 from varavu_selavu_service.services.friend_balance_service import FriendBalanceService
+from varavu_selavu_service.services.expense_service import NOTES_UNCHANGED
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.group_export_service import GroupExportService
 from varavu_selavu_service.services.group_service import GroupService
@@ -432,6 +433,7 @@ def create_group_expense(
         split_entries=[e.model_dump() for e in data.split.entries],
         currency=data.currency,
         card_id=data.card_id,
+        notes=data.notes,
     )
     analysis_service.invalidate_cache()
     eid = _to_uuid(row["row_id"])
@@ -603,6 +605,8 @@ def update_group_expense(
         split_entries=[e.model_dump() for e in data.split.entries],
         currency=data.currency,
         card_id=data.card_id,
+        # Omitted leaves the stored note alone; see GroupExpenseRequest.notes.
+        notes=data.notes if "notes" in data.model_fields_set else NOTES_UNCHANGED,
     )
     analysis_service.invalidate_cache()
     new_shares = {

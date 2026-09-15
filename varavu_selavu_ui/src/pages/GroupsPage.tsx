@@ -181,7 +181,8 @@ const GroupsPage: React.FC = () => {
       setMemberName('');
       setToast({ open: true, message: 'Member added', severity: 'success' });
     } catch (e) {
-      setMemberError(e instanceof ApiError ? e.message : 'Failed to add member');
+      // Non-ApiError = no response at all (offline, blocked, timed out), not a server rejection.
+      setMemberError(e instanceof ApiError ? e.message : "Couldn't reach TrackSpense, so the member wasn't added. Check your connection and try again.");
     } finally {
       setMemberSaving(false);
     }

@@ -14,6 +14,8 @@ export interface AddExpensePayload {
   // TS-CARD-114 — always-replace, same semantics as merchant_name (unlike tag_names, there's
   // no separate additive write path for this single value, so no omitted/empty distinction).
   card_id?: string | null;
+  // On PUT, omitted leaves the stored note unchanged; null clears it.
+  notes?: string | null;
 }
 
 export interface AddExpenseResponse {
@@ -42,6 +44,7 @@ export interface ExpenseRecord {
   split_type?: string | null;
   tags?: TagRefDTO[];
   card?: CardRefDTO | null;
+  notes?: string | null;
 }
 
 export interface ExpenseListResponse {

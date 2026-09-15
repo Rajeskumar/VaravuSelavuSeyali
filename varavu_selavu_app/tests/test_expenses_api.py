@@ -112,3 +112,39 @@ def test_update_expense_merchant_name(test_client, db_session):
 
     db_session.refresh(e)
     assert e.merchant_name == "NewMerchant"
+
+
+def test_update_expense_notes_round_trip(test_client, db_session):
+    """Notes saved from the edit sheet must come back on the next list — previously the field
+    was dropped by the request model, so a saved note reopened blank."""
+    e_id = uuid.uuid4()
+    db_session.add(Expense(
+        id=e_id,
+        user_email="test@user.com",
+        purchased_at=datetime(2024, 6, 1),
+        category_id="Dining out",
+        amount=84.2,
+        description="Dinner",
+    ))
+    db_session.commit()
+
+    base = {"user_id": "test@user.com", "cost": 84.2, "category": "Dining out", "description": "Dinner", "date": "06/01/2024"}
+    res = test_client.put(f"/api/v1/expenses/{e_id}", json={**base, "notes": "Team offsite"})
+    assert res.status_code == 200
+    assert res.json()["expense"]["notes"] == "Team offsite"
+
+    listed = next(i for i in test_client.get("/api/v1/expenses").json()["items"] if i["row_id"] == str(e_id))
+    assert listed["notes"] == "Team offsite"
+
+    # A client that doesn't send notes at all (mobile, AI chat tools) must not wipe the note.
+    res = test_client.put(f"/api/v1/expenses/{e_id}", json={**base, "cost": 90.0})
+    assert res.status_code == 200
+    stored = db_session.query(Expense).filter(Expense.id == e_id).first()
+    db_session.refresh(stored)
+    assert stored.notes == "Team offsite"
+
+    # An explicit null clears it.
+    res = test_client.put(f"/api/v1/expenses/{e_id}", json={**base, "notes": None})
+    assert res.status_code == 200
+    db_session.refresh(stored)
+    assert stored.notes is None

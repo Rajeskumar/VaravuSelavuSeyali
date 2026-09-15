@@ -40,7 +40,14 @@ const WillLogPreview: React.FC<WillLogPreviewProps> = ({ parsed, memberCount, su
         {chip('Amount', formatMoney(parsed.amount))}
         {parsed.merchant && chip('Merchant', parsed.merchant)}
         {chip('Category', parsed.category)}
-        {chip('Split', parsed.groupId ? `${parsed.groupName} · your share ${formatMoney(parsed.amount / Math.max(memberCount, 1))}` : 'Personal')}
+        {chip(
+          'Split',
+          parsed.groupId
+            ? `${parsed.groupName} · your share ${formatMoney(parsed.amount / Math.max(memberCount, 1))}`
+            : parsed.splitRequested
+              ? 'No matching group'
+              : 'Personal'
+        )}
       </Box>
       <Box
         onClick={onSubmit}

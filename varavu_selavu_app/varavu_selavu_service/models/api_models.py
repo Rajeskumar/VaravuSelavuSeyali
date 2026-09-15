@@ -61,6 +61,10 @@ class ExpenseRequest(BaseModel):
     # card attributed" rather than "leave unchanged" — no tag_names-style omitted/empty
     # distinction is needed since there's no separate additive write path for a single value.
     card_id: Optional[str] = None
+    # Free-text note. Like tag_names, an omitted field leaves existing notes unchanged on PUT
+    # (the route checks `model_fields_set`) while an explicit null or "" clears them — clients
+    # that have no notes field (mobile, AI chat tools) must not wipe a note on every edit.
+    notes: OptionalNotesStr = None
 
 
 class ReceiptParseResponse(BaseModel):
@@ -230,6 +234,7 @@ class Expense(BaseModel):
     # TS-CARD-114: which held card was actually used, if the user attributed one. None means
     # unattributed — CardRewardsEngine then falls back to the user's default held card.
     card: Optional[CardRefDTO] = None
+    notes: Optional[str] = None
 
 
 class ExpenseRow(Expense):
@@ -573,6 +578,8 @@ class GroupExpenseRequest(BaseModel):
     # group expenses use full-replace here too (no separate association model needed for a
     # single nullable value the way tags needed one for a many-valued field).
     card_id: Optional[str] = None
+    # Same omitted-means-unchanged semantics as personal ExpenseRequest.notes.
+    notes: OptionalNotesStr = None
 
 
 class MoveToGroupRequest(BaseModel):
@@ -651,6 +658,7 @@ class GroupExpenseRow(BaseModel):
     # and CardRewardsEngine's own group-expense buckets are already scoped to i_paid amounts
     # the current user actually paid — see AnalysisService.compute_category_merchant_buckets).
     card: Optional[CardRefDTO] = None
+    notes: Optional[str] = None
 
 
 class GroupExpenseCreatedResponse(BaseModel):

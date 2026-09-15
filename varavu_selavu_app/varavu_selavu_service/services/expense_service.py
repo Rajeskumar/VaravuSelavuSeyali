@@ -11,6 +11,12 @@ from varavu_selavu_service.db.models import Expense
 from varavu_selavu_service.services.tag_service import get_tags_for_expenses
 from varavu_selavu_service.services.card_service import get_card_refs_for_expenses
 
+# Sentinel for update_expense's `notes`: an omitted field must leave existing notes alone, since
+# not every client sends notes (the mobile app and the AI chat tools never do) and treating
+# "absent" as "clear" would silently wipe notes whenever one of them edits the expense.
+NOTES_UNCHANGED = object()
+
+
 class ExpenseService:
     def __init__(self, db: Session):
         self.db = db
@@ -18,6 +24,7 @@ class ExpenseService:
     def add_expense(
         self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float,
         merchant_name: Optional[str] = None, card_id: Optional[str] = None,
+        notes: Optional[str] = None,
     ) -> Dict:
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
@@ -40,6 +47,7 @@ class ExpenseService:
             description=description,
             merchant_name=merchant_name,
             card_id=uuid.UUID(str(card_id)) if card_id else None,
+            notes=notes,
         )
         self.db.add(db_expense)
         
@@ -68,6 +76,7 @@ class ExpenseService:
             "cost": cost,
             "merchant_name": merchant_name,
             "card_id": card_id,
+            "notes": notes,
         }
 
     def delete_expense(self, row_id: Union[int, str], user_id: str) -> Optional[Dict]:
@@ -134,6 +143,7 @@ class ExpenseService:
                 "category": r.category_id or "",
                 "cost": float(r.amount or 0),
                 "merchant_name": r.merchant_name,
+                "notes": r.notes,
                 "item_count": item_counts.get(str(r.id), 0),
                 "split_type": r.split_type,
                 "tags": tags_by_expense.get(str(r.id), []),
@@ -151,6 +161,7 @@ class ExpenseService:
         cost: float,
         merchant_name: Optional[str] = None,
         card_id: Optional[str] = None,
+        notes=NOTES_UNCHANGED,
     ) -> tuple[Dict, Optional[Dict]]:
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
@@ -189,6 +200,8 @@ class ExpenseService:
             expense.amount = cost
             expense.merchant_name = merchant_name
             expense.card_id = uuid.UUID(str(card_id)) if card_id else None
+            if notes is not NOTES_UNCHANGED:
+                expense.notes = notes
 
             from varavu_selavu_service.db.models import ExpenseItem
             items = self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == parsed_id).all()
@@ -225,4 +238,5 @@ class ExpenseService:
             "cost": cost,
             "merchant_name": merchant_name,
             "card_id": card_id,
+            "notes": expense.notes,
         }, old_expense_data
