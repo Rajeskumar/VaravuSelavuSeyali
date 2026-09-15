@@ -341,6 +341,13 @@ const AppContent: React.FC = () => {
           </Typography>
         </Box>
       )}
+      {user && quickLog.error && (
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'center', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="caption" color="error" role="alert">
+            {quickLog.error}
+          </Typography>
+        </Box>
+      )}
       <Box component="main" id="main-content">
       <ErrorBoundary>
       <Routes>

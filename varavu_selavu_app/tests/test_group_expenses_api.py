@@ -460,3 +460,28 @@ def test_create_itemized_group_expense(test_client, db_session):
     assert float(b_owed) == 22.22
     assert float(c_owed) == 22.22
 
+
+
+def test_group_expense_notes_round_trip_and_omitted_is_unchanged(test_client, db_session):
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
+    payload = {
+        "date": "01/15/2026",
+        "description": "Supplies",
+        "category": "Household supplies",
+        "amount": 20.00,
+        "payers": [{"member_id": m["test@user.com"], "amount_paid": 20.00}],
+        "split": {"type": "equal", "entries": [{"member_id": m["test@user.com"]}, {"member_id": m["b@test.com"]}]},
+    }
+    expense_id = test_client.post(f"/api/v1/groups/{group_id}/expenses", json=payload).json()["expense"]["row_id"]
+
+    res = test_client.put(f"/api/v1/groups/{group_id}/expenses/{expense_id}", json={**payload, "notes": "Paper towels"})
+    assert res.status_code == 200
+    assert res.json()["expense"]["notes"] == "Paper towels"
+
+    listed = test_client.get(f"/api/v1/groups/{group_id}/expenses").json()["items"]
+    assert next(i for i in listed if i["row_id"] == expense_id)["notes"] == "Paper towels"
+
+    # Edit without a notes field (e.g. the mobile edit modal) keeps the note.
+    res = test_client.put(f"/api/v1/groups/{group_id}/expenses/{expense_id}", json={**payload, "amount": 30.00, "payers": [{"member_id": m["test@user.com"], "amount_paid": 30.00}]})
+    assert res.status_code == 200
+    assert res.json()["expense"]["notes"] == "Paper towels"

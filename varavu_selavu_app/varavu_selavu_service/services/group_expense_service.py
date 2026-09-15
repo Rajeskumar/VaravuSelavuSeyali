@@ -12,6 +12,7 @@ from varavu_selavu_service.services.split_engine import SplitError, resolve_spli
 from varavu_selavu_service.services.item_split_engine import resolve_itemized_split
 from varavu_selavu_service.services.tag_service import get_tags_for_expenses
 from varavu_selavu_service.services.card_service import get_card_refs_for_expenses
+from varavu_selavu_service.services.expense_service import NOTES_UNCHANGED
 
 
 def _to_uuid(value) -> Optional[uuid.UUID]:
@@ -122,6 +123,7 @@ class GroupExpenseService:
             "split_type": expense.split_type,
             "tags": tags,
             "card": card,
+            "notes": expense.notes,
         }
 
     # ------------------------------------------------------------------
@@ -142,6 +144,7 @@ class GroupExpenseService:
         split_entries: List[dict],
         currency: Optional[str] = None,
         card_id: Optional[str] = None,
+        notes: Optional[str] = None,
     ) -> Dict:
         self.group_service.require_membership(group_id, actor_email)
         gid = _to_uuid(group_id)
@@ -162,6 +165,7 @@ class GroupExpenseService:
             merchant_name=merchant_name,
             description=description,
             card_id=uuid.UUID(str(card_id)) if card_id else None,
+            notes=notes,
         )
         self.db.add(expense)
         self.db.flush()
@@ -224,6 +228,7 @@ class GroupExpenseService:
         split_entries: List[dict],
         currency: Optional[str] = None,
         card_id: Optional[str] = None,
+        notes=NOTES_UNCHANGED,
     ) -> Dict:
         # Any group member may edit any group expense (spec §5.2, decision §17.2).
         self.group_service.require_membership(group_id, actor_email)
@@ -256,6 +261,8 @@ class GroupExpenseService:
         expense.merchant_name = merchant_name
         expense.split_type = split_type
         expense.card_id = uuid.UUID(str(card_id)) if card_id else None
+        if notes is not NOTES_UNCHANGED:
+            expense.notes = notes
 
         # Atomic rewrite: replace payers/splits (E2 — allowed even after a settlement;
         # no settlement is auto-modified).

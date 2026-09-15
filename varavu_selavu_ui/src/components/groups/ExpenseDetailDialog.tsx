@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
   Box,
@@ -114,6 +115,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
 }) => {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('sm'));
+  const queryClient = useQueryClient();
 
   // This expense's own currency wins (TS-GRP-131 per-expense currency override), falling
   // back to the group's currency, then USD — same precedence as the edit-save payload below.
@@ -262,6 +264,8 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         const toRemove = (expense.tags || []).filter((t) => !after.has(t.name.toLowerCase()));
         if (toAdd.length > 0) {
           await applyTagsToExpense(expense.row_id, { tag_names: toAdd });
+          // May have created new tags — keep the tag filter/autocomplete in sync.
+          queryClient.invalidateQueries({ queryKey: ['tags'] });
         }
         await Promise.all(toRemove.map((t) => removeTagFromExpense(expense.row_id, t.id)));
       }

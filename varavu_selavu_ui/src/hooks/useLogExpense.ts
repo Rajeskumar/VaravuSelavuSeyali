@@ -83,6 +83,9 @@ export function useLogExpense() {
 
   const afterSave = () => {
     queryClient.invalidateQueries({ queryKey: ['expenses', user] });
+    // Saving with tag names can create brand-new tags server-side; refresh the cached tag list
+    // so the tag filter/autocomplete offer them without a page reload.
+    queryClient.invalidateQueries({ queryKey: ['tags'] });
     notifyExpenseChanged();
   };
 

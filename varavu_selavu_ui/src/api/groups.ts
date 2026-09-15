@@ -261,6 +261,8 @@ export interface GroupExpensePayload {
   currency?: string;
   // TS-CARD-114 — always-replace, same as personal expenses' card_id.
   card_id?: string | null;
+  // Omitted leaves the stored note unchanged; null clears it.
+  notes?: string | null;
 }
 
 export interface PayerSummaryItem {
@@ -291,6 +293,7 @@ export interface GroupExpenseRow {
   tags?: TagRefDTO[];
   // TS-CARD-114 — which held card the payer attributed to this expense, if any.
   card?: CardRefDTO | null;
+  notes?: string | null;
 }
 
 export interface GroupExpenseItemDTO {

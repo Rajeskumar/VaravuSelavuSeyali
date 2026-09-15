@@ -250,7 +250,7 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
                 maxWidth: '85%',
                 backgroundColor: m.role === 'user' ? 'text.primary' : 'background.paper',
                 border: m.role === 'user' ? 'none' : `1px solid ${theme.palette.divider}`,
-                color: m.role === 'user' ? 'background.paper' : 'text.primary',
+                color: m.role === 'user' ? 'background.default' : 'text.primary',
                 borderRadius: 3,
                 borderBottomRightRadius: m.role === 'user' ? 1 : 3,
                 borderBottomLeftRadius: m.role === 'assistant' ? 1 : 3,

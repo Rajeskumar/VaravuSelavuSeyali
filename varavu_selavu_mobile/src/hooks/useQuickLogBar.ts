@@ -64,6 +64,14 @@ export function useQuickLogBar() {
       return;
     }
 
+    if (parsed.splitRequested && !parsed.groupId) {
+      // Explicitly asked to split but no group name matched — never fall back to a personal
+      // expense; hand off to the full sheet so the group can be picked.
+      showToast({ message: "Couldn't find a group with that name — pick one here", type: 'info' });
+      openAddExpense();
+      return;
+    }
+
     if (!accessToken || !userEmail) return;
     setSubmitting(true);
     try {

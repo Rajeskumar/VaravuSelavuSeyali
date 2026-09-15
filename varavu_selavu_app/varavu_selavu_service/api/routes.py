@@ -27,7 +27,7 @@ from varavu_selavu_service.models.api_models import (
     ExpenseItemDTO,
 )
 from varavu_selavu_service.core.money import to_decimal, validate_money_amount
-from varavu_selavu_service.services.expense_service import ExpenseService
+from varavu_selavu_service.services.expense_service import ExpenseService, NOTES_UNCHANGED
 from varavu_selavu_service.services.personal_export_service import PersonalExportService
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.repo.postgres_repo import PostgresRepo
@@ -244,6 +244,7 @@ def create_expense(
         cost=data.cost,
         merchant_name=data.merchant_name,
         card_id=data.card_id,
+        notes=data.notes,
     )
     # Invalidate analysis cache on writes
     analysis_service.invalidate_cache()
@@ -276,6 +277,7 @@ def create_expense(
         "merchant_name": saved.get("merchant_name"),
         "tags": tags,
         "card": card,
+        "notes": saved.get("notes"),
     }
     return {"success": True, "expense": expense_payload}
 
@@ -353,6 +355,8 @@ def update_expense(
         cost=data.cost,
         merchant_name=data.merchant_name,
         card_id=data.card_id,
+        # Omitted leaves the stored note alone; see ExpenseRequest.notes.
+        notes=data.notes if "notes" in data.model_fields_set else NOTES_UNCHANGED,
     )
     analysis_service.invalidate_cache()
 
@@ -390,6 +394,7 @@ def update_expense(
         "merchant_name": saved.get("merchant_name"),
         "tags": tags,
         "card": card,
+        "notes": saved.get("notes"),
     }
     return {"success": True, "expense": expense_payload}
 
