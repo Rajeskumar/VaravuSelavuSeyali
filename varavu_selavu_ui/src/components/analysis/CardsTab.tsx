@@ -87,6 +87,44 @@ const GapCard: React.FC<{ label: string; row: GapRowShape }> = ({ label, row }) 
   );
 };
 
+/** Catalog names often already start with the issuer ("Apple Card", "Chase Freedom Unlimited"),
+ * so `issuer + card_name` rendered as "Apple Apple Card" (UI-15). Show the issuer on its own
+ * line and drop it from the product name when it's the leading word(s). */
+function splitCardName(issuer: string, cardName: string): { issuer: string; name: string } {
+  const trimmed = cardName.trim();
+  const prefix = issuer.trim();
+  const name = prefix && trimmed.toLowerCase().startsWith(prefix.toLowerCase())
+    ? trimmed.slice(prefix.length).trim() || trimmed
+    : trimmed;
+  return { issuer: prefix, name };
+}
+
+/** Two-line clamp instead of `noWrap`: the distinguishing suffix ("… Unlimited", "… Cash
+ * Rewards") is exactly the part single-line truncation was cutting off. */
+const cardNameSx = {
+  fontWeight: 600,
+  fontSize: 13.5,
+  lineHeight: 1.3,
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical' as const,
+  overflow: 'hidden',
+};
+
+const CardNameBlock: React.FC<{ issuer: string; cardName: string }> = ({ issuer, cardName }) => {
+  const parts = splitCardName(issuer, cardName);
+  return (
+    <>
+      {parts.issuer && (
+        <Typography sx={{ fontSize: 11, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.04em' }} noWrap>
+          {parts.issuer}
+        </Typography>
+      )}
+      <Typography sx={cardNameSx}>{parts.name}</Typography>
+    </>
+  );
+};
+
 const HeldCardRow: React.FC<{ card: UserCardDTO; onRemove: () => void; onSetDefault: () => void; onOpenDetail: () => void; busy: boolean }> = ({ card, onRemove, onSetDefault, onOpenDetail, busy }) => (
   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
     <Tooltip title={card.is_default ? 'Default card for "actual earned" estimates' : 'Set as default'}>
@@ -95,7 +133,7 @@ const HeldCardRow: React.FC<{ card: UserCardDTO; onRemove: () => void; onSetDefa
       </IconButton>
     </Tooltip>
     <Box sx={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={onOpenDetail}>
-      <Typography sx={{ fontWeight: 600, fontSize: 13.5 }} noWrap>{card.issuer} {card.card_name}</Typography>
+      <CardNameBlock issuer={card.issuer} cardName={card.card_name} />
     </Box>
     <IconButton size="small" onClick={onRemove} disabled={busy} aria-label="Remove card">
       <CloseIcon fontSize="small" />
@@ -181,8 +219,8 @@ const CardsTab: React.FC = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {searchResults.map((c: CardCatalogSummary) => (
               <Box key={c.id} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.25 }}>
-                <Box sx={{ minWidth: 0, cursor: 'pointer' }} onClick={() => setDetailCardId(c.id)}>
-                  <Typography sx={{ fontWeight: 600, fontSize: 13.5 }} noWrap>{c.issuer} {c.card_name}</Typography>
+                <Box sx={{ minWidth: 0, flex: 1, mr: 1.5, cursor: 'pointer' }} onClick={() => setDetailCardId(c.id)}>
+                  <CardNameBlock issuer={c.issuer} cardName={c.card_name} />
                   <Typography sx={{ fontSize: 11.5, color: 'text.secondary' }}>
                     {c.reward_type}{c.annual_fee > 0 ? ` · $${c.annual_fee.toFixed(0)}/yr` : ' · no annual fee'}
                   </Typography>

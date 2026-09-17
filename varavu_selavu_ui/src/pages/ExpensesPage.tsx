@@ -27,10 +27,14 @@ import { AnalysisScope } from '../api/analysis';
 import { applyTagsToExpense, removeTagFromExpense } from '../api/tags';
 import TagFilterSelect from '../components/tags/TagFilterSelect';
 import BulkTagDialog from '../components/tags/BulkTagDialog';
+import EmptyState from '../components/common/EmptyState';
 import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { useTagsEnabled } from '../hooks/useTagsEnabled';
 import { useQuickCapture } from '../context/QuickCaptureContext';
-import { isoToMMDDYYYY } from '../utils/date';
+import { isoToMMDDYYYY, parseAppDate } from '../utils/date';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
 
 type ExpensesTab = 'transactions' | 'recurring';
 
@@ -60,6 +64,12 @@ const ExpensesPage: React.FC = () => {
   // (rather than only client-side after the fact) keeps results correct across pagination —
   // client-side-only filtering would silently miss tagged expenses on pages not yet fetched.
   const [tagFilterIds, setTagFilterIds] = React.useState<string[]>([]);
+  // Design review (2026-09): neither control existed on this page before — search/date
+  // navigation weren't just mis-ordered behind the tag filter, they were entirely absent.
+  // Both filter client-side over the already-merged `feedExpenses` below (same scope as the
+  // existing tag filter's group-row pass), not a new backend query.
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [monthFilter, setMonthFilter] = React.useState(''); // 'YYYY-MM' from a native month input, '' = all time
 
   const {
     data,
@@ -166,8 +176,26 @@ const ExpensesPage: React.FC = () => {
       const wanted = new Set(tagFilterIds);
       result = result.filter((r) => (r.tags || []).some((t) => wanted.has(t.id)));
     }
+
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((r) =>
+        r.description.toLowerCase().includes(q) ||
+        (r.merchantName || '').toLowerCase().includes(q) ||
+        r.category.toLowerCase().includes(q)
+      );
+    }
+
+    if (monthFilter) {
+      result = result.filter((r) => {
+        const d = parseAppDate(r.date);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return key === monthFilter;
+      });
+    }
+
     return result;
-  }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data, tagFilterIds]);
+  }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data, tagFilterIds, searchQuery, monthFilter]);
 
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ExpenseRecord | null>(null);
@@ -426,11 +454,48 @@ const ExpensesPage: React.FC = () => {
             Expenses
           </Typography>
           {tab === 'transactions' && groupsEnabled && <GroupScopeFilter value={scope} onChange={setScope} />}
-          {tab === 'transactions' && tagsEnabled && <TagFilterSelect value={tagFilterIds} onChange={setTagFilterIds} />}
-          {/* TrackSpense v3 Prototype — this now opens the shared Quick Capture sheet/dialog
-              instead of AddExpenseForm; the Dialog+AddExpenseForm below is still used, but only
-              reached via a row's Edit icon (handleRowEdit) now. */}
-          {tab === 'transactions' && (
+        </Box>
+
+        {/* Design review (2026-09): "put search and date navigation ahead of less frequently
+            used controls" — this row is new (neither existed before) and comes first, ahead of
+            the tag filter / Select / Export cluster below. */}
+        {tab === 'transactions' && (
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
+              <TextField
+                size="small"
+                placeholder="Search expenses"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchRoundedIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ minWidth: 200, flex: { xs: 1, sm: 'initial' } }}
+              />
+              <TextField
+                size="small"
+                type="month"
+                label="Month"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                sx={{ width: 168 }}
+              />
+              {monthFilter && (
+                <Button size="small" variant="text" color="inherit" onClick={() => setMonthFilter('')} sx={{ color: 'text.secondary' }}>
+                  Clear
+                </Button>
+              )}
+              {tagsEnabled && <TagFilterSelect value={tagFilterIds} onChange={setTagFilterIds} />}
+            </Box>
+
+            {/* TrackSpense v3 Prototype — this now opens the shared Quick Capture sheet/dialog
+                instead of AddExpenseForm; the Dialog+AddExpenseForm below is still used, but only
+                reached via a row's Edit icon (handleRowEdit) now. */}
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
               {/* TS-TAG-108 — bulk tagging entry point; only meaningful when tags exist to apply. */}
               {tagsEnabled && (
@@ -453,8 +518,8 @@ const ExpensesPage: React.FC = () => {
                 Add Expense
               </Button>
             </Box>
-          )}
-        </Box>
+          </Box>
+        )}
 
         {/* TS-TAG-108 — sticky bulk action bar, shown only in select mode so it doesn't compete
             with the page's normal chrome the rest of the time. */}
@@ -513,6 +578,29 @@ const ExpensesPage: React.FC = () => {
           <ExpenseFeed
             expenses={feedExpenses}
             loading={feedLoading}
+            // UI-08: a filter that matched nothing and a genuinely empty ledger are different
+            // situations and get different copy + actions.
+            emptyState={
+              searchQuery.trim() || monthFilter || tagFilterIds.length > 0 ? (
+                <EmptyState
+                  title="No expenses match this view"
+                  description="Try a different search, month, or tag — or clear the filters to see everything."
+                  actionLabel="Clear filters"
+                  onAction={() => {
+                    setSearchQuery('');
+                    setMonthFilter('');
+                    setTagFilterIds([]);
+                  }}
+                />
+              ) : (
+                <EmptyState
+                  title="No expenses yet"
+                  description="Add your first purchase to start tracking this month — type a line like “coffee 6.75 at Blue Bottle” or scan a receipt."
+                  actionLabel="Add your first expense"
+                  onAction={() => openQuickCapture()}
+                />
+              )
+            }
             onSelect={handleRowSelect}
             onEdit={handleRowEdit}
             onDelete={handleRowDeleteRequest}

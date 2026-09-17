@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Divider, Link } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
+import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Link } from '@mui/material';
 import { logout as apiLogout } from '../api/auth';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 import { motion } from 'framer-motion';
@@ -97,10 +98,13 @@ const ProfilePage: React.FC = () => {
     // layout system.
     <Box sx={{ mt: 4, maxWidth: 640, mx: 'auto', px: { xs: 1, sm: 2 } }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
+      {/* Section order (design review 2026-09, UI-13): everyday details → how people pay you →
+          organization (tags) → help & legal → sign out → account deletion last and set apart.
+          Tags used to sit *after* the red Delete Account button. */}
       <Card>
         <CardContent>
           <Typography variant="h5" gutterBottom>
-            Profile
+            Account
           </Typography>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
           {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
@@ -113,14 +117,17 @@ const ProfilePage: React.FC = () => {
                 <TextField label="Name" fullWidth value={name} onChange={e => setName(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="Phone" fullWidth value={phone} onChange={e => setPhone(e.target.value)} />
+                <TextField label="Phone (optional)" fullWidth value={phone} onChange={e => setPhone(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="Address" fullWidth multiline rows={2} value={address} onChange={e => setAddress(e.target.value)} />
+                <TextField label="Address (optional)" fullWidth multiline rows={2} value={address} onChange={e => setAddress(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 1 }}>
-                  Payment handles (for Settle Up deep links)
+                <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                  How people can pay you
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Optional. When someone settles up with you in a group, these give them a one-tap link to pay you directly. Leave blank to skip.
                 </Typography>
               </Grid>
               <Grid size={12}>
@@ -134,19 +141,38 @@ const ProfilePage: React.FC = () => {
               </Grid>
               <Grid size={12}>
                 <Button type="submit" variant="contained" fullWidth disabled={saving || loading}>
-                  {saving ? 'Saving...' : 'Save Changes'}
+                  {saving ? 'Saving...' : 'Save changes'}
                 </Button>
               </Grid>
             </Grid>
           </Box>
+        </CardContent>
+      </Card>
+
+      <TagManagementSection />
+
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Help &amp; legal
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            <Link component={RouterLink} to="/contact">Help &amp; support</Link>
+            {' '}•{' '}
+            <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
+            {' '}•{' '}
+            <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>
+          </Typography>
           {email && (
-            <Button sx={{ mt: 2 }} variant="outlined" color="primary" fullWidth onClick={handleLogout}>
-              Logout
+            <Button variant="outlined" color="primary" fullWidth onClick={handleLogout}>
+              Log out
             </Button>
           )}
+        </CardContent>
+      </Card>
 
-          <Divider sx={{ my: 3 }} />
-          
+      <Card sx={{ mt: 3, borderColor: 'error.main' }}>
+        <CardContent>
           <Typography variant="h6" color="error" gutterBottom>
             Danger Zone
           </Typography>
@@ -156,17 +182,8 @@ const ProfilePage: React.FC = () => {
           <Button variant="contained" color="error" fullWidth onClick={() => setOpenDeleteDialog(true)}>
             Delete Account
           </Button>
-
         </CardContent>
       </Card>
-      <TagManagementSection />
-      <Box sx={{ mt: 4, mb: 2, textAlign: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/terms-of-service`} target="_blank" rel="noopener noreferrer">Terms of Service</Link>
-          {' '}•{' '}
-          <Link href={`${process.env.REACT_APP_API_BASE_URL || ''}/privacy-policy`} target="_blank" rel="noopener noreferrer">Privacy Policy</Link>
-        </Typography>
-      </Box>
       </motion.div>
 
       <Dialog open={openDeleteDialog} onClose={() => !deleting && setOpenDeleteDialog(false)}>

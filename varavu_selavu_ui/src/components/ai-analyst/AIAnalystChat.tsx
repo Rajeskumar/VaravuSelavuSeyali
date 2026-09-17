@@ -185,17 +185,23 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
           Ask
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 140 }}>
+          {/* UI-12: "Fast/Deep" named the mechanism, not the choice. These pick a smaller vs a
+              larger model (see the model resolution in handleSend) — say what that means. */}
+          <Box sx={{ width: 170, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
             <SegmentedTabs
               options={[
-                { value: 'fast', label: 'Fast' },
-                { value: 'deep', label: 'Deep' }
+                { value: 'fast', label: 'Quick' },
+                { value: 'deep', label: 'Thorough' }
               ]}
               value={selectedSpeed}
               onChange={(v) => setSelectedSpeed(v as 'fast' | 'deep')}
               size="small"
               fullWidth
+              ariaLabel="Answer depth"
             />
+            <Typography sx={{ fontSize: 11, color: 'text.secondary', textAlign: 'right', lineHeight: 1.3 }}>
+              {selectedSpeed === 'fast' ? 'Faster model, good for totals and lookups' : 'Larger model, better for multi-step questions'}
+            </Typography>
           </Box>
           {onClose && (
             <IconButton size="small" onClick={onClose} aria-label="Close Ask">

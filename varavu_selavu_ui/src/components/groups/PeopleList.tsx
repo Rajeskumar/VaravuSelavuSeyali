@@ -9,6 +9,7 @@ import { useTheme } from '@mui/material/styles';
 import { getFriendBalances, getGroup, createSettlement, FriendBalanceDTO } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import { formatMoney } from '../expenses/ExpenseFeed';
+import EmptyState from '../common/EmptyState';
 
 interface PeopleListProps {
   onToast?: (message: string, severity: 'success' | 'error') => void;
@@ -91,9 +92,10 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
 
   if (!data || data.length === 0) {
     return (
-      <Box sx={{ py: 4, textAlign: 'center' }}>
-        <Typography color="text.secondary">No balances with people yet.</Typography>
-      </Box>
+      <EmptyState
+        title="No balances with people yet"
+        description="Shared balances appear here after you add a group expense. Each person's total nets across every group you share."
+      />
     );
   }
 

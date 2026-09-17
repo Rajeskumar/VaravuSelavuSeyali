@@ -29,7 +29,6 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import EmailVerificationBanner from './components/common/EmailVerificationBanner';
 import AskPage from './pages/AskPage';
 import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
-import AmbientBackground from './components/common/AmbientBackground';
 import { QuickCaptureProvider, useQuickCapture } from './context/QuickCaptureContext';
 import { AskProvider, useAsk } from './context/AskContext';
 import { useQuickLogBar } from './hooks/useQuickLogBar';
@@ -205,7 +204,6 @@ const AppContent: React.FC = () => {
       >
         Skip to main content
       </Box>
-      <AmbientBackground />
       <AppBar
         position="fixed"
         sx={{ zIndex: theme => theme.zIndex.drawer + 1 }}
@@ -254,7 +252,7 @@ const AppContent: React.FC = () => {
                 value={quickLog.text}
                 onChange={(e) => quickLog.setText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') quickLog.submit(); }}
-                placeholder="✨ Log or ask anything… “dinner 84.20 at Nopa split with Weekend Trip”"
+                placeholder="Log or ask anything… “dinner 84.20 at Nopa split with Weekend Trip”"
                 sx={{
                   display: { xs: 'none', md: 'block' },
                   width: '100%',
@@ -303,6 +301,7 @@ const AppContent: React.FC = () => {
               email={user}
               onProfile={() => navigate('/account')}
               onFeedback={() => setFeedbackOpen(true)}
+              onHelp={() => navigate('/contact')}
               onLogout={handleLogout}
             />
           ) : (

@@ -2,10 +2,11 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Grid, FormControlLabel, Switch, Drawer, IconButton, CircularProgress, Chip,
+  TextField, Grid, FormControlLabel, Switch, CircularProgress, Chip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddRounded';
-import CloseIcon from '@mui/icons-material/CloseRounded';
+import FormSheet from '../common/FormSheet';
+import EmptyState from '../common/EmptyState';
 import {
   listBudgets, createBudget, deleteBudget, getBudgetSuggestions,
   BudgetDTO, BudgetTargetType, BudgetScope,
@@ -40,7 +41,8 @@ const emptyForm = (): BudgetFormState => ({
 });
 
 function summarize(budgets: BudgetDTO[]): string {
-  if (budgets.length === 0) return 'No budgets yet';
+  // The body below already says "No budgets yet" — repeating it here read as a glitch (UI-08).
+  if (budgets.length === 0) return 'Monthly limits for a category or your overall spend';
   const onTrack = budgets.filter((b) => b.status === 'on_track').length;
   const atRisk = budgets.filter((b) => b.status === 'at_risk' || b.status === 'over_pace').length;
   const exceeded = budgets.filter((b) => b.status === 'exceeded').length;
@@ -175,35 +177,18 @@ const BudgetsTab: React.FC = () => {
           />
         ))}
         {budgets.length === 0 && !isLoading && !isError && (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="body1" color="text.secondary">
-              No budgets yet — set a monthly limit for a category or overall spend.
-            </Typography>
-          </Box>
+          <EmptyState
+            title="No budgets yet"
+            description="Set a monthly limit for a category or your overall spend, and the dashboard will tell you when you're on pace or at risk."
+            actionLabel="New budget"
+            onAction={handleAddClick}
+          />
         )}
       </Box>
 
-      {/* Add/Edit Form Drawer (Bottom Sheet) — same visual language as RecurringTab/AddExpenseForm */}
-      <Drawer
-        anchor="bottom"
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        PaperProps={{
-          sx: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxWidth: 600, margin: '0 auto', width: '100%', maxHeight: '90vh' },
-        }}
-      >
-        <Box sx={{ px: 3, pt: 2, pb: 4 }}>
-          <Box sx={{ width: 40, height: 4, bgcolor: 'divider', borderRadius: 2, mx: 'auto', mb: 3 }} />
-
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-            <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
-              {editing ? 'Edit Budget' : 'New Budget'}
-            </Typography>
-            <IconButton onClick={() => setFormOpen(false)} aria-label="Close" sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
-
+      {/* Desktop dialog / mobile sheet, shared with RecurringTab via FormSheet (UI-10). */}
+      <FormSheet open={formOpen} onClose={() => setFormOpen(false)} title={editing ? 'Edit budget' : 'New budget'}>
+        <Box>
           <Grid container spacing={2}>
             <Grid size={12}>
               <SegmentedTabs<BudgetTargetType>
@@ -257,7 +242,7 @@ const BudgetsTab: React.FC = () => {
                   ariaLabel="Personal or combined spend"
                   options={[
                     { value: 'personal', label: 'Personal only' },
-                    { value: 'combined', label: 'Combined + groups' },
+                    { value: 'combined', label: 'Personal + my shares' },
                   ]}
                 />
               </Grid>
@@ -297,10 +282,10 @@ const BudgetsTab: React.FC = () => {
             disabled={saveMut.isPending || !canSave}
             sx={{ mt: 3, py: 1.5, fontSize: 15, fontWeight: 600, borderRadius: 20 }}
           >
-            Save Budget
+            Save budget
           </Button>
         </Box>
-      </Drawer>
+      </FormSheet>
 
       {/* Delete Confirm Dialog */}
       <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>

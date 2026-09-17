@@ -26,6 +26,8 @@ import BudgetsSummaryCard from '../components/dashboard/BudgetsSummaryCard';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import CardCoachSummaryCard from '../components/dashboard/CardCoachSummaryCard';
 import { onExpenseChanged } from '../utils/expenseEvents';
+import { useQuickCapture } from '../context/QuickCaptureContext';
+import EmptyState from '../components/common/EmptyState';
 import { cerebro, tabularNums } from '../theme';
 
 const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
@@ -114,6 +116,7 @@ const DashboardPage: React.FC = () => {
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
   const { enabled: cardCoachEnabled } = useCardCoachEnabled();
+  const { openQuickCapture } = useQuickCapture();
   const [showCombinedToast, setShowCombinedToast] = React.useState(false);
 
   // Everything below goes through react-query's cache instead of the plain useEffect-per-fetch
@@ -176,12 +179,17 @@ const DashboardPage: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['budgets'] });
   }), [queryClient]);
 
+  // "Your totals now include your share of group expenses" is only news to someone who *has*
+  // group expenses — it used to fire for every brand-new account with no groups at all (UI-06).
+  // Waits for the groups query so a first visit with groups still gets it, once.
   React.useEffect(() => {
-    if (analysisQuery.data && !localStorage.getItem(COMBINED_TOAST_KEY)) {
+    if (!analysisQuery.data || !groupsEnabled || !groupsQuery.data) return;
+    if (groupsQuery.data.length === 0) return;
+    if (!localStorage.getItem(COMBINED_TOAST_KEY)) {
       setShowCombinedToast(true);
       localStorage.setItem(COMBINED_TOAST_KEY, '1');
     }
-  }, [analysisQuery.data]);
+  }, [analysisQuery.data, groupsEnabled, groupsQuery.data]);
 
   const groups = groupsEnabled ? (groupsQuery.data ?? []) : [];
   const groupExpenses = groupsEnabled ? (groupExpensesQuery.data ?? []) : [];
@@ -317,7 +325,7 @@ const DashboardPage: React.FC = () => {
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '-60px' }}
-            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: 0.06 }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
             <Box sx={{ mb: 3 }}>
               <MyGroupsStrip groups={groups} groupSummaries={groupSummaries} />
@@ -355,9 +363,17 @@ const DashboardPage: React.FC = () => {
             }}
           >
             {recent.length === 0 && (
-              <Box sx={{ p: 2 }}>
-                <Typography color="text.secondary" align="center">No recent transactions</Typography>
-              </Box>
+              // First-use guidance lives where the eye lands (UI-06): the empty feed, not just
+              // the header button. Create-a-group is the optional secondary path.
+              <EmptyState
+                compact
+                title="No expenses yet"
+                description="Add your first purchase and your true monthly total starts here."
+                actionLabel="Add your first expense"
+                onAction={() => openQuickCapture()}
+                secondaryLabel={groupsEnabled && groups.length === 0 ? 'Or create a group' : undefined}
+                onSecondary={groupsEnabled && groups.length === 0 ? () => navigate('/groups') : undefined}
+              />
             )}
             {recent.map((item, idx) => (
               <Box

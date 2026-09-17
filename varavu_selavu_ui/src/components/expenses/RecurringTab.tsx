@@ -2,9 +2,10 @@ import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../../api/recurring';
 import { suggestCategory } from '../../api/expenses';
-import { Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControlLabel, Switch, Drawer, IconButton, CircularProgress } from '@mui/material';
+import { Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControlLabel, Switch, CircularProgress } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddRounded';
-import CloseIcon from '@mui/icons-material/CloseRounded';
+import FormSheet from '../common/FormSheet';
+import EmptyState from '../common/EmptyState';
 
 import { RecurringCard } from '../recurring/RecurringCard';
 import { findMainCategory } from './AddExpenseForm';
@@ -65,10 +66,10 @@ const RecurringTab: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
       setFormOpen(false);
-      setToast({ open: true, message: 'Template saved', severity: 'success' });
+      setToast({ open: true, message: 'Recurring expense saved', severity: 'success' });
     },
     onError: () => {
-      setToast({ open: true, message: 'Failed to save template', severity: 'error' });
+      setToast({ open: true, message: 'Failed to save recurring expense', severity: 'error' });
     }
   });
 
@@ -86,9 +87,9 @@ const RecurringTab: React.FC = () => {
     mutationFn: (id: string) => deleteRecurringTemplate(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
-      setToast({ open: true, message: 'Template deleted', severity: 'success' });
+      setToast({ open: true, message: 'Recurring expense deleted', severity: 'success' });
     },
-    onError: () => setToast({ open: true, message: 'Failed to delete template', severity: 'error' }),
+    onError: () => setToast({ open: true, message: 'Failed to delete recurring expense', severity: 'error' }),
   });
 
   const templates = data || [];
@@ -185,7 +186,7 @@ const RecurringTab: React.FC = () => {
 
       {isError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {(error as Error)?.message || 'Failed to load templates'}
+          {(error as Error)?.message || 'Failed to load recurring expenses'}
         </Alert>
       )}
 
@@ -201,42 +202,19 @@ const RecurringTab: React.FC = () => {
           />
         ))}
         {templates.length === 0 && !isLoading && !isError && (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="body1" color="text.secondary">
-              No recurring expenses set up yet.
-            </Typography>
-          </Box>
+          <EmptyState
+            title="No recurring expenses yet"
+            description="Rent, subscriptions, anything that repeats — set it once and TrackSpense prompts you to log it each month."
+            actionLabel="Add recurring expense"
+            onAction={handleAddClick}
+          />
         )}
       </Box>
 
-      {/* Add/Edit Form Drawer (Bottom Sheet) */}
-      <Drawer
-        anchor="bottom"
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        PaperProps={{
-          sx: {
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            maxWidth: 600,
-            margin: '0 auto',
-            width: '100%',
-            maxHeight: '90vh',
-          },
-        }}
-      >
-        <Box sx={{ px: 3, pt: 2, pb: 4 }}>
-          <Box sx={{ width: 40, height: 4, bgcolor: 'divider', borderRadius: 2, mx: 'auto', mb: 3 }} />
-
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-            <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 18, fontWeight: 700, color: 'text.primary' }}>
-              {editing ? 'Edit Template' : 'Add Template'}
-            </Typography>
-            <IconButton onClick={() => setFormOpen(false)} aria-label="Close" sx={{ mt: -1, mr: -1, color: 'text.secondary' }}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
-
+      {/* Desktop dialog / mobile sheet (UI-10). "Template" is what the backend calls these;
+          to the user it's just a recurring expense (UI-12). */}
+      <FormSheet open={formOpen} onClose={() => setFormOpen(false)} title={editing ? 'Edit recurring expense' : 'Add recurring expense'}>
+        <Box>
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Description" fullWidth value={form.description} onChange={e => {
@@ -259,7 +237,7 @@ const RecurringTab: React.FC = () => {
               <TextField label="Day of month" type="number" fullWidth value={form.day_of_month} onChange={e => setForm(f => ({ ...f, day_of_month: Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))) }))} />
             </Grid>
             <Grid size={{ xs: 6, sm: 3 }}>
-              <TextField label="Cost/mo" type="number" fullWidth value={form.default_cost} onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
+              <TextField label="Monthly amount" type="number" fullWidth value={form.default_cost} onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Start date" type="date" fullWidth value={form.start_date_iso} onChange={e => setForm(f => ({ ...f, start_date_iso: e.target.value }))} InputLabelProps={{ shrink: true }} />
@@ -280,10 +258,10 @@ const RecurringTab: React.FC = () => {
             disabled={saveMut.isPending || !form.description || !form.category || form.default_cost <= 0}
             sx={{ mt: 4, py: 1.5, fontSize: 15, fontWeight: 600, borderRadius: 20 }}
           >
-            Save Template
+            Save recurring expense
           </Button>
         </Box>
-      </Drawer>
+      </FormSheet>
 
       {/* Delete Confirm Dialog */}
       <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>

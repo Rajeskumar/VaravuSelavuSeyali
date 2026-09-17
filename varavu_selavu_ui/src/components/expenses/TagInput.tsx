@@ -170,8 +170,10 @@ const TagInput: React.FC<TagInputProps> = ({ value, onChange, maxTags = DEFAULT_
           <TextField
             {...params}
             variant="standard"
-            placeholder={value.length === 0 ? 'Group expenses across categories — a trip, a project, anything' : ''}
-            helperText={atLimit ? `Up to ${maxTags} tags per expense` : undefined}
+            // Short placeholder; the explanation lives in helper text below the field instead
+            // of a long instructional placeholder that truncated on phones (UI-09).
+            placeholder={value.length === 0 ? 'Add a tag' : ''}
+            helperText={atLimit ? `Up to ${maxTags} tags per expense` : 'A trip, a project, anything you want to group across categories'}
           />
         )}
       />

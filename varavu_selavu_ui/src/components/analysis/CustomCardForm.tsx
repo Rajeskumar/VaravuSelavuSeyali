@@ -63,13 +63,15 @@ const CustomCardForm: React.FC<Props> = ({ onDone, onCancel }) => {
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         <TextField size="small" label="Card name" value={cardName} onChange={(e) => setCardName(e.target.value)} autoFocus fullWidth />
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <TextField size="small" label="Issuer (optional)" value={issuer} onChange={(e) => setIssuer(e.target.value)} fullWidth />
+        {/* Stacked below `sm`: the fixed-width fee field squeezed the issuer field until its
+            label truncated on phones (UI-09). */}
+        <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
+          <TextField size="small" label="Issuer (optional)" placeholder="e.g. Chase" value={issuer} onChange={(e) => setIssuer(e.target.value)} fullWidth />
           <TextField
             size="small" label="Annual fee" type="number" value={annualFee}
             onChange={(e) => setAnnualFee(e.target.value)}
             InputProps={{ startAdornment: <Box component="span" sx={{ mr: 0.5, color: 'text.secondary' }}>$</Box> }}
-            sx={{ width: 140, flexShrink: 0 }}
+            sx={{ width: { xs: '100%', sm: 140 }, flexShrink: 0 }}
           />
         </Box>
 

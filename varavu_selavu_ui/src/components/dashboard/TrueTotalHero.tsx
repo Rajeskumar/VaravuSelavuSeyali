@@ -93,8 +93,10 @@ const TrueTotalHero: React.FC<Props> = ({ personalTotal, groupSummaries, groupsE
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: { xs: 'center', md: 'flex-start' }, pt: 1, pb: 2, width: '100%' }}>
+      {/* Plain-language label for the big number (UI-06) — a bare "$0.00" under a month name
+          didn't say what it was. Follows the lens: "I paid" totals aren't "your spending". */}
       <Typography sx={{ ...typeScale.label, color: 'text.secondary', mb: 1.5 }}>
-        {periodLabel}
+        {lens === 'paid' ? 'You paid' : 'Your spending'} · {periodLabel}
       </Typography>
 
       {lens && onLensChange && hasGroups && (

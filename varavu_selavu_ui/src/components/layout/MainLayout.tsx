@@ -4,6 +4,7 @@ import Fab from '@mui/material/Fab';
 import AddIcon from '@mui/icons-material/Add';
 import { useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { useLocation } from 'react-router-dom';
 import SideNav from './SideNav';
 import BottomNav from './BottomNav';
 import Footer from './Footer';
@@ -27,6 +28,16 @@ const MainLayout: React.FC<Props> = ({ children }) => {
   // around it switch at the same width.
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { openQuickCapture } = useQuickCapture();
+  const location = useLocation();
+  // The FAB means "Add expense" — on screens whose own task is a different kind of creation
+  // or editing (Profile, the Cards catalog/custom-card form) it floated over those forms and
+  // read as belonging to them (UI-04). Hide it there; BottomNav still gives one-tap access to
+  // Expenses/Dashboard where it makes sense.
+  const onNonLedgerScreen =
+    location.pathname.startsWith('/account') ||
+    location.pathname.startsWith('/profile') ||
+    location.pathname.startsWith('/contact') ||
+    (location.pathname.startsWith('/analysis') && new URLSearchParams(location.search).get('tab') === 'cards');
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: `calc(100vh - ${HEADER_HEIGHT}px)` }}>
@@ -55,7 +66,7 @@ const MainLayout: React.FC<Props> = ({ children }) => {
       <Footer />
       <BottomNav />
 
-      {isMobile && (
+      {isMobile && !onNonLedgerScreen && (
         <Fab
           color="primary"
           aria-label="Add Expense"

@@ -4,13 +4,17 @@ import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
+import Divider from '@mui/material/Divider';
 
 interface Props {
   email: string;
   onProfile: () => void;
   onFeedback: () => void;
+  onHelp: () => void;
   onLogout: () => void;
 }
+
+const API_BASE = process.env.REACT_APP_API_BASE_URL || '';
 
 function getInitials(email: string): string {
   const name = email.split('@')[0];
@@ -20,7 +24,7 @@ function getInitials(email: string): string {
   return name[0]?.toUpperCase() || 'U';
 }
 
-const UserMenu: React.FC<Props> = ({ email, onProfile, onFeedback, onLogout }) => {
+const UserMenu: React.FC<Props> = ({ email, onProfile, onFeedback, onHelp, onLogout }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
   const handleOpen = (event: React.MouseEvent<HTMLElement>) => setAnchorEl(event.currentTarget);
@@ -72,8 +76,20 @@ const UserMenu: React.FC<Props> = ({ email, onProfile, onFeedback, onLogout }) =
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
         <MenuItem onClick={onProfile}>Profile</MenuItem>
-        <MenuItem onClick={onFeedback}>Feedback</MenuItem>
-        <MenuItem onClick={onLogout}>Logout</MenuItem>
+        <MenuItem onClick={onFeedback}>Send feedback</MenuItem>
+        {/* The link footer is hidden below `md` (BottomNav owns that space), which left phones
+            with no Help/legal route except Profile's bottom section (UI-05). These are the
+            same three links, reachable from every authenticated page at every width. */}
+        <MenuItem onClick={onHelp}>Help &amp; support</MenuItem>
+        <Divider />
+        <MenuItem component="a" href={`${API_BASE}/privacy-policy`} target="_blank" rel="noopener noreferrer">
+          Privacy policy
+        </MenuItem>
+        <MenuItem component="a" href={`${API_BASE}/terms-of-service`} target="_blank" rel="noopener noreferrer">
+          Terms of service
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={onLogout}>Log out</MenuItem>
       </Menu>
     </>
   );

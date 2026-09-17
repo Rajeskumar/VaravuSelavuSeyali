@@ -136,21 +136,26 @@ const STEPS = [
   { n: 3, title: 'Settle in one tap', body: 'One payment per person clears every group you share — recorded per-group underneath.' },
 ];
 
+// Plain-language benefit first; the mechanism is a one-line "how" underneath (UI-12 / UX #8 —
+// two reviews flagged HttpOnly/CSRF/XSS vocabulary as wrong for a general marketing audience).
 const TRUST_POINTS = [
   {
     icon: <LockRoundedIcon fontSize="small" />,
-    title: 'Your session, not your scripts',
-    body: 'Login tokens live in HttpOnly cookies — invisible to any JavaScript on the page, browser extension, or XSS payload — with CSRF protection and automatic rotation on every refresh.',
+    title: 'Your login stays yours',
+    body: "Nothing running in your browser — a page script, an extension, a bad link — can read your sign-in and act as you.",
+    how: 'How: sign-in tokens are kept in HttpOnly cookies with CSRF protection and are rotated on every refresh.',
   },
   {
     icon: <ShieldRoundedIcon fontSize="small" />,
-    title: 'One tap ends every session',
-    body: "Logging out — or a stolen token getting reused — instantly revokes every device tied to that login, not just the one you're on.",
+    title: 'Sign out everywhere, in one tap',
+    body: "Logging out signs you out of every device at once. If a sign-in is ever copied and reused, it's cut off immediately.",
+    how: 'How: refresh tokens are tracked per login and the whole family is revoked on logout or on reuse.',
   },
   {
     icon: <DownloadRoundedIcon fontSize="small" />,
     title: 'Your data, on your terms',
     body: 'Export your full ledger to CSV whenever you want, or delete your account outright — no support ticket, no waiting.',
+    how: 'How: export and deletion are self-serve from Profile and take effect immediately.',
   },
 ];
 
@@ -324,7 +329,7 @@ const HomePage: React.FC = () => {
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2.25, mt: 5.5 }}>
           <FeatureCard index={0} icon={<BoltRoundedIcon fontSize="small" />} title="Log it in one line" body={'Type “coffee 6.75 at Blue Bottle” — TrackSpense parses the amount, merchant, category, and split. Or snap a receipt and let it read the line items.'}>
             <Box sx={{ bgcolor: (t) => withAlpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.16 : 0.08), border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1.75 }}>
-              <Typography sx={{ ...typeScale.eyebrow, fontSize: '0.65rem', color: 'primary.main' }}>✨ Will log</Typography>
+              <Typography sx={{ ...typeScale.eyebrow, fontSize: '0.65rem', color: 'primary.main' }}>Will log</Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
                 {logChip('Amount', '$6.75')}
                 {logChip('Merchant', 'Blue Bottle')}
@@ -430,8 +435,12 @@ const HomePage: React.FC = () => {
           <Typography sx={sectionHeadingSx}>Your money data, held the way it should be.</Typography>
         </ScrollReveal>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.25, mt: 5.5 }}>
-          {TRUST_POINTS.map(({ icon, title, body }, i) => (
-            <FeatureCard key={title} index={i} icon={icon} title={title} body={body} />
+          {TRUST_POINTS.map(({ icon, title, body, how }, i) => (
+            <FeatureCard key={title} index={i} icon={icon} title={title} body={body}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', lineHeight: 1.5 }}>
+                {how}
+              </Typography>
+            </FeatureCard>
           ))}
         </Box>
       </PageContainer>

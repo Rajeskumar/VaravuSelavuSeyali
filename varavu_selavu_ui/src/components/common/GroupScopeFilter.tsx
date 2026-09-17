@@ -21,7 +21,9 @@ const GroupScopeFilter: React.FC<GroupScopeFilterProps> = ({ value, onChange, si
     options={[
       { value: 'personal', label: 'Personal' },
       { value: 'groups', label: 'Groups' },
-      { value: 'combined', label: 'Combined' },
+      // "Combined" didn't say combined *with what* (UI-12) — this scope is personal spend plus
+      // the user's own share of group expenses, never whole group totals.
+      { value: 'combined', label: 'Personal + my shares' },
     ]}
   />
 );

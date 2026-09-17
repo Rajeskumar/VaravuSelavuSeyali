@@ -22,10 +22,11 @@ interface SegmentedTabsProps<T extends string> {
  * underlined Tabs, used wherever a small set of mutually-exclusive views need
  * switching (Expenses/Balances, split type, etc).
  *
- * Sleek/compact pass: sized to match the reference prototypes' 30-34px-tall lens/
- * sub-tab bars (`LensSwitch`/`SubTabBar` in `docs/design/prototypes/v2/**`) instead
- * of MUI's much taller default `ToggleButtonGroup` control — this was the "slider"
- * flagged as too big/rounded on Dashboard, Expenses, Analysis, and Groups. */
+ * Sized between two prior, opposing pieces of feedback: MUI's default `ToggleButtonGroup`
+ * (~40-42px tall, 14px font) was flagged as an oversized "slider," which led to a compact pass
+ * down to 28-32px/11-12px — a later design review then called that too small to read
+ * comfortably. `medium` now lands at 36px/13px and `compact` at 30px/12px, splitting the
+ * difference in both directions rather than re-litigating one extreme into the other. */
 function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, size = 'medium', ariaLabel }: SegmentedTabsProps<T>) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -40,7 +41,7 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
       aria-label={ariaLabel}
       sx={{
         p: '3px',
-        height: compact ? 28 : 32,
+        height: compact ? 30 : 36,
         borderRadius: `${theme.shape.borderRadius}px`,
         backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
         border: 'none',
@@ -51,15 +52,14 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
           borderRadius: `${Math.max(Number(theme.shape.borderRadius) - 2, 4)}px`,
           textTransform: 'none',
           fontWeight: 600,
-          fontSize: compact ? '0.6875rem' : '0.75rem',
+          fontSize: compact ? '0.75rem' : '0.8125rem',
           lineHeight: 1,
           px: compact ? 1.25 : 1.5,
           py: 0,
           color: 'text.secondary',
-          // Touch target: the pill stays visually 28-32px tall (the intentional compact sizing
-          // above), but the tappable area is expanded to the 44×44 WCAG minimum via an invisible
-          // centered hit area, rather than growing the pill itself and reintroducing the
-          // "oversized slider" this compact pass was written to fix.
+          // Touch target: the pill stays visually 30-36px tall (still under 44px), so the
+          // tappable area is expanded to the 44×44 WCAG minimum via an invisible centered hit
+          // area rather than growing the pill further.
           '&::after': {
             content: '""',
             position: 'absolute',

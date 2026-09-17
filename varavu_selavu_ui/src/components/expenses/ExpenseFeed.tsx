@@ -198,7 +198,13 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
           {expense.merchantName || expense.description}
         </Typography>
         <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ fontSize: '0.6875rem' }}>
-          {expense.kind === 'group' ? expense.groupName : expense.category}
+          {/* Design review (2026-09): the title line only ever showed merchant OR description
+              (never both), losing the description whenever a merchant was also set. Now the
+              caption carries the description alongside category/group — but only when it says
+              something the title line doesn't already. */}
+          {expense.merchantName && expense.description && expense.description !== expense.merchantName
+            ? `${expense.description} · ${expense.kind === 'group' ? expense.groupName : expense.category}`
+            : (expense.kind === 'group' ? expense.groupName : expense.category)}
         </Typography>
       </Box>
       <Box
@@ -277,6 +283,9 @@ interface ExpenseFeedProps {
   expenses: FeedExpense[];
   loading?: boolean;
   emptyMessage?: string;
+  /** Full empty-state node (title + explanation + action) — takes precedence over
+   * `emptyMessage`, which stays as the plain one-line fallback. */
+  emptyState?: React.ReactNode;
   onSelect: (expense: FeedExpense) => void;
   onEdit: (expense: FeedExpense) => void;
   onDelete: (expense: FeedExpense) => void;
@@ -306,7 +315,8 @@ interface ExpenseFeedProps {
 const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
   expenses,
   loading,
-  emptyMessage = 'No expenses in this scope',
+  emptyMessage = 'No expenses match this view',
+  emptyState,
   onSelect,
   onEdit,
   onDelete,
@@ -346,6 +356,7 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
   }
 
   if (groups.length === 0) {
+    if (emptyState) return <>{emptyState}</>;
     return (
       <Box sx={{ py: 4, textAlign: 'center' }}>
         <Typography color="text.secondary">{emptyMessage}</Typography>

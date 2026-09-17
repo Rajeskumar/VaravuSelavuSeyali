@@ -105,7 +105,9 @@ const TagBulkApplyDialog: React.FC<TagBulkApplyDialogProps> = ({ open, onClose, 
             placeholder="Trip 1"
             autoFocus
           />
-          <Box sx={{ display: 'flex', gap: 1.5 }}>
+          {/* Two date pickers side by side clipped their own placeholders at phone width
+              (UI-09) — stack them below `sm`. */}
+          <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' } }}>
             <TextField
               label="From date"
               type="date"

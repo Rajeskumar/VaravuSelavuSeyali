@@ -10,9 +10,12 @@ import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
+import Collapse from '@mui/material/Collapse';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
+import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { typeScale, tabularNums } from '../../theme';
+import { typeScale, tabularNums, heroButtonSx } from '../../theme';
 import { CATEGORY_GROUPS, findMainCategory } from './AddExpenseForm';
 import { formatMoney } from './ExpenseFeed';
 import { currencySymbol } from '../../utils/money';
@@ -108,6 +111,11 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [splitValue, setSplitValue] = React.useState<SplitEditorValue>({ type: 'equal', entries: [] });
   const [tagNames, setTagNames] = React.useState<string[]>([]);
   const [cardId, setCardId] = React.useState<string | null>(null);
+  // Design review (2026-09): merchant/category/tags/card used to render unconditionally —
+  // "one compact interaction... reveal merchant, tags and advanced splits progressively."
+  // Collapsed by default; auto-opens once a receipt scan actually populates merchant/category
+  // (onAutoParse below) so a scanned result is never hidden from the user.
+  const [moreOpen, setMoreOpen] = React.useState(false);
   // Tracks whether the user has explicitly saved a change out of PaidBySplitSummary's payer or
   // split picker — while false, payers/splitValue auto-track the live amount/group so the fast
   // "just me, split equally" default needs no interaction; once true, amount edits stop
@@ -129,10 +137,12 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       if (merchant) {
         setScannedMerchant(merchant);
         setUserPickedMerchant(true);
+        setMoreOpen(true);
       }
       if (hdr.category_name && CATEGORY_GROUPS[hdr.main_category_name]?.includes(hdr.category_name)) {
         setScannedCategory(hdr.category_name);
         setUserPickedCategory(true);
+        setMoreOpen(true);
       }
       setScannedTax(Number(hdr.tax) || 0);
       setScannedDiscount(Number(hdr.discount) || 0);
@@ -177,6 +187,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setCardId(null);
     setCustomized(false);
     setError(null);
+    setMoreOpen(false);
     scan.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialGroupId]);
@@ -406,6 +417,61 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     </Box>
   );
 
+  // Design review (2026-09) — collapsed by default (see `moreOpen` above), shared between the
+  // desktop dialog and mobile drawer so both stay in lockstep instead of drifting separately.
+  const moreOptionsToggle = (
+    <Button
+      size="small"
+      variant="text"
+      color="inherit"
+      onClick={() => setMoreOpen((v) => !v)}
+      endIcon={moreOpen ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+      sx={{ mt: 1, color: 'text.secondary', alignSelf: 'flex-start', px: 0 }}
+    >
+      {moreOpen ? 'Fewer options' : 'More options — merchant, tags, card'}
+    </Button>
+  );
+
+  const moreOptionsContent = (
+    <Collapse in={moreOpen} timeout="auto">
+      <Box sx={{ mt: 1 }}>
+        <EntityAutocomplete
+          value={scannedMerchant || ''}
+          onValueChange={(v) => {
+            setScannedMerchant(v || null);
+            setUserPickedMerchant(true);
+          }}
+          fetchSuggestions={fetchMerchantSuggestions}
+          textFieldProps={{ fullWidth: true, size: 'small', placeholder: 'Merchant (optional)' }}
+        />
+
+        <Box sx={{ mt: 1.25 }}>
+          <CategoryPickerField
+            mainCategory={scannedCategory ? findMainCategory(scannedCategory) : ''}
+            subcategory={scannedCategory || ''}
+            onChange={(_main, sub) => {
+              setScannedCategory(sub);
+              setUserPickedCategory(true);
+            }}
+            label="Category"
+          />
+        </Box>
+
+        {tagsEnabled && (
+          <Box sx={{ mt: 1.25 }}>
+            <TagInput value={tagNames} onChange={setTagNames} />
+          </Box>
+        )}
+
+        {cardCoachEnabled && (
+          <Box sx={{ mt: 1.25 }}>
+            <CardPickerField value={cardId} onChange={setCardId} />
+          </Box>
+        )}
+      </Box>
+    </Collapse>
+  );
+
   const splitPreview = selectedGroup && groupDetail && (
     <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1.25, px: 1.5, py: 1 }}>
       <PaidBySplitSummary
@@ -435,9 +501,11 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       variant="contained"
       disabled={!ready}
       onClick={handleSave}
-      sx={{ mt: 1.5, height: 48, borderRadius: 1.5, fontSize: 15 }}
+      // Quick Capture's Save is the one hero CTA on this screen (design system rule: one
+      // gradient CTA per screen) — every other contained-primary button app-wide is flat.
+      sx={{ mt: 1.5, height: 48, borderRadius: 1.5, fontSize: 15, ...heroButtonSx }}
     >
-      {saving ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : selectedGroup ? 'Save & split' : 'Save'}
+      {saving ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : selectedGroup ? 'Save & split' : 'Save expense'}
     </Button>
   );
 
@@ -499,8 +567,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               </Box>
             </Box>
 
-            <Box sx={{ textAlign: 'center', pt: 2, pb: 0.5 }}>
-              <Typography variant="caption" sx={{ ...typeScale.label, color: 'text.secondary' }}>Amount</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, pt: 1.5, pb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ ...typeScale.label, color: 'text.secondary', flexShrink: 0 }}
+              >
+                Amount
+              </Typography>
               <TextField
                 variant="standard"
                 value={amount}
@@ -513,14 +586,17 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 slotProps={{ input: { disableUnderline: true } }}
                 inputProps={{
                   style: {
-                    textAlign: 'center',
+                    textAlign: 'left',
                     fontFamily: "'Bricolage Grotesque', sans-serif",
                     fontWeight: 600,
-                    fontSize: 44,
+                    fontSize: 24,
                     ...tabularNums,
                   },
                 }}
-                sx={{ width: 220 }}
+                // Matches the Description field's height right below it — this used to render
+                // at 44px font with no border, which (combined with the global focus-visible
+                // outline) read as an oversized, off-center box rather than a compact field.
+                sx={{ width: 160, '& .MuiInputBase-input': { py: 0.5 } }}
               />
             </Box>
 
@@ -544,39 +620,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               sx={{ mt: 1 }}
             />
 
-            <EntityAutocomplete
-              value={scannedMerchant || ''}
-              onValueChange={(v) => {
-                setScannedMerchant(v || null);
-                setUserPickedMerchant(true);
-              }}
-              fetchSuggestions={fetchMerchantSuggestions}
-              textFieldProps={{ fullWidth: true, size: 'small', placeholder: 'Merchant (optional)', sx: { mt: 1 } }}
-            />
-
-            <Box sx={{ mt: 1.25 }}>
-              <CategoryPickerField
-                mainCategory={scannedCategory ? findMainCategory(scannedCategory) : ''}
-                subcategory={scannedCategory || ''}
-                onChange={(_main, sub) => {
-                  setScannedCategory(sub);
-                  setUserPickedCategory(true);
-                }}
-                label="Category ✨"
-              />
-            </Box>
-
-            {tagsEnabled && (
-              <Box sx={{ mt: 1.25 }}>
-                <TagInput value={tagNames} onChange={setTagNames} />
-              </Box>
-            )}
-
-            {cardCoachEnabled && (
-              <Box sx={{ mt: 1.25 }}>
-                <CardPickerField value={cardId} onChange={setCardId} />
-              </Box>
-            )}
+            {moreOptionsToggle}
+            {moreOptionsContent}
 
             {scannedItems.length > 0 && (
               <ScannedItemsCard
@@ -672,39 +717,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
             sx={{ mt: 1 }}
           />
 
-          <EntityAutocomplete
-            value={scannedMerchant || ''}
-            onValueChange={(v) => {
-              setScannedMerchant(v || null);
-              setUserPickedMerchant(true);
-            }}
-            fetchSuggestions={fetchMerchantSuggestions}
-            textFieldProps={{ fullWidth: true, size: 'small', placeholder: 'Merchant (optional)', sx: { mt: 1 } }}
-          />
-
-          <Box sx={{ mt: 1 }}>
-            <CategoryPickerField
-              mainCategory={scannedCategory ? findMainCategory(scannedCategory) : ''}
-              subcategory={scannedCategory || ''}
-              onChange={(_main, sub) => {
-                setScannedCategory(sub);
-                setUserPickedCategory(true);
-              }}
-              label="Category ✨"
-            />
-          </Box>
-
-          {tagsEnabled && (
-            <Box sx={{ mt: 1 }}>
-              <TagInput value={tagNames} onChange={setTagNames} />
-            </Box>
-          )}
-
-          {cardCoachEnabled && (
-            <Box sx={{ mt: 1 }}>
-              <CardPickerField value={cardId} onChange={setCardId} />
-            </Box>
-          )}
+          {moreOptionsToggle}
+          {moreOptionsContent}
 
           {scannedItems.length > 0 && (
             <ScannedItemsCard

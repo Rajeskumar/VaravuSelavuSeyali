@@ -21,7 +21,7 @@ const TypeToLogBar: React.FC = () => {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-        placeholder="✨ Log or ask… “coffee 6.75 at Blue Bottle”"
+        placeholder="Log or ask… “coffee 6.75 at Blue Bottle”"
         // minHeight 44: this is the dashboard's primary logging affordance, and
         // size="small" alone renders at 42px — under the touch-target minimum.
         sx={{ '& .MuiOutlinedInput-root': { borderRadius: 999, minHeight: 44 } }}

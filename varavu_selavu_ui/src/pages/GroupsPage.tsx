@@ -368,7 +368,28 @@ const GroupsPage: React.FC = () => {
         {groupId && group && (
           <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', px: { xs: 1.5, sm: 3 }, py: 3 }}>
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
+              {/* Design review (2026-09): this used to be a management-controls-first header
+                  (name, Add Member button, settings gear) with the balance either hidden below
+                  `lg` or off in the side panel — never leading. The compact "You're owed/owe"
+                  line is now the first thing in the column at every width; management controls
+                  (Add Member) drop to a plain text affordance rather than a bordered button. */}
+              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
+                <Typography sx={{ ...typeScale.label, color: 'text.secondary' }}>{balanceDirectionLabel}</Typography>
+                {myBalance !== 0 && (
+                  <Typography component="span" sx={{ ...typeScale.display, ...tabularNums, color: balanceColor }}>
+                    {formatMoney(myBalance, group.currency)}
+                  </Typography>
+                )}
+              </Box>
+              {invitedMembers.length > 0 && (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+                  {invitedMembers.map((m) => (
+                    <Chip key={m.member_id} label={`${m.display_name} · pending`} size="small" variant="outlined" />
+                  ))}
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, mt: 2 }}>
                 <IconButton onClick={() => navigate('/groups')} aria-label="Back to groups" size="small" sx={{ display: { xs: 'inline-flex', md: 'none' } }}>
                   <ArrowBackIcon />
                 </IconButton>
@@ -387,11 +408,12 @@ const GroupsPage: React.FC = () => {
                 <MemberAvatarStack members={members} />
                 <Button
                   size="small"
-                  variant="outlined"
-                  startIcon={<PersonAddAlt1RoundedIcon />}
+                  variant="text"
+                  color="inherit"
+                  startIcon={<PersonAddAlt1RoundedIcon fontSize="small" />}
                   onClick={() => setMemberDialogOpen(true)}
                   disabled={isArchived}
-                  sx={{ flexShrink: 0 }}
+                  sx={{ flexShrink: 0, color: 'text.secondary' }}
                 >
                   Add Member
                 </Button>
@@ -412,24 +434,6 @@ const GroupsPage: React.FC = () => {
                   This group has been deleted. It will be permanently removed after 30 days.
                 </Alert>
               )}
-
-              {/* Standalone balance hero — only shown where GroupBalancesPanel isn't (below lg). */}
-              <Box sx={{ display: { xs: 'flex', lg: 'none' }, flexDirection: 'column', alignItems: 'center', py: 3, mb: 1 }}>
-                <MemberAvatarStack members={members} size={40} max={6} />
-                <Typography sx={{ ...typeScale.label, color: 'text.secondary', mt: 1.5 }}>{balanceDirectionLabel}</Typography>
-                {myBalance !== 0 && (
-                  <Typography component="div" sx={{ ...typeScale.display, ...tabularNums, color: balanceColor, mt: 0.5 }}>
-                    {formatMoney(myBalance, group.currency)}
-                  </Typography>
-                )}
-                {invitedMembers.length > 0 && (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1, mt: 2 }}>
-                    {invitedMembers.map((m) => (
-                      <Chip key={m.member_id} label={`${m.display_name} · pending`} size="small" variant="outlined" />
-                    ))}
-                  </Box>
-                )}
-              </Box>
 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 1.5 }}>
                 <SegmentedTabs

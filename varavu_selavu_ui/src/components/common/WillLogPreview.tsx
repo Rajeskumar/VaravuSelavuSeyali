@@ -14,7 +14,7 @@ interface WillLogPreviewProps {
   variant?: 'card' | 'strip';
 }
 
-/** The "✨ WILL LOG" chip-row preview shared by the mobile Dashboard's type-to-log bar and the
+/** The "WILL LOG" chip-row preview shared by the mobile Dashboard's type-to-log bar and the
  * desktop header's equivalent — see useQuickLogBar.ts for the parsing/submit logic this renders. */
 const WillLogPreview: React.FC<WillLogPreviewProps> = ({ parsed, memberCount, submitting, onSubmit, variant = 'card' }) => {
   const isStrip = variant === 'strip';
@@ -34,7 +34,7 @@ const WillLogPreview: React.FC<WillLogPreviewProps> = ({ parsed, memberCount, su
       }
     >
       <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 700, letterSpacing: '0.05em', flexShrink: 0 }}>
-        ✨ WILL LOG
+        WILL LOG
       </Typography>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: isStrip ? 0 : 0.75, flex: isStrip ? 1 : undefined }}>
         {chip('Amount', formatMoney(parsed.amount))}

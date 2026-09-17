@@ -34,10 +34,13 @@ export const cerebro = {
   textPrimaryDark: '#f0f1f5',
   textSecondaryDark: '#9aa0af',
   textMutedDark: '#6b7080',
-  surfaceBgDark: 'rgba(255,255,255,0.03)',
-  // Opaque counterpart for floating surfaces (dialogs, menus, dropdowns). surfaceBgDark is a
-  // 3%-white wash meant for flat cards sitting on the ink canvas; on a dialog it let the page
-  // underneath show straight through the form.
+  // Opaque, one step up from the ink canvas (#05060a) — cards/panels. Was a 3%-white wash
+  // (`rgba(255,255,255,0.03)`) that let the page's charts/background show straight through
+  // every card; a design review (2026-09) called this out as a "glass panel" look that reads
+  // as an unfinished template rather than a trustworthy financial surface.
+  surfaceBgDark: '#0D0E13',
+  // Opaque, a further step up — floating surfaces (dialogs, menus, dropdowns) sit visibly
+  // above cards rather than blending into them, completing the page < card < floating ladder.
   surfaceElevatedDark: '#14151C',
   surfaceBorderDark: 'rgba(255,255,255,0.1)',
   surfaceBorderStrongDark: 'rgba(255,255,255,0.15)',
@@ -87,6 +90,28 @@ export const gradientCta = {
   backgroundImage: `linear-gradient(120deg, ${cerebro.violet}, ${cerebro.cyan})`,
   color: cerebro.inkDark,
   boxShadow: cerebro.glowShadow,
+} as const;
+
+/**
+ * Opt-in "hero" CTA treatment. `MuiButton`'s `containedPrimary` default is a flat solid fill
+ * (see getTheme below) — the gradient+glow look is reserved for the single most important
+ * action on a given screen (design review 2026-09: applying it to every contained-primary
+ * button, all 48 call sites app-wide, was the concrete source of a "glow everywhere" /
+ * unfinished-template feel). Apply via `sx={heroButtonSx}` on the one true primary action per
+ * screen — e.g. Quick Capture's Save button — not on ordinary dialog Save/Confirm buttons.
+ */
+export const heroButtonSx = {
+  ...gradientCta,
+  backgroundColor: 'transparent',
+  '&:hover': { ...gradientCta, filter: 'brightness(1.08)' },
+  // Disabled must read as disabled: the gradient+glow used to stay at full strength with only
+  // the label fading (UI-11), so an unavailable Save still pulled the eye like a live CTA.
+  '&.Mui-disabled': {
+    backgroundImage: 'none',
+    boxShadow: 'none',
+    backgroundColor: 'action.disabledBackground',
+    color: 'action.disabled',
+  },
 } as const;
 
 /**
@@ -308,9 +333,10 @@ export function getTheme(mode: PaletteMode = 'dark'): Theme {
             '&:active': { transform: 'scale(0.98)' },
           },
           containedPrimary: {
-            ...gradientCta,
-            backgroundColor: 'transparent',
-            '&:hover': { ...gradientCta, filter: 'brightness(1.08)' },
+            // Flat solid fill by default (MUI's own primary.main background + contrastText —
+            // nothing to declare here). The gradient+glow moved to the opt-in `heroButtonSx`
+            // above; this is what every ordinary Save/Confirm/Create button now uses.
+            //
             // Primary CTAs (Add Expense, Create Group, Settle Up, …) are the controls tapped most
             // often — the default 34px root height fell short of the 44×44 touch-target minimum.
             minHeight: 44,
@@ -351,6 +377,7 @@ export function getTheme(mode: PaletteMode = 'dark'): Theme {
             ...gradientCta,
             backgroundColor: 'transparent',
             '&:hover': { ...gradientCta, filter: 'brightness(1.08)' },
+            '&.Mui-disabled': { backgroundImage: 'none', boxShadow: 'none' },
           },
         },
       },

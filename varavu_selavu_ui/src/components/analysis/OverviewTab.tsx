@@ -55,6 +55,8 @@ const OverviewTab: React.FC = () => {
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
   const [askInsight, setAskInsight] = useState<ChangeInsight | null>(null);
+  // Collapsed by default — see the "See the money flow" toggle below CategorySpectrum.
+  const [showFlow, setShowFlow] = useState(false);
   // TrackSpense v3 Prototype's one proposed Analysis change — defaults on (unchanged behavior).
   const [includeGroups, setIncludeGroups] = useState(true);
   const scope = includeGroups ? 'combined' : 'personal';
@@ -180,6 +182,7 @@ const OverviewTab: React.FC = () => {
         year={year}
         month={isYearMode ? undefined : month}
         onAsk={setAskInsight}
+        hasExpenses={periodData.total_expenses > 0 || periodData.category_totals.length > 0}
       />
     </Box>
   );
@@ -207,12 +210,27 @@ const OverviewTab: React.FC = () => {
           budgetsByCategory={isYearMode ? undefined : budgetsByCategory}
         />
 
-        <Box sx={{ mt: 4, mb: 4 }}>
-          <MoneyFlowSankey
-            totalExpenses={periodData.total_expenses}
-            categoryTotals={periodData.category_totals}
-            details={periodData.category_expense_details || {}}
-          />
+        {/* Design review (2026-09): the Sankey visualizes the exact same category_totals data
+            as the spectrum right above it, stacked directly beneath — "multiple visualizations
+            of the same small dataset add weight without insight." Collapsed by default; the
+            spectrum already answers "what did I spend on," so the flow view is now an
+            on-demand alternate look rather than always-rendered duplication. */}
+        <Box sx={{ mt: 2, mb: showFlow ? 4 : 2 }}>
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => setShowFlow((v) => !v)}
+            sx={{ color: 'text.secondary', px: 0 }}
+          >
+            {showFlow ? 'Hide the money flow' : 'See the money flow'}
+          </Button>
+          {showFlow && (
+            <MoneyFlowSankey
+              totalExpenses={periodData.total_expenses}
+              categoryTotals={periodData.category_totals}
+              details={periodData.category_expense_details || {}}
+            />
+          )}
         </Box>
       </>
     );

@@ -11,9 +11,12 @@ interface WhatChangedRailProps {
   year: number;
   month?: number;
   onAsk: (insight: ChangeInsight) => void;
+  /** False when the period has no expenses at all — "no significant changes" is misleading
+   * then (UI-08); there was nothing to compare, not a quiet month. */
+  hasExpenses?: boolean;
 }
 
-export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, month, onAsk }) => {
+export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, month, onAsk, hasExpenses = true }) => {
   const theme = useTheme();
   // Same ['change-insights', year, month] key DashboardPage uses — cached and shared, instead
   // of a plain useEffect fetch that reran every mount.
@@ -37,7 +40,9 @@ export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, 
     return (
       <Box sx={{ px: 2, pb: 2 }}>
         <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 12, color: 'text.secondary' }}>
-          No significant changes detected for this period.
+          {hasExpenses
+            ? 'No significant changes detected for this period.'
+            : 'Nothing to compare yet — add a few expenses and changes versus last period show up here.'}
         </Typography>
       </Box>
     );
