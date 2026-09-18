@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Box, Typography, Paper, CircularProgress, Alert, IconButton, Menu, MenuItem, Button, Switch, FormControlLabel } from '@mui/material';
+import { Box, Typography, Paper, CircularProgress, Alert, IconButton, Menu, MenuItem, Button, Switch, FormControlLabel, TextField } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
 import ShoppingBasketIcon from '@mui/icons-material/ShoppingBagRounded';
@@ -8,7 +8,9 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonthRounded';
 import { useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 
-import { getAnalysis } from '../../api/analysis';
+import { getAnalysis, AnalysisScope } from '../../api/analysis';
+import { listGroups } from '../../api/groups';
+import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
 import { ChangeInsight } from '../../api/analytics';
 import { glassCardSx } from '../../theme';
 import { useBudgetsEnabled } from '../../hooks/useBudgetsEnabled';
@@ -59,7 +61,17 @@ const OverviewTab: React.FC = () => {
   const [showFlow, setShowFlow] = useState(false);
   // TrackSpense v3 Prototype's one proposed Analysis change — defaults on (unchanged behavior).
   const [includeGroups, setIncludeGroups] = useState(true);
-  const scope = includeGroups ? 'combined' : 'personal';
+  // A single group's whole spend, analysed exactly like the personal view (categories, trend,
+  // month/year). '' = the user's own spending, which is what this tab always showed before.
+  const [groupId, setGroupId] = useState('');
+  const { enabled: groupsEnabled } = useGroupsEnabled();
+  const { data: groups = [] } = useQuery({
+    queryKey: ['groups', false],
+    queryFn: () => listGroups(false),
+    enabled: groupsEnabled,
+  });
+  const selectedGroup = groups.find((g) => g.group_id === groupId);
+  const scope: AnalysisScope = groupId ? 'group' : includeGroups ? 'combined' : 'personal';
   const isYearMode = periodMode === 'year';
 
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
@@ -73,10 +85,10 @@ const OverviewTab: React.FC = () => {
 
   // 1. Fetch data for the specific selected month
   const { data: monthData, isLoading: monthLoading, isError: monthIsError, error: monthError } = useQuery({
-    queryKey: ['analysis', user, year, month, scope, tagFilterIds],
+    queryKey: ['analysis', user, year, month, scope, groupId || null, tagFilterIds],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      return getAnalysis({ year, month, scope, tag_ids: tagFilterIds.length ? tagFilterIds : undefined });
+      return getAnalysis({ year, month, scope, group_id: groupId || undefined, tag_ids: tagFilterIds.length ? tagFilterIds : undefined });
     },
     enabled: !!user,
   });
@@ -85,10 +97,10 @@ const OverviewTab: React.FC = () => {
   // `periodMode === 'year'`, is the category-breakdown data source itself (answers "how much did
   // I spend in 2026 on rent/groceries/dining out", not just a single month at a time).
   const { data: yearData, isLoading: yearLoading } = useQuery({
-    queryKey: ['analysis', user, year, null, scope, tagFilterIds],
+    queryKey: ['analysis', user, year, null, scope, groupId || null, tagFilterIds],
     queryFn: async () => {
       if (!user) throw new Error('Please login to view analysis.');
-      return getAnalysis({ year, scope, tag_ids: tagFilterIds.length ? tagFilterIds : undefined });
+      return getAnalysis({ year, scope, group_id: groupId || undefined, tag_ids: tagFilterIds.length ? tagFilterIds : undefined });
     },
     enabled: !!user,
   });
@@ -97,10 +109,12 @@ const OverviewTab: React.FC = () => {
   // Include-group-shares toggles (the latter is already `scope` above). Budgets are monthly-only
   // in v1 (PRD §5.1/§11), so this only applies in month mode, not the whole-year rollup.
   const period = `${year}-${String(month).padStart(2, '0')}`;
+  // Budgets are personal/combined only — no per-group budgets exist, hence the `!groupId` gate.
+  const budgetScope = includeGroups ? 'combined' : 'personal';
   const { data: budgetsData } = useQuery({
-    queryKey: ['budgets', scope, period],
-    queryFn: () => listBudgets({ scope, period }),
-    enabled: !!user && budgetsEnabled && !isYearMode,
+    queryKey: ['budgets', budgetScope, period],
+    queryFn: () => listBudgets({ scope: budgetScope, period }),
+    enabled: !!user && budgetsEnabled && !isYearMode && !groupId,
   });
   const budgetsByCategory: Record<string, BudgetDTO> = {};
   for (const b of budgetsData || []) {
@@ -172,7 +186,16 @@ const OverviewTab: React.FC = () => {
     />
   );
 
-  const whatChangedSection = (
+  const whatChangedSection = groupId ? (
+    <Box sx={{ pt: 1, pb: 2 }}>
+      <Typography sx={{ mb: 1.5, fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
+        {selectedGroup?.name ?? 'Group'}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        Showing everything this group spent, across all members — not just your share. Switch back to “My spending” for change insights and budgets.
+      </Typography>
+    </Box>
+  ) : (
     <Box sx={{ pt: 1, pb: 2 }}>
       <Typography sx={{ mb: 1.5, fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
         WHAT CHANGED
@@ -267,19 +290,50 @@ const OverviewTab: React.FC = () => {
               tags (OR semantics), AND'd against the month/year and Include-group-shares filters
               already on this page. Only the Overview tab gets this: Items/Merchants read from a
               separate pre-aggregated pipeline with no tag_ids support (PRD §10.4 only covers
-              /analysis and /expenses). */}
-          {tagsEnabled && (
+              /analysis and /expenses). Hidden for a group's own total (2026-09 clarification):
+              a tag is private to whoever applied it (TS-TAG-103), so "filter by my tags"
+              doesn't mean anything against a group-wide total that isn't scoped to me. */}
+          {tagsEnabled && !groupId && (
             <TagFilterSelect value={tagFilterIds} onChange={setTagFilterIds} />
+          )}
+
+          {groupsEnabled && groups.length > 0 && (
+            <TextField
+              select
+              size="small"
+              label="Analyse"
+              value={groupId}
+              onChange={(e) => {
+                setGroupId(e.target.value);
+                // The tag filter control is hidden for a group total (tags are private to
+                // whoever applied them, so they don't mean anything against a group-wide
+                // number) — clear it too, or a filter picked earlier would keep silently
+                // narrowing the group's total with no visible control left to explain why.
+                if (e.target.value) setTagFilterIds([]);
+              }}
+              // '' is a real choice ("My spending"), not "nothing picked" — show it as the value.
+              SelectProps={{ displayEmpty: true }}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 180 }}
+            >
+              <MenuItem value="">My spending</MenuItem>
+              {groups.map((g) => (
+                <MenuItem key={g.group_id} value={g.group_id}>{g.name} (whole group)</MenuItem>
+              ))}
+            </TextField>
           )}
 
           {/* TrackSpense v3 Prototype's one proposed Analysis addition — whether group shares
               count at all in the breakdowns below, not a spend-interpretation lens (see the
-              component doc comment above for why this is a different question from that one). */}
-          <FormControlLabel
-            control={<Switch size="small" checked={includeGroups} onChange={(e) => setIncludeGroups(e.target.checked)} />}
-            label={<Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 12.5, color: 'text.secondary' }}>Include group shares</Typography>}
-            sx={{ mr: 0 }}
-          />
+              component doc comment above for why this is a different question from that one).
+              Irrelevant while a single group is being analysed, so hidden then. */}
+          {!groupId && (
+            <FormControlLabel
+              control={<Switch size="small" checked={includeGroups} onChange={(e) => setIncludeGroups(e.target.checked)} />}
+              label={<Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 12.5, color: 'text.secondary' }}>Include group shares</Typography>}
+              sx={{ mr: 0 }}
+            />
+          )}
 
           {/* Answers "how much did I spend in 2026 on rent/groceries/dining out" — Year swaps the
               category breakdown/treemap below to the whole calendar year's totals instead of just

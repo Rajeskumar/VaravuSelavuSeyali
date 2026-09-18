@@ -35,6 +35,7 @@ import { isoToMMDDYYYY, parseAppDate } from '../utils/date';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import TextField from '@mui/material/TextField';
 import InputAdornment from '@mui/material/InputAdornment';
+import MenuItem from '@mui/material/MenuItem';
 
 type ExpensesTab = 'transactions' | 'recurring';
 
@@ -69,7 +70,7 @@ const ExpensesPage: React.FC = () => {
   // Both filter client-side over the already-merged `feedExpenses` below (same scope as the
   // existing tag filter's group-row pass), not a new backend query.
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [monthFilter, setMonthFilter] = React.useState(''); // 'YYYY-MM' from a native month input, '' = all time
+  const [monthFilter, setMonthFilter] = React.useState(''); // 'YYYY-MM', '' = all time
 
   const {
     data,
@@ -105,7 +106,7 @@ const ExpensesPage: React.FC = () => {
     (scope === 'groups' && groupExpensesQuery.isLoading) ||
     (scope === 'combined' && (groupExpensesQuery.isLoading || combinedPersonalQuery.isLoading));
 
-  const feedExpenses: FeedExpense[] = React.useMemo(() => {
+  const scopedRows: FeedExpense[] = React.useMemo(() => {
     const groupRows: FeedExpense[] = (groupExpensesQuery.data || []).map((e: UnifiedGroupExpenseRow) => ({
       key: `group-${e.row_id}`,
       kind: 'group',
@@ -166,6 +167,30 @@ const ExpensesPage: React.FC = () => {
       }));
       result = [...personalRows, ...groupRows];
     }
+    return result;
+  }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data]);
+
+  // Months that actually have expenses in the current scope, newest first — drives the month
+  // selector so it never offers an empty month. A native `<input type="month">` used to sit
+  // here; it rendered as a bare text field on desktop Safari and mis-aligned/vanished on
+  // phones, so this is a plain select instead.
+  const availableMonths = React.useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of scopedRows) {
+      const d = parseAppDate(r.date);
+      keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return Array.from(keys)
+      .sort()
+      .reverse()
+      .map((key) => {
+        const [y, m] = key.split('-').map(Number);
+        return { key, label: new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
+      });
+  }, [scopedRows]);
+
+  const feedExpenses: FeedExpense[] = React.useMemo(() => {
+    let result = scopedRows;
 
     // TS-TAG-111 — the primary retrieval surface (PRD §5.2). Personal rows are already
     // server-filtered above (GET /expenses supports tag_ids, PRD §10.4) — this second pass is a
@@ -195,7 +220,7 @@ const ExpensesPage: React.FC = () => {
     }
 
     return result;
-  }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data, tagFilterIds, searchQuery, monthFilter]);
+  }, [scopedRows, tagFilterIds, searchQuery, monthFilter]);
 
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<ExpenseRecord | null>(null);
@@ -459,8 +484,10 @@ const ExpensesPage: React.FC = () => {
         {/* Design review (2026-09): "put search and date navigation ahead of less frequently
             used controls" — this row is new (neither existed before) and comes first, ahead of
             the tag filter / Select / Export cluster below. */}
+        {/* Stacked below `md`: as one wrapping row, the button group landed on top of the
+            month select at phone widths. */}
         {tab === 'transactions' && (
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', md: 'center' }, mb: 2, gap: 1 }}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
               <TextField
                 size="small"
@@ -474,29 +501,28 @@ const ExpensesPage: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                sx={{ minWidth: 200, flex: { xs: 1, sm: 'initial' } }}
+                sx={{ minWidth: 200, flex: { xs: '1 1 100%', sm: '0 1 auto' } }}
               />
               <TextField
+                select
                 size="small"
-                type="month"
                 label="Month"
                 value={monthFilter}
                 onChange={(e) => setMonthFilter(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                sx={{ width: 168 }}
-              />
-              {monthFilter && (
-                <Button size="small" variant="text" color="inherit" onClick={() => setMonthFilter('')} sx={{ color: 'text.secondary' }}>
-                  Clear
-                </Button>
-              )}
+                sx={{ minWidth: 170, flex: { xs: '1 1 auto', sm: '0 1 auto' } }}
+              >
+                <MenuItem value="">All time</MenuItem>
+                {availableMonths.map((m) => (
+                  <MenuItem key={m.key} value={m.key}>{m.label}</MenuItem>
+                ))}
+              </TextField>
               {tagsEnabled && <TagFilterSelect value={tagFilterIds} onChange={setTagFilterIds} />}
             </Box>
 
             {/* TrackSpense v3 Prototype — this now opens the shared Quick Capture sheet/dialog
                 instead of AddExpenseForm; the Dialog+AddExpenseForm below is still used, but only
                 reached via a row's Edit icon (handleRowEdit) now. */}
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', flexShrink: 0, justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
               {/* TS-TAG-108 — bulk tagging entry point; only meaningful when tags exist to apply. */}
               {tagsEnabled && (
                 <Button

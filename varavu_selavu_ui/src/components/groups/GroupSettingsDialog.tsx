@@ -16,9 +16,12 @@ import {
   Alert,
 } from '@mui/material';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
-import { GroupDetailResponse, ApiError } from '../../api/groups';
+import { GroupDetailResponse, ApiError, MemberDTO } from '../../api/groups';
 import {
   updateGroup,
+  removeMember,
+  leaveGroup,
+  createInvite,
   archiveGroup,
   unarchiveGroup,
   restoreGroup,
@@ -28,6 +31,9 @@ import {
   exportGroupCsv,
 } from '../../api/groups';
 import SplitEditor, { SplitEditorValue } from './SplitEditor';
+import PersonRemoveRoundedIcon from '@mui/icons-material/PersonRemoveRounded';
+import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
+import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
 import { useQueryClient } from '@tanstack/react-query';
 import ConfirmDialog from '../common/ConfirmDialog';
 
@@ -102,6 +108,95 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
   // this holds the confirmed 409 error message so the "delete anyway" confirm can quote it.
   const [confirmForceDelete, setConfirmForceDelete] = useState<string | null>(null);
 
+  // --- Members (removal / leave / re-invite) ---------------------------------------------
+  // removeMember/leaveGroup/createInvite existed in the API client but had no UI at all, so
+  // a member added by mistake could never be removed and a placeholder seat could never be
+  // invited after the fact.
+  const myEmail = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
+  const me = group.members.find((m) => m.user_email === myEmail);
+  const isAdmin = me?.role === 'admin';
+  const visibleMembers = group.members.filter((m) => m.status !== 'left');
+  const [memberBusy, setMemberBusy] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<MemberDTO | null>(null);
+  const [forceRemove, setForceRemove] = useState<{ member: MemberDTO; reason: string } | null>(null);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [inviteFor, setInviteFor] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+
+  const refreshGroup = () => {
+    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+    queryClient.invalidateQueries({ queryKey: ['group-balances', group.group_id] });
+    queryClient.invalidateQueries({ queryKey: ['groups'] });
+  };
+
+  const doRemove = async (member: MemberDTO, force: boolean) => {
+    setMemberBusy(member.member_id);
+    try {
+      await removeMember(group.group_id, member.member_id, force);
+      refreshGroup();
+      setToast({ open: true, message: `${member.display_name} removed`, severity: 'success' });
+      setPendingRemove(null);
+      setForceRemove(null);
+    } catch (e) {
+      // Balance guard: 409 when they still owe / are owed — offer to remove anyway.
+      if (!force && e instanceof ApiError && e.status === 409) {
+        setPendingRemove(null);
+        setForceRemove({ member, reason: e.message });
+      } else {
+        setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to remove member', severity: 'error' });
+        setPendingRemove(null);
+        setForceRemove(null);
+      }
+    } finally {
+      setMemberBusy(null);
+    }
+  };
+
+  const doLeave = async () => {
+    setMemberBusy('me');
+    try {
+      await leaveGroup(group.group_id);
+      refreshGroup();
+      setConfirmLeave(false);
+      onClose();
+      setToast({ open: true, message: `You left ${group.name}`, severity: 'success' });
+    } catch (e) {
+      setConfirmLeave(false);
+      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to leave group', severity: 'error' });
+    } finally {
+      setMemberBusy(null);
+    }
+  };
+
+  const copyInviteLink = async (member: MemberDTO) => {
+    setMemberBusy(member.member_id);
+    try {
+      const inv = await createInvite(group.group_id, member.member_id);
+      await navigator.clipboard.writeText(inv.url);
+      setToast({ open: true, message: 'Invite link copied — anyone with it can take this seat', severity: 'success' });
+    } catch (e) {
+      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to create invite link', severity: 'error' });
+    } finally {
+      setMemberBusy(null);
+    }
+  };
+
+  const sendInviteEmail = async (member: MemberDTO) => {
+    const email = inviteEmail.trim();
+    if (!email) return;
+    setMemberBusy(member.member_id);
+    try {
+      await createInvite(group.group_id, member.member_id, email);
+      setToast({ open: true, message: `Invite emailed to ${email}`, severity: 'success' });
+      setInviteFor(null);
+      setInviteEmail('');
+    } catch (e) {
+      setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to send invite', severity: 'error' });
+    } finally {
+      setMemberBusy(null);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -141,6 +236,78 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
             Unarchive below to edit them again.
           </Alert>
         )}
+
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" gutterBottom>Members</Typography>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            {isAdmin
+              ? 'Removed members keep their past expenses and splits; only their seat closes.'
+              : 'Only a group admin can remove members.'}
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', mt: 1 }}>
+            {visibleMembers.map((m) => {
+              const isMe = m.member_id === me?.member_id;
+              const pending = m.status === 'invited' && !m.user_email;
+              const busy = memberBusy === m.member_id;
+              return (
+                <Box key={m.member_id} sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ flex: '1 1 160px', minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                        {m.display_name}{isMe ? ' (you)' : ''}
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 0.5, mt: 0.25 }}>
+                        {m.role === 'admin' && <Chip label="Admin" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />}
+                        {pending && <Chip label="Hasn't joined yet" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />}
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                      {pending && !isArchived && (
+                        <>
+                          <Button size="small" variant="text" startIcon={<MailOutlineRoundedIcon fontSize="small" />} disabled={busy} onClick={() => { setInviteFor(inviteFor === m.member_id ? null : m.member_id); setInviteEmail(''); }}>
+                            Email invite
+                          </Button>
+                          <Button size="small" variant="text" startIcon={<LinkRoundedIcon fontSize="small" />} disabled={busy} onClick={() => copyInviteLink(m)}>
+                            Copy link
+                          </Button>
+                        </>
+                      )}
+                      {isAdmin && !isMe && !isArchived && (
+                        <Button size="small" variant="text" color="error" startIcon={<PersonRemoveRoundedIcon fontSize="small" />} disabled={busy} onClick={() => setPendingRemove(m)}>
+                          Remove
+                        </Button>
+                      )}
+                    </Box>
+                  </Box>
+                  {inviteFor === m.member_id && (
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                      <TextField
+                        size="small"
+                        type="email"
+                        label="Their email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        autoFocus
+                        sx={{ flex: '1 1 200px' }}
+                        helperText="They get a join link that only this address can use"
+                      />
+                      <Button variant="contained" size="small" disabled={busy || !inviteEmail.trim()} onClick={() => sendInviteEmail(m)} sx={{ mt: 0.25 }}>
+                        Send
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+          {me && !isArchived && (
+            <Button size="small" variant="text" color="inherit" sx={{ mt: 1.5, color: 'text.secondary' }} onClick={() => setConfirmLeave(true)} disabled={memberBusy === 'me'}>
+              Leave this group
+            </Button>
+          )}
+        </Box>
+
+        <Divider sx={{ my: 3 }} />
 
         <Box sx={{ mb: 3 }}>
           <Typography variant="h6" gutterBottom>Currency</Typography>
@@ -438,6 +605,44 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
             setSaving(false);
           }
         }}
+      />
+
+      <ConfirmDialog
+        open={!!pendingRemove}
+        title={`Remove ${pendingRemove?.display_name ?? 'member'}?`}
+        message="They'll lose access to this group. Their past expenses and splits stay in the history."
+        confirmLabel="Remove"
+        destructive
+        loading={!!memberBusy}
+        onCancel={() => setPendingRemove(null)}
+        onConfirm={() => pendingRemove && doRemove(pendingRemove, false)}
+      />
+      <ConfirmDialog
+        open={!!forceRemove}
+        title={`${forceRemove?.member.display_name ?? 'Member'} isn't settled up`}
+        message={
+          <>
+            {forceRemove?.reason}
+            <br />
+            <br />
+            Remove anyway? Their balance stays on the books until it's settled.
+          </>
+        }
+        confirmLabel="Remove anyway"
+        destructive
+        loading={!!memberBusy}
+        onCancel={() => setForceRemove(null)}
+        onConfirm={() => forceRemove && doRemove(forceRemove.member, true)}
+      />
+      <ConfirmDialog
+        open={confirmLeave}
+        title={`Leave ${group.name}?`}
+        message="You'll stop seeing this group's expenses. You need to be settled up first; an admin can add you back later."
+        confirmLabel="Leave group"
+        destructive
+        loading={memberBusy === 'me'}
+        onCancel={() => setConfirmLeave(false)}
+        onConfirm={doLeave}
       />
 
       <DialogActions>

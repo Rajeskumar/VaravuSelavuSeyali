@@ -90,16 +90,20 @@ def _mock_email_sending():
     picks up has real Gmail credentials (MAIL_USERNAME/MAIL_PASSWORD), and email_service's
     send_email/send_transactional_email will happily use them if not mocked. Every test that
     hits /auth/register (or forgot-password) was doing exactly that. Patched at each *call*
-    site, not just the definition in services/email_service.py — auth/routers.py imports
-    send_transactional_email by name (`from ... import send_transactional_email`), which binds
-    a separate reference into that module's namespace at import time, so patching only
-    email_service.send_transactional_email would never reach it. api/routes.py's send_email
-    usage is a local `from ... import send_email` *inside* the route function, which re-resolves
-    against email_service's current attribute on every call, so patching it there is sufficient
-    for that one path."""
+    site, not just the definition in services/email_service.py — auth/routers.py and
+    api/groups_routes.py (create_invite's join-link email, add_member's added-to-group email)
+    both import send_transactional_email by name (`from ... import send_transactional_email`),
+    which binds a separate reference into each module's namespace at import time, so patching
+    only email_service.send_transactional_email would never reach either — confirmed the hard
+    way once already (groups_routes.py's add_member path made a real, failing SMTP connection
+    from ~50 unrelated tests before this line existed). api/routes.py's send_email usage is a
+    local `from ... import send_email` *inside* the route function, which re-resolves against
+    email_service's current attribute on every call, so patching it there is sufficient for
+    that one path."""
     with patch("varavu_selavu_service.services.email_service.send_email", return_value=True), \
          patch("varavu_selavu_service.services.email_service.send_transactional_email", return_value=True), \
-         patch("varavu_selavu_service.auth.routers.send_transactional_email", return_value=True):
+         patch("varavu_selavu_service.auth.routers.send_transactional_email", return_value=True), \
+         patch("varavu_selavu_service.api.groups_routes.send_transactional_email", return_value=True):
         yield
 
 

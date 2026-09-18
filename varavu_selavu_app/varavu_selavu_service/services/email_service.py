@@ -5,7 +5,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.header import Header
-from email.utils import formataddr
+from email.utils import formataddr, formatdate, make_msgid
 from varavu_selavu_service.core.config import Settings
 
 import logging
@@ -57,6 +57,12 @@ def send_email(
     
     if user_email and user_email != "anonymous":
         msg.add_header("Reply-To", user_email)
+    # Neither header is added automatically by smtplib/email — a message with no Date and no
+    # Message-ID is itself a real spam signal to most receiving mail servers, on top of
+    # whatever else affects deliverability. Cheap to fix, so fixed regardless of the bigger
+    # personal-Gmail-relay reputation issue this doesn't solve (see send_transactional_email).
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="cerebroos.com")
 
     # ---- plain text part ----
     text_lines = [
@@ -127,6 +133,10 @@ def send_transactional_email(*, to_email: str, subject: str, heading: str, body_
     msg["Subject"] = Header(subject, "utf-8")
     msg["From"] = formataddr((str(Header("TrackSpense", "utf-8")), sender))
     msg["To"] = to_email
+    # See send_email's identical addition above — no Date/Message-ID is a real spam signal on
+    # its own, independent of the sending account's reputation.
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="cerebroos.com")
 
     text_part = MIMEText(f"{heading}\n\n{cta_label}: {cta_url}\n\nIf you didn't request this, you can safely ignore this email.", "plain", "utf-8")
 

@@ -6,6 +6,7 @@ import time
 import uuid
 from typing import Any, Dict, Optional, Tuple, List
 from datetime import datetime
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, Integer
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, ExpenseTag, Group, GroupMember
@@ -477,8 +478,15 @@ class AnalysisService:
             group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "i_paid", tag_ids=tag_ids)
         elif scope == "group_total":
             group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "group_total", tag_ids=tag_ids)
+        elif scope == "group":
+            # One group's whole spend on its own — the group-level twin of the personal
+            # Analysis view. `group_total` also folds in the caller's personal leg (a "what did
+            # my world cost" number), which is the wrong answer for "what did this group spend".
+            if not group_id:
+                raise HTTPException(status_code=400, detail="scope=group requires group_id")
+            group_leg = self._compute_group_leg(user_id, year, month, start_date, end_date, is_sqlite, group_id, "group_total", tag_ids=tag_ids)
 
-        if scope == "groups":
+        if scope in ("groups", "group"):
             merged = group_leg
         elif scope in ("combined", "i_paid", "group_total"):
             merged = self._merge_legs(personal_leg, group_leg)
@@ -509,7 +517,7 @@ class AnalysisService:
         }
 
 
-        if scope in ("combined", "groups", "i_paid", "group_total"):
+        if scope in ("combined", "groups", "i_paid", "group_total", "group"):
             result["spend_breakdown"] = {
                 "personal": round(personal_leg["total"], 2) if personal_leg else 0.0,
                 "group_share": round(group_leg["total"] if group_leg else 0.0, 2),

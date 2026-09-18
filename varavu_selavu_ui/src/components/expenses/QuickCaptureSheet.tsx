@@ -10,7 +10,6 @@ import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import PhotoCameraRoundedIcon from '@mui/icons-material/PhotoCameraRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
-import Collapse from '@mui/material/Collapse';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -420,20 +419,25 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   // Design review (2026-09) — collapsed by default (see `moreOpen` above), shared between the
   // desktop dialog and mobile drawer so both stay in lockstep instead of drifting separately.
   const moreOptionsToggle = (
-    <Button
-      size="small"
-      variant="text"
-      color="inherit"
-      onClick={() => setMoreOpen((v) => !v)}
-      endIcon={moreOpen ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
-      sx={{ mt: 1, color: 'text.secondary', alignSelf: 'flex-start', px: 0 }}
-    >
-      {moreOpen ? 'Fewer options' : 'More options — merchant, tags, card'}
-    </Button>
+    <Box sx={{ mt: 1 }}>
+      <Button
+        size="small"
+        variant="text"
+        color="inherit"
+        onClick={() => setMoreOpen((v) => !v)}
+        endIcon={moreOpen ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+        sx={{ color: 'text.secondary', px: 0 }}
+      >
+        {moreOpen ? 'Fewer options' : 'More options — merchant, tags, card'}
+      </Button>
+    </Box>
   );
 
-  const moreOptionsContent = (
-    <Collapse in={moreOpen} timeout="auto">
+  // Plain conditional render, not <Collapse>: inside the bottom-sheet Drawer the Collapse
+  // container stayed at its collapsed height after opening, so the revealed fields painted
+  // over the "who was this with" chips and split summary below instead of pushing them down.
+  const moreOptionsContent = moreOpen && (
+    <Box>
       <Box sx={{ mt: 1 }}>
         <EntityAutocomplete
           value={scannedMerchant || ''}
@@ -469,7 +473,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
           </Box>
         )}
       </Box>
-    </Collapse>
+    </Box>
   );
 
   const splitPreview = selectedGroup && groupDetail && (

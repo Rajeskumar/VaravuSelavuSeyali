@@ -1,3 +1,4 @@
+import html as _html
 import uuid
 from typing import List, Optional
 
@@ -46,6 +47,7 @@ from varavu_selavu_service.services.card_service import CardService
 from varavu_selavu_service.services.expense_comment_service import ExpenseCommentService
 from varavu_selavu_service.services.friend_balance_service import FriendBalanceService
 from varavu_selavu_service.services.expense_service import NOTES_UNCHANGED
+from varavu_selavu_service.services.email_service import send_transactional_email
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.group_export_service import GroupExportService
 from varavu_selavu_service.services.group_service import GroupService
@@ -310,6 +312,24 @@ def add_member(
             new_member_display_name=member["display_name"],
             exclude_emails=[member["user_email"]],
         )
+        # The fan_out above deliberately excludes the new member (it's a "someone joined"
+        # notice to everyone *else*), and this path never went through create_invite's email
+        # either — so a registered user added directly got no signal of any kind that they'd
+        # been seated in a group. Same transactional mailer create_invite already uses below.
+        group_name = _html.escape(member["group_name"])
+        inviter_name = _html.escape(member["inviter_name"])
+        background_tasks.add_task(
+            send_transactional_email,
+            to_email=member["user_email"],
+            subject=f"{member['inviter_name']} added you to {member['group_name']} on TrackSpense",
+            heading=f"{inviter_name} added you to \u201c{group_name}\u201d",
+            body_html=(
+                f"<p>{inviter_name} added you to <strong>{group_name}</strong> on TrackSpense. "
+                "You can see the group's expenses, your share of them, and settle up any time.</p>"
+            ),
+            cta_label="Open the group",
+            cta_url=f"{Settings().PUBLIC_APP_URL}/groups/{group_id}",
+        )
     return member
 
 
@@ -329,10 +349,32 @@ def remove_member(
 def create_invite(
     group_id: str,
     data: CreateInviteRequest,
+    background_tasks: BackgroundTasks,
     svc: GroupService = Depends(get_group_service),
     user_email: str = Depends(auth_required),
 ):
-    return svc.create_invite(group_id, user_email, member_id=data.member_id)
+    result = svc.create_invite(group_id, user_email, member_id=data.member_id, invited_email=data.email)
+    # The join link used to be returned only for the caller to paste somewhere by hand —
+    # in practice nobody found it (no UI ever called this), so "Add member" looked like it
+    # silently did nothing. With an address, the link is emailed directly.
+    if data.email:
+        group_name = _html.escape(result["group_name"])
+        inviter_name = _html.escape(result["inviter_name"])
+        background_tasks.add_task(
+            send_transactional_email,
+            to_email=str(data.email),
+            subject=f"{result['inviter_name']} invited you to {result['group_name']} on TrackSpense",
+            heading=f"{result['inviter_name']} invited you to join \u201c{result['group_name']}\u201d",
+            body_html=(
+                f"<p>{inviter_name} is splitting expenses with you in <strong>{group_name}</strong> on TrackSpense. "
+                "Join the group to see what's been shared, your share of it, and settle up in one tap.</p>"
+                "<p>This invite is addressed to you and expires in 7 days.</p>"  # matches group_service._INVITE_TTL_DAYS
+            ),
+            cta_label="Join the group",
+            cta_url=result["url"],
+        )
+        result["email_sent"] = True
+    return result
 
 
 @router.post("/{group_id}/leave", summary="Leave a group")

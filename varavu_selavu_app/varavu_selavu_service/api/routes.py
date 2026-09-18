@@ -562,7 +562,7 @@ def analysis(
     month: int | None = Query(default=None, ge=1, le=12),
     start_date: str | None = None,
     end_date: str | None = None,
-    scope: str = Query(default="personal", pattern="^(personal|combined|groups|i_paid|group_total)$"),
+    scope: str = Query(default="personal", pattern="^(personal|combined|groups|i_paid|group_total|group)$"),
     group_id: str | None = None,
     tag_ids: List[str] | None = Query(default=None),
     response: Response = None,

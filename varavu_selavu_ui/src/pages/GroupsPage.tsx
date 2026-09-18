@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -18,6 +19,7 @@ import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBackRounded';
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import GroupsRoundedIcon from '@mui/icons-material/GroupsRounded';
 import { motion } from 'framer-motion';
 import GroupsListRail from '../components/groups/GroupsListRail';
@@ -43,6 +45,7 @@ import {
   createGroupExpense,
   deleteGroupExpense,
   addMember,
+  createInvite,
   ApiError,
   MemberDTO,
   GroupExpenseRow,
@@ -51,7 +54,7 @@ import { typeScale, tabularNums } from '../theme';
 import { formatMoney } from '../utils/money';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 
-type TabKey = 'expenses' | 'balances' | 'activity';
+type TabKey = 'expenses' | 'activity';
 type RailTab = 'active' | 'archived';
 type RootTab = 'groups' | 'people';
 
@@ -73,6 +76,14 @@ const GroupsPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const theme = useTheme();
+  // Redesign (2026-09): Balances used to be a third tab, but its content is now always
+  // inline (see the disclosure below the group header) rather than gated behind a click —
+  // collapsed by default at `lg+`, where the side panel already gives the gist.
+  const isDesktopWithPanel = useMediaQuery(theme.breakpoints.up('lg'));
+  const [balancesExpanded, setBalancesExpanded] = React.useState(false);
+  React.useEffect(() => {
+    setBalancesExpanded(!isDesktopWithPanel);
+  }, [isDesktopWithPanel]);
   const { openQuickCapture } = useQuickCapture();
   const [tab, setTab] = React.useState<TabKey>('expenses');
   const [railTab, setRailTab] = React.useState<RailTab>('active');
@@ -174,12 +185,31 @@ const GroupsPage: React.FC = () => {
     setMemberError(null);
     setMemberSaving(true);
     try {
-      await addMember(groupId, memberMode === 'email' ? { email: memberEmail } : { display_name: memberName });
+      let message = 'Member added';
+      if (memberMode === 'email') {
+        const email = memberEmail.trim();
+        try {
+          // Already on TrackSpense: seat them directly.
+          await addMember(groupId, { email });
+        } catch (e) {
+          // Not registered: the backend says so with a 400. Create a placeholder seat and
+          // email them a join link pinned to this address — before this, the seat was
+          // created and nothing else happened, which read as "invite not sent".
+          const notRegistered = e instanceof ApiError && e.status === 400 && /No registered user/i.test(e.message);
+          if (!notRegistered) throw e;
+          const fallbackName = memberName.trim() || email.split('@')[0];
+          const seat = await addMember(groupId, { display_name: fallbackName });
+          await createInvite(groupId, seat.member_id, email);
+          message = `Invite emailed to ${email}`;
+        }
+      } else {
+        await addMember(groupId, { display_name: memberName.trim() });
+      }
       queryClient.invalidateQueries({ queryKey: ['group', groupId] });
       setMemberDialogOpen(false);
       setMemberEmail('');
       setMemberName('');
-      setToast({ open: true, message: 'Member added', severity: 'success' });
+      setToast({ open: true, message, severity: 'success' });
     } catch (e) {
       // Non-ApiError = no response at all (offline, blocked, timed out), not a server rejection.
       setMemberError(e instanceof ApiError ? e.message : "Couldn't reach TrackSpense, so the member wasn't added. Check your connection and try again.");
@@ -389,14 +419,81 @@ const GroupsPage: React.FC = () => {
                 </Box>
               )}
 
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, mt: 2 }}>
+              {/* Redesign (2026-09): "Balances" used to be its own tab, duplicating the
+                  desktop side panel's net numbers while also being the only place to see the
+                  per-member breakdown and "who owes whom" — content the panel doesn't carry
+                  and that would have been stranded below `lg`, where the panel is hidden. This
+                  disclosure is now the one place that detail lives, at every width — collapsed
+                  to a one-line summary by default at `lg+` (the panel already gives the gist),
+                  expanded by default below it. */}
+              {members.length > 1 && (
+                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, mb: 2.5, overflow: 'hidden' }}>
+                  <Box
+                    onClick={() => setBalancesExpanded((v) => !v)}
+                    role="button"
+                    aria-expanded={balancesExpanded}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      px: 2,
+                      py: 1.25,
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.875rem' }}>Balances</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {balancesQuery.isLoading
+                          ? 'Loading…'
+                          : !balancesQuery.data?.transfers.length
+                            ? 'Everyone is settled up'
+                            : `${balancesQuery.data.transfers.length} payment${balancesQuery.data.transfers.length === 1 ? '' : 's'} to settle up`}
+                      </Typography>
+                    </Box>
+                    <ExpandMoreRoundedIcon
+                      fontSize="small"
+                      sx={{ color: 'text.secondary', flexShrink: 0, transition: 'transform 0.15s', transform: balancesExpanded ? 'rotate(180deg)' : 'none' }}
+                    />
+                  </Box>
+                  {balancesExpanded && (
+                    <Box sx={{ px: 2, pb: 2.5, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                      {balancesQuery.isLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                          <CircularProgress size={22} />
+                        </Box>
+                      ) : balancesQuery.data ? (
+                        <>
+                          <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} currency={group.currency} />
+                          <Button
+                            fullWidth
+                            variant="contained"
+                            sx={{ mt: 2 }}
+                            onClick={() => setSettleOpen(true)}
+                            disabled={isArchived}
+                          >
+                            Settle up
+                          </Button>
+                        </>
+                      ) : null}
+                    </Box>
+                  )}
+                </Box>
+              )}
+
+              {/* Name is allowed to wrap (was `noWrap`, which truncated "UX Audit Test" to
+                  "UX Aud…" on phones); the management controls wrap onto their own row
+                  instead of squeezing the name. */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, mt: 2, flexWrap: 'wrap' }}>
                 <IconButton onClick={() => navigate('/groups')} aria-label="Back to groups" size="small" sx={{ display: { xs: 'inline-flex', md: 'none' } }}>
                   <ArrowBackIcon />
                 </IconButton>
                 <GroupAvatar seed={group.group_id} groupType={group.group_type} size={40} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }} noWrap>
+                <Box sx={{ flex: '1 1 180px', minWidth: 0 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
                       {group.name}
                     </Typography>
                     {isArchived && <Chip label="Archived" size="small" color="warning" variant="outlined" />}
@@ -405,21 +502,23 @@ const GroupsPage: React.FC = () => {
                     {members.length} member{members.length === 1 ? '' : 's'}
                   </Typography>
                 </Box>
-                <MemberAvatarStack members={members} />
-                <Button
-                  size="small"
-                  variant="text"
-                  color="inherit"
-                  startIcon={<PersonAddAlt1RoundedIcon fontSize="small" />}
-                  onClick={() => setMemberDialogOpen(true)}
-                  disabled={isArchived}
-                  sx={{ flexShrink: 0, color: 'text.secondary' }}
-                >
-                  Add Member
-                </Button>
-                <IconButton onClick={() => setSettingsOpen(true)} aria-label="Group settings" size="small">
-                  <SettingsRoundedIcon />
-                </IconButton>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto', flexShrink: 0 }}>
+                  <MemberAvatarStack members={members} />
+                  <Button
+                    size="small"
+                    variant="text"
+                    color="inherit"
+                    startIcon={<PersonAddAlt1RoundedIcon fontSize="small" />}
+                    onClick={() => setMemberDialogOpen(true)}
+                    disabled={isArchived}
+                    sx={{ flexShrink: 0, color: 'text.secondary' }}
+                  >
+                    Add Member
+                  </Button>
+                  <IconButton onClick={() => setSettingsOpen(true)} aria-label="Group settings" size="small">
+                    <SettingsRoundedIcon />
+                  </IconButton>
+                </Box>
               </Box>
 
               {isArchived && (
@@ -441,17 +540,12 @@ const GroupsPage: React.FC = () => {
                   onChange={setTab}
                   options={[
                     { value: 'expenses', label: 'Expenses' },
-                    { value: 'balances', label: 'Balances' },
                     { value: 'activity', label: 'Activity' },
                   ]}
                 />
-                {tab === 'expenses' ? (
+                {tab === 'expenses' && (
                   <Button variant="contained" startIcon={<AddIcon />} onClick={() => openQuickCapture(groupId)} disabled={members.length === 0 || isArchived}>
                     Add Expense
-                  </Button>
-                ) : (
-                  <Button variant="contained" onClick={() => setSettleOpen(true)} disabled={members.length < 2 || isArchived}>
-                    Settle Up
                   </Button>
                 )}
               </Box>
@@ -482,17 +576,6 @@ const GroupsPage: React.FC = () => {
                       if (row) handleQuickDeleteExpense(row);
                     }}
                   />
-                </Box>
-              )}
-
-              {tab === 'balances' && (
-                <Box>
-                  {balancesQuery.isLoading && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                      <CircularProgress />
-                    </Box>
-                  )}
-                  {balancesQuery.data && <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} currency={group.currency} />}
                 </Box>
               )}
 
@@ -553,15 +636,18 @@ const GroupsPage: React.FC = () => {
               onChange={setMemberMode}
               fullWidth
               options={[
-                { value: 'email', label: 'Registered email' },
-                { value: 'placeholder', label: 'Placeholder name' },
+                { value: 'email', label: 'Invite by email' },
+                { value: 'placeholder', label: 'Name only' },
               ]}
             />
           </Box>
           {memberMode === 'email' ? (
-            <TextField label="Email" type="email" size="small" fullWidth value={memberEmail} onChange={(e) => setMemberEmail(e.target.value)} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <TextField label="Email" type="email" size="small" fullWidth autoFocus value={memberEmail} onChange={(e) => setMemberEmail(e.target.value)} helperText="Already on TrackSpense? They're added right away. Otherwise they get an email with a join link." />
+              <TextField label="Name (optional)" size="small" fullWidth value={memberName} onChange={(e) => setMemberName(e.target.value)} helperText="Shown in the group until they join" />
+            </Box>
           ) : (
-            <TextField label="Name" size="small" fullWidth value={memberName} onChange={(e) => setMemberName(e.target.value)} helperText="For people who aren't on TrackSpense yet" />
+            <TextField label="Name" size="small" fullWidth autoFocus value={memberName} onChange={(e) => setMemberName(e.target.value)} helperText="A seat with no account — for someone who won't use the app. You can email them an invite later from Group settings." />
           )}
           {memberError && (
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>
@@ -571,7 +657,7 @@ const GroupsPage: React.FC = () => {
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
             <Button onClick={() => setMemberDialogOpen(false)}>Cancel</Button>
             <Button variant="contained" disabled={memberSaving || (memberMode === 'email' ? !memberEmail.trim() : !memberName.trim())} onClick={handleAddMember}>
-              {memberSaving ? 'Adding...' : 'Add'}
+              {memberSaving ? 'Adding...' : memberMode === 'email' ? 'Add or invite' : 'Add'}
             </Button>
           </Box>
         </Box>

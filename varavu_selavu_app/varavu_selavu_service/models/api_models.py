@@ -502,12 +502,18 @@ class AddMemberRequest(BaseModel):
 
 class CreateInviteRequest(BaseModel):
     member_id: str
+    # When set, the invite is addressed to this person (accept_invite then only lets that
+    # address redeem it) and the join link is emailed to them. Without it the link is
+    # returned for the caller to share by hand.
+    email: Optional[EmailStr] = None
 
 
 class CreateInviteResponse(BaseModel):
     token: str
     url: str
     expires_at: str
+    invited_email: Optional[str] = None
+    email_sent: bool = False
 
 
 class AcceptInviteRequest(BaseModel):

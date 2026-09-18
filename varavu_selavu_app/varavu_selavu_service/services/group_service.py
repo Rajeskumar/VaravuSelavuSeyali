@@ -409,7 +409,16 @@ class GroupService:
             payload={"display_name": new_member.display_name, "user_email": new_member.user_email}
         )
 
-        return self._member_dto(new_member)
+        result = self._member_dto(new_member)
+        # For the route to email a just-seated registered user (2026-09 gap fix — they
+        # previously got neither an email nor the push fan-out, which excludes them by
+        # design as the actor of their own join event). Dropped by MemberDTO's response
+        # serialization, same pattern as CreateInviteResponse/create_invite below.
+        if registered_user is not None:
+            inviter = self.db.query(User).filter(User.email == email).first()
+            result["group_name"] = group.name
+            result["inviter_name"] = inviter.name if inviter and inviter.name else email
+        return result
 
     def remove_member(self, group_id: str, email: str, member_id: str, force: bool = False) -> None:
         group = self._get_group_or_404(group_id)
@@ -457,7 +466,7 @@ class GroupService:
     # Invitations
     # ------------------------------------------------------------------
 
-    def create_invite(self, group_id: str, email: str, member_id: str) -> Dict:
+    def create_invite(self, group_id: str, email: str, member_id: str, invited_email: Optional[str] = None) -> Dict:
         group = self._get_group_or_404(group_id)
         self.require_membership(group_id, email)
 
@@ -488,21 +497,32 @@ class GroupService:
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now(timezone.utc) + timedelta(days=_INVITE_TTL_DAYS)
 
+        # A placeholder seat has no user_email, so before `invited_email` existed this was
+        # always None and every invite link was freely redeemable by whoever held it. An
+        # addressed invite pins the seat to that address (enforced in accept_invite).
+        resolved_invited_email = (invited_email or member.user_email or None)
+        if resolved_invited_email:
+            resolved_invited_email = resolved_invited_email.strip().lower()
+
         invite = GroupInvitation(
             id=uuid.uuid4(),
             group_id=group.id,
             member_id=member.id,
-            invited_email=member.user_email,
+            invited_email=resolved_invited_email,
             token=token,
             expires_at=expires_at,
         )
         self.db.add(invite)
         self.db.commit()
 
+        inviter = self.db.query(User).filter(User.email == email).first()
         return {
             "token": token,
             "url": f"{self.settings.PUBLIC_APP_URL}/groups/join/{token}",
             "expires_at": expires_at.isoformat(),
+            "invited_email": resolved_invited_email,
+            "group_name": group.name,
+            "inviter_name": (inviter.name if inviter and inviter.name else email),
         }
 
     def accept_invite(self, token: str, acceptor_email: str) -> Dict:

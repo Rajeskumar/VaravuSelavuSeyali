@@ -305,3 +305,24 @@ def test_analysis_cache_distinguishes_scope_and_group_id(test_client, db_session
     assert totals["combined"] == 95.00
     assert totals["groups"] == 45.00
     assert len(set(totals.values())) == 3  # all distinct — no cache-key collision
+
+
+def test_analysis_scope_group_is_the_whole_groups_spend_without_personal(test_client, db_session, _groups_enabled_for_scope_tests):
+    """scope=group answers "what did this group spend" — the full 90.00 the group logged, not
+    the caller's 45.00 share (scope=groups) and not personal spend folded in (group_total)."""
+    group_id, _ = _seed_personal_and_group_scenario(test_client, db_session, year=2026, month=9)
+
+    res = test_client.get("/api/v1/analysis", params={"scope": "group", "year": 2026, "month": 9, "group_id": group_id})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["total_expenses"] == 90.00
+    assert body["spend_breakdown"]["personal"] == 0.0
+    assert body["spend_breakdown"]["group_share"] == 90.00
+
+    # Sanity against the neighbouring scopes on the same data.
+    share = test_client.get("/api/v1/analysis", params={"scope": "groups", "year": 2026, "month": 9, "group_id": group_id}).json()
+    assert share["total_expenses"] == 45.00
+
+    # group_id is mandatory for this scope — there's no "all groups' totals" reading of it.
+    missing = test_client.get("/api/v1/analysis", params={"scope": "group", "year": 2026, "month": 9})
+    assert missing.status_code == 400

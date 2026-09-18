@@ -186,12 +186,16 @@ export interface CreateInviteResponse {
   token: string;
   url: string;
   expires_at: string;
+  invited_email?: string | null;
+  email_sent?: boolean;
 }
 
-export async function createInvite(groupId: string, memberId: string): Promise<CreateInviteResponse> {
+/** Mints a join link for a pending placeholder seat. With `email`, the backend also emails
+ * the link to that address and pins the seat to it (only that address can redeem it). */
+export async function createInvite(groupId: string, memberId: string, email?: string): Promise<CreateInviteResponse> {
   const res = await fetchWithAuth(`/api/v1/groups/${groupId}/invites`, {
     method: 'POST',
-    body: JSON.stringify({ member_id: memberId }),
+    body: JSON.stringify(email ? { member_id: memberId, email } : { member_id: memberId }),
   });
   if (!res.ok) await throwApiError(res, 'Failed to create invite');
   return res.json();

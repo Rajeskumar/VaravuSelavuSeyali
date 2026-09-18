@@ -85,6 +85,43 @@ def test_add_registered_member_links_instantly(test_client, db_session):
     assert body["display_name"] == "Arun"
 
 
+def test_add_registered_member_gets_notified_by_email(test_client, db_session):
+    """2026-09 gap fix: a directly-added registered member previously got no signal of any
+    kind — the push fan-out deliberately excludes them (it's a "someone else joined" notice),
+    and this path never went through create_invite's email either."""
+    from unittest.mock import patch
+
+    db_session.add(User(id=uuid.uuid4(), email="arun@test.com", password_hash="hash", name="Arun"))
+    db_session.commit()
+
+    create_res = test_client.post("/api/v1/groups", json={"name": "Trip"})
+    group_id = create_res.json()["group_id"]
+
+    with patch("varavu_selavu_service.api.groups_routes.send_transactional_email") as send:
+        res = test_client.post(f"/api/v1/groups/{group_id}/members", json={"email": "arun@test.com"})
+    assert res.status_code == 201
+
+    send.assert_called_once()
+    kwargs = send.call_args.kwargs
+    assert kwargs["to_email"] == "arun@test.com"
+    assert "Trip" in kwargs["subject"]
+    assert f"/groups/{group_id}" in kwargs["cta_url"]
+
+
+def test_add_placeholder_member_sends_no_email(test_client, db_session):
+    """A name-only placeholder has no address to notify — this must not error or fire the
+    background task with a null recipient."""
+    from unittest.mock import patch
+
+    create_res = test_client.post("/api/v1/groups", json={"name": "Trip"})
+    group_id = create_res.json()["group_id"]
+
+    with patch("varavu_selavu_service.api.groups_routes.send_transactional_email") as send:
+        res = test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Sam"})
+    assert res.status_code == 201
+    send.assert_not_called()
+
+
 def test_add_member_with_unregistered_email_is_rejected(test_client, db_session):
     create_res = test_client.post("/api/v1/groups", json={"name": "Trip"})
     group_id = create_res.json()["group_id"]
@@ -386,3 +423,58 @@ def test_delete_restore_group(test_client, db_session):
     # Check it shows up in default list
     res = test_client.get("/api/v1/groups")
     assert any(g["group_id"] == group_id for g in res.json())
+
+
+def test_create_invite_with_email_pins_seat_and_sends_join_link(test_client, db_session):
+    from unittest.mock import patch
+    from varavu_selavu_service.db.models import GroupInvitation
+
+    create_res = test_client.post("/api/v1/groups", json={"name": "Trip"})
+    group_id = create_res.json()["group_id"]
+    member_res = test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Alex"})
+    member_id = member_res.json()["member_id"]
+
+    with patch("varavu_selavu_service.api.groups_routes.send_transactional_email") as send:
+        res = test_client.post(
+            f"/api/v1/groups/{group_id}/invites",
+            json={"member_id": member_id, "email": "Alex@Example.com"},
+        )
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["invited_email"] == "alex@example.com"
+    assert body["email_sent"] is True
+
+    # The join link went out by email, to the address given, carrying this invite's token.
+    send.assert_called_once()
+    kwargs = send.call_args.kwargs
+    assert kwargs["to_email"].lower() == "alex@example.com"  # EmailStr normalizes the domain
+    assert body["token"] in kwargs["cta_url"]
+    assert "Trip" in kwargs["subject"]
+
+    # And the seat is pinned: a different account can't redeem it.
+    invite = db_session.query(GroupInvitation).filter(GroupInvitation.token == body["token"]).first()
+    assert invite.invited_email == "alex@example.com"
+    db_session.add(User(id=uuid.uuid4(), email="someone-else@test.com", password_hash="hash", name="Else"))
+    db_session.commit()
+    old = _as_user("someone-else@test.com")
+    try:
+        accept = test_client.post("/api/v1/groups/invites/accept", json={"token": body["token"]})
+    finally:
+        _restore(old)
+    assert accept.status_code == 403
+
+
+def test_create_invite_without_email_sends_nothing(test_client, db_session):
+    from unittest.mock import patch
+
+    create_res = test_client.post("/api/v1/groups", json={"name": "Trip"})
+    group_id = create_res.json()["group_id"]
+    member_res = test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Sam"})
+    member_id = member_res.json()["member_id"]
+
+    with patch("varavu_selavu_service.api.groups_routes.send_transactional_email") as send:
+        res = test_client.post(f"/api/v1/groups/{group_id}/invites", json={"member_id": member_id})
+    assert res.status_code == 201
+    assert res.json()["email_sent"] is False
+    assert res.json()["invited_email"] is None
+    send.assert_not_called()

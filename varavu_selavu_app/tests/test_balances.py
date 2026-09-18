@@ -471,3 +471,28 @@ def test_list_my_balance_respects_expense_currency_fx(test_client, db_session):
         test_client, group_id, m["test@user.com"]
     )
 
+
+
+def test_removed_settled_member_drops_out_of_balances_but_unsettled_one_stays(test_client, db_session):
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
+    # A placeholder seat that never took part in anything: settled by definition.
+    seat = test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Ghost"}).json()["member_id"]
+    # b owes the admin 50 after this expense.
+    test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "01/10/2026", "description": "Dinner", "category": "Food", "amount": 100.00,
+            "payers": [{"member_id": m["test@user.com"], "amount_paid": 100.00}],
+            "split": {"type": "equal", "entries": [{"member_id": m["test@user.com"]}, {"member_id": m["b@test.com"]}]},
+        },
+    )
+
+    assert test_client.delete(f"/api/v1/groups/{group_id}/members/{seat}").status_code == 200
+    names = [x["display_name"] for x in test_client.get(f"/api/v1/groups/{group_id}/balances").json()["members"]]
+    assert "Ghost" not in names
+
+    # Unsettled: plain remove is refused, force-remove goes through and they stay on the books.
+    assert test_client.delete(f"/api/v1/groups/{group_id}/members/{m['b@test.com']}").status_code == 409
+    assert test_client.delete(f"/api/v1/groups/{group_id}/members/{m['b@test.com']}?force=true").status_code == 200
+    balances = {x["display_name"]: x["net"] for x in test_client.get(f"/api/v1/groups/{group_id}/balances").json()["members"]}
+    assert balances["b"] == -50.00

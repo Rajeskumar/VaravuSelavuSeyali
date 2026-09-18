@@ -187,8 +187,15 @@ class BalanceService:
         group = self.db.query(Group).filter(Group.id == gid).first()
         simplify = bool(group.simplify_debts) if group else False
 
-        members = self.db.query(GroupMember).filter(GroupMember.group_id == gid).all()
         net_by_member = self._compute_nets(gid)
+        # A member who left (or was removed) with a settled balance is gone from the group's
+        # point of view — listing them at $0.00 forever made "Remove" look like it hadn't
+        # worked. A departed member who still owes / is owed stays visible until it's settled,
+        # which is exactly what the force-remove confirmation promises.
+        members = [
+            m for m in self.db.query(GroupMember).filter(GroupMember.group_id == gid).all()
+            if not (m.status == "left" and net_by_member.get(m.id, Decimal("0.00")) == 0)
+        ]
 
         # TS-GRP-130: payment handles, only for registered members (placeholders
         # have no User row to look one up on).
