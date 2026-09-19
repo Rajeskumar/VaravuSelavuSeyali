@@ -53,7 +53,7 @@ import ItemSplitBoard from '../groups/ItemSplitBoard';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
 import EntityAutocomplete from './EntityAutocomplete';
-import { formatMoney, currencySymbol } from '../../utils/money';
+import { currencySymbol } from '../../utils/money';
 
 // Exported for reuse by the ExpenseFeed/ExpenseDetailSheet (TS-DES-102) — the
 // feed's category tint-dot mapping and the detail sheet's inline category

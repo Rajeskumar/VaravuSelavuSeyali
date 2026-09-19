@@ -10,7 +10,7 @@ import StarIcon from '@mui/icons-material/StarRounded';
 import StarBorderIcon from '@mui/icons-material/StarBorderRounded';
 import {
   listMyCards, addMyCard, removeMyCard, setMyDefaultCard, searchCardCatalog, getCardCoach,
-  UserCardDTO, CardCatalogSummary, CardCoachCategoryDTO, CardCoachMerchantDTO,
+  UserCardDTO, CardCatalogSummary,
 } from '../../api/cards';
 import CardDetailDialog from './CardDetailDialog';
 import CustomCardForm from './CustomCardForm';

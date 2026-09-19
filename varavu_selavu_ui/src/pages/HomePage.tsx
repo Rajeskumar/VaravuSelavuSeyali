@@ -56,7 +56,7 @@ function useTypedText(text: string, speedMs = 34): string {
       if (i >= text.length) clearInterval(id);
     }, speedMs);
     return () => clearInterval(id);
-  }, [text]);
+  }, [text, speedMs]);
   return display;
 }
 

@@ -45,10 +45,8 @@ const BulkTagDialog: React.FC<BulkTagDialogProps> = ({ open, mode, expenseIds, o
     setError(null);
     try {
       const call = isApply ? bulkApplyTags : bulkRemoveTags;
-      let affected = 0;
       for (const tag_name of tagNames) {
-        const result = await call({ tag_name, expense_ids: expenseIds, dry_run: false });
-        affected += isApply ? result.applied_count : result.matched_count;
+        await call({ tag_name, expense_ids: expenseIds, dry_run: false });
       }
       const verb = isApply ? 'Tagged' : 'Untagged';
       onDone(`${verb} ${expenseIds.length} expense${expenseIds.length === 1 ? '' : 's'} with ${tagNames.length} tag${tagNames.length === 1 ? '' : 's'}.`);

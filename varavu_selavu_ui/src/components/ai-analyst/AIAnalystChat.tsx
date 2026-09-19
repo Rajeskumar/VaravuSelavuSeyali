@@ -30,7 +30,7 @@ const SUGGESTED_PROMPTS = [
   "Where did I buy eggs cheapest?"
 ];
 
-export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnalystChatProps) {
+export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }: AIAnalystChatProps) {
   const theme = useTheme();
   const [messages, setMessages] = useState<Message[]>([]);
   const [query, setQuery] = useState("");
@@ -166,8 +166,8 @@ export default function AIAnalystChat({ userId, initialQuery, onClose }: AIAnaly
       if (heading) {
         const level = heading[1].length;
         html.push(`<h${level} style="margin: 8px 0; font-family: Inter; font-weight: 600;">${formatInline(heading[2])}</h${level}>`);
-      } else if (/^\s*[-\*]\s+/.test(line)) {
-        const item = line.replace(/^\s*[-\*]\s+/, '');
+      } else if (/^\s*[-*]\s+/.test(line)) {
+        const item = line.replace(/^\s*[-*]\s+/, '');
         html.push(`<p style="margin: 4px 0;">• ${formatInline(item)}</p>`);
       } else if (line.trim()) {
         html.push(`<p style="margin: 8px 0;">${formatInline(line)}</p>`);

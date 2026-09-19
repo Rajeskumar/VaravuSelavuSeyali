@@ -14,7 +14,7 @@ import { typeScale, tabularNums } from '../../theme';
 import { findMainCategory } from './AddExpenseForm';
 import { formatMoney, dayLabel } from './ExpenseFeed';
 import type { FeedExpense } from './ExpenseFeed';
-import { parseAppDate, isoToMMDDYYYY, toISODate } from '../../utils/date';
+import { parseAppDate, toISODate } from '../../utils/date';
 import { getExpenseItems, updateExpenseItems } from '../../api/expenses';
 import { getGroupExpenseItems, updateGroupExpenseItems } from '../../api/groups';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';

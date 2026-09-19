@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Avatar, Paper, Button, CircularProgress } from '@mui/material';
+import { Box, Typography, Avatar, Paper, CircularProgress } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { getGroupActivity, GroupDetailResponse, GroupActivityDTO } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';

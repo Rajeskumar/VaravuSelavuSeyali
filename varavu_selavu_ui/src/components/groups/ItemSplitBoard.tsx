@@ -3,10 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import Avatar from '@mui/material/Avatar';
-import Divider from '@mui/material/Divider';
-import Checkbox from '@mui/material/Checkbox';
 import TextField from '@mui/material/TextField';
-import InputAdornment from '@mui/material/InputAdornment';
 import { useTheme } from '@mui/material/styles';
 import { MemberDTO, GroupExpenseItemEntry, SplitSuggestionDTO, suggestItemAssignment } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
@@ -90,7 +87,7 @@ const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
 
   return (
     <Box>
-      {items.map((item, idx) => {
+      {items.map((item) => {
         const assignedIds = Object.keys(item.member_ratios);
         const hasAssignment = assignedIds.length > 0;
         const sumRatios = Object.values(item.member_ratios).reduce((sum, r) => sum + r, 0);

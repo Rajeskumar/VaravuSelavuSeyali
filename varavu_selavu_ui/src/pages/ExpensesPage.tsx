@@ -84,7 +84,10 @@ const ExpensesPage: React.FC = () => {
     enabled: !!user,
     initialPageParam: 0,
   });
-  const personalExpenses: ExpenseRecord[] = data?.pages.flatMap((p) => p.items) ?? [];
+  const personalExpenses: ExpenseRecord[] = React.useMemo(
+    () => data?.pages.flatMap((p) => p.items) ?? [],
+    [data]
+  );
 
   // Groups/Combined scope: a separate, unpaginated fetch (Phase-1 group volumes
   // are expected to be small, spec §6.5) so these two scopes always show the

@@ -22,14 +22,7 @@ import { PriceHistoryChart } from './PriceHistoryChart';
 
 import { typeScale } from '../../theme';
 
-function monthSpan(firstSeenAt?: string | null, lastSeenAt?: string | null): number {
-  if (!firstSeenAt || !lastSeenAt) return 1;
-  const first = new Date(firstSeenAt);
-  const last = new Date(lastSeenAt);
-  if (isNaN(first.getTime()) || isNaN(last.getTime())) return 1;
-  const months = (last.getFullYear() - first.getFullYear()) * 12 + (last.getMonth() - first.getMonth()) + 1;
-  return Math.max(1, months);
-}
+
 
 /**
  * TS-DES-205 — Items tab, migrated from the standalone `ItemInsightsPage.tsx` (deleted; that
@@ -105,8 +98,8 @@ const ItemsTab: React.FC = () => {
   // Detail view
   if (detail) {
     const itemLabel = detail.item_name || detail.normalized_name || '';
-    const span = monthSpan(detail.first_seen_at, detail.last_seen_at);
-    const avgMonthlySpend = (detail.total_spent ?? 0) / span;
+
+
     const hasStoreComparison = (detail.store_comparison?.length ?? 0) >= 2;
 
     return (

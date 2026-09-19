@@ -44,7 +44,7 @@ test('shows expenses and opens Quick Capture', async () => {
   });
   jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false, budgets_enabled: true, card_coach_enabled: false, tags_enabled: false });
   renderPage();
-  await waitFor(() => screen.getByText('Coffee'));
+  await screen.findByText('Coffee');
   expect(screen.getByText('Coffee')).toBeInTheDocument();
   // TrackSpense v3 Prototype: the page's "Add Expense" button now opens the shared
   // QuickCaptureSheet instead of AddExpenseForm's dialog (AddExpenseForm is still used, but only
@@ -63,7 +63,7 @@ test('deletes an expense', async () => {
   const delSpy = jest.spyOn(api, 'deleteExpense').mockResolvedValue();
   jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false, budgets_enabled: true, card_coach_enabled: false, tags_enabled: false });
   renderPage();
-  await waitFor(() => screen.getByText('Coffee'));
+  await screen.findByText('Coffee');
   // The feed row's delete affordance opens the existing confirm dialog rather
   // than deleting immediately (same two-step flow the old <Table> row already
   // had — `setPendingDelete`/`setConfirmOpen`, confirmed by the delete button
@@ -87,7 +87,7 @@ test('regression: with groups disabled (404), no scope filter renders and person
   });
   jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false, budgets_enabled: true, card_coach_enabled: false, tags_enabled: false });
   renderPage();
-  await waitFor(() => screen.getByText('Coffee'));
+  await screen.findByText('Coffee');
   expect(screen.queryByRole('button', { name: 'Groups' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Combined' })).not.toBeInTheDocument();
 });
@@ -122,7 +122,7 @@ test('scope filter switches the queried data and shows the group badge column', 
   ]);
 
   renderPage();
-  await waitFor(() => screen.getByText('Coffee'));
+  await screen.findByText('Coffee');
 
   const groupsToggle = await screen.findByRole('button', { name: 'Groups' });
   fireEvent.click(groupsToggle);

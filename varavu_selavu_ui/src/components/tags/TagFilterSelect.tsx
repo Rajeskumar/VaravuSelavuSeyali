@@ -2,9 +2,8 @@ import React from 'react';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import Chip from '@mui/material/Chip';
-import Box from '@mui/material/Box';
 import { useQuery } from '@tanstack/react-query';
-import { listTags, TagDTO } from '../../api/tags';
+import { listTags } from '../../api/tags';
 
 interface TagFilterSelectProps {
   value: string[]; // selected tag ids

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AddExpenseForm from './AddExpenseForm';
 import * as api from '../../api/expenses';
@@ -49,7 +49,7 @@ test('add and delete items, save enabled on mismatch', async () => {
   const file = new File(['dummy'], 'r.png', { type: 'image/png' });
   fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });
   fireEvent.click(screen.getByRole('button', { name: /Parse Receipt/i }));
-  await waitFor(() => screen.getByText('Items'));
+  await screen.findByText('Items');
 
   expect((screen.getByLabelText(/Description/i) as HTMLInputElement).value).toBe('Store');
 

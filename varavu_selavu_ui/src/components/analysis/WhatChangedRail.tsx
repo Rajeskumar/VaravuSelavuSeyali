@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, CircularProgress, IconButton } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import ArrowUpRightIcon from '@mui/icons-material/ArrowOutwardRounded';
 import ArrowDownRightIcon from '@mui/icons-material/SubdirectoryArrowRightRounded';
 import { useTheme } from '@mui/material/styles';
