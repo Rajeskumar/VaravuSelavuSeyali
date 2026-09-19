@@ -18,6 +18,7 @@ dependencies = [
     # starlette: fastapi sets no upper bound, so raise it explicitly to clear its own
     # advisories. limits: slowapi caps nothing, and limits<3 imports pkg_resources, which
     # setuptools>=81 no longer ships -- that coupling is why setuptools was pinned <70.
+    "anyio (>=4.14.2)",
     "pyasn1 (>=0.6.3)",
     "pygments (>=2.20.0)",
     "python-dotenv (>=1.2.2)",
