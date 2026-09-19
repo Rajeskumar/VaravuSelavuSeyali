@@ -1,0 +1,7 @@
+[
+  { "description": "Groceries_run", "category": "Groceries", "cost": 45.67 },
+  { "description": "Dinner_out", "category": "Food & Dining", "cost": 32.10 },
+  { "description": "Gas_fill_up", "category": "Transportation", "cost": 55.00 },
+  { "description": "Movie_night", "category": "Entertainment", "cost": 24.99 },
+  { "description": "Morning_coffee", "category": "Food & Dining", "cost": 5.25 }
+]

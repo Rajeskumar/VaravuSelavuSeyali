@@ -126,7 +126,11 @@ const TrueTotalHero: React.FC<Props> = ({ personalTotal, groupSummaries, groupsE
         }}
       >
         <Box>
-          <Typography component="div" sx={{ ...typeScale.displayHero, color: 'text.primary' }}>
+          <Typography
+            component="div"
+            data-testid="true-total-hero-amount"
+            sx={{ ...typeScale.displayHero, color: 'text.primary' }}
+          >
             {formatMoney(total)}
           </Typography>
 

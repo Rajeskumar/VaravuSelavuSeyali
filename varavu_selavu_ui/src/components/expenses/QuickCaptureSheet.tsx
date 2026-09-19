@@ -394,6 +394,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         return (
           <Box
             key={chip.id}
+            data-testid={`who-chip-${chip.id}`}
             onClick={() => setWho(chip.id)}
             sx={{
               px: 1.5,
@@ -505,6 +506,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       variant="contained"
       disabled={!ready}
       onClick={handleSave}
+      data-testid="quick-capture-save"
       // Quick Capture's Save is the one hero CTA on this screen (design system rule: one
       // gradient CTA per screen) — every other contained-primary button app-wide is flat.
       sx={{ mt: 1.5, height: 48, borderRadius: 1.5, fontSize: 15, ...heroButtonSx }}
@@ -589,6 +591,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 autoFocus
                 slotProps={{ input: { disableUnderline: true } }}
                 inputProps={{
+                  'data-testid': 'quick-capture-amount',
                   style: {
                     textAlign: 'left',
                     fontFamily: "'Bricolage Grotesque', sans-serif",
@@ -610,6 +613,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               placeholder="Description (AI suggests from merchant)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              inputProps={{ 'data-testid': 'quick-capture-description' }}
               sx={{ mt: 1 }}
             />
 
@@ -707,6 +711,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
             placeholder="Description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            inputProps={{ 'data-testid': 'quick-capture-description' }}
             sx={{ mt: 1 }}
           />
 
@@ -742,6 +747,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
             {KEYS.map((k) => (
               <Box
                 key={k}
+                data-testid={`keypad-${k === '⌫' ? 'backspace' : k === '.' ? 'decimal' : k}`}
                 onClick={() => setAmount((a) => pressKey(a, k))}
                 sx={{
                   height: 46,

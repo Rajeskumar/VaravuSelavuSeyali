@@ -1,0 +1,26 @@
+{
+  "name": "trackspense-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Automated QA framework for TrackSpense (Playwright + TypeScript): smoke, functional, regression, API and negative-path coverage for the web app and backend.",
+  "scripts": {
+    "qa:install": "playwright install --with-deps chromium firefox webkit",
+    "qa:smoke": "playwright test --grep @smoke --project=setup --project=chromium",
+    "qa:prod-smoke": "playwright test --project=prod-smoke",
+    "qa:regression": "playwright test --grep @regression --project=setup --project=chromium",
+    "qa:regression:full": "playwright test --grep @regression --project=setup --project=chromium --project=firefox --project=webkit --project=mobile-iphone",
+    "qa:api": "playwright test --project=api",
+    "qa:e2e": "playwright test --project=setup --project=chromium",
+    "qa:mobile": "playwright test --grep @regression --project=setup --project=mobile-iphone",
+    "qa:all": "playwright test",
+    "qa:report": "playwright show-report reports/html-report",
+    "qa:db:bootstrap": "bash scripts/bootstrap-local-db.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^24.1.0",
+    "dotenv": "^16.4.5",
+    "typescript": "^5.6.3"
+  }
+}

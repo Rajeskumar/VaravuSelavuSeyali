@@ -1,0 +1,180 @@
+name: QA
+
+# Everything below runs in ONE job on purpose: the QA framework provisions its two QA
+# personas once per run (keyed by GITHUB_RUN_ID, see qa/e2e/setup/global.setup.ts's marker
+# file) because POST /auth/register and /auth/login are both rate-limited on the real
+# backend — splitting smoke/regression/api into separate jobs would re-provision (and
+# re-hit those limits) on every job's fresh runner. Keep it one job unless that
+# rate-limit budget is revisited alongside it (see qa/README.md's "Real rate limits").
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DATABASE_URL: postgresql://trackspense_qa:trackspense_qa_pass@localhost:5432/trackspense_qa
+  # global.setup.ts uses this to mark the QA personas email-verified directly in the DB —
+  # group actions require it and there's no real SMTP here to click a verification link
+  # with. Same value as DATABASE_URL: the qa/ framework and the backend under test share
+  # this one Postgres service container.
+  QA_DATABASE_URL: postgresql://trackspense_qa:trackspense_qa_pass@localhost:5432/trackspense_qa
+  ENVIRONMENT: local
+  JWT_SECRET: qa-ci-secret-not-for-prod
+  AUTH_COOKIE_SECURE: 'false' # cookies must work over plain http://localhost in CI
+  GROUPS_ENABLED: 'true'
+  BUDGETS_ENABLED: 'true'
+  CARD_COACH_ENABLED: 'true'
+  TAGS_ENABLED: 'true'
+  ENTITY_RESOLUTION_ENABLED: 'false'
+  OCR_ENGINE: mock # never call real Gemini Vision from CI
+  # MAIL_USERNAME/MAIL_PASSWORD deliberately left unset — email_service.py no-ops without them.
+  BASE_URL: http://localhost:3000
+  API_BASE_URL: http://localhost:8080
+  QA_USER_PASSWORD: Qa_E2E_Ci_Passw0rd!
+
+jobs:
+  qa:
+    name: Smoke, regression & API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: trackspense_qa
+          POSTGRES_PASSWORD: trackspense_qa_pass
+          POSTGRES_DB: trackspense_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U trackspense_qa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ hashFiles('varavu_selavu_app/poetry.lock') }}
+
+      - name: Install backend dependencies
+        working-directory: varavu_selavu_app
+        run: poetry install --no-root
+
+      - name: Prepare Postgres schema
+        run: |
+          PGPASSWORD=trackspense_qa_pass psql -h localhost -U trackspense_qa -d trackspense_qa -c "CREATE SCHEMA IF NOT EXISTS trackspense;"
+          PGPASSWORD=trackspense_qa_pass psql -h localhost -U trackspense_qa -d trackspense_qa -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+
+      # NOTE: intentionally not `alembic upgrade head` — see qa/scripts/bootstrap_schema.py's
+      # docstring. That command does not work against a genuinely empty database in this repo
+      # (the root migration assumes db/schema.sql was applied by hand first, and several later
+      # tables only ever existed as ORM models, never as a migration). This mirrors the
+      # backend's own run_e2e_pg_tests.sh workaround (Base.metadata.create_all()), plus
+      # stamping alembic head and replaying just the Card Catalog seed data directly.
+      - name: Bootstrap database schema + seed data
+        working-directory: varavu_selavu_app
+        env:
+          PYTHONPATH: .
+        run: poetry run python ../qa/scripts/bootstrap_schema.py
+
+      - name: Start backend
+        working-directory: varavu_selavu_app
+        run: |
+          poetry run uvicorn varavu_selavu_service.main:app --host 0.0.0.0 --port 8000 &
+          echo "Waiting for backend to be healthy..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/v1/healthz >/dev/null; then
+              echo "Backend is up."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Backend never became healthy" && exit 1
+
+      - name: Install frontend dependencies
+        working-directory: varavu_selavu_ui
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: varavu_selavu_ui
+        env:
+          REACT_APP_API_BASE_URL: http://localhost:8080
+        run: npm run build
+
+      - name: Serve frontend build
+        working-directory: varavu_selavu_ui
+        run: |
+          npx --yes serve -s build -l 3000 &
+          echo "Waiting for frontend to respond..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000 >/dev/null; then
+              echo "Frontend is up."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Frontend never became reachable" && exit 1
+
+      - name: Install QA framework dependencies
+        working-directory: qa
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium — PR fast path)
+        if: github.event_name == 'pull_request'
+        working-directory: qa
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright browsers (full matrix — main/manual)
+        if: github.event_name != 'pull_request'
+        working-directory: qa
+        run: npx playwright install --with-deps chromium firefox webkit
+
+      - name: Run smoke suite
+        working-directory: qa
+        run: npm run qa:smoke
+
+      - name: Run regression suite (Chromium)
+        working-directory: qa
+        run: npm run qa:regression
+
+      - name: Run full browser regression matrix
+        if: github.event_name != 'pull_request'
+        working-directory: qa
+        run: npx playwright test --grep @regression --project=firefox --project=webkit --project=mobile-iphone
+
+      - name: Run API suite
+        working-directory: qa
+        run: npm run qa:api
+
+      - name: Upload QA reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports
+          path: |
+            qa/reports/html-report
+            qa/reports/junit
+            qa/reports/test-results
+          retention-days: 14
+          if-no-files-found: ignore

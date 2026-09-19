@@ -156,6 +156,8 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
     <Box
       role="button"
       tabIndex={0}
+      data-testid="expense-row"
+      data-expense-id={expense.id}
       onClick={handleRowClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') handleRowClick();

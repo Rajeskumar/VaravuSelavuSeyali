@@ -2,32 +2,35 @@ import { Page, expect } from '@playwright/test';
 
 export const MIN_TOUCH_TARGET = 44;
 
-/** Where auth.setup.ts stores the logged-in cookie jar for reuse. */
-export const AUTH_STATE_PATH = 'e2e/.auth/user.json';
+/**
+ * Viewport width threshold used to gate desktop-only vs. mobile-only interaction
+ * patterns — e.g. QuickCaptureSheet's amount field is a plain `data-testid="quick-capture-amount"`
+ * text input above this width and a numeric keypad (`data-testid="keypad-*"`, no such
+ * text input at all) below it. Any test that assumes one of those two patterns should
+ * skip itself outside the matching viewport rather than fail — see responsive-mobile.spec.ts,
+ * expense-crud.spec.ts, expense-validation.spec.ts.
+ */
+export const MOBILE_VIEWPORT_MAX_WIDTH = 700;
 
-/** Screens covered by the responsive suite. */
+/** Screens covered by the responsive/mobile-rendering regression suite. */
 export const PRIMARY_ROUTES = ['/dashboard', '/expenses', '/analysis', '/groups'] as const;
 
 /**
- * Logs in through the real form so the HttpOnly auth cookies are set the way
- * they are in production. There is no token to inject into localStorage.
+ * The footer-anchored cookie-consent banner (`ConsentBanner.tsx`) sits at the bottom of
+ * the viewport, same as the mobile FAB — at narrow widths its Accept/Decline row can
+ * physically overlap the FAB's hit area and intercept the click (`<div role="region"
+ * aria-label="Cookie consent">... subtree intercepts pointer events`), caught verifying
+ * this framework's mobile-viewport tests. Callers that click anything bottom-anchored at
+ * mobile width should dismiss it first.
  */
-export async function login(page: Page): Promise<void> {
-  const email = process.env.E2E_EMAIL;
-  const password = process.env.E2E_PASSWORD;
-  if (!email || !password) {
-    throw new Error('Set E2E_EMAIL and E2E_PASSWORD (see e2e/README.md).');
+export async function dismissCookieConsent(page: Page): Promise<void> {
+  const decline = page.getByRole('button', { name: 'Decline' });
+  if (await decline.isVisible().catch(() => false)) {
+    await decline.click();
   }
-
-  await page.goto('/login');
-  await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/password/i).fill(password);
-  // The header also carries a "Login" button, so target the form's submit.
-  await page.locator('form button[type="submit"]').click();
-  await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
 }
 
-/** True horizontal page overflow: the acceptance criterion from the brief. */
+/** True horizontal page overflow: the acceptance criterion for "no bleed on mobile". */
 export async function expectNoHorizontalScroll(page: Page, label: string): Promise<void> {
   const { scrollWidth, innerWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -65,11 +68,10 @@ export async function findBleedingElements(page: Page): Promise<Array<{ tag: str
 }
 
 /**
- * Controls whose *effective* tap area is under the minimum.
- *
- * Measured by hit-testing outward from the centre rather than reading the box:
- * SegmentedTabs keeps a visually compact 22-32px pill but expands its tappable
- * region to 44x44 with an invisible `::after`, and that legitimately passes.
+ * Controls whose *effective* tap area is under the minimum. Measured by hit-testing
+ * outward from the centre rather than reading the box: SegmentedTabs keeps a visually
+ * compact 22-32px pill but expands its tappable region to 44x44 with an invisible
+ * `::after`, and that legitimately passes.
  */
 export async function findSmallTouchTargets(
   page: Page,
@@ -120,7 +122,6 @@ export async function findOverflowingTruncatedText(page: Page): Promise<string[]
     document.querySelectorAll('*').forEach((el) => {
       const cs = getComputedStyle(el);
       if (cs.textOverflow !== 'ellipsis') return;
-      // A truncating element must be constrained, not sized by its content.
       if (el.scrollWidth > el.clientWidth + 1 && el.getBoundingClientRect().right > window.innerWidth + 1) {
         out.push((el.textContent || '').trim().slice(0, 40));
       }

@@ -37,7 +37,7 @@ npm install
 ### 2. Configure Environment
 Create `.env.development` if it doesn't exist:
 ```env
-REACT_APP_API_BASE_URL=http://localhost:8000
+REACT_APP_API_BASE_URL=http://localhost:8080
 REACT_APP_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 ```
 

@@ -65,12 +65,12 @@ poetry run uvicorn varavu_selavu_service.main:app --host 0.0.0.0 --port 8000 --r
 
 ### 5. Verify
 ```bash
-curl http://localhost:8000/api/v1/healthz
+curl http://localhost:8080/api/v1/healthz
 # → {"status":"healthy"}
 ```
 
-- **API Docs (Swagger):** http://localhost:8000/docs
-- **ReDoc:** http://localhost:8000/redoc
+- **API Docs (Swagger):** http://localhost:8080/docs
+- **ReDoc:** http://localhost:8080/redoc
 
 ### Run via Makefile (from repo root)
 ```bash

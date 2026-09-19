@@ -236,9 +236,9 @@ The API base URL is configured in `src/api/apiconfig.ts`:
 |:---|:---|:---|
 | **Production** | `https://varavu-selavu-backend-952416556244.us-central1.run.app` | Hardcoded |
 | **Development** | `EXPO_PUBLIC_API_URL` env var or production URL | Override for local |
-| **Android Emulator** | `http://10.0.2.2:8000` | Maps to host `localhost` |
-| **iOS Simulator** | `http://localhost:8000` | Direct localhost access |
-| **Physical Device** | `http://192.168.x.x:8000` | Use your computer's LAN IP |
+| **Android Emulator** | `http://10.0.2.2:8080` | Maps to host `localhost` |
+| **iOS Simulator** | `http://localhost:8080` | Direct localhost access |
+| **Physical Device** | `http://192.168.x.x:8080` | Use your computer's LAN IP |
 
 > **Important:** The backend must be started with `--host 0.0.0.0` to accept connections from emulators and devices.
 

@@ -580,11 +580,11 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 size="small"
                 label="Description"
                 value={description}
-                
                 onChange={handleDescriptionChange}
                 onBlur={handleDescriptionBlur}
                 placeholder="e.g., Electricity bill, Grocery at Costco"
                 required
+                inputProps={{ 'data-testid': 'expense-form-description' }}
               />
             </Grid>
             {groupsEnabled && !existing && (

@@ -1,15 +1,39 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures/auth.fixture';
 import {
   MIN_TOUCH_TARGET,
+  MOBILE_VIEWPORT_MAX_WIDTH,
   PRIMARY_ROUTES,
   findBleedingElements,
   findOverflowingTruncatedText,
   findSmallTouchTargets,
   expectNoHorizontalScroll,
-} from './helpers';
+  dismissCookieConsent,
+} from '../../helpers/responsive.helper';
+import { env } from '../../helpers/env';
 
-/** P1-4: real small-viewport rendering, which the audit could not verify. */
-test.describe('mobile rendering', () => {
+/**
+ * Migrated from the former `varavu_selavu_ui/e2e/responsive.spec.ts` (P1-3/P1-4 of the
+ * pre-launch audit) into the unified QA framework — same assertions, same reasoning
+ * (see the two "easy to get wrong" notes in the original component's doc comments,
+ * now on responsive.helper.ts), running here instead of as a second parallel suite.
+ *
+ * Real small-viewport rendering: no horizontal overflow, no touch target under 44px,
+ * no ellipsised text that widens the layout, no JWT reachable from page JavaScript,
+ * and the amount field cannot be driven out of range.
+ */
+// Mobile-viewport-only checks (bottom-nav collapse, touch targets, keypad) are
+// meaningless — and actively wrong to assert on — at desktop width, since the app's own
+// responsive breakpoints intentionally render differently there (e.g. the sidebar nav does
+// NOT collapse to a bottom bar on desktop; that's correct, not a bug). This file is meant
+// to run under the `mobile-iphone` project, but sits in the default `e2e/tests` testDir so
+// `qa:regression` picks it up too — the two viewport-dependent describe blocks below
+// self-skip outside a narrow viewport rather than asserting something false. `token
+// storage`'s tests further down are viewport-independent and always run.
+
+test.describe('mobile rendering @regression', () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 0) > MOBILE_VIEWPORT_MAX_WIDTH, 'mobile-viewport-only check');
+  });
 
   for (const route of PRIMARY_ROUTES) {
     test(`${route} has no horizontal overflow`, async ({ page }) => {
@@ -43,8 +67,8 @@ test.describe('mobile rendering', () => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // MUI leaves the docked drawer in the DOM and hides it, so assert it takes
-    // no space rather than that it is absent.
+    // MUI leaves the docked drawer in the DOM and hides it, so assert it takes no space
+    // rather than that it is absent.
     await expect(page.locator('.MuiDrawer-docked')).toBeHidden();
 
     const nav = page.getByRole('navigation', { name: 'Primary' });
@@ -58,46 +82,46 @@ test.describe('mobile rendering', () => {
   test('the quick-capture sheet fits the viewport', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
+    await dismissCookieConsent(page);
 
     await page.getByRole('button', { name: /add expense/i }).first().click();
-    await expect(page.getByPlaceholder('Description')).toBeVisible();
+    await expect(page.getByTestId('quick-capture-description')).toBeVisible();
 
     await expectNoHorizontalScroll(page, 'quick-capture sheet');
     expect(await findBleedingElements(page), 'quick-capture sheet bleeds').toEqual([]);
   });
 });
 
-/** P1-3's client-side half: the amount field cannot be driven out of range. */
-test.describe('amount entry bounds', () => {
+test.describe('amount entry bounds @regression', () => {
   test.beforeEach(async ({ page }) => {
+    // The numeric keypad these tests drive only renders on QuickCaptureSheet's mobile
+    // branch (isDesktop check) — see the file-level comment above.
+    test.skip((page.viewportSize()?.width ?? 0) > MOBILE_VIEWPORT_MAX_WIDTH, 'mobile-viewport-only check');
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
+    await dismissCookieConsent(page);
     await page.getByRole('button', { name: /add expense/i }).first().click();
-    await expect(page.getByPlaceholder('Description')).toBeVisible();
+    await expect(page.getByTestId('quick-capture-description')).toBeVisible();
   });
 
-  const amountDisplay = (page: import('@playwright/test').Page) =>
-    page.locator('text=/^\\$[0-9]/').first();
-
   test('the keypad cannot exceed the maximum amount', async ({ page }) => {
-    // Far more presses than the ceiling allows; the field must simply stop.
+    // Far more presses than the ceiling allows; the field must simply stop composing.
     for (let i = 0; i < 12; i++) {
-      await page.locator('div', { hasText: /^9$/ }).last().click();
+      await page.getByTestId('keypad-9').click();
     }
 
-    const shown = (await amountDisplay(page).textContent()) ?? '';
+    const shown = (await page.locator('text=/^\\$[0-9]/').first().textContent()) ?? '';
     const value = Number(shown.replace(/[^0-9.]/g, ''));
     expect(value, 'keypad composed an amount above the server ceiling').toBeLessThanOrEqual(1_000_000);
   });
 
   test('the amount display never overflows its sheet at maximum digits', async ({ page }) => {
     for (let i = 0; i < 12; i++) {
-      await page.locator('div', { hasText: /^9$/ }).last().click();
+      await page.getByTestId('keypad-9').click();
     }
 
     const fits = await page.evaluate(() => {
-      // Scope to the sheet: the dashboard hero behind it also renders a "$…" figure.
-      const sheet = document.querySelector('input[placeholder="Description"]')?.closest('.MuiPaper-root');
+      const sheet = document.querySelector('[data-testid="quick-capture-description"]')?.closest('.MuiPaper-root');
       if (!sheet) return { error: 'sheet not found' };
       const amt = [...sheet.querySelectorAll('*')].find(
         (e) => e.children.length === 0 && /^\$[0-9]/.test((e.textContent || '').trim()),
@@ -113,20 +137,19 @@ test.describe('amount entry bounds', () => {
   });
 
   test('save stays disabled at a zero amount', async ({ page }) => {
-    await page.getByPlaceholder('Description').fill('Playwright zero-amount check');
-    await expect(page.getByRole('button', { name: /^save$/i })).toBeDisabled();
+    await page.getByTestId('quick-capture-description').fill('QA_E2E_zero_amount_check');
+    await expect(page.getByTestId('quick-capture-save')).toBeDisabled();
   });
 });
 
-/** P0-1: no JWT may be reachable from page JavaScript. */
-test.describe('token storage', () => {
+/** No JWT may be reachable from page JavaScript — HttpOnly cookies are the whole point. */
+test.describe('token storage @regression @critical', () => {
   test('no JWT is readable from localStorage, sessionStorage or document.cookie', async ({ page }) => {
     await page.goto('/dashboard');
 
     const exposed = await page.evaluate(() => {
       const looksLikeJwt = (v: string | null) => !!v && /^eyJ[\w-]+\.[\w-]+\./.test(v);
-      const scan = (store: Storage) =>
-        Object.keys(store).filter((k) => looksLikeJwt(store.getItem(k)));
+      const scan = (store: Storage) => Object.keys(store).filter((k) => looksLikeJwt(store.getItem(k)));
       return {
         localStorage: scan(window.localStorage),
         sessionStorage: scan(window.sessionStorage),
@@ -138,7 +161,6 @@ test.describe('token storage', () => {
     expect(exposed.localStorage, 'JWT found in localStorage').toEqual([]);
     expect(exposed.sessionStorage, 'JWT found in sessionStorage').toEqual([]);
     expect(exposed.cookieJwts, 'JWT readable via document.cookie — cookie is not HttpOnly').toEqual([]);
-    // The display identity may remain; it is not a credential.
     expect(exposed.localStorageKeys).not.toContain('vs_token');
     expect(exposed.localStorageKeys).not.toContain('vs_refresh');
   });
@@ -147,11 +169,10 @@ test.describe('token storage', () => {
     await page.goto('/expenses');
     await page.waitForLoadState('networkidle');
 
-    const status = await page.evaluate(async () => {
-      const base = (window as any).__API_BASE__ || 'http://localhost:8080';
-      const res = await fetch(`${base}/api/v1/auth/me`, { credentials: 'include' });
+    const status = await page.evaluate(async (apiBase) => {
+      const res = await fetch(`${apiBase}/api/v1/auth/me`, { credentials: 'include' });
       return res.status;
-    });
+    }, env.API_BASE_URL);
     expect(status).toBe(200);
   });
 
