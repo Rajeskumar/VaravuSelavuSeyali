@@ -1,36 +1,48 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Linking, ActivityIndicator } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, inkOnPastel } from '../theme';
-import CustomButton from '../components/CustomButton';
-import CustomInput from '../components/CustomInput';
+import FieldBox from '../components/FieldBox';
+import IconButton from '../components/IconButton';
 import { showToast } from '../components/Toast';
 import API_BASE_URL from '../api/apiconfig';
 
+/**
+ * V2 "Create account" (Flows 1.2): three fields, consent inline, no second confirmation screen.
+ * Phone is no longer collected at sign-up (the backend treats it as optional) — it can be added
+ * later from the profile.
+ */
 export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [agreed, setAgreed] = useState(true);
   const [loading, setLoading] = useState(false);
 
   const { signUp } = useAuth();
   const navigation = useNavigation<any>();
   const { theme } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const handleRegister = async () => {
-    if (!name || !email || !password || !phone) {
+    if (!name || !email || !password) {
       showToast({ message: 'Please fill in all fields', type: 'warning' });
+      return;
+    }
+    if (!agreed) {
+      showToast({ message: 'Please accept the Terms and Privacy Policy', type: 'warning' });
       return;
     }
 
     setLoading(true);
     try {
-      await signUp({ name, email, phone, password });
+      await signUp({ name, email, password });
       showToast({ message: 'Registration successful! Please login.', type: 'success' });
       navigation.goBack();
     } catch (error: any) {
@@ -41,43 +53,27 @@ export default function RegisterScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      {/* Brand Header */}
-      <LinearGradient
-        colors={[theme.colors.gradientStart, theme.colors.gradientEnd]}
-        style={styles.brandHeader}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Text style={styles.brandIcon}>🚀</Text>
-        <Text style={styles.brandName}>Get Started</Text>
-        <Text style={styles.brandTagline}>Create your free account</Text>
-      </LinearGradient>
-
-      {/* Registration Form Card */}
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        style={styles.scrollArea}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 8, paddingBottom: Math.max(insets.bottom, 20) + 6 }]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.formCard}>
-          <CustomInput
-            label="Full Name"
-            icon="👤"
-            placeholder="John Doe"
+        <IconButton icon="chevron-back" accessibilityLabel="Back to sign in" onPress={() => navigation.goBack()} />
+        <Text style={styles.title}>Create account</Text>
+        <Text style={styles.subtitle}>Just three fields — everything else later.</Text>
+
+        <View style={styles.form}>
+          <FieldBox
+            label="Name"
+            placeholder="Your name"
             value={name}
             onChangeText={setName}
             textContentType="name"
             autoComplete="name"
           />
-
-          <CustomInput
+          <FieldBox
             label="Email"
-            icon="✉️"
             placeholder="you@example.com"
             value={email}
             onChangeText={setEmail}
@@ -86,53 +82,48 @@ export default function RegisterScreen() {
             textContentType="emailAddress"
             autoComplete="email"
           />
-
-          <CustomInput
-            label="Phone"
-            icon="📱"
-            placeholder="+1 (555) 123-4567"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-            textContentType="telephoneNumber"
-            autoComplete="tel"
-          />
-
-          <CustomInput
+          <FieldBox
             label="Password"
-            icon="🔒"
-            placeholder="Create a strong password"
+            placeholder="At least 8 characters"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureToggle
             textContentType="newPassword"
           />
 
-          <CustomButton
-            title="Create Account"
-            onPress={handleRegister}
-            loading={loading}
-            style={{ marginTop: 8 }}
-          />
+          <TouchableOpacity
+            style={styles.consent}
+            activeOpacity={0.7}
+            onPress={() => setAgreed((a) => !a)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: agreed }}
+          >
+            {agreed ? (
+              <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.check}>
+                <Ionicons name="checkmark" size={14} color={inkOnPastel} />
+              </LinearGradient>
+            ) : (
+              <View style={[styles.check, styles.checkOff]} />
+            )}
+            <Text style={styles.consentText}>
+              I agree to the{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>Terms</Text>
+              {' '}and{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>Privacy Policy</Text>
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity activeOpacity={0.85} onPress={handleRegister} disabled={loading} accessibilityRole="button">
+            <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.cta, loading && { opacity: 0.7 }]}>
+              {loading ? <ActivityIndicator color={inkOnPastel} /> : <Text style={styles.ctaText}>Create account</Text>}
+            </LinearGradient>
+          </TouchableOpacity>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>Already have an account?</Text>
             <TouchableOpacity onPress={() => navigation.goBack()}>
-              <Text style={styles.footerLink}>Sign In</Text>
+              <Text style={styles.footerLink}>Sign in</Text>
             </TouchableOpacity>
-          </View>
-
-          <View style={styles.legalFooter}>
-            <Text style={styles.legalText}>By creating an account, you agree to our</Text>
-            <View style={styles.legalLinksRow}>
-              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
-                <Text style={styles.legalLink}>Terms of Service</Text>
-              </TouchableOpacity>
-              <Text style={styles.legalText}> and </Text>
-              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
-                <Text style={styles.legalLink}>Privacy Policy</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </ScrollView>
@@ -141,80 +132,22 @@ export default function RegisterScreen() {
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
+  container: { flex: 1, backgroundColor: theme.colors.background },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 28 },
+  title: {
+    fontFamily: theme.typography.fontFamily.display, fontSize: 34, letterSpacing: -1, color: theme.colors.text,
+    marginTop: 26,
   },
-  brandHeader: {
-    paddingTop: Platform.OS === 'android' ? 60 : 80,
-    paddingBottom: 40,
-    paddingHorizontal: 30,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-  },
-  brandIcon: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  // brandHeader is a real violet→cyan gradient fill, mode-independent (always pastel) — ink
-  // text always, not the mode-aware `textInverse` (which flips to white in light mode).
-  brandName: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: inkOnPastel,
-    letterSpacing: -0.5,
-  },
-  brandTagline: {
-    fontSize: 15,
-    color: 'rgba(5,6,10,0.75)',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  scrollArea: {
-    flex: 1,
-    marginTop: -16,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  formCard: {
-    backgroundColor: theme.colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 24,
-    padding: 28,
-    ...theme.shadows.lg,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
-    gap: 6,
-  },
-  footerText: {
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-  },
-  footerLink: {
-    fontSize: 14,
-    color: theme.colors.primary,
-    fontWeight: '700',
-  },
-  legalFooter: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  legalText: {
-    fontSize: 12,
-    color: theme.colors.textSecondary,
-  },
-  legalLinksRow: {
-    flexDirection: 'row',
-    marginTop: 2,
-  },
-  legalLink: {
-    fontSize: 12,
-    color: theme.colors.primary,
-    textDecorationLine: 'underline',
-  },
+  subtitle: { fontFamily: theme.typography.fontFamily.regular, fontSize: 15, color: theme.colors.textSecondary, marginTop: 8 },
+  form: { marginTop: 26, gap: 12 },
+  consent: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 4, paddingHorizontal: 2 },
+  check: { width: 20, height: 20, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  checkOff: { borderWidth: 1, borderColor: theme.colors.border },
+  consentText: { flex: 1, fontFamily: theme.typography.fontFamily.regular, fontSize: 13, lineHeight: 19.5, color: theme.colors.textSecondary },
+  link: { color: theme.colors.primary },
+  cta: { height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  ctaText: { fontFamily: theme.typography.fontFamily.bold, fontSize: 17, color: inkOnPastel },
+  footer: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
+  footerText: { fontFamily: theme.typography.fontFamily.regular, fontSize: 14, color: theme.colors.textTertiary },
+  footerLink: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 14, color: theme.colors.primary },
 });

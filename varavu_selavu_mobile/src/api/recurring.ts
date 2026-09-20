@@ -11,6 +11,11 @@ export interface RecurringTemplateDTO {
     start_date_iso: string; // YYYY-MM-DD
     last_processed_iso?: string;
     status?: string;
+    // Returned by the backend; the upsert endpoint overwrites all three with null when they're
+    // omitted, so any client-side edit of a template must send them back unchanged.
+    merchant_name?: string | null;
+    group_id?: string | null;
+    split_config?: { type: string; entries: { member_id: string }[] } | null;
 }
 
 export interface UpsertRecurringPayload {
@@ -20,6 +25,7 @@ export interface UpsertRecurringPayload {
     default_cost: number;
     start_date_iso?: string;
     status?: string;
+    merchant_name?: string | null;
     /** Scopes the template to a group — `execute_now` then creates a split group expense
      * (equal split across `split_config.entries`) instead of a personal one. */
     group_id?: string | null;

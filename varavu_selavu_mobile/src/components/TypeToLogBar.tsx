@@ -7,7 +7,8 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AppTheme, withAlpha } from '../theme';
 import { useQuickLogBar } from '../hooks/useQuickLogBar';
 
 export default function TypeToLogBar() {
@@ -17,8 +18,13 @@ export default function TypeToLogBar() {
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.inputRow}>
-        <Text style={styles.sparkle}>✨</Text>
+      <LinearGradient
+        colors={[withAlpha(theme.colors.gradientStart, 0.14), withAlpha(theme.colors.gradientEnd, 0.08)]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.inputRow}
+      >
+        <View style={styles.dot} />
         <TextInput
           style={styles.input}
           value={text}
@@ -30,7 +36,7 @@ export default function TypeToLogBar() {
           editable={!submitting}
         />
         {submitting && <ActivityIndicator size="small" color={theme.colors.primary} />}
-      </View>
+      </LinearGradient>
 
       {parsed && (
         <View style={styles.previewRow}>
@@ -51,23 +57,23 @@ export default function TypeToLogBar() {
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    wrap: { marginHorizontal: 20, marginBottom: 20 },
+    wrap: { marginBottom: 20 },
+    // V2 ask bar: violet→cyan tint with a violet hairline — the one gradient-tinted surface on Home.
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.full,
+      height: 50,
+      borderRadius: 16,
       paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.borderLight,
-      ...theme.shadows.xs,
+      borderWidth: 1,
+      borderColor: withAlpha(theme.colors.gradientStart, 0.28),
+      overflow: 'hidden',
     },
-    sparkle: { fontSize: 15, marginRight: 8 },
+    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.gradientEnd, marginRight: 10 },
     input: {
       flex: 1,
-      fontFamily: 'InstrumentSans-Regular',
-      fontSize: 15,
+      fontFamily: 'InstrumentSans-Medium',
+      fontSize: 14,
       color: theme.colors.text,
     },
     previewRow: {

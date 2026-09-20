@@ -1,0 +1,17 @@
+[
+  {
+    "name": "keep-newest-10-backend",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {"packageNamePrefixes": ["varavu-selavu-backend"], "keepCount": 10}
+  },
+  {
+    "name": "keep-newest-10-frontend",
+    "action": {"type": "Keep"},
+    "mostRecentVersions": {"packageNamePrefixes": ["varavu-selavu-frontend"], "keepCount": 10}
+  },
+  {
+    "name": "delete-everything-else",
+    "action": {"type": "Delete"},
+    "condition": {"tagState": "any", "packageNamePrefixes": ["varavu-selavu-backend", "varavu-selavu-frontend"]}
+  }
+]

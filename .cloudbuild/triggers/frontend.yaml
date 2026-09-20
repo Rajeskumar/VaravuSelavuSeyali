@@ -1,0 +1,25 @@
+# Cloud Build trigger: frontend release. Not applied automatically — see .cloudbuild/README.md.
+name: varavu-frontend-release
+description: Build and deploy the frontend when a release-vX.Y.Z tag is pushed
+github:
+  owner: Rajeskumar
+  name: VaravuSelavuSeyali
+  push:
+    tag: ^release-v[0-9]+\.[0-9]+\.[0-9]+$
+filename: cloudbuild.frontend.yaml
+# Same build service account as the legacy `varavuselavuseyali` trigger (it holds the Cloud Run/registry
+# permissions). Requires `options.logging: CLOUD_LOGGING_ONLY` in the build file, which both have.
+serviceAccount: projects/gold-circlet-424313-r7/serviceAccounts/varavu-selavu-seyali@gold-circlet-424313-r7.iam.gserviceaccount.com
+
+# --- Alternative: continuous deploy from main, only when frontend files change --------------
+# github:
+#   owner: Rajeskumar
+#   name: VaravuSelavuSeyali
+#   push:
+#     branch: ^main$
+# includedFiles:
+#   - varavu_selavu_ui/**
+#   - cloudbuild.frontend.yaml
+# ignoredFiles:
+#   - varavu_selavu_ui/**/*.test.*
+#   - '**/*.md'

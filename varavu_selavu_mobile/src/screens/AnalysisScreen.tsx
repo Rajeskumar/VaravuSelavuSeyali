@@ -23,13 +23,18 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { getAnalysis } from '../api/analysis';
 import { getChangeInsights, ChangeInsight, getTopItems, getTopMerchants, ItemInsightSummary, MerchantInsightSummary } from '../api/analytics';
-import { checkGroupsEnabled } from '../api/groups';
+import { checkGroupsEnabled, listGroups } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, withAlpha } from '../theme';
 import { categoryPalette } from '../utils/chartTheme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import CustomButton from '../components/CustomButton';
-import SegmentedTabs from '../components/SegmentedTabs';
+import TopTabs from '../components/TopTabs';
+import ScreenHeader from '../components/ScreenHeader';
+import SectionLabel from '../components/SectionLabel';
+import SegmentDonut from '../components/SegmentDonut';
+import { splitTopSegments } from '../utils/segments';
+import SimpleSelect from '../components/SimpleSelect';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { AddExpenseContext } from './AddExpenseScreen';
@@ -64,12 +69,17 @@ export default function AnalysisScreen() {
         if (route.params?.initialTab === 'cards' && cardCoachEnabled) setTab('cards');
     }, [route.params?.initialTab, budgetsEnabled, cardCoachEnabled]);
     const [includeGroups, setIncludeGroups] = useState(true);
-    const scope = includeGroups ? 'combined' : 'personal';
+    // A single group's whole spend, analysed exactly like the personal view (categories, trend,
+    // "what changed"/insight callout excluded — see below). '' = the user's own spending, which
+    // is what this screen always showed before. Mirrors web's OverviewTab group picker.
+    const [groupId, setGroupId] = useState('');
+    const scope = groupId ? 'group' : includeGroups ? 'combined' : 'personal';
     // TrackSpense v3 Mobile mock's category drill-down (`anCat`/`anHasCat`): tapping a category
     // in the "WHERE IT WENT" legend swaps the overview content in place for that category's own
     // transaction list, with a "‹ Categories" link back — was missing entirely (legend rows
     // weren't tappable at all).
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [showAllCategories, setShowAllCategories] = useState(false);
 
     const now = useMemo(() => new Date(), []);
     const year = now.getFullYear();
@@ -80,9 +90,16 @@ export default function AnalysisScreen() {
         queryFn: checkGroupsEnabled,
     });
 
+    const { data: groups = [] } = useQuery({
+        queryKey: ['groups', false],
+        queryFn: () => listGroups(false),
+        enabled: !!groupsEnabled,
+    });
+    const selectedGroup = groups.find((g) => g.group_id === groupId);
+
     const { data, isLoading: loadingAnalysis } = useQuery({
-        queryKey: ['analysis', userEmail, year, month, scope, tagFilterIds],
-        queryFn: () => getAnalysis(accessToken!, userEmail!, { year, month, scope, tag_ids: tagFilterIds.length ? tagFilterIds : undefined }),
+        queryKey: ['analysis', userEmail, year, month, scope, groupId || null, tagFilterIds],
+        queryFn: () => getAnalysis(accessToken!, userEmail!, { year, month, scope, group_id: groupId || undefined, tag_ids: tagFilterIds.length ? tagFilterIds : undefined }),
         enabled: !!accessToken && !!userEmail,
     });
 
@@ -145,12 +162,12 @@ export default function AnalysisScreen() {
     const topMerchantSpend = merchants[0]?.total_spent || 0;
 
     return (
-        <ScreenWrapper>
+        <ScreenWrapper contentStyle={{ paddingHorizontal: 0 }}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                <Text style={styles.heading}>Analysis</Text>
+                <ScreenHeader title="Insights" style={{ paddingHorizontal: 22 }} />
 
                 <View style={styles.tabsRow}>
-                    <SegmentedTabs<AnalysisTab>
+                    <TopTabs<AnalysisTab>
                         value={tab}
                         onChange={(t) => { setTab(t); setSelectedCategory(null); }}
                         options={[
@@ -163,8 +180,26 @@ export default function AnalysisScreen() {
                     />
                 </View>
 
-                {tab === 'overview' && tagsEnabled && (
-                    <View style={{ paddingHorizontal: 18, marginBottom: 4 }}>
+                {tab === 'overview' && groupsEnabled && groups.length > 0 && (
+                    <View style={{ paddingHorizontal: 22, marginBottom: 12, maxWidth: 220 }}>
+                        <SimpleSelect
+                            label="Analyse"
+                            value={groupId}
+                            onChange={(v) => {
+                                setGroupId(v);
+                                // Tags are private to whoever applied them, so they don't mean
+                                // anything against a group-wide total — clear the filter too, or
+                                // a filter picked earlier would keep silently narrowing the
+                                // group's total with no visible control left to explain why.
+                                if (v) setTagFilterIds([]);
+                            }}
+                            options={[{ label: 'My spending', value: '' }, ...groups.map((g) => ({ label: `${g.name} (whole group)`, value: g.group_id }))]}
+                        />
+                    </View>
+                )}
+
+                {tab === 'overview' && tagsEnabled && !groupId && (
+                    <View style={{ paddingHorizontal: 22, marginBottom: 4 }}>
                         <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />
                     </View>
                 )}
@@ -239,21 +274,36 @@ export default function AnalysisScreen() {
                     ) : (
                         <>
                             <View style={styles.card}>
-                                <Text style={styles.cardLabel}>WHERE IT WENT — {monthLabel}</Text>
-                                <View style={styles.bar}>
-                                    {segments.map((s) => (
-                                        <View key={s.category} style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
-                                    ))}
-                                </View>
-                                <View style={styles.legend}>
-                                    {segments.map((s) => (
-                                        <TouchableOpacity key={s.category} style={styles.legendItem} onPress={() => setSelectedCategory(s.category)} activeOpacity={0.6}>
-                                            <Text style={[styles.legendDot, { color: s.color }]}>●</Text>
-                                            <Text style={styles.legendText}>{s.category} {s.pct.toFixed(0)}%</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                                {groupsEnabled && (
+                                <SectionLabel>Where it went — {monthLabel}</SectionLabel>
+                                {(() => {
+                                    const { top, rest, restPct } = splitTopSegments(segments, 5);
+                                    const legendRows = showAllCategories ? segments : top;
+                                    return (
+                                        <View style={styles.donutRow}>
+                                            <SegmentDonut
+                                                segments={segments.map((s) => ({ key: s.category, pct: s.pct, color: s.color }))}
+                                                centerValue={`$${Math.round(total).toLocaleString('en-US')}`}
+                                            />
+                                            <View style={styles.legend}>
+                                                {legendRows.map((s) => (
+                                                    <TouchableOpacity key={s.category} style={styles.legendItem} onPress={() => setSelectedCategory(s.category)} activeOpacity={0.6}>
+                                                        <View style={[styles.legendDot, { backgroundColor: s.color }]} />
+                                                        <Text style={styles.legendText} numberOfLines={1}>{s.category}</Text>
+                                                        <Text style={styles.legendPct}>{s.pct.toFixed(0)}%</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                                {rest.length > 0 && (
+                                                    <TouchableOpacity style={styles.legendItem} onPress={() => setShowAllCategories((v) => !v)} activeOpacity={0.6}>
+                                                        <View style={[styles.legendDot, { backgroundColor: theme.colors.textTertiary }]} />
+                                                        <Text style={styles.legendText}>{showAllCategories ? 'Show fewer' : `Others (${rest.length})`}</Text>
+                                                        {!showAllCategories && <Text style={styles.legendPct}>{restPct.toFixed(0)}%</Text>}
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                        </View>
+                                    );
+                                })()}
+                                {!groupId && groupsEnabled && (
                                     <View style={styles.toggleRow}>
                                         <Text style={styles.toggleLabel}>Include group shares</Text>
                                         <Switch
@@ -266,32 +316,46 @@ export default function AnalysisScreen() {
                                 )}
                             </View>
 
-                            {insights.length > 0 && (
+                            {groupId ? (
+                                // Whole-group total, not "my share" — change insights and the
+                                // on-pace projection are computed against personal spend, so
+                                // they don't mean anything here (mirrors web's OverviewTab).
                                 <View style={styles.section}>
-                                    <Text style={styles.sectionLabel}>WHAT CHANGED VS {prevMonthLabel.toUpperCase()}</Text>
-                                    <View style={styles.changesCard}>
-                                        {insights.slice(0, 5).map((c, i) => {
-                                            const up = c.change_percent > 0;
-                                            return (
-                                                <View key={`${c.metric_name}-${i}`} style={[styles.changeRow, i === insights.slice(0, 5).length - 1 && styles.rowLast]}>
-                                                    <View style={{ flex: 1, minWidth: 0 }}>
-                                                        <Text style={styles.changeName} numberOfLines={1}>{c.metric_name}</Text>
-                                                        {!!c.entity_name && <Text style={styles.changeWhy} numberOfLines={1}>{c.entity_name}</Text>}
-                                                    </View>
-                                                    <Text style={[styles.changeDelta, { color: up ? theme.colors.warning : theme.colors.success }]}>
-                                                        {up ? '+' : '−'}{Math.abs(c.change_percent).toFixed(0)}%
-                                                    </Text>
-                                                </View>
-                                            );
-                                        })}
-                                    </View>
+                                    <Text style={styles.sectionLabel}>{(selectedGroup?.name ?? 'GROUP').toUpperCase()}</Text>
+                                    <Text style={styles.tabIntro}>
+                                        Showing everything this group spent, across all members — not just your share. Switch back to “My spending” for change insights.
+                                    </Text>
                                 </View>
-                            )}
+                            ) : (
+                                <>
+                                    {insights.length > 0 && (
+                                        <View style={styles.section}>
+                                            <Text style={styles.sectionLabel}>WHAT CHANGED VS {prevMonthLabel.toUpperCase()}</Text>
+                                            <View style={styles.changesCard}>
+                                                {insights.slice(0, 5).map((c, i) => {
+                                                    const up = c.change_percent > 0;
+                                                    return (
+                                                        <View key={`${c.metric_name}-${i}`} style={[styles.changeRow, i === insights.slice(0, 5).length - 1 && styles.rowLast]}>
+                                                            <View style={{ flex: 1, minWidth: 0 }}>
+                                                                <Text style={styles.changeName} numberOfLines={1}>{c.metric_name}</Text>
+                                                                {!!c.entity_name && <Text style={styles.changeWhy} numberOfLines={1}>{c.entity_name}</Text>}
+                                                            </View>
+                                                            <Text style={[styles.changeDelta, { color: up ? theme.colors.warning : theme.colors.success }]}>
+                                                                {up ? '+' : '−'}{Math.abs(c.change_percent).toFixed(0)}%
+                                                            </Text>
+                                                        </View>
+                                                    );
+                                                })}
+                                            </View>
+                                        </View>
+                                    )}
 
-                            <View style={styles.insightCallout}>
-                                <Text style={{ fontSize: 15 }}>💡</Text>
-                                <Text style={styles.insightText}>{insightLine}</Text>
-                            </View>
+                                    <View style={styles.insightCallout}>
+                                        <Text style={{ fontSize: 15 }}>💡</Text>
+                                        <Text style={styles.insightText}>{insightLine}</Text>
+                                    </View>
+                                </>
+                            )}
                         </>
                     )
                 )}
@@ -371,42 +435,27 @@ export default function AnalysisScreen() {
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
-    heading: {
-        fontFamily: 'BricolageGrotesque-SemiBold',
-        fontSize: 22,
-        color: theme.colors.text,
-        letterSpacing: -0.3,
-        paddingHorizontal: 18,
-    },
-    tabsRow: { paddingHorizontal: 18, marginTop: 12, marginBottom: 14, alignSelf: 'flex-start' },
+    tabsRow: { paddingHorizontal: 22, marginBottom: 6 },
     card: {
-        marginHorizontal: 18,
-        backgroundColor: theme.colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: theme.colors.borderLight,
-        borderRadius: 14,
-        padding: 16,
+        marginHorizontal: 22,
+        paddingVertical: 18,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: theme.colors.borderLight,
     },
-    cardLabel: { fontFamily: 'InstrumentSans-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary },
-    bar: {
-        flexDirection: 'row',
-        height: 14,
-        borderRadius: 999,
-        overflow: 'hidden',
-        marginTop: 12,
-        backgroundColor: theme.colors.surfaceSecondary,
-    },
-    legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
-    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    legendDot: { fontSize: 12, fontWeight: '700' },
-    legendText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textSecondary },
+    cardLabel: { fontFamily: 'IBMPlexMono-Medium', fontSize: 11, letterSpacing: 1.76, color: theme.colors.textTertiary },
+    donutRow: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 14 },
+    legend: { flex: 1, gap: 9 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+    legendDot: { width: 7, height: 7, borderRadius: 2 },
+    legendText: { flex: 1, fontFamily: 'InstrumentSans-Medium', fontSize: 13, color: theme.colors.textSecondary },
+    legendPct: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.text, fontVariant: ['tabular-nums'] },
     toggleRow: {
         flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
         borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderLight,
         marginTop: 14, paddingTop: 12,
     },
     toggleLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.textSecondary },
-    section: { marginTop: 12, marginHorizontal: 18 },
+    section: { marginTop: 12, marginHorizontal: 22 },
     catBackLink: { alignSelf: 'flex-start', paddingVertical: 2 },
     catBackText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.primary },
     catHeaderCard: {
@@ -430,16 +479,10 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     merchantBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
     merchantBarTrack: { flex: 1, height: 6, borderRadius: 999, backgroundColor: theme.colors.surfaceSecondary, overflow: 'hidden' },
     merchantBarFill: { height: '100%', borderRadius: 999 },
-    changesCard: {
-        backgroundColor: theme.colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: theme.colors.borderLight,
-        borderRadius: 14,
-        overflow: 'hidden',
-    },
+    changesCard: {},
     changeRow: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        paddingHorizontal: 14, paddingVertical: 12,
+        flexDirection: 'row', alignItems: 'center', gap: 13,
+        paddingVertical: 13,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
     },
     rowLast: { borderBottomWidth: 0 },
@@ -448,14 +491,14 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     changeDelta: { fontFamily: 'InstrumentSans-Bold', fontSize: 13, flexShrink: 0 },
     insightCallout: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        marginTop: 12, marginHorizontal: 18,
-        backgroundColor: theme.colors.surface,
-        borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight,
+        marginTop: 16, marginHorizontal: 22,
+        backgroundColor: withAlpha(theme.colors.primary, 0.08),
+        borderWidth: 1, borderColor: withAlpha(theme.colors.primary, 0.22),
         borderRadius: 14, padding: 14,
     },
     insightText: { flex: 1, fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.textSecondary, lineHeight: 18 },
     emptyCard: {
-        alignItems: 'center', paddingVertical: 36, marginHorizontal: 18,
+        alignItems: 'center', paddingVertical: 36, marginHorizontal: 22,
         backgroundColor: theme.colors.surface, borderRadius: 14,
         borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight,
     },

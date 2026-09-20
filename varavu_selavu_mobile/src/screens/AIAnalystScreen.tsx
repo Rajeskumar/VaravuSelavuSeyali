@@ -9,11 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { sendChatMessage, ChatPayload, ChatMessage } from '../api/chat';
+import { sendChatMessageFull, ChatPayload, ChatMessage } from '../api/chat';
+import { scopeLine } from '../utils/chatScope';
 import { apiFetch } from '../api/apiFetch';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
-import SegmentedTabs from '../components/SegmentedTabs';
+import { AppTheme, withAlpha, inkOnPastel } from '../theme';
+import ScreenHeader from '../components/ScreenHeader';
 import { notifyExpenseChanged } from '../utils/expenseEvents';
 
 const SUGGESTED_PROMPTS = [
@@ -143,12 +144,13 @@ export default function AIAnalystScreen() {
                 // We no longer send manual period/scope. The backend will use its default.
             };
 
-            const response = await sendChatMessage(accessToken || '', payload);
+            const result = await sendChatMessageFull(accessToken || '', payload);
             const assistantMsg: DisplayMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: response,
-                scope: 'This month · My Expenses', // Placeholder for intent context
+                content: result.response,
+                // What the backend says it resolved for this turn — never a client-side guess.
+                scope: scopeLine(result.resolved_period, result.resolved_scope) ?? undefined,
             };
             setMessages((prev) => [...prev, assistantMsg]);
             // TrackSpense v3: the AI Analyst can now create expenses (create_expense/
@@ -188,30 +190,17 @@ export default function AIAnalystScreen() {
 
     const renderMessage = ({ item }: { item: DisplayMessage }) => {
         const isUser = item.role === 'user';
+        const isError = !isUser && item.content.startsWith('❌');
         return (
             <View style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowAssistant]}>
-                {!isUser && (
-                    <View style={styles.avatarBadge}>
-                        <Ionicons name="sparkles" size={16} color={theme.colors.primary} />
-                    </View>
-                )}
-                <View style={{ flex: 1, alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-                    <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+                <View style={{ maxWidth: isUser ? '76%' : '88%', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+                    {!isUser && item.scope && <Text style={styles.scopeLine}>{item.scope}</Text>}
+                    <View style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble, isError && styles.errorBubble]}>
                         <Text style={[styles.bubbleText, isUser ? styles.userText : styles.assistantText]}>
                             {item.content}
                         </Text>
                     </View>
-                    {!isUser && item.scope && (
-                        <Text style={styles.scopeChip}>
-                            Looked at: {item.scope}
-                        </Text>
-                    )}
                 </View>
-                {isUser && (
-                    <View style={[styles.avatarBadge, { backgroundColor: theme.colors.primary }]}>
-                        <Ionicons name="person" size={16} color={theme.colors.textInverse} />
-                    </View>
-                )}
             </View>
         );
     };
@@ -220,9 +209,6 @@ export default function AIAnalystScreen() {
         if (!loading) return null;
         return (
             <View style={[styles.messageRow, styles.messageRowAssistant]}>
-                <View style={styles.avatarBadge}>
-                    <Ionicons name="sparkles" size={16} color={theme.colors.primary} />
-                </View>
                 <View style={[styles.bubble, styles.assistantBubble, styles.typingBubble]}>
                     {[dot1, dot2, dot3].map((d, i) => (
                         <Animated.View
@@ -245,22 +231,21 @@ export default function AIAnalystScreen() {
 
     return (
         <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
-            {/* Header bar: Period + Model selectors — inside safe area */}
-            <View style={styles.headerBar}>
-                <View style={styles.headerTitleRow}>
-                    <Text style={styles.headerTitle}>AI Analyst</Text>
-                </View>
-                <View style={{ width: 140 }}>
-                    <SegmentedTabs
-                        options={[
-                            { value: 'fast', label: 'Fast' },
-                            { value: 'deep', label: 'Deep' }
-                        ]}
-                        value={selectedSpeed}
-                        onChange={(v) => setSelectedSpeed(v as 'fast' | 'deep')}
-                    />
-                </View>
-            </View>
+            <ScreenHeader
+                title="Ask"
+                style={{ paddingHorizontal: 22 }}
+                right={(
+                    <TouchableOpacity
+                        style={styles.speedChip}
+                        activeOpacity={0.7}
+                        onPress={() => setSelectedSpeed((v) => (v === 'fast' ? 'deep' : 'fast'))}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Model speed: ${selectedSpeed}. Tap to switch.`}
+                    >
+                        <Text style={styles.speedChipText}>{selectedSpeed.toUpperCase()} ▾</Text>
+                    </TouchableOpacity>
+                )}
+            />
 
             {/* Chat messages — takes all available space */}
             <KeyboardAvoidingView
@@ -331,7 +316,7 @@ export default function AIAnalystScreen() {
                     <View style={styles.inputRow}>
                         <TextInput
                             style={styles.input}
-                            placeholder="Ask about your finances..."
+                            placeholder="Ask or log…"
                             placeholderTextColor={theme.colors.textTertiary}
                             value={inputText}
                             onChangeText={setInputText}
@@ -340,16 +325,24 @@ export default function AIAnalystScreen() {
                             maxLength={500}
                         />
                         <TouchableOpacity
-                            style={[styles.sendBtn, (!inputText.trim() || loading) && styles.sendBtnDisabled]}
                             onPress={() => handleSend()}
                             disabled={!inputText.trim() || loading}
                             activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Send"
                         >
-                            {loading ? (
-                                <ActivityIndicator size="small" color={theme.colors.textInverse} />
-                            ) : (
-                                <Text style={styles.sendBtnText}>↑</Text>
-                            )}
+                            <LinearGradient
+                                colors={theme.gradients.primary}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={[styles.sendBtn, (!inputText.trim() || loading) && styles.sendBtnDisabled]}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator size="small" color={inkOnPastel} />
+                                ) : (
+                                    <Ionicons name="arrow-up" size={18} color={inkOnPastel} />
+                                )}
+                            </LinearGradient>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -364,92 +357,49 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     container: {
         flex: 1,
     },
-    headerBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingTop: 8,
-        paddingBottom: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: theme.colors.border,
-        backgroundColor: theme.colors.surface,
+    speedChip: {
+        height: 30, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: theme.colors.border,
+        justifyContent: 'center',
     },
-    headerTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: theme.colors.text,
-    },
-    modelBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 10,
-        backgroundColor: theme.colors.background,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        maxWidth: 160,
-    },
-    modelBtnIcon: { fontSize: 14, marginRight: 6 },
-    modelBtnText: { flex: 1, fontSize: 12, fontWeight: '500', color: theme.colors.text },
-    modelChevron: { fontSize: 10, color: theme.colors.textTertiary, marginLeft: 4 },
+    speedChipText: { fontFamily: 'IBMPlexMono-Medium', fontSize: 10, letterSpacing: 1, color: theme.colors.textSecondary },
     // Chat area
     chatArea: { flex: 1 },
-    chatContent: { paddingVertical: 12, paddingHorizontal: 14 },
+    chatContent: { paddingVertical: 12, paddingHorizontal: 22 },
     // Messages
-    messageRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 12, gap: 6 },
-    messageRowUser: { justifyContent: 'flex-end', paddingLeft: 36 },
-    messageRowAssistant: { justifyContent: 'flex-start', paddingRight: 36 },
-    avatar: { fontSize: 20, marginBottom: 2 },
-    avatarBadge: {
-        width: 26, height: 26, borderRadius: 13, marginBottom: 2,
-        backgroundColor: theme.colors.primarySurface, alignItems: 'center', justifyContent: 'center',
+    messageRow: { flexDirection: 'row', marginBottom: 14 },
+    messageRowUser: { justifyContent: 'flex-end' },
+    messageRowAssistant: { justifyContent: 'flex-start' },
+    scopeLine: { fontFamily: 'IBMPlexMono-Medium', fontSize: 10, letterSpacing: 1.4, color: theme.colors.secondary, marginBottom: 7 },
+    bubble: { paddingHorizontal: 15, paddingVertical: 12 },
+    userBubble: { backgroundColor: theme.colors.surfaceSecondary, borderRadius: 18, borderBottomRightRadius: 6 },
+    assistantBubble: {
+        backgroundColor: withAlpha(theme.colors.primary, 0.1),
+        borderWidth: 1, borderColor: withAlpha(theme.colors.primary, 0.22),
+        borderRadius: 18, borderBottomLeftRadius: 6,
     },
-    bubble: { maxWidth: '80%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16 },
-    userBubble: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
-    assistantBubble: { backgroundColor: theme.colors.surface, borderBottomLeftRadius: 4, ...theme.shadows.sm },
-    bubbleText: { fontSize: 15, lineHeight: 21 },
-    userText: { color: theme.colors.textInverse },
+    errorBubble: { backgroundColor: theme.colors.errorSurface, borderColor: withAlpha(theme.colors.error, 0.3) },
+    bubbleText: { fontSize: 15, lineHeight: 22 },
+    userText: { color: theme.colors.text },
     assistantText: { color: theme.colors.text },
     typingBubble: { flexDirection: 'row', gap: 5, alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 },
     typingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.colors.textTertiary },
     // Input area
-    inputArea: {
-        backgroundColor: theme.colors.surface,
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: theme.colors.border,
-        paddingHorizontal: 10,
-        paddingTop: 6,
+    inputArea: { paddingHorizontal: 22, paddingTop: 6 },
+    inputRow: {
+        flexDirection: 'row', alignItems: 'flex-end', gap: 10,
+        borderWidth: 1, borderColor: theme.colors.border, borderRadius: 18,
+        backgroundColor: theme.colors.surface, paddingLeft: 16, paddingRight: 6, paddingVertical: 5,
     },
-    inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
     input: {
         flex: 1,
-        backgroundColor: theme.colors.background,
-        borderRadius: 20,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
         fontSize: 15,
         maxHeight: 100,
-        minHeight: 42,
+        minHeight: 40,
+        paddingTop: 10,
         color: theme.colors.text,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
     },
-    sendBtn: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        backgroundColor: theme.colors.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    sendBtnDisabled: { backgroundColor: theme.colors.textTertiary },
-    sendBtnText: { color: theme.colors.textInverse, fontSize: 20, fontWeight: '700' },
+    sendBtn: { width: 40, height: 40, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+    sendBtnDisabled: { opacity: 0.4 },
     // Empty state
     emptyState: { alignItems: 'center', paddingVertical: 40 },
     emptyIcon: { fontSize: 48, marginBottom: 12 },
@@ -476,10 +426,4 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         ...theme.shadows.sm
     },
     suggestionText: { fontSize: 14, color: theme.colors.primary, textAlign: 'center', fontWeight: '500' },
-    scopeChip: {
-        fontSize: 11,
-        color: theme.colors.textSecondary,
-        marginTop: 6,
-        marginLeft: 4,
-    },
 });

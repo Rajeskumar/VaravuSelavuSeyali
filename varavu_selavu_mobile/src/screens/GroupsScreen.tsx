@@ -6,7 +6,7 @@
  *
  * Navigation: tap a group → GroupDetailScreen
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import {
   listGroups,
   createGroup,
@@ -33,9 +32,14 @@ import {
   GroupSummary,
 } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AppTheme, withAlpha, directionalColor, inkOnPastel } from '../theme';
+import { categoryTone } from '../utils/categoryCode';
 import ScreenWrapper from '../components/ScreenWrapper';
-import SegmentedTabs from '../components/SegmentedTabs';
+import TopTabs from '../components/TopTabs';
+import ScreenHeader from '../components/ScreenHeader';
+import SectionLabel from '../components/SectionLabel';
+import ListRow from '../components/ListRow';
 import PeopleList from '../components/PeopleList';
 import { showToast } from '../components/Toast';
 import { onExpenseChanged } from '../utils/expenseEvents';
@@ -62,15 +66,17 @@ export default function GroupsScreen() {
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<GroupTypeOption>('other');
 
-  // TrackSpense v3: "Groups | People" top-level toggle — People is a first-class promotion of
-  // what used to be the small embedded FriendBalancesWidget card (now retired).
-  const [topTab, setTopTab] = useState<'groups' | 'people'>('groups');
-  const [tabIndex, setTabIndex] = useState(0);
+  // V2: one tab strip — Groups | People | Archived. People is a first-class promotion of what
+  // used to be the small embedded FriendBalancesWidget card; Archived is the old Active/Archived
+  // sub-toggle folded up a level. `tabIndex` keeps its old meaning (0 = active, 1 = archived).
+  type Section = 'groups' | 'people' | 'archived';
+  const [section, setSection] = useState<Section>('groups');
+  const tabIndex = section === 'archived' ? 1 : 0;
 
   // Dashboard's "Net with people" tap navigates here with `{ initialTab: 'people' }` (see
   // HomeScreen.tsx) — same pattern AIAnalystScreen already uses for `initialQuery`.
   useEffect(() => {
-    if (route.params?.initialTab === 'people') setTopTab('people');
+    if (route.params?.initialTab === 'people') setSection('people');
   }, [route.params?.initialTab]);
 
   // General-purpose fix (not specific to any one entry point): any expense change anywhere
@@ -133,82 +139,60 @@ export default function GroupsScreen() {
     return false;
   });
 
-  const renderItem = ({ item }: { item: GroupSummary }) => {
-    const emoji = GROUP_TYPE_EMOJI[item.group_type as GroupTypeOption] ?? '👥';
-    const balanceColor =
-      item.my_balance > 0
-        ? theme.colors.success
-        : item.my_balance < 0
-        ? theme.colors.error
-        : theme.colors.textTertiary;
+  // Net across the groups on screen — the "Across all groups" figure leading the list.
+  const netAcross = groups.reduce((sum, g) => sum + g.my_balance, 0);
 
+  const renderItem = ({ item }: { item: GroupSummary }) => {
+    const tone = categoryTone(item.name);
+    const owes = item.my_balance < 0;
+    const owed = item.my_balance > 0;
     return (
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.7}
-        onPress={() => navigation.navigate('GroupDetail', { groupId: item.group_id })}
-      >
-        <View style={styles.cardIcon}>
-          <Text style={styles.cardEmoji}>{emoji}</Text>
-        </View>
-        <View style={styles.cardBody}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.cardName} numberOfLines={1}>
-              {item.name}
-            </Text>
-            {item.status === 'archived' && (
-              <View style={[styles.archivedPill, { borderColor: theme.colors.warning }]}>
-                <Text style={[styles.archivedPillText, { color: theme.colors.warning }]}>Archived</Text>
-              </View>
-            )}
+      <ListRow
+        leading={(
+          <View style={[styles.groupTile, { backgroundColor: withAlpha(tone, 0.14) }]}>
+            <Text style={[styles.groupInitial, { color: tone }]}>{item.name.charAt(0).toUpperCase()}</Text>
           </View>
-          <Text style={styles.cardMeta}>
-            {item.member_count} member{item.member_count !== 1 ? 's' : ''}
-          </Text>
-        </View>
-        <View style={styles.cardRight}>
-          <Text style={[styles.balanceAmount, { color: item.my_balance === 0 ? theme.colors.textTertiary : balanceColor }]}>
-            {item.my_balance === 0
-              ? 'settled'
-              : item.my_balance > 0
-              ? `+$${item.my_balance.toFixed(2)}`
-              : `-$${Math.abs(item.my_balance).toFixed(2)}`}
-          </Text>
-        </View>
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={theme.colors.textTertiary}
-        />
-      </TouchableOpacity>
+        )}
+        title={item.name}
+        meta={`${item.member_count} member${item.member_count !== 1 ? 's' : ''}${item.status === 'archived' ? ' · archived' : ''}`}
+        trailing={(
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.balanceLabel}>{owes ? 'you owe' : owed ? 'you are owed' : 'settled'}</Text>
+            <Text style={[styles.balanceAmount, { color: item.my_balance === 0 ? theme.colors.textTertiary : directionalColor(theme, item.my_balance) }]}>
+              ${Math.abs(item.my_balance).toFixed(2)}
+            </Text>
+          </View>
+        )}
+        style={{ paddingVertical: 15, gap: 14 }}
+        onPress={() => navigation.navigate('GroupDetail', { groupId: item.group_id })}
+      />
     );
   };
 
   return (
     <ScreenWrapper>
-      <View style={styles.headerRow}>
-        <Text style={styles.heading}>{topTab === 'groups' ? 'Groups' : 'People'}</Text>
-        {topTab === 'groups' && (
-          <TouchableOpacity style={styles.addBtn} onPress={() => setShowCreate(true)}>
-            <Ionicons name="add" size={20} color={theme.colors.textInverse} />
+      <ScreenHeader
+        title="Groups"
+        right={section !== 'people' ? (
+          <TouchableOpacity activeOpacity={0.8} onPress={() => setShowCreate(true)} accessibilityRole="button" accessibilityLabel="New group">
+            <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.newBtn}>
+              <Text style={styles.newBtnText}>New</Text>
+            </LinearGradient>
           </TouchableOpacity>
-        )}
-      </View>
+        ) : undefined}
+      />
 
-      {/* TrackSpense v3: Groups / People — Active/Archived only applies to Groups (archiving
-          isn't a people concept), so it nests one level down, inside the groups branch below. */}
-      <View style={styles.topTabsRow}>
-        <SegmentedTabs<'groups' | 'people'>
-          value={topTab}
-          onChange={setTopTab}
-          options={[
-            { value: 'groups', label: 'Groups' },
-            { value: 'people', label: 'People' },
-          ]}
-        />
-      </View>
+      <TopTabs<Section>
+        value={section}
+        onChange={setSection}
+        options={[
+          { value: 'groups', label: 'Groups' },
+          { value: 'people', label: 'People' },
+          { value: 'archived', label: 'Archived' },
+        ]}
+      />
 
-      {topTab === 'people' ? (
+      {section === 'people' ? (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}>
           <PeopleList />
         </ScrollView>
@@ -217,7 +201,7 @@ export default function GroupsScreen() {
         data={groups}
         keyExtractor={(item) => item.group_id}
         renderItem={renderItem}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 100 }]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 140 }]}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
@@ -225,24 +209,19 @@ export default function GroupsScreen() {
             tintColor={theme.colors.primary}
           />
         }
-        ListHeaderComponent={
-          <View style={styles.tabsRow}>
-            <SegmentedTabs
-              value={tabIndex === 0 ? 'active' : 'archived'}
-              onChange={(v) => setTabIndex(v === 'active' ? 0 : 1)}
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'archived', label: 'Archived' },
-              ]}
-            />
+        ListHeaderComponent={groups.length > 0 ? (
+          <View style={styles.aggregate}>
+            <SectionLabel>{section === 'archived' ? 'Across archived groups' : 'Across all groups'}</SectionLabel>
+            <Text style={[styles.aggregateAmount, { color: netAcross === 0 ? theme.colors.textTertiary : directionalColor(theme, netAcross) }]}>
+              {netAcross === 0 ? '$0.00' : `${netAcross > 0 ? '+' : '−'}$${Math.abs(netAcross).toFixed(2)}`}
+            </Text>
           </View>
-        }
+        ) : null}
         ListEmptyComponent={
           isLoading ? (
             <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.primary} />
           ) : (
             <View style={styles.emptyCenter}>
-              <Text style={styles.emptyIcon}>👥</Text>
               <Text style={styles.emptyTitle}>
                 {tabIndex === 0 ? 'No active groups' : 'No archived groups'}
               </Text>
@@ -253,15 +232,6 @@ export default function GroupsScreen() {
               </Text>
             </View>
           )
-        }
-        // TrackSpense v3 Mobile mock's dashed "＋ New group" row at the bottom of the list
-        // (only for Active — archiving/creating from the Archived view doesn't apply).
-        ListFooterComponent={
-          tabIndex === 0 && !isLoading ? (
-            <TouchableOpacity style={styles.newGroupRow} onPress={() => setShowCreate(true)} activeOpacity={0.7}>
-              <Text style={styles.newGroupText}>＋ New group</Text>
-            </TouchableOpacity>
-          ) : null
         }
       />
       )}
@@ -338,43 +308,27 @@ export default function GroupsScreen() {
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    headerRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 16,
-    },
-    tabsRow: {
-      marginHorizontal: 20,
-      marginBottom: 16,
-    },
-    topTabsRow: {
-      marginHorizontal: 20,
-      marginBottom: 4,
-    },
     listContent: { flexGrow: 1 },
-    heading: {
-      fontFamily: 'BricolageGrotesque-SemiBold',
-      fontSize: 22,
-      letterSpacing: -0.3,
-      color: theme.colors.text,
+    newBtn: { height: 36, paddingHorizontal: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    newBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 14, color: inkOnPastel },
+    aggregate: {
+      marginTop: 18, paddingVertical: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
     },
-    addBtn: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
+    aggregateAmount: {
+      fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 34, letterSpacing: -1.4, marginTop: 4,
+      fontVariant: ['tabular-nums'],
     },
-    loadingBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    groupTile: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    groupInitial: { fontFamily: 'InstrumentSans-Bold', fontSize: 15 },
+    balanceLabel: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11, color: theme.colors.textTertiary },
+    balanceAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 16, marginTop: 2, fontVariant: ['tabular-nums'] },
     emptyCenter: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 32,
+      paddingTop: 60,
     },
     emptyIcon: { fontSize: 64, marginBottom: 16 },
     emptyTitle: {
@@ -391,62 +345,6 @@ const createStyles = (theme: AppTheme) =>
       marginTop: 8,
       marginBottom: 24,
     },
-    card: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: theme.colors.surface,
-      marginHorizontal: 16,
-      marginTop: 10,
-      borderRadius: 14,
-      padding: 14,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.borderLight,
-    },
-    cardIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: theme.colors.surfaceSecondary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 12,
-    },
-    cardEmoji: { fontSize: 22 },
-    cardBody: { flex: 1 },
-    cardName: {
-      fontFamily: 'InstrumentSans-SemiBold',
-      fontSize: 16,
-      color: theme.colors.text,
-    },
-    cardMeta: {
-      fontFamily: 'InstrumentSans-Regular',
-      fontSize: 13,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
-    },
-    archivedPill: {
-      borderWidth: 1,
-      borderRadius: 999,
-      paddingHorizontal: 7,
-      paddingVertical: 1,
-    },
-    archivedPillText: {
-      fontFamily: 'InstrumentSans-SemiBold',
-      fontSize: 9,
-    },
-    cardRight: { alignItems: 'flex-end', marginRight: 8 },
-    balanceAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 13, fontVariant: ['tabular-nums'] },
-    newGroupRow: {
-      marginHorizontal: 16,
-      marginTop: 10,
-      borderWidth: 1,
-      borderStyle: 'dashed',
-      borderColor: theme.colors.border,
-      borderRadius: 14,
-      paddingVertical: 13,
-      alignItems: 'center',
-    },
-    newGroupText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.primary },
     // Create modal
     modalBackdrop: {
       flex: 1,

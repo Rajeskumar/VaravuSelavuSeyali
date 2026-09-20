@@ -28,6 +28,7 @@ import {
   Dimensions, Pressable, Switch, Alert, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from '../context/AuthContext';
 import { addExpense, addExpenseWithItems, categorizeExpense, uploadReceipt } from '../api/expenses';
@@ -37,7 +38,8 @@ import {
 } from '../api/groups';
 import { upsertRecurringTemplate } from '../api/recurring';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
+import Chip from '../components/Chip';
 import { showToast } from '../components/Toast';
 import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
 import TypeaheadInput from '../components/TypeaheadInput';
@@ -111,6 +113,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [desc, setDesc] = useState('');
   const [expenseDate, setExpenseDate] = useState(() => startOfDay(new Date()));
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // V2 keypad-first: category / merchant / card / repeat live behind a "More" chip so the default
+  // path is amount → one description → Save. Split target and scanned items stay visible when set.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [who, setWho] = useState('me');
   const [merchantName, setMerchantName] = useState('');
   const [mainCategory, setMainCategory] = useState('');
@@ -151,6 +156,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
   );
 
   const resetForm = (initialWho: string) => {
+    setDetailsOpen(false);
     setStage('entry');
     setAmt('');
     setDesc('');
@@ -544,7 +550,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
       <Modal transparent visible={visible} animationType="none" onRequestClose={closeAddExpense} statusBarTranslucent>
         <View style={styles.modalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeAddExpense}>
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: 'rgba(24,24,27,0.4)' }]} />
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: theme.colors.overlay }]} />
           </Pressable>
 
           <Animated.View
@@ -566,19 +572,27 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   keyboardDismissMode="on-drag"
                 >
                   <View style={styles.entryHeader}>
-                    <Text style={styles.entryTitle}>New expense</Text>
-                    <View style={styles.headerActions}>
-                      <TouchableOpacity style={styles.scanBtn} onPress={handleScan} activeOpacity={0.7} disabled={scanning}>
+                    <View style={styles.modeToggle}>
+                      <View style={[styles.modeBtn, styles.modeBtnActive]}>
+                        <Text style={[styles.modeBtnText, styles.modeBtnTextActive]}>Type</Text>
+                      </View>
+                      <TouchableOpacity style={styles.modeBtn} onPress={handleScan} activeOpacity={0.7} disabled={scanning}>
                         {scanning ? (
-                          <ActivityIndicator size="small" color={theme.colors.text} />
+                          <ActivityIndicator size="small" color={theme.colors.textSecondary} />
                         ) : (
-                          <Text style={styles.scanBtnText}>📷 Scan</Text>
+                          <Text style={styles.modeBtnText}>Scan</Text>
                         )}
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={closeAddExpense} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                        <Text style={styles.closeX}>✕</Text>
-                      </TouchableOpacity>
                     </View>
+                    <TouchableOpacity
+                      style={styles.closeBtn}
+                      onPress={closeAddExpense}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close"
+                    >
+                      <Text style={styles.closeX}>✕</Text>
+                    </TouchableOpacity>
                   </View>
 
                   <View style={styles.amountDisplayWrap}>
@@ -587,21 +601,32 @@ export default function AddExpenseProvider({ children }: { children: React.React
 
                   <RNTextInput
                     style={styles.descInput}
-                    placeholder="Description (AI suggests from merchant)"
+                    placeholder="What was it? (AI suggests the category)"
                     placeholderTextColor={theme.colors.textQuaternary}
                     value={desc}
                     onChangeText={handleDescChange}
                     selectionColor={theme.colors.primary}
                   />
 
-                  <TouchableOpacity
-                    style={styles.dateRow}
-                    onPress={() => setShowDatePicker(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.dateRowLabel}>📅 Date</Text>
-                    <Text style={styles.dateRowValue}>{formatShortDate(expenseDate)}</Text>
-                  </TouchableOpacity>
+                  {/* Chips: category (auto-suggested), date, and "More" for the rest. */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                    <Chip
+                      label={subcategory || mainCategory || 'Category'}
+                      variant={subcategory || mainCategory ? 'accent' : 'outline'}
+                      style={styles.captureChip}
+                      onPress={() => setDetailsOpen(true)}
+                    />
+                    <Chip
+                      label={formatShortDate(expenseDate)}
+                      style={styles.captureChip}
+                      onPress={() => setShowDatePicker(true)}
+                    />
+                    <Chip
+                      label={detailsOpen ? 'Less' : 'More'}
+                      style={styles.captureChip}
+                      onPress={() => setDetailsOpen((v) => !v)}
+                    />
+                  </ScrollView>
                   {showDatePicker && (
                     Platform.OS === 'ios' ? (
                       <Modal transparent animationType="slide" visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
@@ -637,34 +662,6 @@ export default function AddExpenseProvider({ children }: { children: React.React
                       />
                     )
                   )}
-
-                  <TypeaheadInput
-                    theme={theme}
-                    value={merchantName}
-                    onChangeValue={(v) => {
-                      setMerchantName(v);
-                      setUserPickedMerchant(true);
-                    }}
-                    fetchSuggestions={fetchMerchantSuggestions}
-                    placeholder="Merchant (optional)"
-                    containerStyle={styles.merchantInputWrap}
-                    inputStyle={styles.merchantInput}
-                  />
-
-                  <CategoryPickerField
-                    theme={theme}
-                    mainCategory={mainCategory}
-                    subcategory={subcategory}
-                    onChange={(main, sub) => {
-                      setMainCategory(main);
-                      setSubcategory(sub);
-                      setUserPickedCategory(true);
-                    }}
-                    label="Category ✨"
-                    containerStyle={styles.categoryFieldWrap}
-                  />
-
-                  <CardPickerField value={cardId} onChange={setCardId} />
 
                   {groupsEnabled && myGroups.length > 0 && (
                     <ScrollView
@@ -722,15 +719,47 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     </View>
                   )}
 
-                  <View style={styles.recurringRow}>
-                    <Text style={styles.recurringRowText}>🔁 Repeat monthly on the {ordinal(new Date().getDate())}</Text>
-                    <Switch
-                      value={recurring}
-                      onValueChange={setRecurring}
-                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                      thumbColor="#fff"
-                    />
-                  </View>
+                  {detailsOpen && (
+                    <>
+                      <TypeaheadInput
+                        theme={theme}
+                        value={merchantName}
+                        onChangeValue={(v) => {
+                          setMerchantName(v);
+                          setUserPickedMerchant(true);
+                        }}
+                        fetchSuggestions={fetchMerchantSuggestions}
+                        placeholder="Merchant (optional)"
+                        containerStyle={styles.merchantInputWrap}
+                        inputStyle={styles.merchantInput}
+                      />
+
+                      <CategoryPickerField
+                        theme={theme}
+                        mainCategory={mainCategory}
+                        subcategory={subcategory}
+                        onChange={(main, sub) => {
+                          setMainCategory(main);
+                          setSubcategory(sub);
+                          setUserPickedCategory(true);
+                        }}
+                        label="Category ✨"
+                        containerStyle={styles.categoryFieldWrap}
+                      />
+
+                      <CardPickerField value={cardId} onChange={setCardId} />
+
+                      <View style={styles.recurringRow}>
+                        <Text style={styles.recurringRowText}>🔁 Repeat monthly on the {ordinal(new Date().getDate())}</Text>
+                        <Switch
+                          value={recurring}
+                          onValueChange={setRecurring}
+                          trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                          thumbColor="#fff"
+                        />
+                      </View>
+                    </>
+                  )}
 
                   <View style={styles.keypad}>
                     {KEYS.map((k) => (
@@ -741,16 +770,23 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   </View>
 
                   <TouchableOpacity
-                    style={[styles.saveBtn, !capReady && styles.saveBtnDisabled]}
                     onPress={handleSave}
                     disabled={!capReady || loading}
                     activeOpacity={0.85}
+                    accessibilityRole="button"
                   >
-                    {loading ? (
-                      <ActivityIndicator color={theme.colors.textInverse} />
-                    ) : (
-                      <Text style={styles.saveBtnText}>{isGroup ? 'Save & split' : 'Save'}</Text>
-                    )}
+                    <LinearGradient
+                      colors={theme.gradients.primary}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.saveBtn, !capReady && styles.saveBtnDisabled]}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color={inkOnPastel} />
+                      ) : (
+                        <Text style={styles.saveBtnText}>{isGroup ? 'Save & split' : 'Save'}</Text>
+                      )}
+                    </LinearGradient>
                   </TouchableOpacity>
                 </ScrollView>
               ) : (
@@ -787,52 +823,43 @@ const createStyles = (theme: AppTheme) =>
     // `modalRoot`'s `justifyContent: 'flex-end'`. A fixed-height absolute box regardless of
     // content was the bug behind "opens from near the top with empty space at the bottom".
     sheet: {
-      maxHeight: '85%',
-      backgroundColor: theme.colors.surface,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.12,
-      shadowRadius: 20,
-      elevation: 24,
+      maxHeight: '92%',
+      backgroundColor: theme.colors.surfaceElevated,
+      borderTopLeftRadius: 26,
+      borderTopRightRadius: 26,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+      ...theme.shadows.lg,
     },
     dragPillWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
-    dragPill: { width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.borderLight },
+    dragPill: { width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.border },
 
-    body: { paddingHorizontal: 18, paddingBottom: 24 },
+    body: { paddingHorizontal: 22, paddingBottom: 24 },
 
     entryHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-    entryTitle: { fontFamily: 'InstrumentSans-Bold', fontSize: 16, color: theme.colors.text },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    scanBtn: {
-      flexDirection: 'row', alignItems: 'center', gap: 6,
-      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 999,
-      paddingHorizontal: 12, paddingVertical: 6,
-    },
-    scanBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12, color: theme.colors.text },
-    closeX: { color: theme.colors.textTertiary, fontSize: 16, paddingHorizontal: 6, paddingVertical: 2 },
+    modeToggle: { flexDirection: 'row', gap: 6, backgroundColor: theme.colors.surfaceSecondary, borderRadius: 11, padding: 3 },
+    modeBtn: { height: 30, minWidth: 54, paddingHorizontal: 13, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+    modeBtnActive: { backgroundColor: theme.colors.text },
+    modeBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.textSecondary },
+    modeBtnTextActive: { fontFamily: 'InstrumentSans-Bold', color: theme.colors.background },
+    closeBtn: { width: 32, height: 32, borderRadius: 11, backgroundColor: theme.colors.surfaceSecondary, alignItems: 'center', justifyContent: 'center' },
+    closeX: { color: theme.colors.textSecondary, fontSize: 14 },
 
-    amountDisplayWrap: { alignItems: 'center', paddingTop: 10, paddingBottom: 2 },
+    amountDisplayWrap: { alignItems: 'center', paddingTop: 12, paddingBottom: 2 },
     amountDisplay: {
-      fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 42, color: theme.colors.text,
-      letterSpacing: -0.5, minHeight: 52,
+      fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 56, color: theme.colors.text,
+      letterSpacing: -2.8, minHeight: 64, fontVariant: ['tabular-nums'],
     },
 
+    // Borderless and centered under the figure — the description is a caption, not a form field.
     descInput: {
-      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
-      paddingHorizontal: 12, paddingVertical: 10, fontFamily: 'InstrumentSans-Regular', fontSize: 13.5,
-      color: theme.colors.text, marginTop: 8,
+      paddingHorizontal: 12, paddingVertical: 8, fontFamily: 'InstrumentSans-Regular', fontSize: 14,
+      color: theme.colors.text, marginTop: 2, textAlign: 'center',
     },
+    chipRow: { gap: 8, paddingVertical: 10 },
+    captureChip: { height: 34, borderRadius: 11 },
 
-    dateRow: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
-      paddingHorizontal: 12, paddingVertical: 10, marginTop: 8,
-    },
-    dateRowLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 13.5, color: theme.colors.textSecondary },
-    dateRowValue: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
-    datePickerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(24,24,27,0.4)' },
+    datePickerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: theme.colors.overlay },
     datePickerSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 16 },
     datePickerHeader: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 },
     datePickerDone: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14, color: theme.colors.primary },
@@ -867,19 +894,16 @@ const createStyles = (theme: AppTheme) =>
     },
     recurringRowText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textSecondary },
 
-    keypad: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+    keypad: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
     key: {
-      width: '31.5%', height: 46, borderRadius: 10, backgroundColor: theme.colors.surfaceSecondary,
+      width: '31.6%', height: 52, borderRadius: 14, backgroundColor: theme.colors.surfaceSecondary,
       alignItems: 'center', justifyContent: 'center',
     },
-    keyLabel: { fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 20, color: theme.colors.text },
+    keyLabel: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 23, color: theme.colors.text },
 
-    saveBtn: {
-      marginTop: 12, height: 48, borderRadius: 12, backgroundColor: theme.colors.primary,
-      alignItems: 'center', justifyContent: 'center',
-    },
-    saveBtnDisabled: { backgroundColor: theme.colors.border },
-    saveBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.textInverse },
+    saveBtn: { marginTop: 14, height: 54, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    saveBtnDisabled: { opacity: 0.4 },
+    saveBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 17, color: inkOnPastel },
 
     savedWrap: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 32, paddingHorizontal: 24 },
     savedCheck: {

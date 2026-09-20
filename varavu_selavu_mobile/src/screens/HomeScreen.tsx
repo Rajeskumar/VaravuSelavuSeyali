@@ -1,366 +1,57 @@
+/**
+ * HomeScreen.tsx — V2 "Dashboard" (Flows 3.1). Two figures that matter — spend this month with six
+ * months of history, and net with people — then the ask bar and three recent rows. No lens toggle,
+ * no duplicate totals: Budgets and Card Coach live under Insights, groups under the Groups tab.
+ */
 import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl,
-  ActivityIndicator,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { getAnalysis, AnalysisResponse } from '../api/analysis';
-import { checkGroupsEnabled, listAllMyGroupExpenses, UnifiedGroupExpenseRow } from '../api/groups';
+import { useNavigation } from '@react-navigation/native';
+import { getAnalysis } from '../api/analysis';
+import { checkGroupsEnabled, listAllMyGroupExpenses } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme, directionalColor } from '../theme';
+import { AppTheme, directionalColor, withAlpha, inkOnPastel } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomButton from '../components/CustomButton';
-import SegmentedTabs from '../components/SegmentedTabs';
 import TypeToLogBar from '../components/TypeToLogBar';
-import { showToast } from '../components/Toast';
+import ListRow from '../components/ListRow';
+import SectionLabel from '../components/SectionLabel';
+import AmbientBackground from '../components/AmbientBackground';
+import IconButton from '../components/IconButton';
 import { onExpenseChanged } from '../utils/expenseEvents';
-import { computeIPaidTotal, computeNetWithPeople, AnalysisGroupSummary } from '../utils/dashboardTotals';
+import { computeNetWithPeople, AnalysisGroupSummary } from '../utils/dashboardTotals';
+import { lastMonthsTrend, barFractions, monthOverMonthPercent } from '../utils/spendTrend';
+import { shortDate } from '../utils/expenseInsights';
 import { AddExpenseContext } from './AddExpenseScreen';
-import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
-import { listBudgets } from '../api/budgets';
-import BudgetsSummaryCard from '../components/BudgetsSummaryCard';
-import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
-import CardCoachSummaryCard from '../components/CardCoachSummaryCard';
-
-// ─── Category icon map ───────────────────────────────────────────────────────
-const categoryEmojis: Record<string, string> = {
-  food: '🍕', groceries: '🛒', transport: '🚗', entertainment: '🎬',
-  shopping: '🛍️', health: '🏥', utilities: '💡', rent: '🏠',
-  travel: '✈️', education: '📚', subscription: '📱', salary: '💰',
-  investment: '📈', other: '📋',
-};
-
-// CerebroOS-era ramp: 12 evenly-spaced oklch hues at matched lightness/chroma (a cohesive wheel,
-// not a grab-bag of unrelated saturated colors like the old set), skipping the one hue that
-// landed too close to `theme.colors.error`'s negative-red.
-const categoryColors: Record<string, string> = {
-  food: '#F99262', groceries: '#E4A339', transport: '#00CCCC', entertainment: '#D294EE',
-  shopping: '#EF8BC5', health: '#89C566', utilities: '#71B4FF', rent: '#A8A3FF',
-  travel: '#1BC3F3', education: '#BFB53B', subscription: '#40CD9B', other: '#9AA0AF',
-};
-
-function getCategoryEmoji(category: string): string {
-  return categoryEmojis[category?.toLowerCase().trim()] || '💳';
-}
-
-function getCategoryColor(category: string): string {
-  return categoryColors[category?.toLowerCase().trim()] || '#9AA0AF';
-}
 
 const formatCurrency = (amount: number) =>
   `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+const signedCurrency = (amount: number) =>
+  amount === 0 ? '$0.00' : `${amount > 0 ? '+' : '−'}${formatCurrency(Math.abs(amount))}`;
 
-/** TrackSpense v3 Mobile mock's hero card — spend total + lens + "personal + group shares"/"I
- * paid" sub-line + Net with people, nothing else (no month-over-month delta line — the mock has
- * none). */
-function HeroCard({
-  monthlyTotal,
-  personalTotal,
-  showLens,
-  lens,
-  onLensChange,
-  netWithPeople,
-  onNetWithPeoplePress,
-}: {
-  monthlyTotal: number;
-  /** `spend_breakdown.personal` — feeds the "$X personal + group shares" sub-line, mirroring
-   * the mock's `dbSpendSub` for the "share" lens. */
-  personalTotal: number;
-  /** TrackSpense v3: lens toggle + "Net with people" only render when the user has at least
-   * one active group (mirrors web's `hasGroups` gate on `TrueTotalHero.tsx`). */
-  showLens: boolean;
-  lens: 'share' | 'paid';
-  onLensChange: (lens: 'share' | 'paid') => void;
-  netWithPeople: number;
-  onNetWithPeoplePress: () => void;
-}) {
-  const { theme } = useAppTheme();
-  const heroStyles = useMemo(() => createHeroStyles(theme), [theme]);
-  // Mock's `dbSpendLabel`/`dbSpendSub`: the label and the line under the amount both flip with
-  // the lens, not just the number itself.
-  const spendLabel = lens === 'paid' ? 'Money out of pocket this month' : 'Spent this month — your true total';
-  const spendSub = lens === 'paid'
-    ? 'includes money fronted for others'
-    : `${formatCurrency(personalTotal)} personal + group shares`;
-  return (
-    <View style={heroStyles.card}>
-      {/* TrackSpense v3 Mobile mock's hero is a flat white/hairline-bordered card (matches the
-          rest of the Slate system), not the pre-v3 LinearGradient treatment this used to have —
-          every child below is styled dark-on-white now instead of white-on-gradient. */}
-      {showLens && (
-        <View style={heroStyles.lensWrap}>
-          <SegmentedTabs<'share' | 'paid'>
-            value={lens}
-            onChange={onLensChange}
-            options={[{ value: 'share', label: 'My expenses' }, { value: 'paid', label: 'I paid' }]}
-          />
-        </View>
-      )}
-
-      <Text style={heroStyles.spendLabel}>{spendLabel}</Text>
-      <Text style={heroStyles.amount}>{formatCurrency(monthlyTotal)}</Text>
-      {showLens && <Text style={heroStyles.spendSub}>{spendSub}</Text>}
-
-      {/* Net with people — tapping jumps to the Groups tab's People sub-tab. */}
-      {showLens && (
-        <TouchableOpacity style={heroStyles.netRow} onPress={onNetWithPeoplePress} activeOpacity={0.7}>
-          <View>
-            <Text style={heroStyles.netLabel}>Net with people</Text>
-            <Text
-              style={[
-                heroStyles.netAmount,
-                { color: netWithPeople === 0 ? theme.colors.textTertiary : directionalColor(theme, netWithPeople) },
-              ]}
-            >
-              {netWithPeople === 0 ? '$0.00' : `${netWithPeople > 0 ? '+' : '−'}${formatCurrency(Math.abs(netWithPeople))}`}
-            </Text>
-          </View>
-          <Text style={heroStyles.netArrow}>→</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+function greeting(now: Date): string {
+  const h = now.getHours();
+  return h < 12 ? 'Morning' : h < 18 ? 'Afternoon' : 'Evening';
 }
-
-const createHeroStyles = (theme: AppTheme) => StyleSheet.create({
-  card: {
-    marginHorizontal: 20,
-    marginBottom: 12,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xxl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.borderLight,
-    padding: 18,
-  },
-  lensWrap: {
-    alignSelf: 'flex-start',
-    marginBottom: 14,
-  },
-  spendLabel: {
-    fontFamily: 'InstrumentSans-SemiBold',
-    fontSize: 12,
-    color: theme.colors.textTertiary,
-  },
-  amount: {
-    fontFamily: 'BricolageGrotesque-SemiBold',
-    fontSize: 38,
-    color: theme.colors.text,
-    letterSpacing: -0.5,
-    marginTop: 2,
-  },
-  spendSub: {
-    fontFamily: 'InstrumentSans-Regular',
-    fontSize: 12,
-    color: theme.colors.textTertiary,
-    marginTop: 2,
-  },
-  netRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: theme.colors.borderLight,
-    marginTop: 14,
-    paddingTop: 12,
-  },
-  netLabel: {
-    fontFamily: 'InstrumentSans-SemiBold',
-    fontSize: 12,
-    color: theme.colors.textTertiary,
-  },
-  netAmount: {
-    fontFamily: 'BricolageGrotesque-SemiBold',
-    fontSize: 24,
-    letterSpacing: -0.3,
-    marginTop: 2,
-  },
-  netArrow: {
-    fontFamily: 'InstrumentSans-SemiBold',
-    fontSize: 13,
-    color: theme.colors.primary,
-  },
-});
-
-/** TrackSpense v3 Mobile mock's "My Groups" chips row — one row per active group with its net,
- * tapping navigates straight to that group's detail screen. Directly below the hero, using
- * `group_summaries` already fetched for the hero itself (no extra API call). */
-function GroupChipsRow({ groupSummaries, onPress }: { groupSummaries: AnalysisGroupSummary[]; onPress: (groupId: string) => void }) {
-  const { theme } = useAppTheme();
-  const styles = useMemo(() => createGroupChipsStyles(theme), [theme]);
-  if (groupSummaries.length === 0) return null;
-  return (
-    <View style={styles.wrap}>
-      {groupSummaries.map((g) => (
-        <TouchableOpacity key={g.group_id} style={styles.chip} onPress={() => onPress(g.group_id)} activeOpacity={0.7}>
-          <Text style={styles.chipName} numberOfLines={1}>{g.name}</Text>
-          <Text
-            style={[
-              styles.chipNet,
-              { color: g.my_balance === 0 ? theme.colors.textTertiary : directionalColor(theme, g.my_balance) },
-            ]}
-          >
-            {g.my_balance === 0 ? 'settled' : `${g.my_balance > 0 ? '+' : '−'}${formatCurrency(Math.abs(g.my_balance))}`}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
-const createGroupChipsStyles = (theme: AppTheme) => StyleSheet.create({
-  wrap: { marginHorizontal: 20, marginBottom: 16, gap: 8 },
-  chip: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: theme.colors.borderLight,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  chipName: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text, flex: 1, marginRight: 8 },
-  chipNet: { fontFamily: 'InstrumentSans-Bold', fontSize: 13 },
-});
-
-/** TrackSpense v3 Mobile mock's compact "RECENT ⋯ See all ›" section header — the only section
- * header the mock has on Home, so this no longer needs to be a generic large-title component
- * (it was previously shared with the now-removed "Analytics" section below). */
-function SectionHeader({
-  title,
-  onSeeAll,
-}: {
-  title: string;
-  onSeeAll?: () => void;
-}) {
-  const { theme } = useAppTheme();
-  const sectionStyles = useMemo(() => createSectionStyles(theme), [theme]);
-  return (
-    <View style={sectionStyles.row}>
-      <Text style={sectionStyles.title}>{title.toUpperCase()}</Text>
-      {onSeeAll && (
-        <TouchableOpacity onPress={onSeeAll} activeOpacity={0.6}>
-          <Text style={sectionStyles.seeAll}>See all ›</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-}
-
-const createSectionStyles = (theme: AppTheme) => StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 8,
-  },
-  title: {
-    fontFamily: 'InstrumentSans-Bold',
-    fontSize: 11,
-    color: theme.colors.textTertiary,
-    letterSpacing: 0.8,
-  },
-  seeAll: {
-    fontFamily: 'InstrumentSans-Regular',
-    fontSize: 12,
-    color: theme.colors.textTertiary,
-  },
-});
-
-/** iOS-style receipt list item */
-function ExpenseRow({
-  expense,
-  isLast,
-}: {
-  expense: any;
-  isLast: boolean;
-}) {
-  const { theme } = useAppTheme();
-  const rowStyles = useMemo(() => createRowStyles(theme), [theme]);
-  const color = getCategoryColor(expense.category);
-  return (
-    <>
-      <View style={rowStyles.row}>
-        <View style={[rowStyles.iconBg, { backgroundColor: color + '20' }]}>
-          <Text style={rowStyles.iconText}>{getCategoryEmoji(expense.category)}</Text>
-        </View>
-        <View style={rowStyles.info}>
-          <Text style={rowStyles.title} numberOfLines={1}>{expense.description}</Text>
-          <Text style={rowStyles.subtitle}>
-            {expense.groupName ? `${expense.groupName} · my expense` : `${expense.category} · ${expense.date}`}
-          </Text>
-        </View>
-        <Text style={rowStyles.amount}>−{formatCurrency(expense.cost)}</Text>
-      </View>
-      {!isLast && <View style={rowStyles.separator} />}
-    </>
-  );
-}
-
-const createRowStyles = (theme: AppTheme) => StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    minHeight: 64,
-  },
-  iconBg: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  iconText: { fontSize: 20 },
-  info: { flex: 1, marginRight: 8 },
-  title: {
-    fontFamily: 'InstrumentSans-SemiBold',
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 3,
-  },
-  subtitle: {
-    fontFamily: 'InstrumentSans-Regular',
-    fontSize: 13,
-    color: theme.colors.textTertiary,
-  },
-  amount: {
-    fontFamily: 'InstrumentSans-SemiBold',
-    fontSize: 16,
-    color: theme.colors.text,
-    letterSpacing: -0.3,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.colors.borderLight,
-    marginLeft: 74,
-  },
-});
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const { userEmail, accessToken } = useAuth();
   const navigation = useNavigation<any>();
-  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const queryClient = useQueryClient();
   const now = useMemo(() => new Date(), []);
   const [refreshing, setRefreshing] = useState(false);
-  const [lens, setLens] = useState<'share' | 'paid'>('share');
   const { openAddExpense } = useContext(AddExpenseContext);
-  
-  const { data: monthlyData, isLoading: loadingMonth, refetch: refetchMonth } = useQuery({
+
+  const { data: monthlyData, isLoading: loading } = useQuery({
     queryKey: ['analysis', userEmail, now.getFullYear(), now.getMonth() + 1, 'combined'],
     queryFn: () => getAnalysis(accessToken!, userEmail!, { year: now.getFullYear(), month: now.getMonth() + 1, scope: 'combined' }),
     enabled: !!accessToken && !!userEmail,
@@ -377,22 +68,11 @@ export default function HomeScreen() {
     enabled: !!accessToken && !!userEmail && !!groupsEnabled,
   });
 
-  const { enabled: budgetsEnabled } = useBudgetsEnabled();
-  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
-  const { data: budgetsData } = useQuery({
-    queryKey: ['budgets'],
-    queryFn: () => listBudgets(),
-    enabled: !!accessToken && budgetsEnabled,
-  });
-
-  const loading = loadingMonth;
-
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['analysis'] }),
       queryClient.invalidateQueries({ queryKey: ['groupExpenses'] }),
-      queryClient.invalidateQueries({ queryKey: ['budgets'] }),
     ]);
     setRefreshing(false);
   };
@@ -401,13 +81,12 @@ export default function HomeScreen() {
     return onExpenseChanged(() => {
       queryClient.invalidateQueries({ queryKey: ['analysis'] });
       queryClient.invalidateQueries({ queryKey: ['groupExpenses'] });
-      queryClient.invalidateQueries({ queryKey: ['budgets'] });
     });
   }, [queryClient]);
 
   const recentExpenses = useMemo(() => {
     const personalRecent = Object.values(monthlyData?.category_expense_details || {}).flat();
-    const groupRecent = (groupExpenses || []).map(e => ({
+    const groupRecent = (groupExpenses || []).map((e) => ({
       date: e.date,
       description: e.description,
       category: e.category,
@@ -416,111 +95,142 @@ export default function HomeScreen() {
     }));
     return [...personalRecent, ...groupRecent]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 6);
+      .slice(0, 3);
   }, [monthlyData, groupExpenses]);
 
-  // TrackSpense v3: under scope=combined, `total_expenses` is already personal + every group's
-  // my_share (see backend AnalysisService._merge_legs) — i.e. it's already the "My expenses"
-  // lens total, no client-side re-sum needed. Only "I paid" needs a client-side compute, since
-  // the backend doesn't precompute that combination.
+  // Under scope=combined, `total_expenses` is already personal + every group's my_share (see
+  // backend AnalysisService._merge_legs) — the "true total" — so no client-side re-sum here.
   const groupSummaries: AnalysisGroupSummary[] = monthlyData?.group_summaries ?? [];
   const hasGroups = !!groupsEnabled && groupSummaries.length > 0;
-  const monthlyTotal = lens === 'paid'
-    ? computeIPaidTotal(monthlyData?.spend_breakdown?.personal ?? 0, groupSummaries)
-    : (monthlyData?.total_expenses || 0);
+  const total = monthlyData?.total_expenses || 0;
   const netWithPeople = computeNetWithPeople(groupSummaries);
+  const owedToYou = groupSummaries.reduce((s, g) => s + Math.max(g.my_balance, 0), 0);
 
-  // TrackSpense v3 Mobile mock's greeting: a period eyebrow ("July 2026") + "Hi, {name}" —
-  // replaces the pre-v3 time-of-day "Good evening, testlocaluser" format.
-  const monthYearLabel = now.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const trend = useMemo(() => lastMonthsTrend(monthlyData?.monthly_trend, now), [monthlyData, now]);
+  const fractions = useMemo(() => barFractions(trend), [trend]);
+  const delta = monthOverMonthPercent(trend);
+
+  const [whole, cents] = formatCurrency(total).split('.');
+  const dateEyebrow = `${now.toLocaleString('en-US', { weekday: 'long' })} · ${now.getDate()} ${now.toLocaleString('en-US', { month: 'short' })}`;
   const firstName = userEmail?.split('@')[0] || 'there';
 
   return (
     <LinearGradient colors={theme.gradients.surface} style={styles.root}>
+      <AmbientBackground />
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 160 }]}
+        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 160 }]}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
       >
-        {/* ── Greeting Header ────────────────────────────────── */}
-        <View style={styles.pageHeader}>
-          <View>
-            <Text style={styles.greetingEyebrow}>{monthYearLabel.toUpperCase()}</Text>
-            <Text style={styles.greetingName}>Hi, {firstName}</Text>
+        {/* ── Header: avatar → Account, date + greeting, bell → Activity ─────── */}
+        <View style={styles.header}>
+          <TouchableOpacity activeOpacity={0.75} onPress={() => navigation.navigate('Profile')} accessibilityRole="button" accessibilityLabel="Account">
+            <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
+              <Text style={styles.avatarText}>{userEmail?.charAt(0).toUpperCase() || '?'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <SectionLabel style={{ letterSpacing: 1.5 }}>{dateEyebrow}</SectionLabel>
+            <Text style={styles.greeting} numberOfLines={1}>{greeting(now)}, {firstName}</Text>
           </View>
-          <TouchableOpacity
-            style={styles.avatarBtn}
-            activeOpacity={0.75}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <Text style={styles.avatarText}>{userEmail?.charAt(0).toUpperCase() || '?'}</Text>
+          <IconButton icon="notifications-outline" accessibilityLabel="Activity" onPress={() => navigation.navigate('Activity')} />
+        </View>
+
+        {/* ── Figure 1: spend this month + six-month history ─────────────────── */}
+        {loading ? (
+          <View style={styles.loading}><ActivityIndicator color={theme.colors.primary} /></View>
+        ) : (
+          <View style={styles.block}>
+            <SectionLabel>Spent in {now.toLocaleString('en-US', { month: 'long' })}</SectionLabel>
+            <View style={styles.heroRow}>
+              <Text style={styles.hero}>
+                {whole}<Text style={styles.heroCents}>.{cents}</Text>
+              </Text>
+              {delta !== null && delta !== 0 && (
+                // Spend going down is good news here, so the arrow follows direction and the
+                // color follows meaning (less spend = success).
+                <Text style={[styles.delta, { color: delta < 0 ? theme.colors.success : theme.colors.warning }]}>
+                  {delta < 0 ? '↓' : '↑'} {Math.abs(delta)}%
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.bars}>
+              {trend.map((p, i) => (
+                <View
+                  key={p.key}
+                  style={[
+                    styles.bar,
+                    {
+                      height: `${Math.round(fractions[i] * 100)}%`,
+                      backgroundColor: p.isCurrent
+                        ? theme.colors.secondary
+                        : i === trend.length - 2
+                          ? withAlpha(theme.colors.primary, 0.45)
+                          : theme.colors.surfaceSecondary,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.barLabels}>
+              {trend.map((p) => (
+                <Text key={p.key} style={[styles.barLabel, p.isCurrent && { color: theme.colors.primary }]}>{p.label}</Text>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Figure 2: net with people (only once there's a group) ──────────── */}
+        {hasGroups && (
+          <>
+            <View style={styles.rule} />
+            <TouchableOpacity style={styles.netRow} onPress={() => navigation.navigate('GroupsTab')} activeOpacity={0.7}>
+              <View style={{ flex: 1 }}>
+                <SectionLabel>Net with people</SectionLabel>
+                <Text style={[styles.net, { color: netWithPeople === 0 ? theme.colors.textTertiary : directionalColor(theme, netWithPeople) }]}>
+                  {signedCurrency(netWithPeople)}
+                </Text>
+              </View>
+              {owedToYou > 0 && (
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.owedLabel, { color: theme.colors.success }]}>owed to you</Text>
+                  <Text style={styles.owedAmount}>{formatCurrency(owedToYou)}</Text>
+                </View>
+              )}
+              <Text style={styles.chev}>›</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ── Ask / log bar ───────────────────────────────────────────────────── */}
+        <TypeToLogBar />
+
+        {/* ── Recent ──────────────────────────────────────────────────────────── */}
+        <View style={styles.recentHeader}>
+          <SectionLabel>Recent</SectionLabel>
+          <TouchableOpacity onPress={() => navigation.navigate('Expenses')} activeOpacity={0.6}>
+            <Text style={styles.all}>All</Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── Type to log (TrackSpense v3) ──────────────────── */}
-        <TypeToLogBar />
-
-        {/* ── Hero Card ─────────────────────────────────────── */}
-        {loading ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator color={theme.colors.primary} />
-          </View>
-        ) : (
-          <HeroCard
-            monthlyTotal={monthlyTotal}
-            personalTotal={monthlyData?.spend_breakdown?.personal ?? 0}
-            showLens={hasGroups}
-            lens={lens}
-            onLensChange={setLens}
-            netWithPeople={netWithPeople}
-            onNetWithPeoplePress={() => navigation.navigate('GroupsTab', { initialTab: 'people' })}
-          />
-        )}
-
-        {/* ── My Groups (TrackSpense v3) ────────────────────── */}
-        <GroupChipsRow groupSummaries={groupSummaries} onPress={(groupId) => navigation.navigate('GroupDetail', { groupId })} />
-
-        {/* ── Budgets (TS-BUD-101) ──────────────────────────── */}
-        {budgetsEnabled && (
-          <BudgetsSummaryCard
-            budgets={budgetsData || []}
-            onPress={() => navigation.navigate('Analysis', { initialTab: 'budgets' })}
-          />
-        )}
-
-        {/* ── Card Coach (TS-CARD-108) ──────────────────────── */}
-        {cardCoachEnabled && (
-          <CardCoachSummaryCard onPress={() => navigation.navigate('Analysis', { initialTab: 'cards' })} />
-        )}
-
-        {/* ── Recent Activity ───────────────────────────────── */}
-        <SectionHeader
-          title="Recent"
-          onSeeAll={() => navigation.navigate('Expenses')}
-        />
-
         {recentExpenses.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>🧾</Text>
+          <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No recent expenses</Text>
             <Text style={styles.emptySubtitle}>Add your first expense to see it here</Text>
-            <CustomButton
-              title="Add an Expense"
-              onPress={openAddExpense}
-              fullWidth={false}
-              style={{ marginTop: 16, paddingHorizontal: 32 }}
-            />
+            <CustomButton title="Add an Expense" onPress={openAddExpense} fullWidth={false} style={{ marginTop: 16, paddingHorizontal: 32 }} />
           </View>
         ) : (
-          <View style={styles.listCard}>
-            {recentExpenses.map((expense, i) => (
-              <ExpenseRow
-                key={`${expense.date}-${i}`}
-                expense={expense}
-                isLast={i === recentExpenses.length - 1}
+          <View style={styles.list}>
+            {recentExpenses.map((e, i) => (
+              <ListRow
+                key={`${e.date}-${i}`}
+                category={e.category}
+                title={e.description}
+                meta={'groupName' in e && e.groupName ? `${shortDate(e.date)} · ${e.groupName}` : `${shortDate(e.date)} · ${e.category}`}
+                amount={formatCurrency(e.cost)}
+                onPress={() => navigation.navigate('Expenses')}
               />
             ))}
           </View>
@@ -531,74 +241,38 @@ export default function HomeScreen() {
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
-  root: {
-    flex: 1,
+  root: { flex: 1 },
+  scroll: { paddingHorizontal: 22 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 14 },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: theme.typography.fontFamily.bold, fontSize: 16, color: inkOnPastel },
+  greeting: {
+    fontFamily: theme.typography.fontFamily.bold, fontSize: 17, color: theme.colors.text,
+    letterSpacing: -0.3, marginTop: 2, textTransform: 'capitalize',
   },
-  scroll: {
-    paddingHorizontal: 0,
+  loading: { height: 180, alignItems: 'center', justifyContent: 'center' },
+  block: { marginTop: 4 },
+  heroRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginTop: 6 },
+  hero: {
+    fontFamily: theme.typography.fontFamily.display, fontSize: 52, lineHeight: 54, letterSpacing: -2.3,
+    color: theme.colors.text, fontVariant: ['tabular-nums'],
   },
-  pageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  greetingEyebrow: {
-    fontFamily: 'InstrumentSans-Bold',
-    fontSize: 11,
-    letterSpacing: 0.7,
-    color: theme.colors.textTertiary,
-    marginBottom: 2,
-  },
-  greetingName: {
-    fontFamily: 'BricolageGrotesque-SemiBold',
-    fontSize: 22,
-    color: theme.colors.text,
-    letterSpacing: -0.3,
-    textTransform: 'capitalize',
-  },
-  avatarBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.sm,
-  },
-  avatarText: {
-    fontFamily: 'InstrumentSans-Bold',
-    fontSize: 18,
-    color: theme.colors.textInverse,
-  },
-  loadingCard: {
-    marginHorizontal: 20,
-    height: 180,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xxl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-    ...theme.shadows.md,
-  },
-  listCard: {
-    marginHorizontal: 20,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    overflow: 'hidden',
-    marginBottom: 8,
-    ...theme.shadows.sm,
-  },
-  emptyCard: {
-    marginHorizontal: 20,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.borderRadius.xl,
-    paddingVertical: 40,
-    alignItems: 'center',
-    ...theme.shadows.xs,
-  },
-  emptyIcon: { fontSize: 44, marginBottom: 14 },
-  emptyTitle: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 17, color: theme.colors.text, marginBottom: 6 },
-  emptySubtitle: { fontFamily: 'InstrumentSans-Regular', fontSize: 15, color: theme.colors.textTertiary },
+  heroCents: { color: theme.colors.textTertiary },
+  delta: { fontFamily: theme.typography.fontFamily.bold, fontSize: 14, paddingBottom: 8 },
+  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, height: 40, marginTop: 16 },
+  bar: { flex: 1, borderRadius: 4 },
+  barLabels: { flexDirection: 'row', gap: 10, marginTop: 7 },
+  barLabel: { flex: 1, textAlign: 'center', fontFamily: theme.typography.fontFamily.monoRegular, fontSize: 10, letterSpacing: 1, color: theme.colors.textQuaternary },
+  rule: { height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.borderLight, marginVertical: 18 },
+  netRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18 },
+  net: { fontFamily: theme.typography.fontFamily.display, fontSize: 28, letterSpacing: -1, marginTop: 4, fontVariant: ['tabular-nums'] },
+  owedLabel: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 12 },
+  owedAmount: { fontFamily: theme.typography.fontFamily.bold, fontSize: 16, color: theme.colors.text, marginTop: 2, fontVariant: ['tabular-nums'] },
+  chev: { fontSize: 22, color: theme.colors.textQuaternary },
+  recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  all: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 13, color: theme.colors.primary },
+  list: { marginBottom: 8 },
+  empty: { alignItems: 'center', paddingVertical: 36 },
+  emptyTitle: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 17, color: theme.colors.text, marginBottom: 6 },
+  emptySubtitle: { fontFamily: theme.typography.fontFamily.regular, fontSize: 15, color: theme.colors.textTertiary },
 });

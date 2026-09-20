@@ -18,7 +18,7 @@ TrackSpense is a Splitwise-style personal + shared expense tracker.
 - **Mobile** — `varavu_selavu_mobile`: React Native/Expo. **Out of scope** for this
   framework — Playwright drives browsers, not native app builds. See §8.
 - **Production** — `expense.cerebroos.com` (frontend) / `trackspense-api.cerebroos.com`
-  (backend), deployed via `cloudbuild.yaml` straight to Cloud Run with **no staging slot
+  (backend), deployed via `cloudbuild.backend.yaml` / `cloudbuild.frontend.yaml` (release-tag triggered) straight to Cloud Run with **no staging slot
   and no test gate today**. Live feature flags (confirmed via `GET /api/v1/config`):
   `groups_enabled=true, budgets_enabled=true, card_coach_enabled=true, tags_enabled=true,
   entity_resolution_enabled=false`.
@@ -53,7 +53,7 @@ viewport on full regression), CI gating, artifacts.
   (flag off in prod).
 - CSV export content-diffing (download exists, byte-for-byte content isn't asserted).
 - Google OAuth login (no realistic way to automate a real Google IdP handshake).
-- A true deploy-time smoke gate in `cloudbuild.yaml` — explicit user decision, revisit
+- A true deploy-time smoke gate in the Cloud Build pipelines — explicit user decision, revisit
   once a GCP dev/staging environment exists.
 - Mobile app (`varavu_selavu_mobile`) — not Playwright-testable.
 
@@ -115,11 +115,11 @@ known-but-undocumented gap rather than a new one.
 
 **Expected**: `alembic upgrade head` against an empty, schema-only database produces a
 fully working TrackSpense schema (this is the standard Alembic contract, and it's the
-only migration command `cloudbuild.yaml`'s prod deploy pipeline runs).
+only migration command `cloudbuild.backend.yaml`'s prod deploy pipeline runs).
 **Actual**: it throws `UndefinedTable` partway through and leaves the database in a
 partially-migrated state.
 
-**Why this matters beyond QA tooling**: `cloudbuild.yaml`'s `run-migrations` step runs
+**Why this matters beyond QA tooling**: `cloudbuild.backend.yaml`'s `run-migrations` step runs
 bare `alembic upgrade head` against the production Postgres instance via a Cloud Run Job,
 with no `schema.sql` step before it. If that database were ever recreated from scratch
 (disaster recovery, a new environment, a provider migration), that deploy step would fail

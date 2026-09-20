@@ -10,7 +10,7 @@
  * editing those happens in GroupDetailScreen; tapping one navigates there instead).
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, Switch, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -26,10 +26,16 @@ import { useAppTheme } from '../context/ThemeContext';
 import { useTagsEnabled } from '../hooks/useTagsEnabled';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import CardPickerField from '../components/cards/CardPickerField';
-import { AppTheme } from '../theme';
+import { AppTheme, withAlpha } from '../theme';
 import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
-import SegmentedTabs from '../components/SegmentedTabs';
+import TopTabs from '../components/TopTabs';
+import ScreenHeader from '../components/ScreenHeader';
+import IconButton from '../components/IconButton';
+import SectionLabel from '../components/SectionLabel';
+import ListRow from '../components/ListRow';
+import ExpenseQuickSheet from '../components/ExpenseQuickSheet';
+import SimpleSelect from '../components/SimpleSelect';
 import SplitEditor, { SplitEditorValue } from '../components/SplitEditor';
 import TagFilterBar from '../components/tags/TagFilterBar';
 import TagPickerModal from '../components/tags/TagPickerModal';
@@ -37,19 +43,7 @@ import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
 import { onExpenseChanged } from '../utils/expenseEvents';
-
-// CerebroOS-era ramp: same violet/cyan-anchored hues as the web app's
-// `expenses/categoryColors.ts` and `groups/GroupAvatar.tsx`, for a consistent palette family.
-const categoryDotColors: Record<string, string> = {
-    food: '#F0975E', groceries: '#F0975E', dining: '#F0975E',
-    home: '#9C93FF', rent: '#9C93FF', utilities: '#9C93FF',
-    transport: '#5FD9B8', transportation: '#5FD9B8',
-    entertainment: '#E88CD8', shopping: '#E88CD8',
-};
-
-function dotColorFor(category: string): string {
-    return categoryDotColors[category?.toLowerCase().trim()] || '#9AA0AF';
-}
+import { shortDate, ordinal, nextRecurringOccurrence } from '../utils/expenseInsights';
 
 /** Mock's `r.ran`/"Logged today" pill — derived from `last_processed_iso` (persists across
  * app restarts) rather than session-only local state. */
@@ -65,6 +59,17 @@ function ranToday(template: RecurringTemplateDTO): boolean {
 }
 
 type Tab = 'transactions' | 'recurring';
+
+/** Parses either the personal-expense "MM/DD/YYYY" format or an ISO date string into a
+ * 'YYYY-MM' key, so search/month filtering can group personal and group rows consistently
+ * regardless of which endpoint they came from. */
+function monthKeyOf(dateStr: string): string {
+    const mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateStr);
+    if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}`;
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return '';
+}
 
 interface FeedRow {
     key: string;
@@ -118,6 +123,15 @@ export default function ExpensesScreen() {
     const [editCardId, setEditCardId] = useState<string | null>(null);
     const { enabled: cardCoachEnabled } = useCardCoachEnabled();
     const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
+    // Design review (2026-09): neither control existed on this screen before — parity with
+    // web's ExpensesPage, which added search/month filtering over the same combined feed.
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
+    // V2 expense detail sheet (personal rows) — replaces the old Alert action list.
+    const [detailExpense, setDetailExpense] = useState<ExpenseRecord | null>(null);
+    // "Skip" on the due-soon prompt is a per-session dismissal — there's no server-side snooze.
+    const [dismissedDue, setDismissedDue] = useState<string[]>([]);
+    const [monthFilter, setMonthFilter] = useState(''); // 'YYYY-MM', '' = all time
 
     // TrackSpense v3 Mobile mock's recurring row expand/edit/run-now (`r.expanded`/`r.editing`) —
     // was previously a flat, non-interactive row.
@@ -336,27 +350,21 @@ export default function ExpensesScreen() {
         }
     };
 
-    const showRowActions = (expense: ExpenseRecord) => {
-        const isItemized = expense.split_type === 'itemized' || (expense.item_count || 0) > 1;
-        const buttons: any[] = [];
-        if (isItemized) buttons.push({ text: 'View Items', onPress: () => setViewItemsExpense(expense) });
-        buttons.push({ text: 'Edit', onPress: () => handleEdit(expense) });
-        if (groupsEnabled) buttons.push({ text: 'Move to group', onPress: () => openMoveModal(expense) });
-        buttons.push({ text: 'Delete', style: 'destructive', onPress: () => handleDelete(expense.row_id) });
-        buttons.push({ text: 'Cancel', style: 'cancel' });
-        Alert.alert(expense.description, undefined, buttons);
-    };
-
-    // ── Day-grouped feed (personal + group expenses combined), mirrors the mock's `expDays`. ──
-    const dayGroups = useMemo(() => {
+    // ── Combined feed rows (personal + group expenses), mirrors the mock's `expDays` before
+    // day-grouping. Kept separate from `dayGroups` below so `availableMonths` can be derived
+    // from the full, unfiltered set (the month picker's options shouldn't shrink to match
+    // whatever's currently filtered). ──
+    const allFeedRows = useMemo(() => {
         const personalRows: FeedRow[] = expenses.map((e) => ({
             key: `p-${e.row_id}`,
             date: e.date,
             desc: e.description,
-            meta: (e.tags || []).length > 0 ? `Personal · ${e.category} · ${e.tags!.map((t) => t.name).join(', ')}` : `Personal · ${e.category}`,
+            meta: (e.tags || []).length > 0
+                ? `${shortDate(e.date)} · ${e.category} · ${e.tags!.map((t) => t.name).join(', ')}`
+                : `${shortDate(e.date)} · ${e.category}`,
             amount: e.cost,
             category: e.category,
-            onPress: () => showRowActions(e),
+            onPress: () => setDetailExpense(e),
             tagIds: (e.tags || []).map((t) => t.id),
         }));
         // TS-TAG-112 — personal rows are already server-filtered by tagFilterIds (GET /expenses
@@ -367,8 +375,8 @@ export default function ExpensesScreen() {
             date: e.date,
             desc: e.description,
             meta: (e.tags || []).length > 0
-                ? `${e.group_name} · your share ${formatCurrency(e.my_share)} · ${e.tags!.map((t) => t.name).join(', ')}`
-                : `${e.group_name} · your share ${formatCurrency(e.my_share)}`,
+                ? `${shortDate(e.date)} · ${e.group_name} · your share · ${e.tags!.map((t) => t.name).join(', ')}`
+                : `${shortDate(e.date)} · ${e.group_name} · your share`,
             amount: e.my_share,
             category: e.category,
             onPress: () => navigation.navigate('GroupDetail', { groupId: e.group_id }),
@@ -377,16 +385,33 @@ export default function ExpensesScreen() {
         const groupRows = tagFilterIds.length > 0
             ? groupRowsAll.filter((r) => (r.tagIds || []).some((id) => tagFilterIds.includes(id)))
             : groupRowsAll;
-        const all = [...personalRows, ...groupRows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        const order: string[] = [];
-        const map: Record<string, FeedRow[]> = {};
-        all.forEach((row) => {
-            if (!map[row.date]) { map[row.date] = []; order.push(row.date); }
-            map[row.date].push(row);
-        });
-        return order.map((date) => ({ date, rows: map[date] }));
+        return [...personalRows, ...groupRows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [expenses, groupExpenses, tagFilterIds]);
+
+    const availableMonths = useMemo(() => {
+        const seen = new Map<string, string>();
+        allFeedRows.forEach((r) => {
+            const key = monthKeyOf(r.date);
+            if (key && !seen.has(key)) {
+                const [y, m] = key.split('-');
+                seen.set(key, new Date(Number(y), Number(m) - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' }));
+            }
+        });
+        return Array.from(seen.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([value, label]) => ({ value, label }));
+    }, [allFeedRows]);
+
+    const visibleRows = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        return allFeedRows.filter((r) => {
+            if (monthFilter && monthKeyOf(r.date) !== monthFilter) return false;
+            if (q && !`${r.desc} ${r.meta}`.toLowerCase().includes(q)) return false;
+            return true;
+        });
+    }, [allFeedRows, searchQuery, monthFilter]);
+    const visibleTotal = useMemo(() => visibleRows.reduce((sum, r) => sum + r.amount, 0), [visibleRows]);
+    const subtotalLabel = monthFilter
+        ? (availableMonths.find((m) => m.value === monthFilter)?.label ?? 'Selected month')
+        : 'All time';
 
     // ── Recurring tab: simple day-of-month heuristic for due/active, matching the mock's pill. ──
     const recurringRows = useMemo(() => {
@@ -396,8 +421,35 @@ export default function ExpensesScreen() {
             isDue: t.day_of_month < todayDay,
         }));
     }, [recurringTemplates]);
+    // Nearest active template landing within a week that hasn't already run today — drives the
+    // cyan "Due in N days" prompt at the top of the Recurring tab.
+    const dueSoon = useMemo(() => {
+        const today = new Date();
+        return (recurringTemplates || [])
+            .filter((t) => t.status !== 'Paused' && !ranToday(t) && !dismissedDue.includes(t.id))
+            .map((t) => ({ t, ...nextRecurringOccurrence(t.day_of_month, today) }))
+            .filter((x) => x.daysUntil <= 7)
+            .sort((a, b) => a.daysUntil - b.daysUntil)[0] ?? null;
+    }, [recurringTemplates, dismissedDue]);
+
+    const toggleTemplateMut = useMutation({
+        mutationFn: (t: RecurringTemplateDTO) => upsertRecurringTemplate({
+            description: t.description,
+            category: t.category,
+            day_of_month: t.day_of_month,
+            default_cost: t.default_cost,
+            start_date_iso: t.start_date_iso,
+            status: t.status === 'Paused' ? 'Active' : 'Paused',
+            merchant_name: t.merchant_name,
+            group_id: t.group_id,
+            split_config: t.split_config,
+        }),
+        onSuccess: () => qc.invalidateQueries({ queryKey: ['recurringTemplates'] }),
+        onError: () => showToast({ message: 'Failed to update template', type: 'error' }),
+    });
+
     const activeRecurringTotal = useMemo(
-        () => (recurringTemplates || []).reduce((sum, t) => sum + t.default_cost, 0),
+        () => (recurringTemplates || []).filter((t) => t.status !== 'Paused').reduce((sum, t) => sum + t.default_cost, 0),
         [recurringTemplates]
     );
 
@@ -437,17 +489,26 @@ export default function ExpensesScreen() {
             default_cost: cost,
             start_date_iso: t.start_date_iso,
             status: t.status || 'Active',
+            merchant_name: t.merchant_name,
+            group_id: t.group_id,
+            split_config: t.split_config,
         });
     };
 
     return (
         <LinearGradient colors={theme.gradients.surface} style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Expenses</Text>
-            </View>
-
-            <View style={styles.tabsRow}>
-                <SegmentedTabs<Tab>
+            <View style={styles.gutter}>
+                <ScreenHeader
+                    title="Transactions"
+                    right={tab === 'transactions' ? (
+                        <IconButton
+                            icon={showSearch ? 'close' : 'search'}
+                            accessibilityLabel={showSearch ? 'Close search' : 'Search expenses'}
+                            onPress={() => { setShowSearch((v) => !v); if (showSearch) setSearchQuery(''); }}
+                        />
+                    ) : undefined}
+                />
+                <TopTabs<Tab>
                     value={tab}
                     onChange={setTab}
                     options={[
@@ -457,79 +518,125 @@ export default function ExpensesScreen() {
                 />
             </View>
 
-            {tab === 'transactions' && tagsEnabled && (
-                <View style={{ paddingHorizontal: 18 }}>
-                    <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />
+            {tab === 'transactions' && (
+                <View style={[styles.gutter, { paddingTop: 14 }]}>
+                    {showSearch && (
+                        <CustomInput
+                            icon="🔍"
+                            placeholder="Search expenses"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            autoFocus
+                            style={{ minHeight: 0, paddingVertical: 0 }}
+                        />
+                    )}
+                    {availableMonths.length > 0 && (
+                        <View style={{ alignSelf: 'flex-start', width: 170 }}>
+                            <SimpleSelect
+                                value={monthFilter}
+                                onChange={setMonthFilter}
+                                placeholder="All time"
+                                options={[{ label: 'All time', value: '' }, ...availableMonths]}
+                            />
+                        </View>
+                    )}
+                    {tagsEnabled && <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />}
+                    <View style={styles.subtotal}>
+                        <SectionLabel>{subtotalLabel}</SectionLabel>
+                        <Text style={styles.subtotalAmount}>{formatCurrency(visibleTotal)}</Text>
+                    </View>
                 </View>
             )}
 
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={[styles.gutter, { paddingBottom: 140 }]} showsVerticalScrollIndicator={false}>
                 {tab === 'transactions' ? (
                     loading && expenses.length === 0 ? (
                         <ListSkeleton count={5} />
-                    ) : dayGroups.length === 0 ? (
+                    ) : visibleRows.length === 0 ? (
                         <View style={styles.emptyCard}>
-                            <Text style={styles.emptyIcon}>📭</Text>
-                            <Text style={styles.emptyTitle}>No expenses yet</Text>
-                            <Text style={styles.emptySubtitle}>Start tracking your spending</Text>
+                            <Text style={styles.emptyTitle}>
+                                {searchQuery.trim() || monthFilter || tagFilterIds.length > 0 ? 'No matches' : 'No expenses yet'}
+                            </Text>
+                            <Text style={styles.emptySubtitle}>
+                                {searchQuery.trim() || monthFilter || tagFilterIds.length > 0
+                                    ? 'Try a different search, month, or tag.'
+                                    : 'Start tracking your spending'}
+                            </Text>
                         </View>
                     ) : (
-                        dayGroups.map((group) => (
-                            <View key={group.date} style={styles.dayGroup}>
-                                <Text style={styles.dayLabel}>{group.date}</Text>
-                                <View style={styles.dayCard}>
-                                    {group.rows.map((row, i) => (
-                                        <TouchableOpacity
-                                            key={row.key}
-                                            style={[styles.row, i === group.rows.length - 1 && styles.rowLast]}
-                                            onPress={row.onPress}
-                                            activeOpacity={0.7}
-                                        >
-                                            <View style={[styles.dot, { backgroundColor: dotColorFor(row.category) }]} />
-                                            <View style={{ flex: 1, minWidth: 0 }}>
-                                                <Text style={styles.rowDesc} numberOfLines={1}>{row.desc}</Text>
-                                                <Text style={styles.rowMeta} numberOfLines={1}>{row.meta}</Text>
-                                            </View>
-                                            <Text style={styles.rowAmount}>{formatCurrency(row.amount)}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
+                        visibleRows.map((row) => (
+                            <ListRow
+                                key={row.key}
+                                category={row.category}
+                                title={row.desc}
+                                meta={row.meta}
+                                amount={formatCurrency(row.amount)}
+                                onPress={row.onPress}
+                            />
                         ))
                     )
                 ) : loadingRecurring ? (
                     <ListSkeleton count={4} />
                 ) : recurringRows.length === 0 ? (
                     <View style={styles.emptyCard}>
-                        <Text style={styles.emptyIcon}>🔁</Text>
                         <Text style={styles.emptyTitle}>No recurring expenses</Text>
                         <Text style={styles.emptySubtitle}>Templates you set up will appear here</Text>
                     </View>
                 ) : (
-                    <View style={styles.dayCard}>
-                        {recurringRows.map((r, i) => {
+                    <>
+                        {dueSoon && (
+                            <View style={styles.dueCard}>
+                                <SectionLabel color={theme.colors.secondary}>
+                                    {dueSoon.daysUntil === 0 ? 'Due today' : `Due in ${dueSoon.daysUntil} day${dueSoon.daysUntil === 1 ? '' : 's'}`}
+                                </SectionLabel>
+                                <Text style={styles.dueText}>
+                                    {dueSoon.t.description} · {formatCurrency(dueSoon.t.default_cost)} on {dueSoon.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </Text>
+                                <View style={styles.dueActions}>
+                                    <TouchableOpacity
+                                        style={styles.dueConfirm}
+                                        activeOpacity={0.8}
+                                        disabled={runRecurringMut.isPending}
+                                        onPress={() => runRecurringMut.mutate(dueSoon.t.id)}
+                                    >
+                                        <Text style={styles.dueConfirmText}>{runRecurringMut.isPending ? 'Logging…' : 'Confirm now'}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.dueSkip}
+                                        activeOpacity={0.7}
+                                        onPress={() => setDismissedDue((d) => [...d, dueSoon.t.id])}
+                                    >
+                                        <Text style={styles.dueSkipText}>Skip</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                        {recurringRows.map((r) => {
                             const expanded = recOpenId === r.id;
                             const editing = expanded && recEdit?.id === r.id;
                             const ran = ranToday(r);
+                            const paused = r.status === 'Paused';
                             return (
-                                <View key={r.id} style={i === recurringRows.length - 1 && styles.recurringRowLast}>
-                                    <TouchableOpacity
-                                        style={styles.row}
-                                        activeOpacity={0.7}
+                                <View key={r.id}>
+                                    <ListRow
+                                        leading={<View />}
+                                        title={r.description}
+                                        meta={`Monthly on the ${ordinal(r.day_of_month)} · ${r.category}${ran ? ' · logged today' : ''}`}
                                         onPress={() => { setRecOpenId(expanded ? null : r.id); setRecEdit(null); }}
-                                    >
-                                        <View style={{ flex: 1, minWidth: 0 }}>
-                                            <Text style={styles.rowDesc} numberOfLines={1}>{r.description}</Text>
-                                            <Text style={styles.rowMeta} numberOfLines={1}>{r.category} · day {r.day_of_month}</Text>
-                                        </View>
-                                        <View style={[styles.pill, ran ? styles.pillRan : r.isDue ? styles.pillDue : styles.pillActive]}>
-                                            <Text style={[styles.pillText, ran ? styles.pillTextRan : r.isDue ? styles.pillTextDue : styles.pillTextActive]}>
-                                                {ran ? 'logged today' : r.isDue ? `due ${r.day_of_month}th` : 'active'}
-                                            </Text>
-                                        </View>
-                                        <Text style={styles.recurringAmount}>{formatCurrency(r.default_cost)}</Text>
-                                        <Text style={styles.recurringChevron}>{expanded ? '▾' : '▸'}</Text>
-                                    </TouchableOpacity>
+                                        style={[styles.recRow, paused && { opacity: 0.55 }]}
+                                        trailing={(
+                                            <View style={styles.recTrailing}>
+                                                <Text style={styles.recurringAmount}>{formatCurrency(r.default_cost)}</Text>
+                                                <Switch
+                                                    value={!paused}
+                                                    onValueChange={() => toggleTemplateMut.mutate(r)}
+                                                    trackColor={{ false: theme.colors.surfaceSecondary, true: withAlpha(theme.colors.primary, 0.5) }}
+                                                    thumbColor={paused ? theme.colors.textTertiary : '#FFFFFF'}
+                                                    ios_backgroundColor={theme.colors.surfaceSecondary}
+                                                />
+                                            </View>
+                                        )}
+                                    />
 
                                     {expanded && (
                                         <View style={styles.recurringExpand}>
@@ -616,12 +723,22 @@ export default function ExpensesScreen() {
                             );
                         })}
                         <View style={styles.recurringFooter}>
-                            <Text style={styles.recurringFooterLabel}>Active recurring total</Text>
+                            <SectionLabel>Active recurring total</SectionLabel>
                             <Text style={styles.recurringFooterAmount}>{formatCurrency(activeRecurringTotal)}/mo</Text>
                         </View>
-                    </View>
+                    </>
                 )}
             </ScrollView>
+
+            <ExpenseQuickSheet
+                expense={detailExpense}
+                allExpenses={expenses}
+                onClose={() => setDetailExpense(null)}
+                onEdit={handleEdit}
+                onViewItems={setViewItemsExpense}
+                onMove={groupsEnabled ? openMoveModal : undefined}
+                onDelete={(e) => handleDelete(e.row_id)}
+            />
 
             {/* Edit Modal — bottom sheet, standardized with the group expense edit/view sheets */}
             <Modal visible={editModalVisible} animationType="slide" transparent onRequestClose={() => setEditModalVisible(false)}>
@@ -837,68 +954,26 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
         flex: 1,
         paddingTop: Platform.OS === 'android' ? 50 : 56,
     },
-    header: {
-        paddingHorizontal: 18,
-        marginBottom: 4,
+    gutter: { paddingHorizontal: 22 },
+    subtotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 6 },
+    subtotalAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.text, fontVariant: ['tabular-nums'] },
+    dueCard: {
+        borderWidth: 1, borderColor: withAlpha(theme.colors.secondary, 0.25), backgroundColor: withAlpha(theme.colors.secondary, 0.07),
+        borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, marginTop: 16, marginBottom: 6,
     },
-    headerTitle: {
-        fontFamily: 'BricolageGrotesque-SemiBold',
-        fontSize: 22,
-        color: theme.colors.text,
-        letterSpacing: -0.3,
-    },
-    tabsRow: {
-        paddingHorizontal: 18,
-        marginTop: 12,
-        marginBottom: 14,
-        alignSelf: 'flex-start',
-    },
-    dayGroup: { marginBottom: 14 },
-    dayLabel: {
-        fontFamily: 'InstrumentSans-Bold',
-        fontSize: 11,
-        color: theme.colors.textTertiary,
-        letterSpacing: 0.8,
-        marginBottom: 6,
-        textTransform: 'uppercase',
-    },
-    dayCard: {
-        backgroundColor: theme.colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: theme.colors.borderLight,
-        borderRadius: 14,
-        overflow: 'hidden',
-    },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: theme.colors.borderLight,
-    },
-    rowLast: { borderBottomWidth: 0 },
-    recurringRowLast: {},
-    dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-    rowDesc: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
-    rowMeta: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary, marginTop: 1 },
-    rowAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text, flexShrink: 0 },
-    pill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, marginRight: 8 },
-    pillDue: { backgroundColor: theme.colors.warningSurface },
-    pillActive: { backgroundColor: theme.colors.surfaceSecondary },
-    pillText: { fontFamily: 'InstrumentSans-Bold', fontSize: 10.5 },
-    pillTextDue: { color: theme.colors.warning },
-    pillTextActive: { color: theme.colors.textTertiary },
-    pillRan: { backgroundColor: theme.colors.successSurface },
-    pillTextRan: { color: theme.colors.success },
-    recurringAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text, width: 62, textAlign: 'right' },
-    recurringChevron: { color: theme.colors.textTertiary, fontSize: 12, marginLeft: 8 },
+    dueText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, lineHeight: 21, color: theme.colors.text, marginTop: 6 },
+    dueActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+    dueConfirm: { height: 34, paddingHorizontal: 14, borderRadius: 11, backgroundColor: theme.colors.gradientEnd, justifyContent: 'center' },
+    dueConfirmText: { fontFamily: 'InstrumentSans-Bold', fontSize: 13, color: '#05060A' },
+    dueSkip: { height: 34, paddingHorizontal: 14, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, justifyContent: 'center' },
+    dueSkipText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.textSecondary },
+    recRow: { paddingVertical: 10, gap: 0 },
+    recTrailing: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    recurringAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text, fontVariant: ['tabular-nums'] },
     recurringExpand: {
         backgroundColor: theme.colors.surfaceSecondary,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: theme.colors.borderLight,
-        paddingHorizontal: 14, paddingVertical: 12,
+        borderRadius: 12,
+        paddingHorizontal: 14, paddingVertical: 12, marginVertical: 8,
     },
     recurringActionsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     recurringRanText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.success, paddingVertical: 8 },
@@ -914,35 +989,13 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
     recurringEditBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.primary },
     recurringEditActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
     recurringFooter: {
-        flexDirection: 'row', justifyContent: 'space-between',
-        paddingHorizontal: 14, paddingVertical: 11,
-        backgroundColor: theme.colors.surfaceSecondary,
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+        paddingVertical: 14,
     },
-    recurringFooterLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary },
-    recurringFooterAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 12.5, color: theme.colors.text },
-    emptyCard: {
-        alignItems: 'center',
-        paddingVertical: 40,
-        marginTop: 20,
-        backgroundColor: theme.colors.surface,
-        borderRadius: 14,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: theme.colors.borderLight,
-    },
-    emptyIcon: {
-        fontSize: 44,
-        marginBottom: 12,
-    },
-    emptyTitle: {
-        fontSize: 17,
-        fontWeight: '600',
-        color: theme.colors.text,
-        marginBottom: 4,
-    },
-    emptySubtitle: {
-        fontSize: 14,
-        color: theme.colors.textSecondary,
-    },
+    recurringFooterAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 14, color: theme.colors.text },
+    emptyCard: { alignItems: 'center', paddingVertical: 48 },
+    emptyTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.text, marginBottom: 4 },
+    emptySubtitle: { fontSize: 14, color: theme.colors.textSecondary },
     modalOverlay: {
         flex: 1,
         backgroundColor: theme.colors.overlay,

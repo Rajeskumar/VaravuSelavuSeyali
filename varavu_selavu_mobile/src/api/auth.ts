@@ -16,7 +16,8 @@ export interface LoginResponse {
 export interface RegisterPayload {
   name: string;
   email: string;
-  phone: string;
+  /** Optional — not collected at sign-up in V2; the backend accepts it being absent. */
+  phone?: string;
   password: string;
 }
 

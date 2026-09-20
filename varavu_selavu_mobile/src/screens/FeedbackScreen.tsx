@@ -17,6 +17,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { useAuth } from '../context/AuthContext';
 import ScreenWrapper from '../components/ScreenWrapper';
+import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
 import SegmentedTabs from '../components/SegmentedTabs';
 import { sendEmail } from '../api/email';
@@ -84,6 +85,7 @@ export default function FeedbackScreen() {
 
     return (
         <ScreenWrapper scroll>
+            <ScreenHeader title="Feedback" back />
             {/* Header */}
             <View style={styles.hero}>
                 <Text style={styles.heroEmoji}>💬</Text>

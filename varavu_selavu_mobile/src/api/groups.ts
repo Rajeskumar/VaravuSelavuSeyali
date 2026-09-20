@@ -299,6 +299,8 @@ export interface CreateInviteResponse {
   token: string;
   url: string;
   expires_at: string;
+  invited_email?: string | null;
+  email_sent?: boolean;
 }
 
 export interface AcceptInviteResponse {
@@ -388,13 +390,26 @@ export async function getGroupActivity(groupId: string, limit = 50, offset = 0):
   return handleResponse<GroupActivityListResponse>(res);
 }
 
-export async function createInvite(groupId: string, memberId: string): Promise<CreateInviteResponse> {
+/** Mints a join link for a pending placeholder seat. With `email`, the backend also emails
+ * the link to that address and pins the seat to it (only that address can redeem it). */
+export async function createInvite(groupId: string, memberId: string, email?: string): Promise<CreateInviteResponse> {
   const res = await apiFetch(`/api/v1/groups/${groupId}/invites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ member_id: memberId }),
+    body: JSON.stringify(email ? { member_id: memberId, email } : { member_id: memberId }),
   });
   return handleResponse<CreateInviteResponse>(res);
+}
+
+export async function removeMember(groupId: string, memberId: string, force = false): Promise<void> {
+  const qs = force ? '?force=true' : '';
+  const res = await apiFetch(`/api/v1/groups/${groupId}/members/${memberId}${qs}`, { method: 'DELETE' });
+  return handleResponse<void>(res);
+}
+
+export async function leaveGroup(groupId: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/groups/${groupId}/leave`, { method: 'POST' });
+  return handleResponse<void>(res);
 }
 
 export async function acceptInvite(token: string): Promise<AcceptInviteResponse> {

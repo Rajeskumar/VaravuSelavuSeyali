@@ -7,6 +7,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
+import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
 import {
@@ -222,22 +223,21 @@ export default function RecurringExpensesScreen() {
         >
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <View>
-                    <Text style={styles.headerTitle}>Recurring Expenses</Text>
-                    <Text style={styles.headerSubtitle}>
-                        {templates.length} template{templates.length !== 1 ? 's' : ''} • {formatCurrency(totalMonthly)}/mo
-                    </Text>
-                </View>
-                <TouchableOpacity
-                    style={styles.addBtn}
-                    onPress={() => { setForm({ ...EMPTY_FORM }); setFormVisible(true); }}
-                    activeOpacity={0.7}
-                >
-                    <Text style={styles.addBtnText}>+ Add</Text>
-                </TouchableOpacity>
-            </View>
+            <ScreenHeader
+                title="Recurring"
+                subtitle={`${templates.length} template${templates.length !== 1 ? 's' : ''} • ${formatCurrency(totalMonthly)}/mo`}
+                back
+                style={{ paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 48 : 56 }}
+                right={(
+                    <TouchableOpacity
+                        style={styles.addBtn}
+                        onPress={() => { setForm({ ...EMPTY_FORM }); setFormVisible(true); }}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.addBtnText}>+ Add</Text>
+                    </TouchableOpacity>
+                )}
+            />
 
             <View style={styles.body}>
                 {templates.length === 0 ? (

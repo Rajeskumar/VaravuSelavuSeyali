@@ -63,31 +63,47 @@ export default function CustomButton({
         textStyle,
     ].filter(Boolean) as TextStyle[];
 
+    const content = loading ? (
+        <ActivityIndicator
+            size="small"
+            color={variant === 'primary' ? inkOnPastel : variant === 'danger' ? theme.colors.textInverse : theme.colors.primary}
+        />
+    ) : (
+        <>
+            {icon ? <Text style={[styles.icon, variantTextStyles[variant]]}>{icon}</Text> : null}
+            <Text style={labelStyles}>{title}</Text>
+        </>
+    );
+
+    // Primary: the gradient must be the element that carries the padding. AnimatedPressable wraps
+    // its children in an inner view, so an absolute-fill gradient only ever covered that inner
+    // (already padded-in) box — a small patch inside a dark pill. Padding moves onto the gradient.
+    if (variant === 'primary') {
+        return (
+            <AnimatedPressable
+                onPress={onPress}
+                disabled={isDisabled}
+                style={[buttonStyles, styles.primaryShell]}
+            >
+                <LinearGradient
+                    colors={theme.gradients.primary}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.primaryFill}
+                >
+                    {content}
+                </LinearGradient>
+            </AnimatedPressable>
+        );
+    }
+
     return (
         <AnimatedPressable
             onPress={onPress}
             disabled={isDisabled}
             style={buttonStyles}
         >
-            {variant === 'primary' && (
-                <LinearGradient
-                    colors={theme.gradients.primary}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={StyleSheet.absoluteFillObject}
-                />
-            )}
-            {loading ? (
-                <ActivityIndicator
-                    size="small"
-                    color={variant === 'primary' ? inkOnPastel : variant === 'danger' ? theme.colors.textInverse : theme.colors.primary}
-                />
-            ) : (
-                <>
-                    {icon ? <Text style={[styles.icon, variantTextStyles[variant]]}>{icon}</Text> : null}
-                    <Text style={labelStyles}>{title}</Text>
-                </>
-            )}
+            {content}
         </AnimatedPressable>
     );
 }
@@ -105,6 +121,20 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     fullWidth: {
         width: '100%',
+    },
+    primaryShell: {
+        paddingVertical: 0,
+        paddingHorizontal: 0,
+    },
+    primaryFill: {
+        width: '100%',
+        minHeight: 50,
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
     },
     disabled: {
         opacity: 0.4,

@@ -3,6 +3,7 @@ import { View, Text, Image, StyleSheet, Linking, TouchableOpacity } from 'react-
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
+import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
 
 export default function AboutScreen() {
@@ -10,6 +11,7 @@ export default function AboutScreen() {
     const styles = useMemo(() => createStyles(theme), [theme]);
     return (
         <ScreenWrapper scroll>
+            <ScreenHeader title="About" back />
             {/* App Identity */}
             <View style={styles.hero}>
                 <View style={styles.iconCircle}>

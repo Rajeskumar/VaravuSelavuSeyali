@@ -17,6 +17,7 @@ import {
   MerchantInsightSummary,
 } from '../api/analytics';
 import { ListSkeleton, HeroSkeleton } from '../components/SkeletonLoader';
+import ScreenHeader from '../components/ScreenHeader';
 import { AddExpenseContext } from './AddExpenseScreen';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -114,12 +115,7 @@ export default function MerchantInsightsScreen() {
   if (loading && !refreshing) {
     return (
       <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
-         <View style={styles.header}>
-            <View>
-              <Text style={styles.screenTitle}>Merchant Insights</Text>
-              <Text style={styles.screenSubtitle}>Your top merchants by total spend</Text>
-            </View>
-          </View>
+         <ScreenHeader title="Merchant Insights" subtitle="Your top merchants by total spend" back style={{ paddingHorizontal: 20 }} />
         <View style={{ paddingHorizontal: 16 }}>
            <ListSkeleton count={5} />
         </View>
@@ -295,12 +291,7 @@ export default function MerchantInsightsScreen() {
   // List view
   return (
     <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.screenTitle}>Merchant Insights</Text>
-          <Text style={styles.screenSubtitle}>Your top merchants by total spend</Text>
-        </View>
-      </View>
+      <ScreenHeader title="Merchant Insights" subtitle="Your top merchants by total spend" back style={{ paddingHorizontal: 20 }} />
       <View style={styles.filters}>
         <View style={styles.pickerContainer}>
           <SimpleSelect label="Year" value={year} onChange={setYear} options={yearOptions} />

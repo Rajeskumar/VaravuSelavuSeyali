@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Switch, Modal, Pressable, KeyboardAvoidingView, Platform, Animated, Share } from 'react-native';
+import { View, Text, StyleSheet, Switch, Modal, Pressable, KeyboardAvoidingView, Platform, Animated, Share, Alert, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   GroupDetail,
+  MemberDTO,
   updateGroup,
   archiveGroup,
   unarchiveGroup,
   restoreGroup,
   deleteGroup,
+  removeMember,
+  leaveGroup,
+  createInvite,
   getNotificationPreferences,
   updateNotificationPreferences,
   fetchGroupExportCsv,
@@ -19,6 +23,7 @@ import SplitEditor from './SplitEditor';
 import { SplitEditorValue } from './SplitEditor';
 import { showToast } from './Toast';
 import { useAppTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
 interface GroupSettingsSheetProps {
@@ -29,6 +34,7 @@ interface GroupSettingsSheetProps {
 
 export default function GroupSettingsSheet({ visible, onClose, group }: GroupSettingsSheetProps) {
   const { theme } = useAppTheme();
+  const { userEmail } = useAuth();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const isArchived = group.status === 'archived';
@@ -37,6 +43,113 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
   const defaultSplitVal: SplitEditorValue = group.default_split || { type: 'equal', entries: [] };
   const [splitValue, setSplitValue] = useState<SplitEditorValue>(defaultSplitVal);
   const [saving, setSaving] = useState(false);
+
+  // --- Members (removal / leave / re-invite) — parity with web's GroupSettingsDialog, which
+  // previously had this and mobile didn't: a member added by mistake could never be removed
+  // and a placeholder seat could never be (re-)invited from here.
+  const me = group.members.find((m) => m.user_email === userEmail);
+  const isAdmin = me?.role === 'admin';
+  const visibleMembers = group.members.filter((m) => m.status !== 'left');
+  const [memberBusy, setMemberBusy] = useState<string | null>(null);
+  const [inviteFor, setInviteFor] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState('');
+
+  const refreshGroup = () => {
+    queryClient.invalidateQueries({ queryKey: ['group-detail', group.group_id] });
+    queryClient.invalidateQueries({ queryKey: ['group-balances', group.group_id] });
+    queryClient.invalidateQueries({ queryKey: ['groups'] });
+  };
+
+  const doRemove = async (member: MemberDTO, force: boolean) => {
+    setMemberBusy(member.member_id);
+    try {
+      await removeMember(group.group_id, member.member_id, force);
+      refreshGroup();
+      showToast({ message: `${member.display_name} removed`, type: 'success' });
+    } catch (e) {
+      // Balance guard: 409 when they still owe / are owed — offer to remove anyway.
+      if (!force && e instanceof ApiError && e.status === 409) {
+        Alert.alert(
+          `${member.display_name} isn't settled up`,
+          `${e.message}\n\nRemove anyway? Their balance stays on the books until it's settled.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Remove anyway', style: 'destructive', onPress: () => doRemove(member, true) },
+          ]
+        );
+      } else {
+        showToast({ message: e instanceof ApiError ? e.message : 'Failed to remove member', type: 'error' });
+      }
+    } finally {
+      setMemberBusy(null);
+    }
+  };
+
+  const confirmRemove = (member: MemberDTO) => {
+    Alert.alert(
+      `Remove ${member.display_name}?`,
+      "They'll lose access to this group. Their past expenses and splits stay in the history.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => doRemove(member, false) },
+      ]
+    );
+  };
+
+  const handleLeave = () => {
+    Alert.alert(
+      `Leave ${group.name}?`,
+      "You'll stop seeing this group's expenses. You need to be settled up first; an admin can add you back later.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave group',
+          style: 'destructive',
+          onPress: async () => {
+            setMemberBusy('me');
+            try {
+              await leaveGroup(group.group_id);
+              refreshGroup();
+              showToast({ message: `You left ${group.name}`, type: 'success' });
+              onClose();
+            } catch (e) {
+              showToast({ message: e instanceof ApiError ? e.message : 'Failed to leave group', type: 'error' });
+            } finally {
+              setMemberBusy(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const shareInviteLink = async (member: MemberDTO) => {
+    setMemberBusy(member.member_id);
+    try {
+      const inv = await createInvite(group.group_id, member.member_id);
+      await Share.share({ message: inv.url });
+    } catch (e) {
+      showToast({ message: e instanceof ApiError ? e.message : 'Failed to create invite link', type: 'error' });
+    } finally {
+      setMemberBusy(null);
+    }
+  };
+
+  const sendInviteEmail = async (member: MemberDTO) => {
+    const email = inviteEmail.trim();
+    if (!email) return;
+    setMemberBusy(member.member_id);
+    try {
+      await createInvite(group.group_id, member.member_id, email);
+      showToast({ message: `Invite emailed to ${email}`, type: 'success' });
+      setInviteFor(null);
+      setInviteEmail('');
+    } catch (e) {
+      showToast({ message: e instanceof ApiError ? e.message : 'Failed to send invite', type: 'error' });
+    } finally {
+      setMemberBusy(null);
+    }
+  };
 
   // TS-GRP-125: notification preferences — saved immediately on toggle,
   // independent of the group-settings "Save" button below.
@@ -116,6 +229,90 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
               </Text>
             </View>
           )}
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Members</Text>
+            <Text style={[styles.sectionDesc, { color: theme.colors.textSecondary }]}>
+              {isAdmin
+                ? "Removed members keep their past expenses and splits; only their seat closes."
+                : 'Only a group admin can remove members.'}
+            </Text>
+            <View style={{ marginTop: 10 }}>
+              {visibleMembers.map((m) => {
+                const isMe = m.member_id === me?.member_id;
+                const pending = m.status === 'invited' && !m.user_email;
+                const busy = memberBusy === m.member_id;
+                return (
+                  <View key={m.member_id} style={[styles.memberRow, { borderColor: theme.colors.border }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+                        <Text style={[styles.memberName, { color: theme.colors.text }]} numberOfLines={1}>
+                          {m.display_name}{isMe ? ' (you)' : ''}
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 3 }}>
+                          {m.role === 'admin' && (
+                            <View style={[styles.pillChip, { borderColor: theme.colors.border }]}>
+                              <Text style={[styles.pillChipText, { color: theme.colors.textSecondary }]}>Admin</Text>
+                            </View>
+                          )}
+                          {pending && (
+                            <View style={[styles.pillChip, { borderColor: theme.colors.warning }]}>
+                              <Text style={[styles.pillChipText, { color: theme.colors.warning }]}>Hasn't joined yet</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      {isAdmin && !isMe && !isArchived && (
+                        <Pressable disabled={busy} onPress={() => confirmRemove(m)} hitSlop={8}>
+                          <Text style={[styles.memberAction, { color: theme.colors.error, opacity: busy ? 0.4 : 1 }]}>Remove</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    {pending && !isArchived && (
+                      <View style={{ flexDirection: 'row', gap: 20, marginTop: 8 }}>
+                        <Pressable
+                          disabled={busy}
+                          onPress={() => { setInviteFor(inviteFor === m.member_id ? null : m.member_id); setInviteEmail(''); }}
+                          hitSlop={8}
+                        >
+                          <Text style={[styles.memberAction, { color: theme.colors.primary, opacity: busy ? 0.4 : 1 }]}>Email invite</Text>
+                        </Pressable>
+                        <Pressable disabled={busy} onPress={() => shareInviteLink(m)} hitSlop={8}>
+                          <Text style={[styles.memberAction, { color: theme.colors.primary, opacity: busy ? 0.4 : 1 }]}>Share link</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                    {inviteFor === m.member_id && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                        <TextInput
+                          value={inviteEmail}
+                          onChangeText={setInviteEmail}
+                          placeholder="Their email"
+                          placeholderTextColor={theme.colors.textSecondary}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoFocus
+                          style={[styles.inviteInput, { color: theme.colors.text, borderColor: theme.colors.border }]}
+                        />
+                        <Pressable disabled={busy || !inviteEmail.trim()} onPress={() => sendInviteEmail(m)} hitSlop={8}>
+                          <Text style={[styles.memberAction, { color: theme.colors.primary, opacity: busy || !inviteEmail.trim() ? 0.4 : 1 }]}>
+                            Send
+                          </Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+            {me && !isArchived && (
+              <Pressable onPress={handleLeave} disabled={memberBusy === 'me'} style={{ marginTop: 12 }} hitSlop={8}>
+                <Text style={[styles.memberAction, { color: theme.colors.textSecondary }]}>Leave this group</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
 
           <View style={styles.section}>
             <View style={styles.row}>
@@ -380,6 +577,37 @@ const styles = StyleSheet.create({
   },
   splitEditorContainer: {
     marginTop: 16,
+  },
+  memberRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+  },
+  memberName: {
+    fontFamily: 'InstrumentSans-SemiBold',
+    fontSize: 14.5,
+  },
+  pillChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+  },
+  pillChipText: {
+    fontFamily: 'InstrumentSans-SemiBold',
+    fontSize: 10,
+  },
+  memberAction: {
+    fontFamily: 'InstrumentSans-SemiBold',
+    fontSize: 13,
+  },
+  inviteInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontFamily: 'InstrumentSans-Regular',
+    fontSize: 14,
   },
   saveBtn: {
     marginTop: 'auto',

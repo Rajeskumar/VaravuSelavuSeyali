@@ -1,0 +1,107 @@
+# Backend release pipeline (Cloud Run service `varavu-selavu-backend`).
+#
+# Triggered by a `release-vX.Y.Z` tag (see .cloudbuild/triggers/backend.yaml), in parallel with
+# cloudbuild.frontend.yaml. Split out of the old all-in-one cloudbuild.yaml so a backend failure
+# can't block a frontend release and the migration job only runs when the backend ships.
+#
+# Images are tagged with the commit SHA (and `latest`, kept for compatibility). Migrations and
+# the Cloud Run deploy both use the SHA tag, so a revision always maps to exactly one commit
+# and a rollback is "redeploy that SHA". On a release build the version tag (release-vX.Y.Z)
+# is added too. Run this only through its trigger: SHORT_SHA is empty for `gcloud builds submit`.
+steps:
+  # Refuse to continue without a SHA — an empty tag would otherwise fail later with a
+  # confusing "invalid reference format" from docker.
+  - name: 'bash'
+    id: 'require-sha'
+    args: ['-c', 'test -n "${_IMAGE_TAG}" || { echo "SHORT_SHA is empty - run this build through its trigger"; exit 1; }']
+
+  # Dependency vulnerability gate. The pre-launch audit found 138 known Python advisories
+  # because nothing ever checked. This fails the build on a *new* high/critical in code that
+  # actually ships: the resolved production lock (poetry's main group), not the dev toolchain.
+  - name: 'python:3.12-slim'
+    id: 'audit-backend-deps'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        pip install --quiet poetry poetry-plugin-export pip-audit
+        cd varavu_selavu_app
+        poetry export -f requirements.txt --without-hashes --only main -o /tmp/req-main.txt
+        pip-audit -r /tmp/req-main.txt --progress-spinner off
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-backend'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/${_PROJECT_ID}/varavu-selavu-backend:${_IMAGE_TAG}'
+      - '-t'
+      - 'gcr.io/${_PROJECT_ID}/varavu-selavu-backend:latest'
+      - '.'
+    dir: 'varavu_selavu_app'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-backend'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        docker push gcr.io/${_PROJECT_ID}/varavu-selavu-backend:${_IMAGE_TAG}
+        docker push gcr.io/${_PROJECT_ID}/varavu-selavu-backend:latest
+        # Release builds only: also publish the human-readable version tag.
+        if [ -n "${TAG_NAME}" ]; then
+          docker tag gcr.io/${_PROJECT_ID}/varavu-selavu-backend:${_IMAGE_TAG} gcr.io/${_PROJECT_ID}/varavu-selavu-backend:${TAG_NAME}
+          docker push gcr.io/${_PROJECT_ID}/varavu-selavu-backend:${TAG_NAME}
+        fi
+
+  # Run pending Alembic migrations against the prod DB, using the image just built/pushed so
+  # the migration set always matches the code about to be deployed. Runs *before* the deploy
+  # step so new code never queries a table/column that doesn't exist yet. (Migrations used to
+  # be a manual, undocumented step — that gap let the `budgets` feature ship with its table
+  # never created in prod.)
+  #
+  # Delegates to a Cloud Run Job rather than running `alembic` in this step: Cloud Build's
+  # default worker pool cannot reach the Supabase host over IPv6 ("OperationalError: Cannot
+  # assign requested address"); Cloud Run's networking can. `migrate-db` is a standing job
+  # resource, re-pointed at the freshly built image and re-executed on every backend release.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'run-migrations'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        gcloud run jobs deploy migrate-db \
+          --image=gcr.io/${_PROJECT_ID}/varavu-selavu-backend:${_IMAGE_TAG} \
+          --region=${_REGION} \
+          --command=bash \
+          --args="-c,cd /app && alembic upgrade head" \
+          --set-secrets=DATABASE_URL=SUPABASE_PG_DB_URL:latest \
+          --service-account=varavu-selavu-seyali@${_PROJECT_ID}.iam.gserviceaccount.com \
+          --max-retries=0
+        gcloud run jobs execute migrate-db --region=${_REGION} --wait
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-backend'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_BACKEND_SERVICE}'
+      - '--image=gcr.io/${_PROJECT_ID}/varavu-selavu-backend:${_IMAGE_TAG}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # Lets `_IMAGE_TAG` below reference the built-in SHORT_SHA.
+  dynamicSubstitutions: true
+
+substitutions:
+  _REGION: 'us-central1'
+  _PROJECT_ID: 'gold-circlet-424313-r7'
+  _BACKEND_SERVICE: 'varavu-selavu-backend'
+  _IMAGE_TAG: '${SHORT_SHA}'

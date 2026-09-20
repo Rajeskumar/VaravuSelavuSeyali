@@ -1,3 +1,6 @@
+# DEPRECATED — being replaced by cloudbuild.backend.yaml + cloudbuild.frontend.yaml (release-tag
+# triggered, see .cloudbuild/README.md). This file is kept only because the old `varavuselavuseyali`
+# trigger still points at it. Delete it once that trigger is disabled.
 steps:
   # Dependency vulnerability gate. The pre-launch audit found 138 known Python advisories
   # and 64 npm ones because nothing ever checked. These steps fail the build on a *new*

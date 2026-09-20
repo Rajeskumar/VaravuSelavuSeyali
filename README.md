@@ -31,7 +31,7 @@ Understand your cash flow at a glance. Visualize your spending with beautiful, i
 Drill all the way down to individual line-items. TrackSpense automatically aggregates your purchases in the background, allowing you to track the exact price history of specific items across different stores, visualize store comparisons, and monitor merchant-level spend over time.
 
 ### 📱 Seamless Cross-Platform Experience
-Whether you prefer managing your finances on a desktop or while out and about, TrackSpense has you covered. Enjoy a consistent, premium experience across our feature-rich **Web Application** and our native **Mobile Apps** for both iOS and Android.
+Whether you prefer managing your finances on a desktop or while out and about, TrackSpense has you covered. Enjoy a consistent, premium experience across our feature-rich **Web Application** and our native **Mobile Apps** for both iOS and Android. The mobile app's V2 design is dark and numbers-first, built around five tabs — Home, Spend, Groups, Insights and Ask — with your account, activity feed and settings one tap from the Home header.
 
 ### 💡 Direct User Feedback & Submit Ideas
 We constantly evolve based on user input! TrackSpense features a built-in "Submit Idea" module across both web and mobile, allowing you to directly communicate feature requests and ideas straight to the development team.

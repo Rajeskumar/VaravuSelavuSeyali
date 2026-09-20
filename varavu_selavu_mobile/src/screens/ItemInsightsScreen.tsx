@@ -18,6 +18,7 @@ import {
   ItemInsightSummary,
 } from '../api/analytics';
 import { ListSkeleton, HeroSkeleton } from '../components/SkeletonLoader';
+import ScreenHeader from '../components/ScreenHeader';
 import { AddExpenseContext } from './AddExpenseScreen';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -122,12 +123,7 @@ export default function ItemInsightsScreen() {
     return (
       <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
         <ScrollView>
-          <View style={styles.header}>
-              <View>
-                <Text style={styles.screenTitle}>Item Insights</Text>
-                <Text style={styles.screenSubtitle}>Your top purchased items by total spend</Text>
-              </View>
-          </View>
+          <ScreenHeader title="Item Insights" subtitle="Your top purchased items by total spend" back style={{ paddingHorizontal: 20 }} />
           <View style={{ paddingHorizontal: 16 }}>
              <ListSkeleton count={6} />
           </View>
@@ -280,12 +276,7 @@ export default function ItemInsightsScreen() {
   // List view
   return (
     <LinearGradient colors={theme.gradients.surface} style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.screenTitle}>Item Insights</Text>
-          <Text style={styles.screenSubtitle}>Your top purchased items by total spend</Text>
-        </View>
-      </View>
+      <ScreenHeader title="Item Insights" subtitle="Your top purchased items by total spend" back style={{ paddingHorizontal: 20 }} />
       <View style={styles.filters}>
         <View style={styles.pickerContainer}>
           <SimpleSelect label="Year" value={year} onChange={setYear} options={yearOptions} />

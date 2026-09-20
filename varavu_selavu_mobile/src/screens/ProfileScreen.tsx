@@ -1,9 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, TextInput, ActivityIndicator, Switch, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Switch, Linking } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, withAlpha, inkOnPastel } from '../theme';
+import ScreenWrapper from '../components/ScreenWrapper';
+import ScreenHeader from '../components/ScreenHeader';
+import FieldBox from '../components/FieldBox';
+import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
+import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
+import { listBudgets } from '../api/budgets';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 import { useAuth } from '../context/AuthContext';
 import * as Haptics from 'expo-haptics';
@@ -24,6 +31,12 @@ export default function ProfileScreen({ navigation }: any) {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  // V2 "Account" is a menu; the old profile form lives one level down as "Edit profile".
+  const [mode, setMode] = useState<'menu' | 'edit'>('menu');
+
+  const { enabled: budgetsEnabled } = useBudgetsEnabled();
+  const { enabled: cardCoachEnabled } = useCardCoachEnabled();
+  const { data: budgets } = useQuery({ queryKey: ['budgets'], queryFn: () => listBudgets(), enabled: budgetsEnabled });
 
   useEffect(() => {
     loadProfile();
@@ -32,7 +45,7 @@ export default function ProfileScreen({ navigation }: any) {
   const loadProfile = async () => {
     try {
       const p = await getProfile();
-      setEmail(p.email);
+      setEmail(p.email || userEmail || '');
       setName(p.name || '');
       setPhone(p.phone || '');
       setAddress(p.address || '');
@@ -106,251 +119,148 @@ export default function ProfileScreen({ navigation }: any) {
     );
   }
 
+  const initial = (name || email || '?').charAt(0).toUpperCase();
+
+  if (mode === 'edit') {
+    return (
+      <ScreenWrapper scroll paddingBottom={60}>
+        <ScreenHeader title="Edit profile" back={() => setMode('menu')} />
+        <View style={styles.form}>
+          <FieldBox label="Email (read only)" value={email} editable={false} style={{ color: theme.colors.textTertiary }} />
+          <FieldBox label="Name" value={name} onChangeText={setName} placeholder="John Doe" />
+          <FieldBox label="Phone" value={phone} onChangeText={setPhone} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
+          <FieldBox label="Address" value={address} onChangeText={setAddress} placeholder="123 Main St, City, Country" multiline />
+          <FieldBox label="Venmo username" value={venmoHandle} onChangeText={setVenmoHandle} placeholder="@yourname" autoCapitalize="none" />
+          <FieldBox label="PayPal.me username" value={paypalHandle} onChangeText={setPaypalHandle} placeholder="yourname" autoCapitalize="none" />
+          <FieldBox label="UPI ID" value={upiId} onChangeText={setUpiId} placeholder="yourname@bank" autoCapitalize="none" />
+
+          <TouchableOpacity activeOpacity={0.85} onPress={handleSave} disabled={saving} accessibilityRole="button">
+            <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.cta, saving && { opacity: 0.7 }]}>
+              <Text style={styles.ctaText}>{saving ? 'Saving…' : 'Save changes'}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.dangerZone}>
+          <Text style={styles.dangerTitle}>Danger zone</Text>
+          <Text style={styles.dangerDesc}>
+            Permanently delete your account and all associated expense data. This action cannot be undone.
+          </Text>
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount} activeOpacity={0.8}>
+            <Text style={styles.deleteButtonText}>Delete account</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWrapper>
+    );
+  }
+
+  // Menu rows only for things that exist on mobile. Categories/tags management, notification
+  // preferences and data export have no mobile screen yet, so they're not listed rather than
+  // shown as dead rows.
+  const rows: { name: string; hint?: string; onPress: () => void }[] = [
+    ...(cardCoachEnabled ? [{ name: 'Cards & accounts', onPress: () => navigation.navigate('MainTabs', { screen: 'Analysis', params: { initialTab: 'cards' } }) }] : []),
+    ...(budgetsEnabled ? [{
+      name: 'Budgets',
+      hint: budgets && budgets.length > 0 ? `${budgets.length} active` : undefined,
+      onPress: () => navigation.navigate('MainTabs', { screen: 'Analysis', params: { initialTab: 'budgets' } }),
+    }] : []),
+    { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
+    { name: 'About', onPress: () => navigation.navigate('About') },
+  ];
+
   return (
-    <LinearGradient colors={theme.gradients.surface} style={styles.container}>
-      <SafeAreaView edges={['bottom']} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.card}>
-            <Text style={styles.label}>Email (Read Only)</Text>
-            <TextInput
-              style={[styles.input, styles.readOnlyInput]}
-              value={email}
-              editable={false}
-            />
+    <ScreenWrapper scroll paddingBottom={60}>
+      <ScreenHeader title="Account" back />
 
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="John Doe"
-              placeholderTextColor={theme.colors.textTertiary}
-            />
+      <View style={styles.identity}>
+        <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
+          <Text style={styles.avatarText}>{initial}</Text>
+        </LinearGradient>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.identityName} numberOfLines={1}>{name || email.split('@')[0]}</Text>
+          <Text style={styles.identityEmail} numberOfLines={1}>{email}</Text>
+        </View>
+        <TouchableOpacity style={styles.editBtn} activeOpacity={0.7} onPress={() => setMode('edit')} accessibilityRole="button">
+          <Text style={styles.editBtnText}>Edit</Text>
+        </TouchableOpacity>
+      </View>
 
-            <Text style={styles.label}>Phone</Text>
-            <TextInput
-              style={styles.input}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="+1 234 567 8900"
-              keyboardType="phone-pad"
-              placeholderTextColor={theme.colors.textTertiary}
-            />
+      <View>
+        {rows.map((r) => (
+          <TouchableOpacity key={r.name} style={styles.menuRow} activeOpacity={0.6} onPress={r.onPress}>
+            <Text style={styles.menuName}>{r.name}</Text>
+            {r.hint ? <Text style={styles.menuHint}>{r.hint}</Text> : null}
+          </TouchableOpacity>
+        ))}
+        <View style={styles.menuRow}>
+          <Text style={styles.menuName}>Appearance</Text>
+          <Text style={styles.menuHint}>{isDark ? 'Dark' : 'Light'}</Text>
+          <Switch
+            value={isDark}
+            onValueChange={toggleTheme}
+            trackColor={{ false: theme.colors.surfaceSecondary, true: withAlpha(theme.colors.primary, 0.5) }}
+            thumbColor="#FFFFFF"
+            ios_backgroundColor={theme.colors.surfaceSecondary}
+          />
+        </View>
+      </View>
 
-            <Text style={styles.label}>Address</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={address}
-              onChangeText={setAddress}
-              placeholder="123 Main St, City, Country"
-              multiline
-              numberOfLines={3}
-              placeholderTextColor={theme.colors.textTertiary}
-            />
+      <TouchableOpacity style={styles.signOut} activeOpacity={0.8} onPress={signOut} accessibilityRole="button">
+        <Text style={styles.signOutText}>Sign out</Text>
+      </TouchableOpacity>
 
-            <Text style={styles.label}>Venmo username</Text>
-            <TextInput
-              style={styles.input}
-              value={venmoHandle}
-              onChangeText={setVenmoHandle}
-              placeholder="@yourname"
-              autoCapitalize="none"
-              placeholderTextColor={theme.colors.textTertiary}
-            />
-
-            <Text style={styles.label}>PayPal.me username</Text>
-            <TextInput
-              style={styles.input}
-              value={paypalHandle}
-              onChangeText={setPaypalHandle}
-              placeholder="yourname"
-              autoCapitalize="none"
-              placeholderTextColor={theme.colors.textTertiary}
-            />
-
-            <Text style={styles.label}>UPI ID</Text>
-            <TextInput
-              style={styles.input}
-              value={upiId}
-              onChangeText={setUpiId}
-              placeholder="yourname@bank"
-              autoCapitalize="none"
-              placeholderTextColor={theme.colors.textTertiary}
-            />
-
-            <TouchableOpacity
-              style={[styles.saveButton, saving && { opacity: 0.7 }]}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              <Text style={styles.saveButtonText}>
-                {saving ? 'Saving...' : 'Save Changes'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Preferences</Text>
-            <View style={styles.preferenceRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.preferenceLabel}>Dark Mode</Text>
-                <Text style={styles.preferenceDesc}>Switch between light and dark appearance</Text>
-              </View>
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor="#fff"
-              />
-            </View>
-          </View>
-
-          <View style={styles.dangerZone}>
-            <Text style={styles.dangerTitle}>Danger Zone</Text>
-            <Text style={styles.dangerDesc}>
-              Permanently delete your account and all associated expense data. This action cannot be undone.
-            </Text>
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-              <Text style={styles.deleteButtonText}>Delete Account</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.legalFooter}>
-            <View style={styles.legalLinksRow}>
-              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
-                <Text style={styles.legalLink}>Terms of Service</Text>
-              </TouchableOpacity>
-              <Text style={styles.legalText}> • </Text>
-              <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
-                <Text style={styles.legalLink}>Privacy Policy</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </LinearGradient>
+      <View style={styles.legalLinksRow}>
+        <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
+          <Text style={styles.legalLink}>Terms of Service</Text>
+        </TouchableOpacity>
+        <Text style={styles.legalText}> • </Text>
+        <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
+          <Text style={styles.legalLink}>Privacy Policy</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.version}>TrackSpense {Constants.expoConfig?.version ?? ''}</Text>
+    </ScreenWrapper>
   );
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
-  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scrollContent: { padding: 16, paddingBottom: 100 },
-  card: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    ...theme.shadows.sm,
+  form: { gap: 12, marginBottom: 28 },
+  cta: { height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  ctaText: { fontFamily: 'InstrumentSans-Bold', fontSize: 17, color: inkOnPastel },
+  identity: {
+    flexDirection: 'row', alignItems: 'center', gap: 15, paddingBottom: 22,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
   },
-  sectionTitle: {
-    fontFamily: 'InstrumentSans-Bold',
-    fontSize: 16,
-    color: theme.colors.text,
-    marginBottom: 12,
+  avatar: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: 'InstrumentSans-Bold', fontSize: 24, color: inkOnPastel },
+  identityName: { fontFamily: 'InstrumentSans-Bold', fontSize: 18, color: theme.colors.text },
+  identityEmail: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textTertiary, marginTop: 3 },
+  editBtn: { height: 32, paddingHorizontal: 13, borderRadius: 11, borderWidth: 1, borderColor: theme.colors.border, justifyContent: 'center' },
+  editBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.textSecondary },
+  menuRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 14, minHeight: 52,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
   },
-  preferenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  menuName: { flex: 1, fontFamily: 'InstrumentSans-Medium', fontSize: 15, color: theme.colors.text },
+  menuHint: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textTertiary },
+  signOut: {
+    marginTop: 20, height: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: withAlpha(theme.colors.error, 0.3), backgroundColor: withAlpha(theme.colors.error, 0.08),
   },
-  preferenceLabel: {
-    fontFamily: 'InstrumentSans-SemiBold',
-    fontSize: 15,
-    color: theme.colors.text,
-    marginBottom: 2,
-  },
-  preferenceDesc: {
-    fontFamily: 'InstrumentSans-Regular',
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-  },
-  label: {
-    fontFamily: 'InstrumentSans-SemiBold',
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: theme.colors.surfaceSecondary,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    fontFamily: 'InstrumentSans-Regular',
-    color: theme.colors.text,
-    marginBottom: 20,
-  },
-  readOnlyInput: {
-    backgroundColor: theme.colors.surfaceSecondary,
-    color: theme.colors.textTertiary,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  saveButton: {
-    backgroundColor: theme.colors.primary,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveButtonText: {
-    color: theme.colors.textInverse,
-    fontFamily: 'InstrumentSans-Bold',
-    fontSize: 16,
-  },
-  // Previously a hand-picked light-mode-only red palette (#FECACA/#DC2626/#991B1B) — floated a
-  // light pink border on a dark red surface once the app went dark-only. Theme tokens instead.
+  signOutText: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.error },
+  version: { textAlign: 'center', fontFamily: 'IBMPlexMono-Regular', fontSize: 11, color: theme.colors.textQuaternary, marginTop: 14 },
+  // Danger zone uses theme tokens (the old hand-picked light-mode reds floated a pink border on
+  // a dark surface).
   dangerZone: {
-    backgroundColor: theme.colors.errorSurface,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: theme.colors.error,
+    backgroundColor: theme.colors.errorSurface, borderRadius: 16, padding: 20,
+    borderWidth: 1, borderColor: theme.colors.error,
   },
-  dangerTitle: {
-    fontFamily: 'InstrumentSans-Bold',
-    fontSize: 18,
-    color: theme.colors.error,
-    marginBottom: 8,
-  },
-  dangerDesc: {
-    fontFamily: 'InstrumentSans-Regular',
-    fontSize: 14,
-    color: theme.colors.textSecondary,
-    marginBottom: 20,
-    lineHeight: 20,
-  },
-  deleteButton: {
-    backgroundColor: theme.colors.error,
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: theme.colors.textInverse,
-    fontFamily: 'InstrumentSans-Bold',
-    fontSize: 16,
-  },
-  legalFooter: {
-    marginTop: 32,
-    alignItems: 'center',
-  },
-  legalText: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    fontFamily: 'InstrumentSans-Regular',
-  },
-  legalLinksRow: {
-    flexDirection: 'row',
-  },
-  legalLink: {
-    fontSize: 13,
-    color: theme.colors.textSecondary,
-    fontFamily: 'InstrumentSans-Regular',
-    textDecorationLine: 'underline',
-  },
+  dangerTitle: { fontFamily: 'InstrumentSans-Bold', fontSize: 18, color: theme.colors.error, marginBottom: 8 },
+  dangerDesc: { fontFamily: 'InstrumentSans-Regular', fontSize: 14, color: theme.colors.textSecondary, marginBottom: 20, lineHeight: 20 },
+  deleteButton: { backgroundColor: theme.colors.error, borderRadius: 12, padding: 16, alignItems: 'center' },
+  deleteButtonText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
+  legalText: { fontSize: 13, color: theme.colors.textSecondary, fontFamily: 'InstrumentSans-Regular' },
+  legalLinksRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 22 },
+  legalLink: { fontSize: 13, color: theme.colors.textSecondary, fontFamily: 'InstrumentSans-Regular', textDecorationLine: 'underline' },
 });

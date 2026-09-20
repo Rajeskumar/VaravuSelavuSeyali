@@ -12,7 +12,6 @@ import {
   Modal,
   Pressable,
   TextInput,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Linking,
@@ -167,7 +166,19 @@ export default function SettleUpSheet({
         <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.pill} />
-          <Text style={styles.title}>Settle Up</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Settle up</Text>
+            {stage !== 'settling' && (
+              <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
+                <Ionicons name="close" size={16} color={theme.colors.textSecondary} />
+              </Pressable>
+            )}
+          </View>
+          {stage === 'review' && (
+            <Text style={styles.subtitle}>
+              Recording a payment never changes anyone's spend totals.
+            </Text>
+          )}
 
           {(fromMember && toMember) || stage === 'done' ? (
             <View style={styles.heroBlock}>
@@ -232,21 +243,15 @@ export default function SettleUpSheet({
                       style={styles.paymentButton}
                       onPress={() => Linking.openURL(b.url).catch(() => showToast({ message: `Couldn't open ${b.label}`, type: 'error' }))}
                     >
-                      <Text style={styles.paymentButtonText}>Pay with {b.label}</Text>
+                      <Text style={styles.paymentButtonText}>{b.label}</Text>
                     </Pressable>
                   ))}
                 </View>
               )}
 
               <CustomButton
-                title={stage === 'settling' ? 'Settling…' : 'Record Payment'}
+                title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record $${parsedAmountForLinks.toFixed(2)} paid` : 'Record payment'}
                 onPress={handleSubmit}
-                disabled={loading}
-              />
-              <CustomButton
-                title="Cancel"
-                onPress={onClose}
-                variant="outline"
                 disabled={loading}
               />
             </>
@@ -262,15 +267,24 @@ const createStyles = (theme: AppTheme) =>
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.4)',
+      backgroundColor: theme.colors.overlay,
     },
+    // V2 sheet panel: elevated surface, 26px radius, 22px gutter (see components/Sheet.tsx).
     sheet: {
-      backgroundColor: theme.colors.background,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      padding: 24,
+      backgroundColor: theme.colors.surfaceElevated,
+      borderTopLeftRadius: 26,
+      borderTopRightRadius: 26,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.colors.border,
+      paddingHorizontal: 22,
       paddingTop: 12,
-      gap: 12,
+      gap: 14,
+      ...theme.shadows.lg,
+    },
+    titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    closeBtn: {
+      width: 32, height: 32, borderRadius: 11, backgroundColor: theme.colors.surfaceSecondary,
+      alignItems: 'center', justifyContent: 'center',
     },
     pill: {
       width: 40,
@@ -282,15 +296,15 @@ const createStyles = (theme: AppTheme) =>
     },
     title: {
       fontFamily: 'InstrumentSans-Bold',
-      fontSize: 20,
+      fontSize: 19,
+      letterSpacing: -0.3,
       color: theme.colors.text,
-      textAlign: 'center',
     },
     subtitle: {
       fontFamily: 'InstrumentSans-Regular',
-      fontSize: 15,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
+      fontSize: 13.5,
+      lineHeight: 19,
+      color: theme.colors.textTertiary,
     },
     heroBlock: {
       alignItems: 'center',
@@ -326,9 +340,9 @@ const createStyles = (theme: AppTheme) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.colors.primarySurface,
-      borderRadius: 16,
-      paddingVertical: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.borderLight,
+      paddingVertical: 14,
       paddingHorizontal: 12,
       marginTop: 4,
     },
@@ -378,15 +392,18 @@ const createStyles = (theme: AppTheme) =>
       marginBottom: 4,
     },
     paymentButton: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
+      flex: 1,
+      minWidth: 90,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 13,
+      borderWidth: 1,
       borderColor: theme.colors.border,
     },
     paymentButtonText: {
       fontFamily: 'InstrumentSans-SemiBold',
-      fontSize: 13,
-      color: theme.colors.primary,
+      fontSize: 14,
+      color: theme.colors.text,
     },
   });

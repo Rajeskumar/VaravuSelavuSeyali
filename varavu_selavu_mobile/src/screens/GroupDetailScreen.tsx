@@ -39,9 +39,14 @@ import {
 } from '../api/groups';
 import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme, inkOnPastel } from '../theme';
+import { LinearGradient } from 'expo-linear-gradient';
+import { AppTheme, inkOnPastel, directionalColor } from '../theme';
+import { shortDate, myShareDelta } from '../utils/expenseInsights';
 import { categoryPalette } from '../utils/chartTheme';
-import SegmentedTabs from '../components/SegmentedTabs';
+import TopTabs from '../components/TopTabs';
+import IconButton from '../components/IconButton';
+import SectionLabel from '../components/SectionLabel';
+import ListRow from '../components/ListRow';
 import BalanceRow from '../components/BalanceRow';
 import SettleUpSheet from '../components/SettleUpSheet';
 import GroupSettingsSheet from '../components/GroupSettingsSheet';
@@ -55,13 +60,6 @@ import { memberColor, initialsFromName } from '../components/BalanceRow';
 import { AddExpenseContext } from './AddExpenseScreen';
 
 type Tab = 'expenses' | 'balances' | 'activity';
-
-const GROUP_TYPE_EMOJI: Record<string, string> = {
-  other: '👥',
-  trip: '✈️',
-  home: '🏠',
-  couple: '💑',
-};
 
 export default function GroupDetailScreen() {
   const { theme } = useAppTheme();
@@ -150,8 +148,7 @@ export default function GroupDetailScreen() {
   // TrackSpense v3 Mobile mock's balance display: a small uppercase label + a big centered
   // figure (✓ glyph when settled, matching `gdBalLabel`/`gdBal`), not a left-aligned banner
   // sentence.
-  const balanceColor =
-    myBalance > 0 ? theme.colors.success : myBalance < 0 ? theme.colors.error : theme.colors.textSecondary;
+  const balanceColor = myBalance === 0 ? theme.colors.textSecondary : directionalColor(theme, myBalance);
   const balanceLabel = myBalance === 0 ? "You're all settled up" : myBalance > 0 ? "You're owed" : 'You owe';
   const balanceFigure = myBalance === 0 ? '✓' : formatCurrency(Math.abs(myBalance));
 
@@ -213,27 +210,6 @@ export default function GroupDetailScreen() {
     }
   };
 
-  React.useEffect(() => {
-    if (detail?.name) {
-      // TrackSpense v3 Mobile mock's own header row (emoji/name/members/avatars) now lives in
-      // the screen body, matching the mock — the native title stays blank rather than
-      // duplicating it in the small nav bar.
-      navigation.setOptions({
-        headerTitle: '',
-        headerLeft: () => (
-          <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4, marginLeft: 8 }}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
-          </TouchableOpacity>
-        ),
-        headerRight: () => (
-          <TouchableOpacity onPress={() => setSettingsVisible(true)} style={{ padding: 4 }}>
-            <Ionicons name="settings-outline" size={22} color={theme.colors.primary} />
-          </TouchableOpacity>
-        )
-      });
-    }
-  }, [detail, navigation, theme]);
-
   if (detailLoading || expensesLoading) {
     return (
       <View style={styles.loadingCenter}>
@@ -278,36 +254,54 @@ export default function GroupDetailScreen() {
     ]);
   };
 
-  // TrackSpense v3 Mobile mock's flat expense row (desc/meta left, total + "your share $X"
-  // right) — replaces the heavier icon-badge `ExpenseCard` treatment. Tap opens the existing
-  // detail sheet (which has its own delete action + comments/history); a small trailing edit
-  // icon keeps direct access to `EditGroupExpenseModal`, since the detail sheet has no edit
-  // entry point of its own.
+  // V2 group row: category tile, "paid by" meta, total with a signed "you +$X" delta beneath.
+  // Tap opens the detail sheet (comments, history, settle-my-share); the pencil keeps direct
+  // access to EditGroupExpenseModal, which the detail sheet has no entry point for.
   const renderExpense = ({ item }: { item: GroupExpenseRow }) => {
     const payerNames = item.payer_summary
       .map((p) => members.find((m) => m.member_id === p.member_id)?.display_name ?? '?')
       .join(', ');
+    const delta = myShareDelta(item, myMember?.member_id);
     return (
-      <TouchableOpacity style={styles.expenseRow} onPress={() => setSelectedExpense(item)} activeOpacity={0.7}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.expenseDesc} numberOfLines={1}>{item.description}</Text>
-          <Text style={styles.expenseMeta} numberOfLines={1}>{item.date} · paid by {payerNames}</Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.expenseTotal}>{formatCurrency(item.cost)}</Text>
-          <Text style={styles.expenseShareText}>your share {formatCurrency(item.my_share)}</Text>
-        </View>
-        {!isArchived && (
-          <TouchableOpacity
-            onPress={() => handleEditExpense(item)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={styles.expenseEditBtn}
-          >
-            <Ionicons name="pencil-outline" size={15} color={theme.colors.textTertiary} />
-          </TouchableOpacity>
+      <ListRow
+        category={item.category}
+        title={item.description}
+        meta={`${shortDate(item.date)} · paid by ${payerNames}`}
+        onPress={() => setSelectedExpense(item)}
+        trailing={(
+          <View style={styles.expenseTrailing}>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={styles.expenseTotal}>{formatCurrency(item.cost)}</Text>
+              {delta !== 0 && (
+                <Text style={[styles.expenseDelta, { color: directionalColor(theme, delta) }]}>
+                  you {delta > 0 ? '+' : '−'}{formatCurrency(Math.abs(delta))}
+                </Text>
+              )}
+            </View>
+            {!isArchived && (
+              <TouchableOpacity
+                onPress={() => handleEditExpense(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.expenseEditBtn}
+                accessibilityLabel="Edit expense"
+              >
+                <Ionicons name="pencil-outline" size={15} color={theme.colors.textTertiary} />
+              </TouchableOpacity>
+            )}
+          </View>
         )}
-      </TouchableOpacity>
+      />
     );
+  };
+
+  // "Settle up" under the balance: pre-fill the sheet with the first suggested transfer where I'm
+  // the payer, otherwise open it blank so the user can pick who paid whom.
+  const handleSettleUpAction = () => {
+    const mine = balanceData?.transfers?.find((t) => t.from_member_id === myMember?.member_id);
+    setSettleFrom(mine ? mine.from_member_id : null);
+    setSettleTo(mine ? mine.to_member_id : null);
+    setSettleSuggested(mine ? mine.amount : 0);
+    setSettleUpVisible(true);
   };
 
   const renderBalance = ({ item }: { item: MemberBalance }) => (
@@ -342,60 +336,56 @@ export default function GroupDetailScreen() {
         </View>
       )}
 
-      {/* TrackSpense v3 Mobile mock's header row: emoji box + name + member count + an
-          overlapping avatar stack — previously tucked into the tiny native header title. */}
+      {/* V2 header: back, group name, "···" → settings. */}
       <View style={styles.headerRow}>
-        <View style={styles.headerEmojiBox}>
-          <Text style={styles.headerEmoji}>{GROUP_TYPE_EMOJI[detail.group_type] ?? '👥'}</Text>
+        <IconButton icon="chevron-back" accessibilityLabel="Back" onPress={() => navigation.goBack()} />
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerName} numberOfLines={1}>{detail.name}</Text>
+          {isArchived && <Badge label="Archived" tone="caution" />}
         </View>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.headerName} numberOfLines={1}>{detail.name}</Text>
-            {isArchived && <Badge label="Archived" tone="caution" />}
+        <IconButton icon="ellipsis-horizontal" accessibilityLabel="Group settings" onPress={() => setSettingsVisible(true)} />
+      </View>
+
+      {/* Balance leads; both actions sit under it. */}
+      <View style={styles.balanceBlock}>
+        <SectionLabel>{balanceLabel}</SectionLabel>
+        <Text style={[styles.balanceFigure, { color: balanceColor }]}>{balanceFigure}</Text>
+        <View style={styles.memberLine}>
+          <View style={{ flexDirection: 'row' }}>
+            {members.slice(0, 4).map((m, i) => (
+              <View
+                key={m.member_id}
+                style={[styles.avatarStack, { backgroundColor: memberColor(m.member_id), marginLeft: i === 0 ? 0 : -8 }]}
+              >
+                <Text style={styles.avatarStackText}>{initialsFromName(m.display_name)}</Text>
+              </View>
+            ))}
           </View>
-          <Text style={styles.headerMembers}>{members.length} member{members.length === 1 ? '' : 's'}</Text>
+          <Text style={styles.memberText}>
+            {members.length} member{members.length === 1 ? '' : 's'}{detail.simplify_debts ? ' · simplified debts on' : ''}
+          </Text>
         </View>
-        <View style={{ flexDirection: 'row' }}>
-          {members.slice(0, 4).map((m, i) => (
-            <View
-              key={m.member_id}
-              style={[styles.avatarStack, { backgroundColor: memberColor(m.member_id), marginLeft: i === 0 ? 0 : -8 }]}
-            >
-              <Text style={styles.avatarStackText}>{initialsFromName(m.display_name)}</Text>
-            </View>
-          ))}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[{ flex: 1 }, isArchived && styles.actionBtnDisabled]}
+            onPress={() => !isArchived && openAddExpense(groupId)}
+            disabled={isArchived}
+            activeOpacity={0.85}
+          >
+            <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.addExpenseBtn}>
+              <Text style={styles.addExpenseBtnText}>Add expense</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          {/* Opens the settle sheet pre-filled with the transfer I owe, if any; stays enabled when
+              archived so browsing is never blocked — the sheet's own mutation is what's locked. */}
+          <TouchableOpacity style={styles.settleUpLinkBtn} onPress={handleSettleUpAction} activeOpacity={0.85}>
+            <Text style={styles.settleUpLinkText}>Settle up</Text>
+          </TouchableOpacity>
         </View>
-      </View>
-
-      <View style={styles.balanceCenter}>
-        <Text style={styles.balanceCenterLabel}>{balanceLabel.toUpperCase()}</Text>
-        <Text style={[styles.balanceCenterFigure, { color: balanceColor }]}>{balanceFigure}</Text>
-      </View>
-
-      {/* TrackSpense v3 Mobile mock's action row — today this is the only way to open Quick
-          Capture pre-scoped to a specific group. "Settle up" deliberately doesn't mirror the
-          mock's own choice (navigating away to the global People tab, losing this group's
-          context) — it switches to this screen's own Balances tab instead, where the real
-          Settle Up FAB already lives. */}
-      <View style={styles.actionRow}>
-        <TouchableOpacity
-          style={[styles.addExpenseBtn, isArchived && styles.actionBtnDisabled]}
-          onPress={() => !isArchived && openAddExpense(groupId)}
-          disabled={isArchived}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.addExpenseBtnText}>＋ Add expense</Text>
-        </TouchableOpacity>
-        {/* Pure navigation to the Balances tab (same destination as tapping the segmented tab
-            below) — stays enabled even when archived so browsing balances/history isn't
-            blocked; only the actual "Settle Up" mutating action inside that tab is disabled. */}
-        <TouchableOpacity style={styles.settleUpLinkBtn} onPress={() => setActiveTab('balances')} activeOpacity={0.85}>
-          <Text style={styles.settleUpLinkText}>Settle up →</Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.tabBar}>
-        <SegmentedTabs<Tab>
+        <TopTabs<Tab>
           value={activeTab}
           onChange={setActiveTab}
           options={[
@@ -444,7 +434,7 @@ export default function GroupDetailScreen() {
               )}
             </View>
           )}
-          <View style={styles.expensesCard}>
+          <View style={styles.expensesList}>
             <FlatList
               data={filteredExpenses}
               keyExtractor={(item) => item.row_id}
@@ -618,17 +608,15 @@ const createStyles = (theme: AppTheme) =>
       textAlign: 'center',
     },
     headerRow: {
-      flexDirection: 'row', alignItems: 'center', gap: 12,
-      marginHorizontal: 18, marginTop: 10,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 22, paddingTop: 56, paddingBottom: 14,
     },
-    headerEmojiBox: {
-      width: 44, height: 44, borderRadius: 14,
-      backgroundColor: theme.colors.primarySurface,
-      alignItems: 'center', justifyContent: 'center',
-    },
-    headerEmoji: { fontSize: 22 },
-    headerName: { fontFamily: 'InstrumentSans-Bold', fontSize: 17, color: theme.colors.text },
-    headerMembers: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 1 },
+    headerTitleWrap: { flex: 1, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, paddingHorizontal: 8 },
+    headerName: { fontFamily: 'InstrumentSans-Bold', fontSize: 16, color: theme.colors.text },
+    balanceBlock: { paddingHorizontal: 22 },
+    balanceFigure: { fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 48, letterSpacing: -2.2, marginTop: 4, fontVariant: ['tabular-nums'] },
+    memberLine: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 14 },
+    memberText: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textTertiary },
     avatarStack: {
       width: 30, height: 30, borderRadius: 999,
       alignItems: 'center', justifyContent: 'center',
@@ -636,41 +624,23 @@ const createStyles = (theme: AppTheme) =>
     },
     // memberColor() avatar palette is fixed pastel in both modes — ink text always.
     avatarStackText: { fontFamily: 'InstrumentSans-Bold', fontSize: 12, color: inkOnPastel },
-    balanceCenter: { alignItems: 'center', paddingTop: 20, paddingBottom: 4 },
-    balanceCenterLabel: {
-      fontFamily: 'InstrumentSans-Bold', fontSize: 11, letterSpacing: 0.8,
-      color: theme.colors.textTertiary,
-    },
-    balanceCenterFigure: {
-      fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 36, marginTop: 4,
-    },
-    actionRow: {
-      flexDirection: 'row', justifyContent: 'center', gap: 8,
-      marginTop: 10, marginBottom: 4, paddingHorizontal: 16,
-    },
-    addExpenseBtn: {
-      backgroundColor: theme.colors.primary, borderRadius: 999,
-      paddingHorizontal: 18, paddingVertical: 10,
-    },
-    addExpenseBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 13, color: theme.colors.textInverse },
+    actionRow: { flexDirection: 'row', gap: 10, marginTop: 18 },
+    addExpenseBtn: { height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+    addExpenseBtnText: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: inkOnPastel },
     actionBtnDisabled: { opacity: 0.4 },
     settleUpLinkBtn: {
-      borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
-      borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10,
+      flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border,
+      alignItems: 'center', justifyContent: 'center',
     },
-    settleUpLinkText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.primary },
-    // SegmentedTabs supplies its own background/padding/pill chrome — this wrapper now only
-    // owns the outer margin (was duplicating the same pill background+padding a second time
-    // around the old inline TouchableOpacity tab row).
-    tabBar: { margin: 16 },
+    settleUpLinkText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
+    tabBar: { paddingHorizontal: 22, marginTop: 20 },
     catCard: {
-      marginHorizontal: 16,
-      marginBottom: 12,
-      backgroundColor: theme.colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.borderLight,
-      borderRadius: 14,
-      padding: 16,
+      marginHorizontal: 22,
+      marginTop: 14,
+      marginBottom: 4,
+      paddingBottom: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.borderLight,
     },
     catCardLabel: { fontFamily: 'InstrumentSans-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary },
     catBar: {
@@ -691,38 +661,11 @@ const createStyles = (theme: AppTheme) =>
     },
     catFilterText: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
     catFilterClear: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11.5, color: theme.colors.primary },
-    expensesCard: {
-      flex: 1,
-      marginHorizontal: 16,
-      backgroundColor: theme.colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.borderLight,
-      borderRadius: 14,
-      overflow: 'hidden',
-    },
-    expenseRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.borderLight,
-    },
-    expenseDesc: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
-    expenseMeta: {
-      fontFamily: 'InstrumentSans-Regular',
-      fontSize: 11.5,
-      color: theme.colors.textTertiary,
-      marginTop: 1,
-    },
-    expenseShareText: {
-      fontFamily: 'InstrumentSans-Regular',
-      fontSize: 10.5,
-      color: theme.colors.textTertiary,
-      marginTop: 1,
-    },
-    expenseEditBtn: { padding: 4, marginLeft: 2 },
+    expensesList: { flex: 1, paddingHorizontal: 22 },
+    expenseTrailing: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    expenseTotal: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text, fontVariant: ['tabular-nums'] },
+    expenseDelta: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11, marginTop: 2 },
+    expenseEditBtn: { padding: 4 },
     sectionTitle: {
       fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 18,
@@ -767,7 +710,6 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 14,
       color: theme.colors.text,
     },
-    expenseTotal: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
     settleBtn: {
       position: 'absolute',
       backgroundColor: theme.colors.primary,

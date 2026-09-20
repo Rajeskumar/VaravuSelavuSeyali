@@ -20,7 +20,10 @@ import {
 } from '../api/budgets';
 import { checkGroupsEnabled } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppTheme } from '../theme';
+import SectionLabel from './SectionLabel';
+import { daysLeftInPeriod } from '../utils/expenseInsights';
 import CategoryPickerField from './CategoryPickerField';
 import SegmentedTabs from './SegmentedTabs';
 import { ListSkeleton } from './SkeletonLoader';
@@ -162,6 +165,36 @@ export default function BudgetsTabContent() {
 
   return (
     <View style={styles.section}>
+      {/* V2 hero: what's left of the overall budget, leading the pane. Only when an overall budget
+          exists — per-category budgets alone have no single "left to spend" figure. */}
+      {(() => {
+        const overall = budgets.find((b) => b.target_type === 'overall');
+        if (!overall) return null;
+        const left = Math.max(overall.remaining, 0);
+        const [whole, cents] = left.toFixed(2).split('.');
+        const pct = overall.amount > 0 ? Math.min((overall.spent / overall.amount) * 100, 100) : 0;
+        const days = daysLeftInPeriod(overall.period_end, new Date());
+        return (
+          <View style={styles.hero}>
+            <SectionLabel>Left to spend{days > 0 ? ` · ${days} day${days === 1 ? '' : 's'}` : ''}</SectionLabel>
+            <Text style={styles.heroAmount}>
+              ${Number(whole).toLocaleString('en-US')}<Text style={{ color: theme.colors.textTertiary }}>.{cents}</Text>
+            </Text>
+            <View style={styles.heroTrack}>
+              <LinearGradient
+                colors={theme.gradients.primary}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ width: `${pct}%`, height: '100%' }}
+              />
+            </View>
+            <View style={styles.heroFoot}>
+              <Text style={styles.heroFootText}>{formatBudgetMoney(overall.spent)} spent</Text>
+              <Text style={styles.heroFootText}>{formatBudgetMoney(overall.amount)} budget</Text>
+            </View>
+          </View>
+        );
+      })()}
       <View style={styles.headerRow}>
         <Text style={styles.summaryText}>{summarize(budgets)}</Text>
         <TouchableOpacity style={styles.addBtn} onPress={openAdd} activeOpacity={0.8}>
@@ -353,19 +386,28 @@ export default function BudgetsTabContent() {
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    section: { marginTop: 4, marginHorizontal: 18 },
+    section: { marginTop: 4, marginHorizontal: 22 },
+    hero: {
+      paddingTop: 16, paddingBottom: 16, marginBottom: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
+    },
+    heroAmount: {
+      fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 44, letterSpacing: -2, color: theme.colors.text,
+      marginTop: 4, fontVariant: ['tabular-nums'],
+    },
+    heroTrack: { height: 6, borderRadius: 999, backgroundColor: theme.colors.surfaceSecondary, marginTop: 16, overflow: 'hidden' },
+    heroFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+    heroFootText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary },
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
     summaryText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.textSecondary },
     addBtn: { backgroundColor: theme.colors.primary, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
     addBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.textInverse },
 
-    list: { gap: 12 },
+    list: {},
     card: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.colors.borderLight,
-      borderRadius: 14,
-      padding: 14,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.colors.borderLight,
     },
     cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
     cardTitle: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14.5, color: theme.colors.text, flexShrink: 1 },

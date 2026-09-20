@@ -6,11 +6,23 @@ name: QA
 # backend — splitting smoke/regression/api into separate jobs would re-provision (and
 # re-hit those limits) on every job's fresh runner. Keep it one job unless that
 # rate-limit budget is revisited alongside it (see qa/README.md's "Real rate limits").
+# Mobile and docs-only changes can't affect what this suite tests (the web app + backend), so
+# they skip the run. `workflow_dispatch` still runs it on demand. If this check is ever made
+# *required* in branch protection, a skipped run stays "pending" and blocks the merge — in that
+# case drop `paths-ignore` and filter inside the job instead.
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'varavu_selavu_mobile/**'
+      - 'docs/**'
+      - '**/*.md'
   push:
     branches: [main]
+    paths-ignore:
+      - 'varavu_selavu_mobile/**'
+      - 'docs/**'
+      - '**/*.md'
   workflow_dispatch:
 
 env:

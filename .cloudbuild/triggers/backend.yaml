@@ -1,0 +1,29 @@
+# Cloud Build trigger: backend release. Not applied automatically — see .cloudbuild/README.md.
+name: varavu-backend-release
+description: Build, migrate and deploy the backend when a release-vX.Y.Z tag is pushed
+github:
+  owner: Rajeskumar
+  name: VaravuSelavuSeyali
+  push:
+    # Strict semver only (no -rc suffixes): a stray tag can't deploy prod.
+    tag: ^release-v[0-9]+\.[0-9]+\.[0-9]+$
+filename: cloudbuild.backend.yaml
+# Same build service account as the legacy `varavuselavuseyali` trigger (it holds the Cloud Run/registry
+# permissions). Requires `options.logging: CLOUD_LOGGING_ONLY` in the build file, which both have.
+serviceAccount: projects/gold-circlet-424313-r7/serviceAccounts/varavu-selavu-seyali@gold-circlet-424313-r7.iam.gserviceaccount.com
+
+# --- Alternative: continuous deploy from main, only when backend files change ---------------
+# Swap the `push:` block above for the one below (tag pipelines ignore path filters, so these
+# only work with a branch trigger). Nothing else needs to change.
+#
+# github:
+#   owner: Rajeskumar
+#   name: VaravuSelavuSeyali
+#   push:
+#     branch: ^main$
+# includedFiles:
+#   - varavu_selavu_app/**
+#   - cloudbuild.backend.yaml
+# ignoredFiles:
+#   - varavu_selavu_app/tests/**
+#   - '**/*.md'

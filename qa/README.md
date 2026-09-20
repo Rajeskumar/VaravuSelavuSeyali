@@ -214,7 +214,8 @@ GitHub Actions check. **To actually block merges**, turn on branch protection on
 requiring the `QA / Smoke, regression & API tests` check — that's a repo-settings change
 this framework doesn't make for you.
 
-`cloudbuild.yaml` (the Cloud Run deploy pipeline) is intentionally untouched — there is no
+The Cloud Run deploy pipelines (`cloudbuild.backend.yaml` / `cloudbuild.frontend.yaml`, see
+`.cloudbuild/README.md`) are intentionally untouched — there is no
 staging slot to deploy a candidate into and smoke-test before it takes prod traffic. A
 true deploy-time gate (deploy with `--no-traffic`, smoke test the tagged revision,
 migrate traffic only on green) is a natural next step once a GCP dev/staging environment
@@ -222,9 +223,10 @@ exists, per the plan already discussed for that work.
 
 ## Before deploying to prod
 
-Merging to `main` here *is* the deploy trigger (`cloudbuild.yaml` builds and deploys
-straight to Cloud Run on push, no staging slot, no manual gate) — so "before prod" means
-before you merge:
+Pushing a `release-vX.Y.Z` tag *is* the deploy trigger (`cloudbuild.backend.yaml` and
+`cloudbuild.frontend.yaml` build and deploy straight to Cloud Run, no staging slot, no
+manual gate; merging to `main` alone deploys nothing — see `.cloudbuild/README.md`) — so
+"before prod" means before you run `scripts/release.sh`:
 
 1. **`make release-check`** (or `npm run qa:api && npm run qa:regression && npm run
    qa:smoke` — order doesn't matter locally, but this is fail-fast-cheapest-first) — the

@@ -1,0 +1,78 @@
+# Frontend release pipeline (Cloud Run service `varavu-selavu-frontend`).
+#
+# Triggered by a `release-vX.Y.Z` tag (see .cloudbuild/triggers/frontend.yaml), in parallel with
+# cloudbuild.backend.yaml. Split out of the old all-in-one cloudbuild.yaml so it never runs the
+# backend audit/build or the prod migration job, and a failure here can't block a backend release.
+#
+# Images are tagged with the commit SHA (and `latest`, kept for compatibility); the deploy uses
+# the SHA tag so a revision maps to exactly one commit. Release builds also get the version tag.
+# Run this only through its trigger: SHORT_SHA is empty for `gcloud builds submit`.
+steps:
+  - name: 'bash'
+    id: 'require-sha'
+    args: ['-c', 'test -n "${_IMAGE_TAG}" || { echo "SHORT_SHA is empty - run this build through its trigger"; exit 1; }']
+
+  # Dependency vulnerability gate: fails the build on a *new* high/critical in code that ships.
+  # `--omit=dev` is only meaningful because the build-only toolchain (react-scripts and friends)
+  # lives in devDependencies. `react-scripts` itself is unmaintained upstream and still carries
+  # build-time advisories; those are deliberately out of scope since none of that code is served
+  # to a browser.
+  - name: 'node:18'
+    id: 'audit-frontend-deps'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        cd varavu_selavu_ui
+        npm ci --ignore-scripts
+        npm audit --omit=dev --audit-level=high
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-frontend'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:${_IMAGE_TAG}'
+      - '-t'
+      - 'gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:latest'
+      - '.'
+    dir: 'varavu_selavu_ui'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-frontend'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+        docker push gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:${_IMAGE_TAG}
+        docker push gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:latest
+        # Release builds only: also publish the human-readable version tag.
+        if [ -n "${TAG_NAME}" ]; then
+          docker tag gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:${_IMAGE_TAG} gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:${TAG_NAME}
+          docker push gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:${TAG_NAME}
+        fi
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-frontend'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_FRONTEND_SERVICE}'
+      - '--image=gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:${_IMAGE_TAG}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # Lets `_IMAGE_TAG` below reference the built-in SHORT_SHA.
+  dynamicSubstitutions: true
+
+substitutions:
+  _REGION: 'us-central1'
+  _PROJECT_ID: 'gold-circlet-424313-r7'
+  _FRONTEND_SERVICE: 'varavu-selavu-frontend'
+  _IMAGE_TAG: '${SHORT_SHA}'
