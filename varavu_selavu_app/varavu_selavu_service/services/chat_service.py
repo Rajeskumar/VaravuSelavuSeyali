@@ -564,6 +564,13 @@ def call_chat_model(
     Also resolves (TS-ANL-013) the concrete time period and personal/group
     scope for this turn and returns them as structured data alongside the
     prose answer, for the "Looked at: ..." UI treatment.
+
+    `messages` is the full turn history the client sends (TS-CHAT: both mobile and web resend
+    every prior turn each time, so the whole conversation is available here) — everything but
+    the last entry becomes real Human/AIMessage turns in the agent's own message list, so
+    follow-ups ("what about last month?") are answered with actual conversational memory, not
+    a flattened text summary. Only the last message's text drives period/scope resolution and
+    RAG lookups, since that's this turn's actual question.
     """
 
     @tool
@@ -816,7 +823,6 @@ def call_chat_model(
             temperature=0
         )
         
-    # Only pass the final message to the agent as the current input
     if not messages:
         fallback_period = _resolve_chat_period("", year, month, start_date, end_date)
         return ChatResult(
@@ -824,14 +830,6 @@ def call_chat_model(
             resolved_period=fallback_period,
             resolved_scope=ResolvedScope(kind="personal"),
         )
-
-    history_text = ""
-    if len(messages) > 1:
-        history_text = "\n\nPrevious conversation history:\n"
-        for m in messages[:-1]:
-            role = "User" if m.get("role") == "user" else "Assistant"
-            content = m.get("content", "")
-            history_text += f"{role}: {content}\n"
 
     last_message = messages[-1]
     query_text = last_message.get("content", "")
@@ -970,12 +968,19 @@ def call_chat_model(
         "user's questions clearly and concisely. "
         "Format your answer using markdown. "
     ) + logging_guidance + injection_boundary + (
-        default_summary_text + rag_context_text + group_context_text + scope_text + history_text
+        default_summary_text + rag_context_text + group_context_text + scope_text
     ) + "\n--- END RETRIEVED DATA ---\n"
 
     agent = create_react_agent(llm, tools, prompt=system_prompt)
 
-    lc_messages = [HumanMessage(content=query_text)]
+    lc_messages: list = []
+    for m in messages[:-1]:
+        content = m.get("content", "")
+        if m.get("role") == "user":
+            lc_messages.append(HumanMessage(content=content))
+        else:
+            lc_messages.append(AIMessage(content=content))
+    lc_messages.append(HumanMessage(content=query_text))
 
     def _result(response_text: str) -> ChatResult:
         return ChatResult(response=response_text, resolved_period=resolved_period, resolved_scope=resolved_scope)
