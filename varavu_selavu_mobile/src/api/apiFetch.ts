@@ -62,6 +62,19 @@ function forceLogout() {
 /**
  * Authenticated fetch wrapper.
  * Automatically attaches Bearer token and handles 401 with token refresh.
+ *
+ * `credentials: 'omit'` on every call below is load-bearing, not decoration. The backend's
+ * `/auth/login` and `/auth/refresh` set `Set-Cookie: vs_token=...` unconditionally (P0-1's
+ * cookie auth is meant for the web client only — see auth/cookies.py's own comment claiming
+ * "native clients ... are unaffected"). That claim only holds if the native HTTP stack never
+ * stores or resends that cookie. React Native's fetch, unlike a browser's spec default, DOES
+ * keep and automatically reattach cookies from a prior Set-Cookie unless told not to — so
+ * without `credentials: 'omit'` here, every mobile request after the first login silently
+ * carries `vs_token` again. The CSRF double-submit middleware (core/csrf.py) treats *any*
+ * request carrying that cookie as cookie-authenticated and demands a matching `X-CSRF-Token`
+ * header this Bearer-only client never sends — 403 "CSRF token missing or invalid" on every
+ * POST/PUT/PATCH/DELETE (GETs are exempt as a safe method, which is why this only ever showed
+ * up on a mutating call like the AI chat send, not on ordinary browsing).
  */
 export async function apiFetch(
     path: string,
@@ -84,14 +97,14 @@ export async function apiFetch(
         throw new Error('OFFLINE: No internet connection');
     }
 
-    let response = await fetch(url, { ...options, headers });
+    let response = await fetch(url, { ...options, headers, credentials: 'omit' });
 
     // On 401, attempt refresh and retry once
     if (response.status === 401) {
         const newToken = await attemptRefresh();
         if (newToken) {
             headers['Authorization'] = `Bearer ${newToken}`;
-            response = await fetch(url, { ...options, headers });
+            response = await fetch(url, { ...options, headers, credentials: 'omit' });
         }
 
         // If still 401 after refresh (or refresh failed), force logout

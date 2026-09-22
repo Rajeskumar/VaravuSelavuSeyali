@@ -1,4 +1,9 @@
 // src/api/auth.ts
+//
+// Every call below passes `credentials: 'omit'` — see apiFetch.ts's own comment for why:
+// the backend sets a `vs_token` cookie on login/refresh regardless of client type, and
+// React Native's fetch (unlike a browser) will otherwise keep and resend it, tripping the
+// backend's CSRF double-submit check on every subsequent mutating request.
 import API_BASE_URL from './apiconfig';
 
 export interface LoginPayload {
@@ -38,6 +43,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
         'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: params.toString(),
+        credentials: 'omit',
     });
 
     if (!response.ok) {
@@ -60,6 +66,7 @@ export async function register(payload: RegisterPayload): Promise<void> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+    credentials: 'omit',
   });
 
   if (!response.ok) {
@@ -75,6 +82,7 @@ export async function logout(refresh_token: string): Promise<void> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ refresh_token }),
+    credentials: 'omit',
   });
 }
 
@@ -85,6 +93,7 @@ export async function refresh(refresh_token: string): Promise<LoginResponse> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ refresh_token }),
+    credentials: 'omit',
   });
   if (!response.ok) {
     throw new Error('Refresh failed');
