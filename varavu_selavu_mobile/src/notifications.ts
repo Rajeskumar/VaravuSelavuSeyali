@@ -43,9 +43,13 @@ export async function registerForPushNotifications(): Promise<void> {
 
     await registerDevice(expoPushToken, platform);
     _lastRegisteredToken = expoPushToken;
-  } catch (e) {
+  } catch (e: any) {
     // Fire-and-forget: registration failing must never block login/app start.
-    console.warn('Push notification registration failed', e);
+    if (e?.message?.includes('aps-environment')) {
+      console.log('Push notifications are disabled for local personal Apple ID builds.');
+    } else {
+      console.warn('Push notification registration failed', e);
+    }
   }
 }
 
