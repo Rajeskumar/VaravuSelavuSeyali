@@ -439,7 +439,7 @@ const createStyles = (theme: AppTheme) =>
 
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
     modalContent: {
-      backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      backgroundColor: theme.colors.surfaceElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24,
       padding: 24, paddingBottom: 40, maxHeight: '80%',
     },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 },

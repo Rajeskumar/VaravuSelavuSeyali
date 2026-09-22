@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Switch, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, Share } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import Constants from 'expo-constants';
+import * as Notifications from 'expo-notifications';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, withAlpha, inkOnPastel } from '../theme';
@@ -14,11 +16,12 @@ import { listBudgets } from '../api/budgets';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
 import { useAuth } from '../context/AuthContext';
 import * as Haptics from 'expo-haptics';
-import API_BASE_URL from '../api/apiconfig';
+import { apiFetch } from '../api/apiFetch';
+import { listMyCards } from '../api/cards';
 
 export default function ProfileScreen({ navigation }: any) {
   const { signOut, userEmail } = useAuth();
-  const { theme, isDark, toggleTheme } = useAppTheme();
+  const { theme, isDark, isSystemDefault, setMode: setThemeMode, useSystemTheme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [email, setEmail] = useState(userEmail || '');
@@ -36,7 +39,38 @@ export default function ProfileScreen({ navigation }: any) {
 
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
   const { enabled: cardCoachEnabled } = useCardCoachEnabled();
-  const { data: budgets } = useQuery({ queryKey: ['budgets'], queryFn: () => listBudgets(), enabled: budgetsEnabled });
+  const { data: budgets } = useQuery({ queryKey: ['budgets', null], queryFn: () => listBudgets(), enabled: budgetsEnabled });
+  const { data: myCards } = useQuery({ queryKey: ['cards-mine'], queryFn: listMyCards, enabled: cardCoachEnabled });
+
+  // "On" only when the OS actually lets us alert — a token alone doesn't mean permission.
+  const [notifsOn, setNotifsOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    Notifications.getPermissionsAsync().then((p) => setNotifsOn(p.granted)).catch(() => setNotifsOn(null));
+  }, []);
+
+  const [exporting, setExporting] = useState(false);
+  const exportData = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const res = await apiFetch('/api/v1/expenses/export.csv', { method: 'GET' });
+      if (!res.ok) throw new Error('export failed');
+      const csv = await res.text();
+      await Share.share({ title: 'trackspense_expenses.csv', message: csv });
+    } catch (e) {
+      Alert.alert('Export failed', 'Could not export your expenses. Try again in a moment.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const chooseAppearance = () =>
+    Alert.alert('Appearance', undefined, [
+      { text: 'Dark', onPress: () => setThemeMode('dark') },
+      { text: 'Light', onPress: () => setThemeMode('light') },
+      { text: 'System', onPress: useSystemTheme },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
 
   useEffect(() => {
     loadProfile();
@@ -154,23 +188,30 @@ export default function ProfileScreen({ navigation }: any) {
     );
   }
 
-  // Menu rows only for things that exist on mobile. Categories/tags management, notification
-  // preferences and data export have no mobile screen yet, so they're not listed rather than
-  // shown as dead rows.
+  // Same eight rows, same order as the design. Cards and Budgets drop out only when their backend
+  // feature flag is off (no screen to open); everything else is always present.
   const rows: { name: string; hint?: string; onPress: () => void }[] = [
-    ...(cardCoachEnabled ? [{ name: 'Cards & accounts', onPress: () => navigation.navigate('MainTabs', { screen: 'Analysis', params: { initialTab: 'cards' } }) }] : []),
+    ...(cardCoachEnabled ? [{
+      name: 'Cards & accounts',
+      hint: myCards && myCards.length > 0 ? String(myCards.length) : undefined,
+      onPress: () => navigation.navigate('Cards'),
+    }] : []),
+    { name: 'Categories & tags', onPress: () => navigation.navigate('Tags') },
     ...(budgetsEnabled ? [{
       name: 'Budgets',
       hint: budgets && budgets.length > 0 ? `${budgets.length} active` : undefined,
       onPress: () => navigation.navigate('MainTabs', { screen: 'Analysis', params: { initialTab: 'budgets' } }),
     }] : []),
+    { name: 'Notifications', hint: notifsOn === null ? undefined : notifsOn ? 'On' : 'Off', onPress: () => Linking.openSettings() },
+    { name: 'Appearance', hint: isSystemDefault ? 'System' : isDark ? 'Dark' : 'Light', onPress: chooseAppearance },
+    { name: 'Export data', hint: exporting ? 'Exporting…' : undefined, onPress: exportData },
     { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
     { name: 'About', onPress: () => navigation.navigate('About') },
   ];
 
   return (
     <ScreenWrapper scroll paddingBottom={60}>
-      <ScreenHeader title="Account" back />
+      <ScreenHeader title="Account" back style={{ paddingBottom: 22 }} />
 
       <View style={styles.identity}>
         <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
@@ -187,37 +228,18 @@ export default function ProfileScreen({ navigation }: any) {
 
       <View>
         {rows.map((r) => (
-          <TouchableOpacity key={r.name} style={styles.menuRow} activeOpacity={0.6} onPress={r.onPress}>
+          <TouchableOpacity key={r.name} style={styles.menuRow} activeOpacity={0.6} onPress={r.onPress} accessibilityRole="button">
             <Text style={styles.menuName}>{r.name}</Text>
             {r.hint ? <Text style={styles.menuHint}>{r.hint}</Text> : null}
+            <Ionicons name="chevron-forward" size={15} color={theme.colors.textQuaternary} />
           </TouchableOpacity>
         ))}
-        <View style={styles.menuRow}>
-          <Text style={styles.menuName}>Appearance</Text>
-          <Text style={styles.menuHint}>{isDark ? 'Dark' : 'Light'}</Text>
-          <Switch
-            value={isDark}
-            onValueChange={toggleTheme}
-            trackColor={{ false: theme.colors.surfaceSecondary, true: withAlpha(theme.colors.primary, 0.5) }}
-            thumbColor="#FFFFFF"
-            ios_backgroundColor={theme.colors.surfaceSecondary}
-          />
-        </View>
       </View>
 
       <TouchableOpacity style={styles.signOut} activeOpacity={0.8} onPress={signOut} accessibilityRole="button">
         <Text style={styles.signOutText}>Sign out</Text>
       </TouchableOpacity>
 
-      <View style={styles.legalLinksRow}>
-        <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
-          <Text style={styles.legalLink}>Terms of Service</Text>
-        </TouchableOpacity>
-        <Text style={styles.legalText}> • </Text>
-        <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
-          <Text style={styles.legalLink}>Privacy Policy</Text>
-        </TouchableOpacity>
-      </View>
       <Text style={styles.version}>TrackSpense {Constants.expoConfig?.version ?? ''}</Text>
     </ScreenWrapper>
   );
@@ -260,7 +282,4 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   dangerDesc: { fontFamily: 'InstrumentSans-Regular', fontSize: 14, color: theme.colors.textSecondary, marginBottom: 20, lineHeight: 20 },
   deleteButton: { backgroundColor: theme.colors.error, borderRadius: 12, padding: 16, alignItems: 'center' },
   deleteButtonText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
-  legalText: { fontSize: 13, color: theme.colors.textSecondary, fontFamily: 'InstrumentSans-Regular' },
-  legalLinksRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 22 },
-  legalLink: { fontSize: 13, color: theme.colors.textSecondary, fontFamily: 'InstrumentSans-Regular', textDecorationLine: 'underline' },
 });

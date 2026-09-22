@@ -28,7 +28,7 @@ export default function ScreenHeader({ title, subtitle, back, right, style }: Sc
 
   return (
     <View style={[styles.row, style]}>
-      {back ? <IconButton icon="chevron-back" accessibilityLabel="Back" onPress={onBack} style={styles.back} /> : null}
+      {back ? <IconButton icon="arrow-back" accessibilityLabel="Back" onPress={onBack} style={styles.back} /> : null}
       <View style={styles.titles}>
         <Text style={[styles.title, back ? styles.titlePushed : styles.titleRoot]} numberOfLines={1}>{title}</Text>
         {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}

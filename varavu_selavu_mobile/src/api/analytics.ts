@@ -5,7 +5,8 @@ import { apiFetch } from './apiFetch';
 
 // ─── Types ──────────────────────────────────────────
 export interface ItemInsightSummary {
-  id: string;
+  /** Not returned by the backend (rows are identified by `item_name`) — never use as a React key. */
+  id?: string;
   item_name: string;
   normalized_name?: string;
   avg_unit_price?: number;
@@ -47,7 +48,8 @@ export interface ItemInsightDetail extends ItemInsightSummary {
 }
 
 export interface MerchantInsightSummary {
-  id: string;
+  /** Not returned by the backend (rows are identified by `merchant_name`) — never use as a React key. */
+  id?: string;
   merchant_name: string;
   total_spent: number;
   transaction_count: number;

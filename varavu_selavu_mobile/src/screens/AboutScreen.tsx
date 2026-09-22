@@ -5,6 +5,7 @@ import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
+import API_BASE_URL from '../api/apiconfig';
 
 export default function AboutScreen() {
     const { theme } = useAppTheme();
@@ -68,6 +69,16 @@ export default function AboutScreen() {
                     © {new Date().getFullYear()} TrackSpense by Cerebroos. All rights reserved.
                 </Text>
             </Card>
+
+            <View style={styles.legalRow}>
+                <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
+                    <Text style={styles.legalLink}>Terms of Service</Text>
+                </TouchableOpacity>
+                <Text style={styles.legalDot}> • </Text>
+                <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
+                    <Text style={styles.legalLink}>Privacy Policy</Text>
+                </TouchableOpacity>
+            </View>
         </ScreenWrapper>
     );
 }
@@ -130,6 +141,9 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: theme.colors.borderLight,
     },
+    legalRow: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
+    legalDot: { fontSize: 13, color: theme.colors.textSecondary },
+    legalLink: { fontSize: 13, color: theme.colors.textSecondary, textDecorationLine: 'underline' },
     featureIcon: { fontSize: 24, marginRight: 14 },
     featureInfo: { flex: 1 },
     featureTitle: { fontSize: 15, fontWeight: '600', color: theme.colors.text },

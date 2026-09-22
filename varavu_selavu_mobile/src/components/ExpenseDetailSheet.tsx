@@ -51,6 +51,8 @@ interface Props {
   readOnly?: boolean;
   onSettled?: () => void;
   onDeleted?: () => void;
+  /** Opens the edit form for this expense (the list rows no longer carry a pencil). */
+  onEdit?: (expense: GroupExpenseRow) => void;
 }
 
 const FIELD_LABELS: Record<string, string> = {
@@ -66,7 +68,7 @@ function formatFieldValue(field: string, value: any): string {
   return String(value);
 }
 
-export default function ExpenseDetailSheet({ visible, onClose, groupId, expense, members, myMemberId, readOnly, onSettled, onDeleted }: Props) {
+export default function ExpenseDetailSheet({ visible, onClose, groupId, expense, members, myMemberId, readOnly, onSettled, onDeleted, onEdit }: Props) {
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { enabled: tagsEnabled } = useTagsEnabled();
@@ -171,7 +173,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
-        <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surface, paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surfaceElevated, paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={1}>
@@ -323,13 +325,23 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
             )
           )}
 
+          {!readOnly && onEdit && !confirmDelete && (
+            <CustomButton
+              title="Edit Expense"
+              onPress={() => onEdit(expense)}
+              variant="outline"
+              style={{ marginTop: 24 }}
+              disabled={deleting || settling}
+            />
+          )}
+
           {!readOnly && (
             !confirmDelete ? (
               <CustomButton
                 title="Delete Expense"
                 onPress={() => setConfirmDelete(true)}
                 variant="danger"
-                style={{ marginTop: 24 }}
+                style={{ marginTop: onEdit ? 12 : 24 }}
                 disabled={deleting || settling}
               />
             ) : (

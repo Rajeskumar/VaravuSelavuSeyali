@@ -305,7 +305,7 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 12,

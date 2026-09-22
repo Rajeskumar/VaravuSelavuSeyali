@@ -10,7 +10,7 @@
  * editing those happens in GroupDetailScreen; tapping one navigates there instead).
  */
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, Switch, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -35,15 +35,16 @@ import IconButton from '../components/IconButton';
 import SectionLabel from '../components/SectionLabel';
 import ListRow from '../components/ListRow';
 import ExpenseQuickSheet from '../components/ExpenseQuickSheet';
-import SimpleSelect from '../components/SimpleSelect';
+import ToggleSwitch from '../components/ToggleSwitch';
+import SpendFilterChips from '../components/SpendFilterChips';
 import SplitEditor, { SplitEditorValue } from '../components/SplitEditor';
-import TagFilterBar from '../components/tags/TagFilterBar';
 import TagPickerModal from '../components/tags/TagPickerModal';
 import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { shortDate, ordinal, nextRecurringOccurrence } from '../utils/expenseInsights';
+import { matchesSpendFilters, SpendScope } from '../utils/spendFilters';
 
 /** Mock's `r.ran`/"Logged today" pill — derived from `last_processed_iso` (persists across
  * app restarts) rather than session-only local state. */
@@ -63,14 +64,6 @@ type Tab = 'transactions' | 'recurring';
 /** Parses either the personal-expense "MM/DD/YYYY" format or an ISO date string into a
  * 'YYYY-MM' key, so search/month filtering can group personal and group rows consistently
  * regardless of which endpoint they came from. */
-function monthKeyOf(dateStr: string): string {
-    const mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateStr);
-    if (mdy) return `${mdy[3]}-${mdy[1].padStart(2, '0')}`;
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return '';
-}
-
 interface FeedRow {
     key: string;
     date: string;
@@ -131,7 +124,13 @@ export default function ExpensesScreen() {
     const [detailExpense, setDetailExpense] = useState<ExpenseRecord | null>(null);
     // "Skip" on the due-soon prompt is a per-session dismissal — there's no server-side snooze.
     const [dismissedDue, setDismissedDue] = useState<string[]>([]);
-    const [monthFilter, setMonthFilter] = useState(''); // 'YYYY-MM', '' = all time
+    // Defaults to the current month (the design's "THIS MONTH"); the chip's sheet can widen to all time.
+    const [monthFilter, setMonthFilter] = useState(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    });
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [scopeFilter, setScopeFilter] = useState<SpendScope>('all');
 
     // TrackSpense v3 Mobile mock's recurring row expand/edit/run-now (`r.expanded`/`r.editing`) —
     // was previously a flat, non-interactive row.
@@ -388,30 +387,20 @@ export default function ExpensesScreen() {
         return [...personalRows, ...groupRows].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [expenses, groupExpenses, tagFilterIds]);
 
-    const availableMonths = useMemo(() => {
-        const seen = new Map<string, string>();
-        allFeedRows.forEach((r) => {
-            const key = monthKeyOf(r.date);
-            if (key && !seen.has(key)) {
-                const [y, m] = key.split('-');
-                seen.set(key, new Date(Number(y), Number(m) - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' }));
-            }
-        });
-        return Array.from(seen.entries()).sort((a, b) => b[0].localeCompare(a[0])).map(([value, label]) => ({ value, label }));
-    }, [allFeedRows]);
-
-    const visibleRows = useMemo(() => {
-        const q = searchQuery.trim().toLowerCase();
-        return allFeedRows.filter((r) => {
-            if (monthFilter && monthKeyOf(r.date) !== monthFilter) return false;
-            if (q && !`${r.desc} ${r.meta}`.toLowerCase().includes(q)) return false;
-            return true;
-        });
-    }, [allFeedRows, searchQuery, monthFilter]);
+    const visibleRows = useMemo(
+        () => allFeedRows.filter((r) => matchesSpendFilters(r, { month: monthFilter, category: categoryFilter, scope: scopeFilter, query: searchQuery })),
+        [allFeedRows, searchQuery, monthFilter, categoryFilter, scopeFilter],
+    );
     const visibleTotal = useMemo(() => visibleRows.reduce((sum, r) => sum + r.amount, 0), [visibleRows]);
-    const subtotalLabel = monthFilter
-        ? (availableMonths.find((m) => m.value === monthFilter)?.label ?? 'Selected month')
-        : 'All time';
+    const currentMonthKey = useMemo(() => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }, []);
+    const subtotalLabel = !monthFilter
+        ? 'All time'
+        : monthFilter === currentMonthKey
+            ? 'This month'
+            : new Date(Number(monthFilter.slice(0, 4)), Number(monthFilter.slice(5)) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
     // ── Recurring tab: simple day-of-month heuristic for due/active, matching the mock's pill. ──
     const recurringRows = useMemo(() => {
@@ -447,11 +436,6 @@ export default function ExpensesScreen() {
         onSuccess: () => qc.invalidateQueries({ queryKey: ['recurringTemplates'] }),
         onError: () => showToast({ message: 'Failed to update template', type: 'error' }),
     });
-
-    const activeRecurringTotal = useMemo(
-        () => (recurringTemplates || []).filter((t) => t.status !== 'Paused').reduce((sum, t) => sum + t.default_cost, 0),
-        [recurringTemplates]
-    );
 
     const saveRecurringEditMut = useMutation({
         mutationFn: (payload: UpsertRecurringPayload) => upsertRecurringTemplate(payload),
@@ -499,7 +483,7 @@ export default function ExpensesScreen() {
         <LinearGradient colors={theme.gradients.surface} style={styles.container}>
             <View style={styles.gutter}>
                 <ScreenHeader
-                    title="Transactions"
+                    title="Expenses"
                     right={tab === 'transactions' ? (
                         <IconButton
                             icon={showSearch ? 'close' : 'search'}
@@ -530,17 +514,18 @@ export default function ExpensesScreen() {
                             style={{ minHeight: 0, paddingVertical: 0 }}
                         />
                     )}
-                    {availableMonths.length > 0 && (
-                        <View style={{ alignSelf: 'flex-start', width: 170 }}>
-                            <SimpleSelect
-                                value={monthFilter}
-                                onChange={setMonthFilter}
-                                placeholder="All time"
-                                options={[{ label: 'All time', value: '' }, ...availableMonths]}
-                            />
-                        </View>
-                    )}
-                    {tagsEnabled && <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />}
+                    <SpendFilterChips
+                        month={monthFilter}
+                        onMonth={setMonthFilter}
+                        category={categoryFilter}
+                        onCategory={setCategoryFilter}
+                        tagIds={tagFilterIds}
+                        onTagIds={setTagFilterIds}
+                        scope={scopeFilter}
+                        onScope={setScopeFilter}
+                        tagsEnabled={tagsEnabled}
+                        showScope={(groupExpenses || []).length > 0}
+                    />
                     <View style={styles.subtotal}>
                         <SectionLabel>{subtotalLabel}</SectionLabel>
                         <Text style={styles.subtotalAmount}>{formatCurrency(visibleTotal)}</Text>
@@ -555,7 +540,7 @@ export default function ExpensesScreen() {
                     ) : visibleRows.length === 0 ? (
                         <View style={styles.emptyCard}>
                             <Text style={styles.emptyTitle}>
-                                {searchQuery.trim() || monthFilter || tagFilterIds.length > 0 ? 'No matches' : 'No expenses yet'}
+                                {searchQuery.trim() || categoryFilter || scopeFilter !== 'all' || tagFilterIds.length > 0 || monthFilter ? 'No matches' : 'No expenses yet'}
                             </Text>
                             <Text style={styles.emptySubtitle}>
                                 {searchQuery.trim() || monthFilter || tagFilterIds.length > 0
@@ -623,16 +608,14 @@ export default function ExpensesScreen() {
                                         title={r.description}
                                         meta={`Monthly on the ${ordinal(r.day_of_month)} · ${r.category}${ran ? ' · logged today' : ''}`}
                                         onPress={() => { setRecOpenId(expanded ? null : r.id); setRecEdit(null); }}
-                                        style={[styles.recRow, paused && { opacity: 0.55 }]}
+                                        style={styles.recRow}
                                         trailing={(
                                             <View style={styles.recTrailing}>
                                                 <Text style={styles.recurringAmount}>{formatCurrency(r.default_cost)}</Text>
-                                                <Switch
+                                                <ToggleSwitch
                                                     value={!paused}
                                                     onValueChange={() => toggleTemplateMut.mutate(r)}
-                                                    trackColor={{ false: theme.colors.surfaceSecondary, true: withAlpha(theme.colors.primary, 0.5) }}
-                                                    thumbColor={paused ? theme.colors.textTertiary : '#FFFFFF'}
-                                                    ios_backgroundColor={theme.colors.surfaceSecondary}
+                                                    accessibilityLabel={`${r.description} ${paused ? 'paused' : 'active'}`}
                                                 />
                                             </View>
                                         )}
@@ -722,10 +705,6 @@ export default function ExpensesScreen() {
                                 </View>
                             );
                         })}
-                        <View style={styles.recurringFooter}>
-                            <SectionLabel>Active recurring total</SectionLabel>
-                            <Text style={styles.recurringFooterAmount}>{formatCurrency(activeRecurringTotal)}/mo</Text>
-                        </View>
                     </>
                 )}
             </ScrollView>
@@ -988,11 +967,6 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
     },
     recurringEditBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.primary },
     recurringEditActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
-    recurringFooter: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingVertical: 14,
-    },
-    recurringFooterAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 14, color: theme.colors.text },
     emptyCard: { alignItems: 'center', paddingVertical: 48 },
     emptyTitle: { fontSize: 17, fontWeight: '600', color: theme.colors.text, marginBottom: 4 },
     emptySubtitle: { fontSize: 14, color: theme.colors.textSecondary },
@@ -1003,7 +977,7 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
         padding: 20,
     },
     modalContent: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: theme.colors.surfaceElevated,
         borderRadius: 24,
         padding: 28,
         ...theme.shadows.lg,
@@ -1028,7 +1002,7 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
         justifyContent: 'flex-end',
     },
     editSheetContent: {
-        backgroundColor: theme.colors.surface,
+        backgroundColor: theme.colors.surfaceElevated,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingHorizontal: 24,

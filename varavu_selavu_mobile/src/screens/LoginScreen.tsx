@@ -54,7 +54,7 @@ export default function LoginScreen() {
       >
         <SectionLabel color={theme.colors.primary} style={{ letterSpacing: 2 }}>TrackSpense</SectionLabel>
         <Text style={styles.headline}>
-          Every rupee,{'\n'}every rupiah,{'\n'}
+          Every transaction,{'\n'}every expense,{'\n'}
           <Text style={{ color: theme.colors.secondary }}>accounted for.</Text>
         </Text>
         <Text style={styles.tagline}>Track what you spend, split what you share, and ask why it changed.</Text>

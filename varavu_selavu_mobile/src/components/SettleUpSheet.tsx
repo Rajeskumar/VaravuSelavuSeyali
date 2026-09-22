@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, inkOnPastel } from '../theme';
-import { MemberDTO, MemberBalance, recordSettlement } from '../api/groups';
+import { MemberDTO, MemberBalance, BalanceTransfer, recordSettlement } from '../api/groups';
 import CustomButton from './CustomButton';
 import { showToast } from './Toast';
 import { memberColor, initialsFromName } from './BalanceRow';
@@ -65,6 +65,9 @@ interface Props {
   toMemberId?: string | null;
   /** Pre-populated suggestion amount */
   suggestedAmount?: number;
+  /** All the transfers the current user owes — switches the sheet to the V2 list layout (one row
+   * per transfer, one "Record $total paid" for the lot). Omit for the single-payment form. */
+  transfers?: BalanceTransfer[];
   onClose: () => void;
   onSettled: () => void;
 }
@@ -77,6 +80,7 @@ export default function SettleUpSheet({
   fromMemberId,
   toMemberId,
   suggestedAmount = 0,
+  transfers,
   onClose,
   onSettled,
 }: Props) {
@@ -90,6 +94,11 @@ export default function SettleUpSheet({
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<Stage>('review');
   const { displayValue, setDisplayValue, runFrom } = useCountDown();
+  const listMode = !!transfers && transfers.length > 0;
+  // Payment method recorded with each transfer in list mode; null = not specified.
+  const [method, setMethod] = useState<string | null>(null);
+  const listTotal = (transfers ?? []).reduce((sum, t) => sum + t.amount, 0);
+  const nameOf = (id: string) => members.find((m) => m.member_id === id)?.display_name ?? 'Someone';
 
   const fromMember = members.find((m) => m.member_id === fromMemberId);
   const toMember = members.find((m) => m.member_id === toMemberId);
@@ -111,6 +120,7 @@ export default function SettleUpSheet({
       const initial = suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '';
       setAmount(initial);
       setStage('review');
+      setMethod(null);
       setDisplayValue(suggestedAmount > 0 ? suggestedAmount : 0);
     }
   }, [visible, suggestedAmount, setDisplayValue]);
@@ -147,6 +157,37 @@ export default function SettleUpSheet({
     }
   };
 
+  // List mode: record every transfer in order. Stops at the first failure so nothing is recorded
+  // twice on retry — the ones already recorded drop out of the group's suggested transfers.
+  const handleRecordAll = async () => {
+    if (!transfers || loading) return;
+    setLoading(true);
+    let recorded = 0;
+    try {
+      for (const t of transfers) {
+        await recordSettlement(groupId, {
+          from_member_id: t.from_member_id,
+          to_member_id: t.to_member_id,
+          amount: t.amount,
+          ...(method ? { method } : {}),
+        });
+        recorded += 1;
+      }
+      showToast({ message: `Recorded $${listTotal.toFixed(2)} paid`, type: 'success' });
+      onSettled();
+      onClose();
+    } catch (e: any) {
+      if (recorded > 0) onSettled();
+      showToast({
+        message: recorded > 0 ? `Recorded ${recorded} of ${transfers.length}; the rest failed` : (e.message ?? 'Failed to record settlement'),
+        type: 'error',
+      });
+      if (recorded > 0) onClose();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDone = () => {
     onClose();
   };
@@ -174,13 +215,59 @@ export default function SettleUpSheet({
               </Pressable>
             )}
           </View>
-          {stage === 'review' && (
+          {listMode && (
+            <>
+              <Text style={styles.subtitle}>
+                Simplified to the fewest transfers. Recording a payment never changes anyone's spend totals.
+              </Text>
+              <View>
+                {transfers!.map((t, i) => (
+                  <View key={`${t.from_member_id}-${t.to_member_id}-${i}`} style={styles.transferRow}>
+                    <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.from_member_id) }]}>
+                      <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.from_member_id))}</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={16} color={theme.colors.textTertiary} />
+                    <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.to_member_id) }]}>
+                      <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.to_member_id))}</Text>
+                    </View>
+                    <Text style={styles.transferText} numberOfLines={1}>
+                      {nameOf(t.from_member_id)} pays {nameOf(t.to_member_id)}
+                    </Text>
+                    <Text style={styles.transferAmount}>${t.amount.toFixed(2)}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.methodRow}>
+                {['Venmo', 'PayPal', 'Cash'].map((label) => {
+                  const active = method === label.toLowerCase();
+                  return (
+                    <Pressable
+                      key={label}
+                      style={[styles.methodChip, active && styles.methodChipActive]}
+                      onPress={() => setMethod(active ? null : label.toLowerCase())}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                    >
+                      <Text style={[styles.methodChipText, active && { color: theme.colors.primaryLight }]}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <CustomButton
+                title={loading ? 'Recording…' : `Record $${listTotal.toFixed(2)} paid`}
+                onPress={handleRecordAll}
+                disabled={loading}
+              />
+            </>
+          )}
+
+          {!listMode && stage === 'review' && (
             <Text style={styles.subtitle}>
               Recording a payment never changes anyone's spend totals.
             </Text>
           )}
 
-          {(fromMember && toMember) || stage === 'done' ? (
+          {!listMode && ((fromMember && toMember) || stage === 'done') ? (
             <View style={styles.heroBlock}>
               <Text style={styles.heroLabel}>{stage === 'done' ? 'All squared up' : 'Settling'}</Text>
               <View style={styles.heroAmountRow}>
@@ -194,7 +281,7 @@ export default function SettleUpSheet({
             </View>
           ) : null}
 
-          {stage === 'done' ? (
+          {listMode ? null : stage === 'done' ? (
             <>
               <Text style={styles.doneSubtext}>
                 {fromMember?.display_name} paid {toMember?.display_name} — balances updated.
@@ -281,6 +368,20 @@ const createStyles = (theme: AppTheme) =>
       gap: 14,
       ...theme.shadows.lg,
     },
+    transferRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
+    },
+    transferAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    transferText: { flex: 1, fontFamily: 'InstrumentSans-Regular', fontSize: 14, color: theme.colors.textSecondary },
+    transferAmount: { fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 16, color: theme.colors.text, fontVariant: ['tabular-nums'] },
+    methodRow: { flexDirection: 'row', gap: 10 },
+    methodChip: {
+      flex: 1, height: 44, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.border,
+      alignItems: 'center', justifyContent: 'center',
+    },
+    methodChipActive: { borderColor: theme.colors.primary, backgroundColor: theme.colors.primarySurface },
+    methodChipText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14, color: theme.colors.text },
     titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     closeBtn: {
       width: 32, height: 32, borderRadius: 11, backgroundColor: theme.colors.surfaceSecondary,

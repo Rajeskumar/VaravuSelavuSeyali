@@ -10,10 +10,9 @@
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView,
-  ActivityIndicator, Switch, Alert,
+  ActivityIndicator, Alert,
 } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ionicons } from '@expo/vector-icons';
 import {
   listBudgets, createBudget, updateBudget, deleteBudget, getBudgetSuggestions, getBudgetAskWhy,
   BudgetDTO, BudgetTargetType, BudgetScope,
@@ -28,7 +27,8 @@ import CategoryPickerField from './CategoryPickerField';
 import SegmentedTabs from './SegmentedTabs';
 import { ListSkeleton } from './SkeletonLoader';
 import { findMainCategory } from '../constants/categories';
-import BudgetProgressBar, { formatBudgetMoney } from './BudgetProgressBar';
+import { formatBudgetMoney, statusColor, STATUS_LABEL } from './BudgetProgressBar';
+import ToggleSwitch from './ToggleSwitch';
 
 const THRESHOLD_OPTIONS = [50, 80, 90, 100, 110];
 const DEFAULT_THRESHOLDS = [80, 100];
@@ -51,28 +51,22 @@ const emptyForm = (): FormState => ({
   alert_thresholds: [...DEFAULT_THRESHOLDS],
 });
 
-function summarize(budgets: BudgetDTO[]): string {
-  if (budgets.length === 0) return 'No budgets yet';
-  const onTrack = budgets.filter((b) => b.status === 'on_track').length;
-  const atRisk = budgets.filter((b) => b.status === 'at_risk' || b.status === 'over_pace').length;
-  const exceeded = budgets.filter((b) => b.status === 'exceeded').length;
-  const parts = [`${onTrack} of ${budgets.length} on track`];
-  if (atRisk > 0) parts.push(`${atRisk} at risk`);
-  if (exceeded > 0) parts.push(`${exceeded} over`);
-  return parts.join(' · ');
-}
+const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const wholeMoney = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 
-export default function BudgetsTabContent() {
+/** `period` is 'YYYY-MM' (the Insights month chip); omitted = the current month. */
+export default function BudgetsTabContent({ period }: { period?: string }) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const qc = useQueryClient();
 
   const { data: groupsEnabled } = useQuery({ queryKey: ['groupsEnabled'], queryFn: checkGroupsEnabled });
-  const { data, isLoading } = useQuery({ queryKey: ['budgets'], queryFn: () => listBudgets() });
+  const { data, isLoading } = useQuery({ queryKey: ['budgets', period ?? null], queryFn: () => listBudgets({ period }) });
   const budgets = data || [];
 
   const [formVisible, setFormVisible] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<BudgetDTO | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
 
   const { data: suggestions } = useQuery({
@@ -109,18 +103,24 @@ export default function BudgetsTabContent() {
   // client exposed a way to reach it. Toggled with a tap on the card's bell icon.
   const muteMut = useMutation({
     mutationFn: (b: BudgetDTO) => updateBudget(b.id, { muted: !b.muted }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['budgets'] }),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: ['budgets'] });
+      setEditingBudget((cur) => (cur && cur.id === updated.id ? { ...cur, muted: updated.muted } : cur));
+    },
     onError: () => Alert.alert('Failed to update mute setting'),
   });
 
   const openAdd = () => {
     setEditing(false);
+    setEditingBudget(null);
     setForm(emptyForm());
     setFormVisible(true);
   };
 
   const openEdit = (b: BudgetDTO) => {
     setEditing(true);
+    setEditingBudget(b);
+    setAskWhyId(null);
     setForm({
       target_type: b.target_type,
       category: b.category || '',
@@ -163,19 +163,20 @@ export default function BudgetsTabContent() {
 
   const canSave = parseFloat(form.amount) > 0 && (form.target_type === 'overall' || !!form.category);
 
+  const overall = budgets.find((b) => b.target_type === 'overall');
+  const rows = budgets.filter((b) => b.target_type !== 'overall');
+
   return (
     <View style={styles.section}>
-      {/* V2 hero: what's left of the overall budget, leading the pane. Only when an overall budget
-          exists — per-category budgets alone have no single "left to spend" figure. */}
-      {(() => {
-        const overall = budgets.find((b) => b.target_type === 'overall');
-        if (!overall) return null;
+      {/* V2 hero: what's left of the overall budget. Only when an overall budget exists —
+          per-category budgets alone have no single "left to spend" figure. */}
+      {overall && (() => {
         const left = Math.max(overall.remaining, 0);
         const [whole, cents] = left.toFixed(2).split('.');
         const pct = overall.amount > 0 ? Math.min((overall.spent / overall.amount) * 100, 100) : 0;
-        const days = daysLeftInPeriod(overall.period_end, new Date());
+        const days = overall.is_snapshot ? 0 : daysLeftInPeriod(overall.period_end, new Date());
         return (
-          <View style={styles.hero}>
+          <TouchableOpacity style={styles.hero} onPress={() => openEdit(overall)} activeOpacity={0.8} accessibilityLabel="Edit overall budget">
             <SectionLabel>Left to spend{days > 0 ? ` · ${days} day${days === 1 ? '' : 's'}` : ''}</SectionLabel>
             <Text style={styles.heroAmount}>
               ${Number(whole).toLocaleString('en-US')}<Text style={{ color: theme.colors.textTertiary }}>.{cents}</Text>
@@ -189,87 +190,52 @@ export default function BudgetsTabContent() {
               />
             </View>
             <View style={styles.heroFoot}>
-              <Text style={styles.heroFootText}>{formatBudgetMoney(overall.spent)} spent</Text>
-              <Text style={styles.heroFootText}>{formatBudgetMoney(overall.amount)} budget</Text>
+              <Text style={styles.heroFootText}>{money(overall.spent)} spent</Text>
+              <Text style={styles.heroFootText}>{money(overall.amount)} budget</Text>
             </View>
-          </View>
+          </TouchableOpacity>
         );
       })()}
-      <View style={styles.headerRow}>
-        <Text style={styles.summaryText}>{summarize(budgets)}</Text>
-        <TouchableOpacity style={styles.addBtn} onPress={openAdd} activeOpacity={0.8}>
-          <Text style={styles.addBtnText}>+ New</Text>
-        </TouchableOpacity>
-      </View>
 
       {isLoading ? (
         <ListSkeleton count={3} />
       ) : budgets.length === 0 ? (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyIcon}>🎯</Text>
           <Text style={styles.emptyTitle}>No budgets yet</Text>
           <Text style={styles.emptySubtitle}>Set a monthly limit for a category or your overall spend.</Text>
         </View>
       ) : (
-        <View style={styles.list}>
-          {budgets.map((b) => {
-            const title = b.target_type === 'overall' ? 'Overall' : b.category || 'Budget';
+        <View>
+          {rows.map((b) => {
+            const color = statusColor(theme, b.status);
+            const pct = b.amount > 0 ? Math.max(0, Math.min(100, (b.spent / b.amount) * 100)) : 0;
+            const title = b.category || 'Budget';
             return (
-              <TouchableOpacity key={b.id} style={styles.card} onPress={() => openEdit(b)} activeOpacity={0.85} onLongPress={() => confirmDelete(b)}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>{title}</Text>
-                    <View style={styles.scopeBadge}>
-                      <Text style={styles.scopeBadgeText}>{b.scope === 'combined' ? 'Combined' : 'Personal'}</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => muteMut.mutate(b)}
-                    disabled={muteMut.isPending}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityLabel={b.muted ? 'Unmute budget alerts' : 'Mute budget alerts'}
-                  >
-                    <Ionicons
-                      name={b.muted ? 'notifications-off-outline' : 'notifications-outline'}
-                      size={17}
-                      color={b.muted ? theme.colors.textTertiary : theme.colors.textSecondary}
-                    />
-                  </TouchableOpacity>
+              <TouchableOpacity
+                key={b.id}
+                style={styles.row}
+                onPress={() => openEdit(b)}
+                onLongPress={() => confirmDelete(b)}
+                activeOpacity={0.7}
+                accessibilityLabel={`${title}, ${money(b.spent)} of ${money(b.amount)}, ${STATUS_LABEL[b.status]}`}
+              >
+                <View style={styles.rowTop}>
+                  <Text style={styles.rowName} numberOfLines={1}>{title}</Text>
+                  <Text style={[styles.rowSpent, { color }]}>{money(b.spent)}</Text>
+                  <Text style={styles.rowCap}>/ {wholeMoney(b.amount)}</Text>
                 </View>
-
-                <BudgetProgressBar theme={theme} spent={b.spent} amount={b.amount} status={b.status} />
-
-                <View style={styles.cardFooter}>
-                  <Text style={styles.footerText}>
-                    {b.is_snapshot
-                      ? 'Final for this period'
-                      : `Projected ${formatBudgetMoney(b.projected)}${b.committed > 0 ? ` · ${formatBudgetMoney(b.committed)} committed` : ''}`}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => askWhy(b)}
-                    disabled={askWhyMut.isPending}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={styles.askWhy}>
-                      {askWhyId === b.id && askWhyMut.isPending ? 'Thinking…' : '✨ Ask why'}
-                    </Text>
-                  </TouchableOpacity>
+                <View style={styles.rowTrack}>
+                  <View style={{ width: `${pct}%`, height: '100%', backgroundColor: color }} />
                 </View>
-
-                {askWhyId === b.id && (askWhyMut.isSuccess || askWhyMut.isError) && (
-                  <View style={styles.askWhyBox}>
-                    <Text style={askWhyMut.isError ? styles.askWhyErrorText : styles.askWhyText}>
-                      {askWhyMut.isError
-                        ? (askWhyMut.error as Error)?.message || 'Failed to get an explanation.'
-                        : askWhyMut.data?.response}
-                    </Text>
-                  </View>
-                )}
               </TouchableOpacity>
             );
           })}
         </View>
       )}
+
+      <TouchableOpacity onPress={openAdd} activeOpacity={0.7} style={styles.newBtn} accessibilityRole="button">
+        <Text style={styles.newBtnText}>+ New budget</Text>
+      </TouchableOpacity>
 
       {/* Add/Edit Form Modal — same shell RecurringExpensesScreen.tsx uses */}
       <Modal visible={formVisible} animationType="slide" transparent onRequestClose={() => setFormVisible(false)}>
@@ -357,12 +323,39 @@ export default function BudgetsTabContent() {
 
               <View style={[styles.rowFields, { alignItems: 'center', marginTop: 16, marginBottom: 8, justifyContent: 'space-between' }]}>
                 <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Roll over unused amount</Text>
-                <Switch
+                <ToggleSwitch
                   value={form.rollover}
                   onValueChange={(v) => setForm((f) => ({ ...f, rollover: v }))}
-                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  accessibilityLabel="Roll over unused amount"
                 />
               </View>
+
+              {editingBudget && (
+                <View style={styles.editExtras}>
+                  <View style={styles.extraRow}>
+                    <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Mute alerts</Text>
+                    <ToggleSwitch
+                      value={!!editingBudget.muted}
+                      onValueChange={() => muteMut.mutate(editingBudget)}
+                      disabled={muteMut.isPending}
+                      accessibilityLabel="Mute budget alerts"
+                    />
+                  </View>
+                  <Text style={styles.statusLine}>
+                    {STATUS_LABEL[editingBudget.status]} · {editingBudget.is_snapshot
+                      ? 'final for this period'
+                      : `projected ${formatBudgetMoney(editingBudget.projected)}${editingBudget.committed > 0 ? ` · ${formatBudgetMoney(editingBudget.committed)} committed` : ''}`}
+                  </Text>
+                  <TouchableOpacity onPress={() => askWhy(editingBudget)} disabled={askWhyMut.isPending} activeOpacity={0.7}>
+                    <Text style={styles.askWhy}>{askWhyId === editingBudget.id && askWhyMut.isPending ? 'Thinking…' : '✨ Ask why'}</Text>
+                  </TouchableOpacity>
+                  {askWhyId === editingBudget.id && (askWhyMut.isSuccess || askWhyMut.isError) && (
+                    <Text style={askWhyMut.isError ? styles.askWhyErrorText : styles.askWhyText}>
+                      {askWhyMut.isError ? (askWhyMut.error as Error)?.message || 'Failed to get an explanation.' : askWhyMut.data?.response}
+                    </Text>
+                  )}
+                </View>
+              )}
 
               <TouchableOpacity
                 style={[styles.saveBtn, (saveMut.isPending || !canSave) && styles.saveBtnDisabled]}
@@ -376,6 +369,11 @@ export default function BudgetsTabContent() {
                   <Text style={styles.saveBtnText}>Save Budget</Text>
                 )}
               </TouchableOpacity>
+              {editingBudget && (
+                <TouchableOpacity onPress={() => { setFormVisible(false); confirmDelete(editingBudget); }} activeOpacity={0.7} style={styles.deleteBtn}>
+                  <Text style={styles.deleteBtnText}>Delete budget</Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -398,33 +396,20 @@ const createStyles = (theme: AppTheme) =>
     heroTrack: { height: 6, borderRadius: 999, backgroundColor: theme.colors.surfaceSecondary, marginTop: 16, overflow: 'hidden' },
     heroFoot: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
     heroFootText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary },
-    headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-    summaryText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.textSecondary },
-    addBtn: { backgroundColor: theme.colors.primary, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
-    addBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.textInverse },
-
-    list: {},
-    card: {
-      paddingVertical: 14,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.borderLight,
-    },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-    cardTitle: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14.5, color: theme.colors.text, flexShrink: 1 },
-    scopeBadge: { backgroundColor: theme.colors.surfaceSecondary, borderRadius: 999, paddingHorizontal: 7, paddingVertical: 2 },
-    scopeBadgeText: { fontFamily: 'InstrumentSans-Bold', fontSize: 9.5, color: theme.colors.textSecondary },
-    cardFooter: {
-      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      marginTop: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderLight,
-      gap: 8,
-    },
-    footerText: { fontFamily: 'InstrumentSans-Regular', fontSize: 11, color: theme.colors.textTertiary, flex: 1 },
-    askWhy: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11.5, color: theme.colors.primary },
-    askWhyBox: {
-      marginTop: 10, paddingTop: 10,
-      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderLight,
-      borderStyle: 'dashed',
-    },
+    row: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight },
+    rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
+    rowName: { flex: 1, fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
+    rowSpent: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14, fontVariant: ['tabular-nums'] },
+    rowCap: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary, fontVariant: ['tabular-nums'] },
+    rowTrack: { height: 5, borderRadius: 999, backgroundColor: theme.colors.surfaceSecondary, marginTop: 9, overflow: 'hidden' },
+    newBtn: { alignSelf: 'flex-start', paddingVertical: 16 },
+    newBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14, color: theme.colors.primary },
+    editExtras: { marginTop: 12, paddingTop: 14, gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderLight },
+    extraRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    statusLine: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary },
+    askWhy: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.primary },
+    deleteBtn: { alignItems: 'center', paddingVertical: 16 },
+    deleteBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14, color: theme.colors.error },
     askWhyText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.text, lineHeight: 18 },
     askWhyErrorText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.error },
 
@@ -433,14 +418,13 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.surface, borderRadius: 14,
       borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight,
     },
-    emptyIcon: { fontSize: 40, marginBottom: 12 },
     emptyTitle: { fontSize: 17, fontWeight: '700', color: theme.colors.text, marginBottom: 6, textAlign: 'center' },
     emptySubtitle: { fontSize: 13.5, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 24 },
 
     // Modal (mirrors RecurringExpensesScreen.tsx's own form modal shell)
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
     modalContent: {
-      backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+      backgroundColor: theme.colors.surfaceElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24,
       padding: 24, paddingBottom: 40, maxHeight: '85%',
     },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

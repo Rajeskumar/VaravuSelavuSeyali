@@ -25,7 +25,6 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import {
   getGroupDetail,
   listGroupExpenses,
@@ -33,6 +32,7 @@ import {
   addMember,
   GroupExpenseRow,
   MemberBalance,
+  BalanceTransfer,
   MemberDTO,
   ApiError,
   deleteGroupExpense,
@@ -42,8 +42,8 @@ import { useAppTheme } from '../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppTheme, inkOnPastel, directionalColor } from '../theme';
 import { shortDate, myShareDelta } from '../utils/expenseInsights';
-import { categoryPalette } from '../utils/chartTheme';
 import TopTabs from '../components/TopTabs';
+import TintGlow from '../components/TintGlow';
 import IconButton from '../components/IconButton';
 import SectionLabel from '../components/SectionLabel';
 import ListRow from '../components/ListRow';
@@ -78,6 +78,8 @@ export default function GroupDetailScreen() {
   const [settleFrom, setSettleFrom] = useState<string | null>(null);
   const [settleTo, setSettleTo] = useState<string | null>(null);
   const [settleSuggested, setSettleSuggested] = useState(0);
+  // Set only by the header's "Settle up": every transfer I owe, shown as a list (V2 settle sheet).
+  const [settleTransfers, setSettleTransfers] = useState<BalanceTransfer[] | null>(null);
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<GroupExpenseRow | null>(null);
@@ -126,21 +128,6 @@ export default function GroupDetailScreen() {
   const expenses: GroupExpenseRow[] = expenseData?.items ?? [];
   const balances: MemberBalance[] = balanceData?.members ?? [];
 
-  // TrackSpense v3 Mobile mock's "GROUP SPEND BY CATEGORY" card (`gdCats`) — a stacked bar +
-  // tappable legend above the expense list, filtering it down to one category at a time. Was
-  // missing entirely.
-  const [catFilter, setCatFilter] = useState<string | null>(null);
-  const palette = categoryPalette(theme);
-  const categoryAgg = React.useMemo(() => {
-    const totals: Record<string, number> = {};
-    expenses.forEach((e) => { totals[e.category] = (totals[e.category] || 0) + e.cost; });
-    const sum = Object.values(totals).reduce((s, v) => s + v, 0) || 1;
-    return Object.entries(totals)
-      .sort((a, b) => b[1] - a[1])
-      .map(([category, total], i) => ({ category, total, pct: (total / sum) * 100, color: palette[i % palette.length] }));
-  }, [expenses, palette]);
-  const filteredExpenses = catFilter ? expenses.filter((e) => e.category === catFilter) : expenses;
-
   const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name ?? 'Unknown';
 
   const myMember = members.find((m) => m.user_email === userEmail);
@@ -157,6 +144,7 @@ export default function GroupDetailScreen() {
   // unconditionally on every render per the Rules of Hooks — can reference it.
   const handleSettleUp = (balance: MemberBalance) => {
     if (!myMember) return;
+    setSettleTransfers(null);
     if (balance.net < 0 && balance.member_id !== myMember.member_id) {
       setSettleFrom(myMember.member_id);
       setSettleTo(balance.member_id);
@@ -255,8 +243,7 @@ export default function GroupDetailScreen() {
   };
 
   // V2 group row: category tile, "paid by" meta, total with a signed "you +$X" delta beneath.
-  // Tap opens the detail sheet (comments, history, settle-my-share); the pencil keeps direct
-  // access to EditGroupExpenseModal, which the detail sheet has no entry point for.
+  // Tap opens the detail sheet (comments, history, settle-my-share, Edit).
   const renderExpense = ({ item }: { item: GroupExpenseRow }) => {
     const payerNames = item.payer_summary
       .map((p) => members.find((m) => m.member_id === p.member_id)?.display_name ?? '?')
@@ -278,16 +265,6 @@ export default function GroupDetailScreen() {
                 </Text>
               )}
             </View>
-            {!isArchived && (
-              <TouchableOpacity
-                onPress={() => handleEditExpense(item)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={styles.expenseEditBtn}
-                accessibilityLabel="Edit expense"
-              >
-                <Ionicons name="pencil-outline" size={15} color={theme.colors.textTertiary} />
-              </TouchableOpacity>
-            )}
           </View>
         )}
       />
@@ -297,7 +274,9 @@ export default function GroupDetailScreen() {
   // "Settle up" under the balance: pre-fill the sheet with the first suggested transfer where I'm
   // the payer, otherwise open it blank so the user can pick who paid whom.
   const handleSettleUpAction = () => {
-    const mine = balanceData?.transfers?.find((t) => t.from_member_id === myMember?.member_id);
+    const allMine = (balanceData?.transfers ?? []).filter((t) => t.from_member_id === myMember?.member_id);
+    const mine = allMine[0];
+    setSettleTransfers(allMine.length > 0 ? allMine : null);
     setSettleFrom(mine ? mine.from_member_id : null);
     setSettleTo(mine ? mine.to_member_id : null);
     setSettleSuggested(mine ? mine.amount : 0);
@@ -319,6 +298,7 @@ export default function GroupDetailScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: 0 }]}>
+      {myBalance !== 0 && <TintGlow color={balanceColor} />}
       {isArchived && (
         <View style={[styles.banner, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}>
           <Text style={[styles.bannerText, { color: theme.colors.warning }]}>
@@ -338,7 +318,7 @@ export default function GroupDetailScreen() {
 
       {/* V2 header: back, group name, "···" → settings. */}
       <View style={styles.headerRow}>
-        <IconButton icon="chevron-back" accessibilityLabel="Back" onPress={() => navigation.goBack()} />
+        <IconButton icon="arrow-back" accessibilityLabel="Back" onPress={() => navigation.goBack()} />
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerName} numberOfLines={1}>{detail.name}</Text>
           {isArchived && <Badge label="Archived" tone="caution" />}
@@ -398,45 +378,9 @@ export default function GroupDetailScreen() {
 
       {activeTab === 'expenses' && (
         <>
-          {categoryAgg.length > 0 && (
-            <View style={styles.catCard}>
-              <Text style={styles.catCardLabel}>GROUP SPEND BY CATEGORY</Text>
-              <View style={styles.catBar}>
-                {categoryAgg.map((c) => (
-                  <View key={c.category} style={{ width: `${c.pct}%`, backgroundColor: c.color }} />
-                ))}
-              </View>
-              <View style={{ marginTop: 4 }}>
-                {categoryAgg.map((c) => {
-                  const active = catFilter === c.category;
-                  return (
-                    <TouchableOpacity
-                      key={c.category}
-                      style={[styles.catRow, active && styles.catRowActive]}
-                      onPress={() => setCatFilter(active ? null : c.category)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.catDot, { color: c.color }]}>●</Text>
-                      <Text style={styles.catName} numberOfLines={1}>{c.category}</Text>
-                      <Text style={styles.catPct}>{c.pct.toFixed(0)}%</Text>
-                      <Text style={styles.catAmount}>{formatCurrency(c.total)}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {catFilter && (
-                <View style={styles.catFilterRow}>
-                  <Text style={styles.catFilterText}>Showing {catFilter} only</Text>
-                  <TouchableOpacity onPress={() => setCatFilter(null)}>
-                    <Text style={styles.catFilterClear}>· clear</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
           <View style={styles.expensesList}>
             <FlatList
-              data={filteredExpenses}
+              data={expenses}
               keyExtractor={(item) => item.row_id}
               renderItem={renderExpense}
               contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
@@ -487,6 +431,7 @@ export default function GroupDetailScreen() {
             <TouchableOpacity
               style={[styles.settleBtn, { bottom: insets.bottom + 16 }]}
               onPress={() => {
+                setSettleTransfers(null);
                 setSettleFrom(null);
                 setSettleTo(null);
                 setSettleSuggested(0);
@@ -509,6 +454,7 @@ export default function GroupDetailScreen() {
         fromMemberId={settleFrom}
         toMemberId={settleTo}
         suggestedAmount={settleSuggested}
+        transfers={settleTransfers ?? undefined}
         onClose={() => setSettleUpVisible(false)}
         onSettled={() => {
           qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
@@ -526,6 +472,7 @@ export default function GroupDetailScreen() {
         members={members}
         myMemberId={myMember?.member_id}
         readOnly={isArchived}
+        onEdit={(e) => { setSelectedExpense(null); handleEditExpense(e); }}
         onSettled={() => {
           qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
           qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
@@ -634,38 +581,10 @@ const createStyles = (theme: AppTheme) =>
     },
     settleUpLinkText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
     tabBar: { paddingHorizontal: 22, marginTop: 20 },
-    catCard: {
-      marginHorizontal: 22,
-      marginTop: 14,
-      marginBottom: 4,
-      paddingBottom: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.borderLight,
-    },
-    catCardLabel: { fontFamily: 'InstrumentSans-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary },
-    catBar: {
-      flexDirection: 'row', height: 12, borderRadius: 999, overflow: 'hidden',
-      marginTop: 12, backgroundColor: theme.colors.surfaceSecondary,
-    },
-    catRow: {
-      flexDirection: 'row', alignItems: 'center', gap: 10,
-      paddingVertical: 9, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 10,
-    },
-    catRowActive: { backgroundColor: theme.colors.primarySurface },
-    catDot: { fontSize: 12 },
-    catName: { flex: 1, fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.text },
-    catPct: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
-    catAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.text, width: 70, textAlign: 'right' },
-    catFilterRow: {
-      flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8,
-    },
-    catFilterText: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary },
-    catFilterClear: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11.5, color: theme.colors.primary },
     expensesList: { flex: 1, paddingHorizontal: 22 },
-    expenseTrailing: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    expenseTrailing: { flexDirection: 'row', alignItems: 'center' },
     expenseTotal: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text, fontVariant: ['tabular-nums'] },
     expenseDelta: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11, marginTop: 2 },
-    expenseEditBtn: { padding: 4 },
     sectionTitle: {
       fontFamily: 'InstrumentSans-SemiBold',
       fontSize: 18,

@@ -7,7 +7,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRoute, useNavigation } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { sendChatMessageFull, ChatPayload, ChatMessage } from '../api/chat';
 import { scopeLine } from '../utils/chatScope';
@@ -43,7 +43,6 @@ export default function AIAnalystScreen() {
     const styles = useMemo(() => createStyles(theme), [theme]);
     const insets = useSafeAreaInsets();
     const route = useRoute<any>();
-    const navigation = useNavigation<any>();
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
@@ -287,18 +286,6 @@ export default function AIAnalystScreen() {
                                 ))}
                             </View>
 
-                            <View style={styles.browseRow}>
-                                <Text style={styles.browseRowText}>Prefer browsing instead of asking?</Text>
-                                <View style={styles.browseLinksRow}>
-                                    <TouchableOpacity onPress={() => navigation.navigate('ItemInsights')} activeOpacity={0.7}>
-                                        <Text style={styles.browseLink}>Item Insights</Text>
-                                    </TouchableOpacity>
-                                    <Text style={styles.browseRowText}> · </Text>
-                                    <TouchableOpacity onPress={() => navigation.navigate('MerchantInsights')} activeOpacity={0.7}>
-                                        <Text style={styles.browseLink}>Merchant Insights</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
                         </View>
                     }
                     ListFooterComponent={renderTypingIndicator}
@@ -409,10 +396,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     },
     emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.colors.text, marginBottom: 6 },
     emptySubtitle: { fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 36 },
-    browseRow: { marginTop: 24, alignItems: 'center' },
-    browseRowText: { fontSize: 13, color: theme.colors.textSecondary },
-    browseLinksRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-    browseLink: { fontSize: 13, fontWeight: '700', color: theme.colors.primary, textDecorationLine: 'underline' },
     suggestionsContainer: { width: '100%', paddingHorizontal: 20, marginTop: 10 },
     suggestionsTitle: { fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 10, textAlign: 'center' },
     suggestionChip: { 

@@ -59,7 +59,7 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <IconButton icon="chevron-back" accessibilityLabel="Back to sign in" onPress={() => navigation.goBack()} />
+        <IconButton icon="arrow-back" accessibilityLabel="Back to sign in" onPress={() => navigation.goBack()} />
         <Text style={styles.title}>Create account</Text>
         <Text style={styles.subtitle}>Just three fields — everything else later.</Text>
 

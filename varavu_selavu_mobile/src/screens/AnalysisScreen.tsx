@@ -1,95 +1,82 @@
 /**
- * AnalysisScreen.tsx — TrackSpense v3 Mobile mock's "Analysis" tab (`isAnalysis` block):
- * Overview/Items/Merchants segmented tabs, all three rendered in place (switching `tab` state
- * only — no navigation away). Overview is a "WHERE IT WENT" stacked color bar + legend +
- * "Include group shares" toggle, a "WHAT CHANGED vs last month" list, and a one-line insight
- * callout. Items/Merchants are simple ranked lists (name/meta + amount, matching the mock's
- * illustrative copy) fetched directly from the existing `getTopItems`/`getTopMerchants` APIs —
- * an earlier pass had these two tabs `navigation.navigate()` away to the separate dedicated
- * ItemInsightsScreen/MerchantInsightsScreen, which meant the tab never visually showed as
- * selected and the toggle read as broken/missing; this embeds real content instead.
+ * AnalysisScreen.tsx — V2 "Insights" tab (Flows 6.1). Overview · Items · Merchants · Budgets under a
+ * month chip. Overview is the category donut with its legend, then "what changed vs last month",
+ * each row linking to the item or merchant behind it. Items and Merchants are ranked lists that open
+ * the detail screens; Budgets hosts BudgetsTabContent (left-to-spend hero + per-category bars).
  *
- * Previously this screen had a Month/Year period toggle, a TrendNavigator month-bar strip, an
- * InsightRail, a standalone total card, and a CategoryRankedList — none of that matches the
- * mock; replaced with the structure above.
+ * Everything the design doesn't show above the fold — the group/tag scope pickers and the "include
+ * group shares" switch — sits in a "Scope" block at the bottom of Overview rather than in front of
+ * the chart. Card Coach lives under Account → Cards & accounts (as in the design), not as a tab.
  */
 import React, { useState, useMemo } from 'react';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Switch,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { getAnalysis } from '../api/analysis';
 import { getChangeInsights, ChangeInsight, getTopItems, getTopMerchants, ItemInsightSummary, MerchantInsightSummary } from '../api/analytics';
 import { checkGroupsEnabled, listGroups } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme, withAlpha } from '../theme';
-import { categoryPalette } from '../utils/chartTheme';
+import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
+import ScreenHeader from '../components/ScreenHeader';
 import CustomButton from '../components/CustomButton';
 import TopTabs from '../components/TopTabs';
-import ScreenHeader from '../components/ScreenHeader';
 import SectionLabel from '../components/SectionLabel';
 import SegmentDonut from '../components/SegmentDonut';
-import { splitTopSegments } from '../utils/segments';
+import MonthChip from '../components/MonthChip';
+import ToggleSwitch from '../components/ToggleSwitch';
 import SimpleSelect from '../components/SimpleSelect';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
 import { onExpenseChanged } from '../utils/expenseEvents';
+import { splitTopSegments } from '../utils/segments';
+import { changeRow, DONUT_COLORS, DONUT_OTHERS, ChangeTone } from '../utils/insightsFormat';
 import { AddExpenseContext } from './AddExpenseScreen';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import BudgetsTabContent from '../components/BudgetsTabContent';
-import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
-import CardsTabContent from '../components/CardsTabContent';
 import { useTagsEnabled } from '../hooks/useTagsEnabled';
 import TagFilterBar from '../components/tags/TagFilterBar';
 
-type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets' | 'cards';
+type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets';
 
 const formatCurrency = (amount: number) => `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const monthKey = (y: number, m: number) => `${y}-${String(m).padStart(2, '0')}`;
 
 export default function AnalysisScreen() {
     const { accessToken, userEmail } = useAuth();
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const qc = useQueryClient();
+    const navigation = useNavigation<any>();
     const { openAddExpense } = React.useContext(AddExpenseContext);
     const route = useRoute<any>();
 
     const { enabled: budgetsEnabled } = useBudgetsEnabled();
-    const { enabled: cardCoachEnabled } = useCardCoachEnabled();
     const { enabled: tagsEnabled } = useTagsEnabled();
     const [tagFilterIds, setTagFilterIds] = useState<string[]>([]);
     const [tab, setTab] = useState<AnalysisTab>('overview');
-    // Dashboard's Budgets/Card Coach summary cards navigate here with `{ initialTab: '...' }` —
-    // same pattern as GroupsScreen's own `initialTab` param handling.
+
+    // Deep links into a sub-tab (Account → Budgets, Ask hand-offs): `{ initialTab }`.
     React.useEffect(() => {
-        if (route.params?.initialTab === 'budgets' && budgetsEnabled) setTab('budgets');
-        if (route.params?.initialTab === 'cards' && cardCoachEnabled) setTab('cards');
-    }, [route.params?.initialTab, budgetsEnabled, cardCoachEnabled]);
+        const t = route.params?.initialTab;
+        if (t === 'budgets' && budgetsEnabled) setTab('budgets');
+        else if (t === 'items' || t === 'merchants') setTab(t);
+        else if (t === 'cards') navigation.navigate('Cards');
+    }, [route.params?.initialTab, budgetsEnabled, navigation]);
+
     const [includeGroups, setIncludeGroups] = useState(true);
-    // A single group's whole spend, analysed exactly like the personal view (categories, trend,
-    // "what changed"/insight callout excluded — see below). '' = the user's own spending, which
-    // is what this screen always showed before. Mirrors web's OverviewTab group picker.
+    // One group's whole spend, analysed like the personal view. '' = the user's own spending.
     const [groupId, setGroupId] = useState('');
     const scope = groupId ? 'group' : includeGroups ? 'combined' : 'personal';
-    // TrackSpense v3 Mobile mock's category drill-down (`anCat`/`anHasCat`): tapping a category
-    // in the "WHERE IT WENT" legend swaps the overview content in place for that category's own
-    // transaction list, with a "‹ Categories" link back — was missing entirely (legend rows
-    // weren't tappable at all).
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [showAllCategories, setShowAllCategories] = useState(false);
 
-    const now = useMemo(() => new Date(), []);
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
+    const today = useMemo(() => new Date(), []);
+    const [period, setPeriod] = useState({ year: today.getFullYear(), month: today.getMonth() + 1 });
+    const { year, month } = period;
 
-    const { data: groupsEnabled } = useQuery({
-        queryKey: ['groupsEnabled'],
-        queryFn: checkGroupsEnabled,
-    });
-
+    const { data: groupsEnabled } = useQuery({ queryKey: ['groupsEnabled'], queryFn: checkGroupsEnabled });
     const { data: groups = [] } = useQuery({
         queryKey: ['groups', false],
         queryFn: () => listGroups(false),
@@ -132,39 +119,39 @@ export default function AnalysisScreen() {
     const insights: ChangeInsight[] = insightsData || [];
     const isEmpty = data?.total_expenses === 0 && (data?.category_totals.length ?? 0) === 0;
 
-    const monthLabel = now.toLocaleString('default', { month: 'long' }).toUpperCase();
     const prevMonthLabel = new Date(year, month - 2, 1).toLocaleString('default', { month: 'long' });
+    const monthName = new Date(year, month - 1, 1).toLocaleString('default', { month: 'long' });
 
     const total = data?.total_expenses || 0;
-    const palette = categoryPalette(theme);
     const segments = useMemo(() => {
         const cats = data?.category_totals || [];
-        return cats.map((c, i) => ({
-            ...c,
-            pct: total > 0 ? (c.total / total) * 100 : 0,
-            color: palette[i % palette.length],
-        }));
+        return cats.map((c) => ({ ...c, pct: total > 0 ? (c.total / total) * 100 : 0 }));
     }, [data, total]);
-
-    // Simple day-of-month projection for the insight callout — the mock's own line ("On pace for
-    // $2,180 this month — Dining is up 34%...") is illustrative demo copy, not backed by a
-    // dedicated backend projection endpoint, so this is a lightweight client-side estimate.
-    const dayOfMonth = now.getDate();
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const onPaceTotal = dayOfMonth > 0 ? (total / dayOfMonth) * daysInMonth : total;
-    const topInsight = insights[0];
-    const insightLine = topInsight
-        ? `On pace for ${formatCurrency(onPaceTotal)} this month — ${topInsight.metric_name} is ${topInsight.change_percent > 0 ? 'up' : 'down'} ${Math.abs(topInsight.change_percent).toFixed(0)}% vs last month.`
-        : `On pace for ${formatCurrency(onPaceTotal)} this month.`;
+    const { top, rest, restPct } = useMemo(() => splitTopSegments(segments, 5), [segments]);
+    const colorFor = (i: number) => (i < DONUT_COLORS.length ? DONUT_COLORS[i] : DONUT_OTHERS);
+    const donutSeries = useMemo(() => [
+        ...top.map((s, i) => ({ key: s.category, pct: s.pct, color: colorFor(i) })),
+        ...(rest.length > 0 ? [{ key: '__others', pct: restPct, color: DONUT_OTHERS }] : []),
+    ], [top, rest, restPct]);
 
     const items: ItemInsightSummary[] = topItemsData || [];
     const merchants: MerchantInsightSummary[] = topMerchantsData || [];
     const topMerchantSpend = merchants[0]?.total_spent || 0;
 
+    const toneColor = (t: ChangeTone) =>
+        t === 'error' ? theme.colors.error : t === 'warning' ? theme.colors.warning : t === 'success' ? theme.colors.success : theme.colors.secondary;
+
+    const openLink = (link: { kind: 'item' | 'merchant'; name: string }) =>
+        navigation.navigate(link.kind === 'item' ? 'ItemDetail' : 'MerchantDetail', link.kind === 'item' ? { itemName: link.name } : { merchantName: link.name });
+
     return (
         <ScreenWrapper contentStyle={{ paddingHorizontal: 0 }}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-                <ScreenHeader title="Insights" style={{ paddingHorizontal: 22 }} />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+                <ScreenHeader
+                    title="Insights"
+                    style={{ paddingHorizontal: 22 }}
+                    right={<MonthChip value={monthKey(year, month)} onChange={(_v, y, m) => { setPeriod({ year: y, month: m }); setSelectedCategory(null); }} />}
+                />
 
                 <View style={styles.tabsRow}>
                     <TopTabs<AnalysisTab>
@@ -175,49 +162,9 @@ export default function AnalysisScreen() {
                             { value: 'items', label: 'Items' },
                             { value: 'merchants', label: 'Merchants' },
                             ...(budgetsEnabled ? [{ value: 'budgets' as const, label: 'Budgets' }] : []),
-                            ...(cardCoachEnabled ? [{ value: 'cards' as const, label: 'Cards' }] : []),
                         ]}
                     />
                 </View>
-
-                {tab === 'overview' && groupsEnabled && groups.length > 0 && (
-                    <View style={{ paddingHorizontal: 22, marginBottom: 12, maxWidth: 220 }}>
-                        <SimpleSelect
-                            label="Analyse"
-                            value={groupId}
-                            onChange={(v) => {
-                                setGroupId(v);
-                                // Tags are private to whoever applied them, so they don't mean
-                                // anything against a group-wide total — clear the filter too, or
-                                // a filter picked earlier would keep silently narrowing the
-                                // group's total with no visible control left to explain why.
-                                if (v) setTagFilterIds([]);
-                            }}
-                            options={[{ label: 'My spending', value: '' }, ...groups.map((g) => ({ label: `${g.name} (whole group)`, value: g.group_id }))]}
-                        />
-                    </View>
-                )}
-
-                {tab === 'overview' && tagsEnabled && !groupId && (
-                    <View style={{ paddingHorizontal: 22, marginBottom: 4 }}>
-                        <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />
-                    </View>
-                )}
-
-                {tab === 'overview' && tagFilterIds.length > 0 && data?.my_expenses_total != null && (
-                    <View style={[styles.card, { flexDirection: 'row', gap: 24, alignItems: 'center', marginBottom: 12 }]}>
-                        <View>
-                            <Text style={styles.catHeaderTotal}>{formatCurrency(data.my_expenses_total)}</Text>
-                            <Text style={styles.toggleLabel}>My Expenses</Text>
-                        </View>
-                        {data.i_paid_total != null && (
-                            <View>
-                                <Text style={styles.catHeaderTotal}>{formatCurrency(data.i_paid_total)}</Text>
-                                <Text style={styles.toggleLabel}>I Paid</Text>
-                            </View>
-                        )}
-                    </View>
-                )}
 
                 {tab === 'overview' && (
                     loading ? (
@@ -226,283 +173,226 @@ export default function AnalysisScreen() {
                             <ListSkeleton count={3} />
                         </>
                     ) : isEmpty ? (
-                        <View style={styles.emptyCard}>
-                            <Text style={styles.emptyIcon}>📊</Text>
-                            <Text style={styles.emptyTitle}>No expenses this month yet</Text>
+                        <View style={styles.empty}>
+                            <Text style={styles.emptyTitle}>No expenses in {monthName} yet</Text>
                             <Text style={styles.emptySubtitle}>Add an expense to see category breakdowns and trends.</Text>
-                            <CustomButton title="Add an Expense" onPress={() => openAddExpense()} fullWidth={false} style={{ marginTop: 4 }} />
+                            <CustomButton title="Add an Expense" onPress={() => openAddExpense()} fullWidth={false} style={{ marginTop: 12 }} />
                         </View>
                     ) : selectedCategory ? (
                         (() => {
-                            const catSegment = segments.find((s) => s.category === selectedCategory);
+                            const idx = segments.findIndex((s) => s.category === selectedCategory);
+                            const catSegment = segments[idx];
                             const catTxns = data?.category_expense_details?.[selectedCategory] ?? [];
                             return (
-                                <View style={styles.section}>
-                                    <TouchableOpacity onPress={() => setSelectedCategory(null)} activeOpacity={0.6} style={styles.catBackLink}>
-                                        <Text style={styles.catBackText}>‹ Categories</Text>
+                                <View style={styles.pad}>
+                                    <TouchableOpacity onPress={() => setSelectedCategory(null)} activeOpacity={0.6} style={styles.backLink}>
+                                        <Ionicons name="arrow-back" size={14} color={theme.colors.primary} />
+                                        <Text style={styles.backText}>Categories</Text>
                                     </TouchableOpacity>
-                                    <View style={styles.catHeaderCard}>
-                                        <Text style={[styles.catHeaderDot, { color: catSegment?.color ?? theme.colors.textTertiary }]}>●</Text>
+                                    <View style={styles.catHead}>
+                                        <View style={[styles.legendDot, { backgroundColor: idx >= 0 ? colorFor(idx) : theme.colors.textTertiary }]} />
                                         <View style={{ flex: 1, minWidth: 0 }}>
-                                            <Text style={styles.catHeaderName} numberOfLines={1}>{selectedCategory}</Text>
-                                            <Text style={styles.catHeaderSub}>
-                                                {catTxns.length} transaction{catTxns.length === 1 ? '' : 's'} · {(catSegment?.pct ?? 0).toFixed(0)}% of {monthLabel.charAt(0) + monthLabel.slice(1).toLowerCase()}
+                                            <Text style={styles.catName} numberOfLines={1}>{selectedCategory}</Text>
+                                            <Text style={styles.meta}>
+                                                {catTxns.length} transaction{catTxns.length === 1 ? '' : 's'} · {(catSegment?.pct ?? 0).toFixed(0)}% of {monthName}
                                             </Text>
                                         </View>
-                                        <Text style={styles.catHeaderTotal}>{formatCurrency(catSegment?.total ?? 0)}</Text>
+                                        <Text style={styles.catTotal}>{formatCurrency(catSegment?.total ?? 0)}</Text>
                                     </View>
                                     {catTxns.length === 0 ? (
-                                        <View style={styles.emptyCard}>
-                                            <Text style={styles.emptySubtitle}>No transactions found.</Text>
+                                        <Text style={styles.emptySubtitle}>No transactions found.</Text>
+                                    ) : catTxns.map((t, i) => (
+                                        <View key={`${t.date}-${i}`} style={styles.row}>
+                                            <View style={{ flex: 1, minWidth: 0 }}>
+                                                <Text style={styles.rowTitle} numberOfLines={1}>{t.description}</Text>
+                                                <Text style={styles.meta} numberOfLines={1}>{t.date}</Text>
+                                            </View>
+                                            <Text style={styles.amount}>{formatCurrency(t.cost)}</Text>
                                         </View>
-                                    ) : (
-                                        <View style={[styles.changesCard, { marginTop: 10 }]}>
-                                            {catTxns.map((t, i) => (
-                                                <View key={`${t.date}-${i}`} style={[styles.changeRow, i === catTxns.length - 1 && styles.rowLast]}>
-                                                    <View style={{ flex: 1, minWidth: 0 }}>
-                                                        <Text style={styles.changeName} numberOfLines={1}>{t.description}</Text>
-                                                        <Text style={styles.changeWhy} numberOfLines={1}>{t.date}</Text>
-                                                    </View>
-                                                    <Text style={styles.changeAmount}>{formatCurrency(t.cost)}</Text>
-                                                </View>
-                                            ))}
-                                        </View>
-                                    )}
+                                    ))}
                                 </View>
                             );
                         })()
                     ) : (
                         <>
-                            <View style={styles.card}>
-                                <SectionLabel>Where it went — {monthLabel}</SectionLabel>
-                                {(() => {
-                                    const { top, rest, restPct } = splitTopSegments(segments, 5);
-                                    const legendRows = showAllCategories ? segments : top;
-                                    return (
-                                        <View style={styles.donutRow}>
-                                            <SegmentDonut
-                                                segments={segments.map((s) => ({ key: s.category, pct: s.pct, color: s.color }))}
-                                                centerValue={`$${Math.round(total).toLocaleString('en-US')}`}
-                                            />
-                                            <View style={styles.legend}>
-                                                {legendRows.map((s) => (
-                                                    <TouchableOpacity key={s.category} style={styles.legendItem} onPress={() => setSelectedCategory(s.category)} activeOpacity={0.6}>
-                                                        <View style={[styles.legendDot, { backgroundColor: s.color }]} />
-                                                        <Text style={styles.legendText} numberOfLines={1}>{s.category}</Text>
-                                                        <Text style={styles.legendPct}>{s.pct.toFixed(0)}%</Text>
-                                                    </TouchableOpacity>
-                                                ))}
-                                                {rest.length > 0 && (
-                                                    <TouchableOpacity style={styles.legendItem} onPress={() => setShowAllCategories((v) => !v)} activeOpacity={0.6}>
-                                                        <View style={[styles.legendDot, { backgroundColor: theme.colors.textTertiary }]} />
-                                                        <Text style={styles.legendText}>{showAllCategories ? 'Show fewer' : `Others (${rest.length})`}</Text>
-                                                        {!showAllCategories && <Text style={styles.legendPct}>{restPct.toFixed(0)}%</Text>}
-                                                    </TouchableOpacity>
-                                                )}
-                                            </View>
-                                        </View>
-                                    );
-                                })()}
-                                {!groupId && groupsEnabled && (
-                                    <View style={styles.toggleRow}>
-                                        <Text style={styles.toggleLabel}>Include group shares</Text>
-                                        <Switch
-                                            value={includeGroups}
-                                            onValueChange={setIncludeGroups}
-                                            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                                            thumbColor="#fff"
-                                        />
-                                    </View>
-                                )}
+                            {/* Donut + legend — straight under the tabs, as designed. */}
+                            <View style={styles.donutBlock}>
+                                <SegmentDonut segments={donutSeries} centerValue={`$${Math.round(total).toLocaleString('en-US')}`} />
+                                <View style={styles.legend}>
+                                    {(showAllCategories ? segments : top).map((s, i) => (
+                                        <TouchableOpacity key={s.category} style={styles.legendItem} onPress={() => setSelectedCategory(s.category)} activeOpacity={0.6}>
+                                            <View style={[styles.legendDot, { backgroundColor: colorFor(i) }]} />
+                                            <Text style={styles.legendText} numberOfLines={1}>{s.category}</Text>
+                                            <Text style={styles.legendPct}>{s.pct.toFixed(0)}%</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                    {rest.length > 0 && (
+                                        <TouchableOpacity style={styles.legendItem} onPress={() => setShowAllCategories((v) => !v)} activeOpacity={0.6}>
+                                            <View style={[styles.legendDot, { backgroundColor: DONUT_OTHERS }]} />
+                                            <Text style={styles.legendText}>{showAllCategories ? 'Show fewer' : 'Others'}</Text>
+                                            {!showAllCategories && <Text style={styles.legendPct}>{restPct.toFixed(0)}%</Text>}
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
                             </View>
 
                             {groupId ? (
-                                // Whole-group total, not "my share" — change insights and the
-                                // on-pace projection are computed against personal spend, so
-                                // they don't mean anything here (mirrors web's OverviewTab).
-                                <View style={styles.section}>
-                                    <Text style={styles.sectionLabel}>{(selectedGroup?.name ?? 'GROUP').toUpperCase()}</Text>
-                                    <Text style={styles.tabIntro}>
-                                        Showing everything this group spent, across all members — not just your share. Switch back to “My spending” for change insights.
+                                <View style={styles.pad}>
+                                    <SectionLabel style={styles.labelPad}>{selectedGroup?.name ?? 'Group'}</SectionLabel>
+                                    <Text style={styles.emptySubtitle}>
+                                        Everything this group spent, across all members — not just your share. Switch Scope back to “My spending” for change insights.
                                     </Text>
                                 </View>
-                            ) : (
-                                <>
-                                    {insights.length > 0 && (
-                                        <View style={styles.section}>
-                                            <Text style={styles.sectionLabel}>WHAT CHANGED VS {prevMonthLabel.toUpperCase()}</Text>
-                                            <View style={styles.changesCard}>
-                                                {insights.slice(0, 5).map((c, i) => {
-                                                    const up = c.change_percent > 0;
-                                                    return (
-                                                        <View key={`${c.metric_name}-${i}`} style={[styles.changeRow, i === insights.slice(0, 5).length - 1 && styles.rowLast]}>
-                                                            <View style={{ flex: 1, minWidth: 0 }}>
-                                                                <Text style={styles.changeName} numberOfLines={1}>{c.metric_name}</Text>
-                                                                {!!c.entity_name && <Text style={styles.changeWhy} numberOfLines={1}>{c.entity_name}</Text>}
-                                                            </View>
-                                                            <Text style={[styles.changeDelta, { color: up ? theme.colors.warning : theme.colors.success }]}>
-                                                                {up ? '+' : '−'}{Math.abs(c.change_percent).toFixed(0)}%
-                                                            </Text>
-                                                        </View>
-                                                    );
-                                                })}
-                                            </View>
+                            ) : insights.length > 0 && (
+                                <View style={styles.pad}>
+                                    <SectionLabel style={styles.labelPad}>What changed vs {prevMonthLabel}</SectionLabel>
+                                    {insights.slice(0, 5).map((c, i) => {
+                                        const r = changeRow(c, prevMonthLabel);
+                                        const body = (
+                                            <>
+                                                <View style={{ flex: 1, minWidth: 0 }}>
+                                                    <Text style={styles.changeTitle} numberOfLines={2}>{r.title}</Text>
+                                                    {!!r.meta && <Text style={styles.meta} numberOfLines={1}>{r.meta}</Text>}
+                                                </View>
+                                                <Text style={[styles.delta, { color: toneColor(r.tone) }]}>{r.delta}</Text>
+                                            </>
+                                        );
+                                        return r.link ? (
+                                            <TouchableOpacity key={`${c.metric_name}-${i}`} style={styles.row} activeOpacity={0.6} onPress={() => openLink(r.link!)}>{body}</TouchableOpacity>
+                                        ) : (
+                                            <View key={`${c.metric_name}-${i}`} style={styles.row}>{body}</View>
+                                        );
+                                    })}
+                                </View>
+                            )}
+
+                            {/* Secondary controls live below the fold. */}
+                            {((groupsEnabled && groups.length > 0) || (tagsEnabled && !groupId)) && (
+                                <View style={[styles.pad, { marginTop: 22 }]}>
+                                    <SectionLabel style={styles.labelPad}>Scope</SectionLabel>
+                                    {groupsEnabled && groups.length > 0 && (
+                                        <SimpleSelect
+                                            label="Analyse"
+                                            value={groupId}
+                                            onChange={(v) => {
+                                                setGroupId(v);
+                                                // Tags are private to whoever applied them, so they mean nothing against a
+                                                // group-wide total — clear the filter or it would silently keep narrowing it.
+                                                if (v) setTagFilterIds([]);
+                                            }}
+                                            options={[{ label: 'My spending', value: '' }, ...groups.map((g) => ({ label: `${g.name} (whole group)`, value: g.group_id }))]}
+                                        />
+                                    )}
+                                    {tagsEnabled && !groupId && <TagFilterBar value={tagFilterIds} onChange={setTagFilterIds} />}
+                                    {!groupId && groupsEnabled && (
+                                        <View style={styles.toggleRow}>
+                                            <Text style={styles.toggleLabel}>Include group shares</Text>
+                                            <ToggleSwitch value={includeGroups} onValueChange={setIncludeGroups} accessibilityLabel="Include group shares" />
                                         </View>
                                     )}
-
-                                    <View style={styles.insightCallout}>
-                                        <Text style={{ fontSize: 15 }}>💡</Text>
-                                        <Text style={styles.insightText}>{insightLine}</Text>
-                                    </View>
-                                </>
+                                </View>
                             )}
                         </>
                     )
                 )}
 
                 {tab === 'items' && (
-                    <View style={styles.section}>
-                        <Text style={styles.tabIntro}>Line items from receipts and splits, ranked by month-to-date spend.</Text>
+                    <View style={styles.pad}>
                         {loadingItems ? (
                             <ListSkeleton count={4} />
                         ) : items.length === 0 ? (
-                            <View style={styles.emptyCard}>
-                                <Text style={styles.emptyIcon}>🛒</Text>
+                            <View style={styles.empty}>
                                 <Text style={styles.emptyTitle}>No item data yet</Text>
                                 <Text style={styles.emptySubtitle}>Scan a receipt to unlock item-level insights.</Text>
                             </View>
-                        ) : (
-                            <View style={styles.changesCard}>
-                                {items.map((it, i) => (
-                                    <View key={it.id} style={[styles.changeRow, i === items.length - 1 && styles.rowLast]}>
-                                        <View style={{ flex: 1, minWidth: 0 }}>
-                                            <Text style={styles.changeName} numberOfLines={1}>{it.item_name}</Text>
-                                            <Text style={styles.changeWhy} numberOfLines={1}>
-                                                {it.distinct_merchants_count ? `${it.distinct_merchants_count} merchant${it.distinct_merchants_count === 1 ? '' : 's'}` : 'Personal'}
-                                            </Text>
-                                        </View>
-                                        <View style={{ alignItems: 'flex-end' }}>
-                                            <Text style={styles.changeAmount}>{formatCurrency(it.total_spent)}</Text>
-                                            <Text style={styles.changeCount}>{it.transaction_count}×</Text>
-                                        </View>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
+                        ) : items.map((it) => (
+                            <TouchableOpacity key={it.item_name} style={styles.row} activeOpacity={0.6} onPress={() => navigation.navigate('ItemDetail', { itemName: it.item_name })}>
+                                <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={styles.rowTitle} numberOfLines={1}>{it.normalized_name || it.item_name}</Text>
+                                    <Text style={styles.meta} numberOfLines={1}>
+                                        {it.transaction_count} purchase{it.transaction_count === 1 ? '' : 's'}{it.distinct_merchants_count ? ` · ${it.distinct_merchants_count} merchant${it.distinct_merchants_count === 1 ? '' : 's'}` : ''}
+                                    </Text>
+                                </View>
+                                <Text style={styles.amount}>{formatCurrency(it.total_spent)}</Text>
+                                <Ionicons name="chevron-forward" size={16} color={theme.colors.textQuaternary} />
+                            </TouchableOpacity>
+                        ))}
                     </View>
                 )}
 
                 {tab === 'merchants' && (
-                    <View style={styles.section}>
-                        <Text style={styles.tabIntro}>Where your money went, by merchant — group shares included.</Text>
+                    <View style={styles.pad}>
                         {loadingMerchants ? (
                             <ListSkeleton count={4} />
                         ) : merchants.length === 0 ? (
-                            <View style={styles.emptyCard}>
-                                <Text style={styles.emptyIcon}>🏪</Text>
+                            <View style={styles.empty}>
                                 <Text style={styles.emptyTitle}>No merchant data yet</Text>
                                 <Text style={styles.emptySubtitle}>Add merchant names to your expenses to unlock this.</Text>
                             </View>
-                        ) : (
-                            <View style={styles.changesCard}>
-                                {merchants.map((m, i) => {
-                                    const pct = topMerchantSpend > 0 ? (m.total_spent / topMerchantSpend) * 100 : 0;
-                                    return (
-                                        <View key={m.id} style={[styles.merchantRow, i === merchants.length - 1 && styles.rowLast]}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <Text style={styles.changeName} numberOfLines={1}>{m.merchant_name}</Text>
-                                                <Text style={styles.changeAmount}>{formatCurrency(m.total_spent)}</Text>
-                                            </View>
-                                            <View style={styles.merchantBarRow}>
-                                                <View style={styles.merchantBarTrack}>
-                                                    <View style={[styles.merchantBarFill, { width: `${pct}%`, backgroundColor: theme.colors.primary }]} />
-                                                </View>
-                                                <Text style={styles.changeCount}>{m.transaction_count} visit{m.transaction_count === 1 ? '' : 's'}</Text>
-                                            </View>
+                        ) : merchants.map((m) => {
+                            const pct = topMerchantSpend > 0 ? (m.total_spent / topMerchantSpend) * 100 : 0;
+                            return (
+                                <TouchableOpacity key={m.merchant_name} style={styles.merchantRow} activeOpacity={0.6} onPress={() => navigation.navigate('MerchantDetail', { merchantName: m.merchant_name })}>
+                                    <View style={styles.merchantTop}>
+                                        <Text style={styles.rowTitle} numberOfLines={1}>{m.merchant_name}</Text>
+                                        <Text style={styles.amount}>{formatCurrency(m.total_spent)}</Text>
+                                        <Ionicons name="chevron-forward" size={16} color={theme.colors.textQuaternary} />
+                                    </View>
+                                    <View style={styles.merchantBarRow}>
+                                        <View style={styles.track}>
+                                            <View style={{ width: `${pct}%`, height: '100%', backgroundColor: theme.colors.primary }} />
                                         </View>
-                                    );
-                                })}
-                            </View>
-                        )}
+                                        <Text style={styles.meta}>{m.transaction_count} visit{m.transaction_count === 1 ? '' : 's'}</Text>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
                 )}
 
-                {tab === 'budgets' && budgetsEnabled && <BudgetsTabContent />}
-                {tab === 'cards' && cardCoachEnabled && <CardsTabContent />}
+                {tab === 'budgets' && budgetsEnabled && <BudgetsTabContent period={monthKey(year, month)} />}
             </ScrollView>
         </ScreenWrapper>
     );
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
-    tabsRow: { paddingHorizontal: 22, marginBottom: 6 },
-    card: {
-        marginHorizontal: 22,
-        paddingVertical: 18,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: theme.colors.borderLight,
+    tabsRow: { paddingHorizontal: 22 },
+    pad: { paddingHorizontal: 22 },
+    labelPad: { paddingTop: 18, paddingBottom: 4 },
+    donutBlock: {
+        flexDirection: 'row', alignItems: 'center', gap: 20, marginHorizontal: 22, paddingTop: 20, paddingBottom: 18,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
     },
-    cardLabel: { fontFamily: 'IBMPlexMono-Medium', fontSize: 11, letterSpacing: 1.76, color: theme.colors.textTertiary },
-    donutRow: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 14 },
     legend: { flex: 1, gap: 9 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 9 },
     legendDot: { width: 7, height: 7, borderRadius: 2 },
     legendText: { flex: 1, fontFamily: 'InstrumentSans-Medium', fontSize: 13, color: theme.colors.textSecondary },
     legendPct: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.text, fontVariant: ['tabular-nums'] },
+    row: {
+        flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 13,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
+    },
+    rowTitle: { flex: 1, fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
+    changeTitle: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14.5, lineHeight: 19, color: theme.colors.text },
+    meta: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary, marginTop: 3 },
+    delta: { fontFamily: 'InstrumentSans-Bold', fontSize: 14, fontVariant: ['tabular-nums'] },
+    amount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text, fontVariant: ['tabular-nums'] },
+    merchantRow: { paddingVertical: 13, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight },
+    merchantTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    merchantBarRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+    track: { flex: 1, height: 5, borderRadius: 999, backgroundColor: theme.colors.surfaceSecondary, overflow: 'hidden' },
+    backLink: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 16, paddingBottom: 4, alignSelf: 'flex-start' },
+    backText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.primary },
+    catHead: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight },
+    catName: { fontFamily: 'InstrumentSans-Bold', fontSize: 16, color: theme.colors.text },
+    catTotal: { fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 22, color: theme.colors.text, fontVariant: ['tabular-nums'] },
     toggleRow: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.borderLight,
-        marginTop: 14, paddingTop: 12,
-    },
-    toggleLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.textSecondary },
-    section: { marginTop: 12, marginHorizontal: 22 },
-    catBackLink: { alignSelf: 'flex-start', paddingVertical: 2 },
-    catBackText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.primary },
-    catHeaderCard: {
-        flexDirection: 'row', alignItems: 'center', gap: 12,
-        backgroundColor: theme.colors.surface,
-        borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight,
-        borderRadius: 14, padding: 16, marginTop: 8,
-    },
-    catHeaderDot: { fontSize: 14 },
-    catHeaderName: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.text },
-    catHeaderSub: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary, marginTop: 2 },
-    catHeaderTotal: { fontFamily: 'BricolageGrotesque-SemiBold', fontSize: 22, color: theme.colors.text },
-    sectionLabel: { fontFamily: 'InstrumentSans-Bold', fontSize: 11, letterSpacing: 0.8, color: theme.colors.textTertiary, marginBottom: 6 },
-    tabIntro: { fontFamily: 'InstrumentSans-Regular', fontSize: 12, color: theme.colors.textTertiary, lineHeight: 17, marginBottom: 8 },
-    changeAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
-    changeCount: { fontFamily: 'InstrumentSans-Regular', fontSize: 10.5, color: theme.colors.textTertiary, marginTop: 2 },
-    merchantRow: {
-        paddingHorizontal: 14, paddingVertical: 12,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
     },
-    merchantBarRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
-    merchantBarTrack: { flex: 1, height: 6, borderRadius: 999, backgroundColor: theme.colors.surfaceSecondary, overflow: 'hidden' },
-    merchantBarFill: { height: '100%', borderRadius: 999 },
-    changesCard: {},
-    changeRow: {
-        flexDirection: 'row', alignItems: 'center', gap: 13,
-        paddingVertical: 13,
-        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
-    },
-    rowLast: { borderBottomWidth: 0 },
-    changeName: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13.5, color: theme.colors.text },
-    changeWhy: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textTertiary, marginTop: 1 },
-    changeDelta: { fontFamily: 'InstrumentSans-Bold', fontSize: 13, flexShrink: 0 },
-    insightCallout: {
-        flexDirection: 'row', alignItems: 'center', gap: 10,
-        marginTop: 16, marginHorizontal: 22,
-        backgroundColor: withAlpha(theme.colors.primary, 0.08),
-        borderWidth: 1, borderColor: withAlpha(theme.colors.primary, 0.22),
-        borderRadius: 14, padding: 14,
-    },
-    insightText: { flex: 1, fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.textSecondary, lineHeight: 18 },
-    emptyCard: {
-        alignItems: 'center', paddingVertical: 36, marginHorizontal: 22,
-        backgroundColor: theme.colors.surface, borderRadius: 14,
-        borderWidth: StyleSheet.hairlineWidth, borderColor: theme.colors.borderLight,
-    },
-    emptyIcon: { fontSize: 40, marginBottom: 12 },
-    emptyTitle: { fontSize: 17, fontWeight: '700', color: theme.colors.text, marginBottom: 6, textAlign: 'center' },
-    emptySubtitle: { fontSize: 13.5, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 16, paddingHorizontal: 24 },
+    toggleLabel: { fontFamily: 'InstrumentSans-Medium', fontSize: 15, color: theme.colors.text },
+    empty: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 32 },
+    emptyTitle: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 17, color: theme.colors.text, marginBottom: 4, textAlign: 'center' },
+    emptySubtitle: { fontFamily: 'InstrumentSans-Regular', fontSize: 13.5, lineHeight: 19, color: theme.colors.textTertiary, textAlign: 'center' },
 });

@@ -20,8 +20,8 @@ interface Props {
  * the web app's `GroupAvatar.tsx`/`categoryColors.ts`, for a consistent palette family. */
 export function memberColor(memberId: string): string {
   const COLORS = [
-    '#9C93FF', '#00D2D3', '#7DA6FF', '#5FD9B8',
-    '#E88CD8', '#F0975E', '#6E7FE0', '#B98BC9',
+    // V2 avatar sequence — violet, cyan, amber, green, pink, deep violet (no red: red means "owes").
+    '#AEA5FF', '#00E0E0', '#FBBF24', '#4ADE80', '#EF8BC5', '#7C72E8',
   ];
   let hash = 0;
   for (let i = 0; i < memberId.length; i++) {

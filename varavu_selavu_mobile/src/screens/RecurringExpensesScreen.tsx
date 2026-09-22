@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
-    ActivityIndicator, Alert, ScrollView, RefreshControl, Platform, Switch,
+    ActivityIndicator, Alert, ScrollView, RefreshControl, Platform,
 } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { useAppTheme } from '../context/ThemeContext';
@@ -9,6 +9,7 @@ import { AppTheme } from '../theme';
 import ScreenWrapper from '../components/ScreenWrapper';
 import ScreenHeader from '../components/ScreenHeader';
 import Card from '../components/Card';
+import ToggleSwitch from '../components/ToggleSwitch';
 import { HeroSkeleton, ListSkeleton } from '../components/SkeletonLoader';
 import {
     listRecurringTemplates,
@@ -386,10 +387,10 @@ export default function RecurringExpensesScreen() {
 
                             <View style={[styles.rowFields, { alignItems: 'center', marginBottom: 16, justifyContent: 'space-between' }]}>
                                 <Text style={[styles.fieldLabel, { marginBottom: 0 }]}>Pause Template</Text>
-                                <Switch
+                                <ToggleSwitch
                                     value={form.status === 'Paused'}
                                     onValueChange={(val) => setForm((f) => ({ ...f, status: val ? 'Paused' : 'Active' }))}
-                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                    accessibilityLabel="Pause template"
                                 />
                             </View>
 
@@ -510,7 +511,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     // Modal
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
     modalContent: {
-        backgroundColor: theme.colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        backgroundColor: theme.colors.surfaceElevated, borderTopLeftRadius: 24, borderTopRightRadius: 24,
         padding: 24, paddingBottom: 40, maxHeight: '80%',
     },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

@@ -2,7 +2,7 @@
  * AddExpenseScreen.tsx — TrackSpense v3 Mobile "Quick Capture" sheet (see
  * `TrackSpense v3 Mobile.dc.html`'s `capIsEntry`/`capIsSaved` blocks). File path and the exported
  * `AddExpenseContext`/`AddExpenseProvider` shell are kept as-is — six call sites across the app
- * (`App.tsx`'s FAB, `HomeScreen`/`AnalysisScreen`/`ItemInsightsScreen`/`MerchantInsightsScreen`'s
+ * (`App.tsx`'s FAB, `HomeScreen`/`AnalysisScreen`/`ItemDetailScreen`/`MerchantDetailScreen`'s
  * empty-state CTAs, `GroupDetailScreen`'s "+ Add expense") depend on
  * `useContext(AddExpenseContext).openAddExpense` — only the internal sheet changed.
  *
@@ -25,7 +25,7 @@ import React, { useState, useRef, useCallback, createContext, useMemo } from 're
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
-  Dimensions, Pressable, Switch, Alert, Platform,
+  Dimensions, Pressable, Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -44,11 +44,16 @@ import { showToast } from '../components/Toast';
 import ScannedItemsCard, { ScannedItem } from '../components/ScannedItemsCard';
 import TypeaheadInput from '../components/TypeaheadInput';
 import CategoryPickerField from '../components/CategoryPickerField';
-import CardPickerField from '../components/cards/CardPickerField';
+import OptionSheet from '../components/OptionSheet';
+import ToggleSwitch from '../components/ToggleSwitch';
+import { listMyCards } from '../api/cards';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import { suggestMerchants } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
-import PaidBySplitSummary from '../components/PaidBySplitSummary';
+import SplitSheet, { paidByName } from '../components/SplitSheet';
+import ReceiptScanScreen from '../components/ReceiptScanScreen';
+import ReceiptItemsSheet from '../components/ReceiptItemsSheet';
+import { Assignments, buildMemberRatios, computeReceiptShares, toggleAssignee } from '../utils/receiptSplit';
 import { SplitEditorValue, computeSplitValid } from '../components/SplitEditor';
 import { computePayersValid } from '../components/PayerPicker';
 import { notifyExpenseChanged } from '../utils/expenseEvents';
@@ -63,6 +68,10 @@ function formatMMDDYYYY(d: Date): string {
 }
 
 /** "Aug 4, 2026" (year omitted when it's the current one) for the compact date row. */
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 function formatShortDate(d: Date): string {
   const includeYear = d.getFullYear() !== new Date().getFullYear();
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: includeYear ? 'numeric' : undefined });
@@ -116,6 +125,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
   // V2 keypad-first: category / merchant / card / repeat live behind a "More" chip so the default
   // path is amount → one description → Save. Split target and scanned items stay visible when set.
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // Who / Card chips each open a small option sheet.
+  const [pickerSheet, setPickerSheet] = useState<'who' | 'card' | null>(null);
   const [who, setWho] = useState('me');
   const [merchantName, setMerchantName] = useState('');
   const [mainCategory, setMainCategory] = useState('');
@@ -127,6 +138,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [recurring, setRecurring] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
   const { enabled: cardCoachEnabled } = useCardCoachEnabled();
+  const { data: myCards = [] } = useQuery({ queryKey: ['cards-mine'], queryFn: listMyCards, enabled: cardCoachEnabled });
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
@@ -134,10 +146,16 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [scannedDiscount, setScannedDiscount] = useState(0);
   const [scannedPurchasedAt, setScannedPurchasedAt] = useState<string | null>(null);
   const [scannedFingerprint, setScannedFingerprint] = useState<string | null>(null);
+  // Full-screen scanner, the itemised review sheet, and the split sheet.
+  const [scanVisible, setScanVisible] = useState(false);
+  const [itemsVisible, setItemsVisible] = useState(false);
+  const [splitVisible, setSplitVisible] = useState(false);
+  // Who each scanned line belongs to (group expenses); missing = split among everyone.
+  const [assignments, setAssignments] = useState<Assignments>({});
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
   const [payers, setPayers] = useState<PayerSummaryItem[]>([]);
   const [splitValue, setSplitValue] = useState<SplitEditorValue>({ type: 'equal', entries: [] });
-  // Tracks whether the user has explicitly saved a change out of PaidBySplitSummary's payer or
+  // Tracks whether the user has explicitly saved a change out of the split sheet's payer or
   // split picker — while false, payers/splitValue auto-track the live amount/group so the fast
   // "just me, split equally" default needs no interaction; once true, amount edits stop
   // silently rewriting a customized payer/split (see the effects below).
@@ -175,6 +193,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setScannedDiscount(0);
     setScannedPurchasedAt(null);
     setScannedFingerprint(null);
+    setScanVisible(false);
+    setItemsVisible(false);
+    setSplitVisible(false);
+    setAssignments({});
     setGroupDetail(null);
     setPayers([]);
     setSplitValue({ type: 'equal', entries: [] });
@@ -231,7 +253,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
   // Quick Capture form fields — mirrors the web app's QuickCaptureSheet onAutoParse handler.
   const applyParseResult = (res: any) => {
     const hdr = res.header || {};
-    if (hdr.amount) setAmt(String(Number(hdr.amount)));
+    if (hdr.amount) setAmt(Number(hdr.amount).toFixed(2));
     const merchant = hdr.merchant_name || hdr.merchant || '';
     const description = hdr.description || (merchant ? `Receipt from ${merchant}` : '');
     if (description) setDesc(description);
@@ -256,6 +278,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
       if (y && m && d) setExpenseDate(new Date(y, m - 1, d));
     }
     setScannedFingerprint(res.fingerprint || null);
+    setAssignments({});
     // The itemized save path only supports an equal split (member_ratios per item, no
     // percentage/exact/shares/adjustment analog) — if the user had already customized to a
     // weighted split before scanning, drop back to equal over the same participants rather
@@ -273,12 +296,16 @@ export default function AddExpenseProvider({ children }: { children: React.React
     );
   };
 
+  // Reads a receipt photo into the form. On success the scanner closes and — when line items were
+  // found — the Items review sheet opens; otherwise the filled-in capture sheet is left showing.
   const parseReceiptUri = async (uri: string) => {
     setScanning(true);
     try {
       const res = await uploadReceipt(uri, accessToken || '');
       applyParseResult(res);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setScanVisible(false);
+      if ((res.items || []).length > 0) setItemsVisible(true);
     } catch (error: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast({ message: error.message || 'Failed to parse receipt', type: 'error' });
@@ -304,14 +331,6 @@ export default function AddExpenseProvider({ children }: { children: React.React
     } catch {
       showToast({ message: 'Failed to open camera or photo library', type: 'error' });
     }
-  };
-
-  const handleScan = () => {
-    Alert.alert('Scan receipt', undefined, [
-      { text: 'Take Photo', onPress: () => pickReceipt('camera') },
-      { text: 'Choose from Library', onPress: () => pickReceipt('library') },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
   };
 
   // Same query key useQuickLogBar.ts uses for its group list — shared cache, no duplicate fetch.
@@ -377,9 +396,18 @@ export default function AddExpenseProvider({ children }: { children: React.React
 
   // Items with a blank name (a row the user cleared rather than deleted) are dropped rather
   // than sent to the itemized endpoints, which require a non-empty item_name. Hoisted out of
-  // handleSave so the split-type restriction below (PaidBySplitSummary's allowedSplitTypes)
+  // handleSave so the split-type restriction below (SplitSheet's allowedTypes)
   // can see it too.
   const itemsToSave = scannedItems.filter((it) => it.item_name.trim() !== '');
+
+  // Items-sheet inputs. `participantIds` = who the group split currently includes.
+  const participantIds = splitValue.entries.map((e) => e.member_id);
+  const itemPeople = isGroup && groupDetail
+    ? participantIds.map((id) => ({ id, name: groupDetail.members.find((m) => m.member_id === id)?.display_name ?? '?' }))
+    : [];
+  const receiptShares = computeReceiptShares(itemsToSave, assignments, participantIds, scannedTax, scannedDiscount);
+  const itemsExtras = isGroup ? receiptShares.extras : Math.round((scannedTax - scannedDiscount) * 100) / 100;
+  const itemsYourShare = isGroup && myMemberId ? (receiptShares.perMember[myMemberId] ?? 0) : numAmount;
 
   const handleSave = async () => {
     if (!capReady || !accessToken || !userEmail || loading) return;
@@ -453,20 +481,14 @@ export default function AddExpenseProvider({ children }: { children: React.React
         if (!myMember) {
           throw new Error("You don't appear to be an active member of that group.");
         }
-        // `payers`/`splitValue` reflect PaidBySplitSummary's live state — either the
+        // `payers`/`splitValue` reflect the split sheet's committed state — either the
         // auto-tracked "just me, split equally" default or the user's customization; capReady
         // already required a loaded groupDetail plus both computeXValid checks to pass before
         // Save was even enabled, so both are guaranteed populated and valid here.
         let myShare: number;
         if (itemsToSave.length > 0) {
-          // No per-item person-assignment UI here (that's ItemSplitBoard.tsx's job, reachable
-          // only from the full editor) and no whole-expense `split` concept either — split
-          // every item equally across the chosen participant subset so the line items
-          // themselves are preserved instead of silently dropped, while still letting
-          // PaidBySplitSummary's participant-subset editing apply.
-          const participantIds = splitValue.entries.map((e) => e.member_id);
-          const ratio = participantIds.length > 0 ? 1 / participantIds.length : 1;
-          const memberRatios = Object.fromEntries(participantIds.map((id) => [id, ratio]));
+          // Each line is split equally among the people it was assigned to in the Items sheet, or
+          // among every participant when nobody was.
           const items: GroupExpenseItemEntry[] = itemsToSave.map((it, idx) => ({
             line_no: idx + 1,
             item_name: it.item_name,
@@ -474,7 +496,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             quantity: it.quantity ?? null,
             unit_price: it.unit_price ?? null,
             line_total: it.line_total,
-            member_ratios: memberRatios,
+            member_ratios: buildMemberRatios(assignments[it.line_no], participantIds),
             // tax/discount are per-item fields server-side but resolve_itemized_split pools
             // and prorates them across every assigned member regardless of which item carries
             // them — attaching the header-level scan values to just the first item is
@@ -541,6 +563,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
     }
   };
 
+  React.useEffect(() => { if (stage === 'saved') setItemsVisible(false); }, [stage]);
+
   const handleAgain = () => resetForm('me');
 
   return (
@@ -576,7 +600,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
                       <View style={[styles.modeBtn, styles.modeBtnActive]}>
                         <Text style={[styles.modeBtnText, styles.modeBtnTextActive]}>Type</Text>
                       </View>
-                      <TouchableOpacity style={styles.modeBtn} onPress={handleScan} activeOpacity={0.7} disabled={scanning}>
+                      <TouchableOpacity style={styles.modeBtn} onPress={() => setScanVisible(true)} activeOpacity={0.7} disabled={scanning}>
                         {scanning ? (
                           <ActivityIndicator size="small" color={theme.colors.textSecondary} />
                         ) : (
@@ -617,16 +641,108 @@ export default function AddExpenseProvider({ children }: { children: React.React
                       onPress={() => setDetailsOpen(true)}
                     />
                     <Chip
-                      label={formatShortDate(expenseDate)}
+                      label={isSameDay(expenseDate, new Date()) ? 'Today' : formatShortDate(expenseDate)}
                       style={styles.captureChip}
                       onPress={() => setShowDatePicker(true)}
                     />
+                    {groupsEnabled && myGroups.length > 0 && (
+                      <Chip
+                        label={who === 'me' ? 'Just me' : (selectedGroup?.name ?? 'Just me')}
+                        variant={who === 'me' ? 'outline' : 'accent'}
+                        style={styles.captureChip}
+                        onPress={() => setPickerSheet('who')}
+                      />
+                    )}
+                    {isGroup && groupDetail && (
+                      <Chip
+                        label={`${paidByName(payers, groupDetail.members, myMemberId)} paid · ${splitValue.type === 'equal' ? 'Equal' : 'Custom'}`}
+                        variant={customized ? 'accent' : 'outline'}
+                        style={styles.captureChip}
+                        onPress={() => setSplitVisible(true)}
+                      />
+                    )}
+                    {scannedItems.length > 0 && (
+                      <Chip
+                        label={`${scannedItems.length} item${scannedItems.length === 1 ? '' : 's'}`}
+                        variant="accent"
+                        style={styles.captureChip}
+                        onPress={() => setItemsVisible(true)}
+                      />
+                    )}
+                    {cardCoachEnabled && myCards.length > 0 && (
+                      <Chip
+                        label={myCards.find((c) => c.card_id === cardId)?.card_name ?? 'Card'}
+                        variant={cardId ? 'accent' : 'outline'}
+                        style={styles.captureChip}
+                        onPress={() => setPickerSheet('card')}
+                      />
+                    )}
                     <Chip
                       label={detailsOpen ? 'Less' : 'More'}
                       style={styles.captureChip}
                       onPress={() => setDetailsOpen((v) => !v)}
                     />
                   </ScrollView>
+                  <SplitSheet
+                    visible={splitVisible}
+                    onClose={() => setSplitVisible(false)}
+                    amount={numAmount}
+                    members={groupDetail?.members ?? []}
+                    myMemberId={myMemberId}
+                    payers={payers}
+                    splitValue={splitValue}
+                    allowedTypes={itemsToSave.length > 0 ? ['equal'] : undefined}
+                    onDone={(nextPayers, nextSplit) => {
+                      setPayers(nextPayers);
+                      setSplitValue(nextSplit);
+                      setCustomized(true);
+                      setSplitVisible(false);
+                    }}
+                  />
+                  <ReceiptScanScreen
+                    visible={scanVisible}
+                    busy={scanning}
+                    onClose={() => setScanVisible(false)}
+                    onShutter={() => pickReceipt('camera')}
+                    onLibrary={() => pickReceipt('library')}
+                  />
+                  <ReceiptItemsSheet
+                    visible={itemsVisible}
+                    onClose={() => setItemsVisible(false)}
+                    merchant={merchantName}
+                    items={itemsToSave}
+                    people={itemPeople}
+                    assignments={assignments}
+                    onToggle={(lineNo, personId) => setAssignments((a) => toggleAssignee(a, lineNo, personId))}
+                    extras={itemsExtras}
+                    yourShare={itemsYourShare}
+                    saving={loading}
+                    canSave={capReady}
+                    onSave={handleSave}
+                    onEditItems={() => setItemsVisible(false)}
+                  />
+                  <OptionSheet
+                    visible={pickerSheet === 'who'}
+                    title="Who was this for?"
+                    options={[
+                      { value: 'me', label: 'Just me' },
+                      ...myGroups.map((g) => ({ value: g.group_id, label: `${GROUP_TYPE_EMOJI[g.group_type] ?? '👥'} ${g.name}`, hint: 'Split equally' })),
+                    ]}
+                    selected={who}
+                    onSelect={(v) => { setWho(v); setPickerSheet(null); }}
+                    onClose={() => setPickerSheet(null)}
+                  />
+                  <OptionSheet
+                    visible={pickerSheet === 'card'}
+                    title="Card used"
+                    options={[
+                      { value: '', label: 'Default card' },
+                      ...myCards.map((c) => ({ value: c.card_id, label: c.card_name, hint: c.issuer })),
+                    ]}
+                    selected={cardId ?? ''}
+                    onSelect={(v) => { setCardId(v || null); setPickerSheet(null); }}
+                    onClose={() => setPickerSheet(null)}
+                  />
                   {showDatePicker && (
                     Platform.OS === 'ios' ? (
                       <Modal transparent animationType="slide" visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
@@ -663,34 +779,6 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     )
                   )}
 
-                  {groupsEnabled && myGroups.length > 0 && (
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.whoRow}
-                    >
-                      <TouchableOpacity
-                        style={[styles.whoChip, who === 'me' && styles.whoChipActive]}
-                        onPress={() => setWho('me')}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.whoChipText, who === 'me' && styles.whoChipTextActive]}>Just me</Text>
-                      </TouchableOpacity>
-                      {myGroups.map((g) => (
-                        <TouchableOpacity
-                          key={g.group_id}
-                          style={[styles.whoChip, who === g.group_id && styles.whoChipActive]}
-                          onPress={() => setWho(g.group_id)}
-                          activeOpacity={0.7}
-                        >
-                          <Text style={[styles.whoChipText, who === g.group_id && styles.whoChipTextActive]}>
-                            {GROUP_TYPE_EMOJI[g.group_type] ?? '👥'} {g.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  )}
-
                   {scannedItems.length > 0 && (
                     <ScannedItemsCard
                       theme={theme}
@@ -701,22 +789,6 @@ export default function AddExpenseProvider({ children }: { children: React.React
                       discount={scannedDiscount}
                       currentAmount={numAmount}
                     />
-                  )}
-
-                  {isGroup && selectedGroup && groupDetail && (
-                    <View style={styles.splitPreview}>
-                      <PaidBySplitSummary
-                        amount={numAmount}
-                        members={groupDetail.members}
-                        myMemberId={myMemberId}
-                        payers={payers}
-                        onPayersChange={setPayers}
-                        splitValue={splitValue}
-                        onSplitChange={setSplitValue}
-                        allowedSplitTypes={itemsToSave.length > 0 ? ['equal'] : undefined}
-                        onCustomized={() => setCustomized(true)}
-                      />
-                    </View>
                   )}
 
                   {detailsOpen && (
@@ -747,16 +819,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
                         containerStyle={styles.categoryFieldWrap}
                       />
 
-                      <CardPickerField value={cardId} onChange={setCardId} />
-
                       <View style={styles.recurringRow}>
                         <Text style={styles.recurringRowText}>🔁 Repeat monthly on the {ordinal(new Date().getDate())}</Text>
-                        <Switch
-                          value={recurring}
-                          onValueChange={setRecurring}
-                          trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                          thumbColor="#fff"
-                        />
+                        <ToggleSwitch value={recurring} onValueChange={setRecurring} accessibilityLabel="Repeat monthly" />
                       </View>
                     </>
                   )}
@@ -860,7 +925,7 @@ const createStyles = (theme: AppTheme) =>
     captureChip: { height: 34, borderRadius: 11 },
 
     datePickerBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: theme.colors.overlay },
-    datePickerSheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 16 },
+    datePickerSheet: { backgroundColor: theme.colors.surfaceElevated, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 16 },
     datePickerHeader: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingTop: 12 },
     datePickerDone: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 14, color: theme.colors.primary },
 
@@ -872,20 +937,6 @@ const createStyles = (theme: AppTheme) =>
     },
 
     categoryFieldWrap: { marginTop: 8 },
-
-    whoRow: { gap: 6, marginTop: 10, paddingRight: 4 },
-    whoChip: {
-      paddingHorizontal: 13, paddingVertical: 9, borderRadius: 999,
-      borderWidth: 1, borderColor: theme.colors.borderLight, backgroundColor: theme.colors.surface,
-    },
-    whoChipActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
-    whoChipText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.text },
-    whoChipTextActive: { color: theme.colors.textInverse },
-
-    splitPreview: {
-      marginTop: 8, borderWidth: 1, borderColor: theme.colors.borderLight, borderRadius: 10,
-      paddingHorizontal: 12, paddingVertical: 9,
-    },
 
     recurringRow: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

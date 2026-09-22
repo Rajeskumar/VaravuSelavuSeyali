@@ -8,9 +8,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
 import {
   ActivityIndicator, View, Text, TouchableOpacity, StyleSheet,
-  Platform, SafeAreaView
+  SafeAreaView
 } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   useFonts,
@@ -25,6 +25,7 @@ import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from '@expo-google-font
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import TabBarIcon from './src/components/TabBarIcon';
 import * as Haptics from 'expo-haptics';
 
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -42,13 +43,15 @@ import AIAnalystScreen from './src/screens/AIAnalystScreen';
 import RecurringExpensesScreen from './src/screens/RecurringExpensesScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import FeedbackScreen from './src/screens/FeedbackScreen';
-import ItemInsightsScreen from './src/screens/ItemInsightsScreen';
-import MerchantInsightsScreen from './src/screens/MerchantInsightsScreen';
+import ItemDetailScreen from './src/screens/ItemDetailScreen';
+import MerchantDetailScreen from './src/screens/MerchantDetailScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import GroupsScreen from './src/screens/GroupsScreen';
 import GroupDetailScreen from './src/screens/GroupDetailScreen';
 import JoinGroupScreen from './src/screens/JoinGroupScreen';
 import ActivityScreen from './src/screens/ActivityScreen';
+import CardsScreen from './src/screens/CardsScreen';
+import TagsScreen from './src/screens/TagsScreen';
 
 import AddExpenseProvider, { AddExpenseContext } from './src/screens/AddExpenseScreen';
 import { extractGroupIdFromNotificationData } from './src/notifications';
@@ -85,12 +88,12 @@ function AuthStack() {
   );
 }
 
-// V2 nav: Home, Spend, Groups, Insights, Ask. Route names are unchanged (deep links, `navigate()`
+// V2 nav: Home, Expenses, Groups, Insights, Ask. Route names are unchanged (deep links, `navigate()`
 // calls and notification handlers all key off them) — only the labels the user sees are new.
 // Tab screens render their own 28px titles (ScreenHeader), so the native header is off.
 const TAB_LABELS: Record<string, string> = {
   Dashboard: 'Home',
-  Expenses: 'Spend',
+  Expenses: 'Expenses',
   GroupsTab: 'Groups',
   Analysis: 'Insights',
   'AI Analyst': 'Ask',
@@ -103,6 +106,7 @@ function MainTabs() {
   const tabStyles = React.useMemo(() => createTabStyles(theme), [theme]);
   const { openAddExpense } = useContext(AddExpenseContext);
   const [activeTab, setActiveTab] = useState('Dashboard');
+  const insets = useSafeAreaInsets();
 
   return (
     <>
@@ -116,26 +120,25 @@ function MainTabs() {
         })}
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarIcon: ({ focused, color, size }) => {
-            let iconName = '';
-            if (route.name === 'Dashboard') iconName = focused ? 'home' : 'home-outline';
-            else if (route.name === 'Expenses') iconName = focused ? 'wallet' : 'wallet-outline';
-            else if (route.name === 'GroupsTab') iconName = focused ? 'people' : 'people-outline';
-            else if (route.name === 'Analysis') iconName = focused ? 'pie-chart' : 'pie-chart-outline';
-            else if (route.name === 'AI Analyst') iconName = focused ? 'sparkles' : 'sparkles-outline';
-            return <Ionicons name={iconName as any} size={size} color={color} />;
-          },
+          tabBarIcon: ({ color }) => <TabBarIcon name={route.name} color={color} />,
           tabBarLabel: TAB_LABELS[route.name] ?? route.name,
           tabBarLabelStyle: tabStyles.tabLabel,
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.textTertiary,
+          // 84px total with the home-indicator inset folded in, 12px above the icons, 6px between
+          // icon and label — the design's tab bar geometry.
           tabBarStyle: {
             position: 'absolute',
+            height: 62 + insets.bottom,
+            paddingTop: 12,
+            paddingBottom: Math.max(insets.bottom, 8),
             borderTopWidth: StyleSheet.hairlineWidth,
             borderTopColor: theme.colors.borderLight,
             elevation: 0,
             backgroundColor: 'transparent',
           },
+          tabBarItemStyle: { paddingVertical: 0 },
+          tabBarIconStyle: { marginBottom: 2 },
           tabBarBackground: () => (
             <BlurView tint={isDark ? 'dark' : 'light'} intensity={80} style={StyleSheet.absoluteFill} />
           ),
@@ -168,14 +171,14 @@ function MainTabs() {
 }
 
 const createTabStyles = (theme: AppTheme) => StyleSheet.create({
-  tabLabel: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 10 },
+  tabLabel: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 10, letterSpacing: 0.1 },
   // Outer wrapper carries position + the CerebroOS glow shadow (theme.shadows.fab); the inner
   // gradient fill (LinearGradient, App() render) can't carry shadowColor itself on Android
   // (elevation ignores it), but keeping the split means iOS still gets the true glow.
   fabShadow: {
     position: 'absolute',
     right: 22,
-    bottom: Platform.OS === 'ios' ? 98 : 80, // Above the tab bar
+    bottom: 98, // Above the 84px tab bar
     width: 54,
     height: 54,
     borderRadius: 27,
@@ -220,8 +223,10 @@ function AppShell() {
         <Stack.Screen name="Activity"         component={ActivityScreen} />
         <Stack.Screen name="Profile"          component={ProfileScreen} />
         <Stack.Screen name="Recurring"        component={RecurringExpensesScreen} />
-        <Stack.Screen name="ItemInsights"     component={ItemInsightsScreen} />
-        <Stack.Screen name="MerchantInsights" component={MerchantInsightsScreen} />
+        <Stack.Screen name="ItemDetail"       component={ItemDetailScreen} />
+        <Stack.Screen name="MerchantDetail"   component={MerchantDetailScreen} />
+        <Stack.Screen name="Cards"            component={CardsScreen} />
+        <Stack.Screen name="Tags"             component={TagsScreen} />
         <Stack.Screen name="About"            component={AboutScreen} />
         <Stack.Screen name="Feedback"         component={FeedbackScreen} />
         {/* ── Groups (TS-GRP-109) ── */}

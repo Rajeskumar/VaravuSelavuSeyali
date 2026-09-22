@@ -12,6 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { getAnalysis } from '../api/analysis';
+import { getProfile } from '../api/profile';
+import { firstNameOf, initialOf } from '../utils/identity';
 import { checkGroupsEnabled, listAllMyGroupExpenses } from '../api/groups';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, directionalColor, withAlpha, inkOnPastel } from '../theme';
@@ -50,6 +52,8 @@ export default function HomeScreen() {
   const now = useMemo(() => new Date(), []);
   const [refreshing, setRefreshing] = useState(false);
   const { openAddExpense } = useContext(AddExpenseContext);
+  // Same key the Account screen would use; the greeting falls back to the email until it lands.
+  const { data: profile } = useQuery({ queryKey: ['profile'], queryFn: getProfile, enabled: !!accessToken, staleTime: 5 * 60_000 });
 
   const { data: monthlyData, isLoading: loading } = useQuery({
     queryKey: ['analysis', userEmail, now.getFullYear(), now.getMonth() + 1, 'combined'],
@@ -112,7 +116,7 @@ export default function HomeScreen() {
 
   const [whole, cents] = formatCurrency(total).split('.');
   const dateEyebrow = `${now.toLocaleString('en-US', { weekday: 'long' })} · ${now.getDate()} ${now.toLocaleString('en-US', { month: 'short' })}`;
-  const firstName = userEmail?.split('@')[0] || 'there';
+  const firstName = firstNameOf(profile?.name, userEmail);
 
   return (
     <LinearGradient colors={theme.gradients.surface} style={styles.root}>
@@ -127,7 +131,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <TouchableOpacity activeOpacity={0.75} onPress={() => navigation.navigate('Profile')} accessibilityRole="button" accessibilityLabel="Account">
             <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.avatar}>
-              <Text style={styles.avatarText}>{userEmail?.charAt(0).toUpperCase() || '?'}</Text>
+              <Text style={styles.avatarText}>{initialOf(profile?.name, userEmail)}</Text>
             </LinearGradient>
           </TouchableOpacity>
           <View style={{ flex: 1, minWidth: 0 }}>

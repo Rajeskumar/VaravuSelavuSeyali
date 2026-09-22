@@ -4,9 +4,10 @@
  * 'equal' — member_ratios per line item has no percentage/exact/shares/adjustment analog).
  */
 import React from 'react';
-import { View, Text, StyleSheet, Switch, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
-import { AppTheme } from '../theme';
+import { AppTheme, inkOnPastel } from '../theme';
 import { MemberDTO } from '../api/groups';
 import { memberColor } from './BalanceRow';
 
@@ -114,7 +115,7 @@ export function previewAdjustmentSplit(entries: SplitEntry[], amount: number): n
 
 /**
  * Pure validity check, usable without mounting the component — lets a parent (e.g. the new
- * PaidBySplitSummary.tsx) gate its own Save button on the currently-staged split. At least as
+ * SplitSheet.tsx) gate its own Save button on the currently-staged split. At least as
  * strict as the component's own inline isValid computation below (which this mirrors), plus a
  * participant-count requirement for equal/shares/adjustment that the inline version leaves to
  * a separate, non-blocking "Select at least one member" warning (matches the web app's
@@ -149,11 +150,11 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
   const allTypes: SplitType[] = allowedTypes || ['equal', 'exact', 'percentage', 'shares', 'adjustment'];
 
   const typeLabels: Record<SplitType, string> = {
-    equal: '=',
-    exact: '$',
-    percentage: '%',
+    equal: 'Equal',
+    exact: 'Exact',
+    percentage: 'Percent',
     shares: 'Shares',
-    adjustment: '+/-',
+    adjustment: 'Adjust',
   };
 
   const setType = (newType: SplitType) => {
@@ -225,22 +226,31 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
     }
   }
 
+  // Whatever the current preview doesn't account for (exact amounts still to allocate, or a
+  // percentage/shares total that doesn't reconcile) — the "$X left" figure under the rows.
+  const allocated = Math.round(preview.reduce((acc, n) => acc + n, 0) * 100) / 100;
+  const left = Math.round((totalAmount - allocated) * 100) / 100;
+  const balanced = Math.abs(left) < 0.005;
+
   return (
     <View style={styles.container}>
       {allTypes.length > 1 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeSelector}>
+        <View style={styles.typeSelector}>
           {allTypes.map((t) => (
             <TouchableOpacity
               key={t}
               style={[styles.typeBtn, value.type === t && styles.typeBtnActive]}
               onPress={() => setType(t)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityState={{ selected: value.type === t }}
             >
-              <Text style={[styles.typeBtnText, value.type === t && styles.typeBtnTextActive]}>
+              <Text style={[styles.typeBtnText, value.type === t && styles.typeBtnTextActive]} numberOfLines={1}>
                 {typeLabels[t] || t}
               </Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       )}
       {activeMembers.map((member) => {
         const isSelected = selectedIds.has(member.member_id);
@@ -249,41 +259,51 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
         const memberPreview = entryIndex >= 0 ? preview[entryIndex] : 0;
 
         return (
-          <View key={member.member_id} style={[styles.row, !isSelected && styles.rowDisabled]}>
-            <Switch
-              value={isSelected}
-              onValueChange={(v) => toggleMember(member.member_id, v)}
-              trackColor={{ false: theme.colors.borderLight, true: theme.colors.primary }}
-              thumbColor="#fff"
-              style={{ marginRight: 12, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-            />
+          <View key={member.member_id} style={styles.row}>
             <View style={[styles.avatarBox, { backgroundColor: memberColor(member.member_id) }]}>
               <Text style={styles.avatarText}>
                 {member.display_name.charAt(0).toUpperCase()}
               </Text>
             </View>
-            <Text style={styles.memberName} numberOfLines={1}>
+            <Text style={[styles.memberName, !isSelected && styles.dim]} numberOfLines={1}>
               {member.display_name}
             </Text>
-            
-            <View style={styles.rightContent}>
-              {isSelected && value.type !== 'equal' && (
-                <TextInput
-                  style={styles.numberInput}
-                  keyboardType="numeric"
-                  value={entry?.value?.toString() ?? ''}
-                  onChangeText={(text) => updateEntryValue(member.member_id, text)}
-                  placeholder="0"
-                  placeholderTextColor={theme.colors.textQuaternary}
-                />
-              )}
-              {isSelected && totalAmount > 0 && (
-                <Text style={styles.shareAmount}>${memberPreview.toFixed(2)}</Text>
-              )}
-            </View>
+
+            {isSelected && value.type !== 'equal' && (
+              <TextInput
+                style={styles.numberInput}
+                keyboardType="numeric"
+                value={entry?.value?.toString() ?? ''}
+                onChangeText={(text) => updateEntryValue(member.member_id, text)}
+                placeholder="0"
+                placeholderTextColor={theme.colors.textQuaternary}
+                selectTextOnFocus
+              />
+            )}
+            {isSelected && totalAmount > 0 && (
+              <Text style={styles.shareAmount}>${memberPreview.toFixed(2)}</Text>
+            )}
+            <TouchableOpacity
+              onPress={() => toggleMember(member.member_id, !isSelected)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSelected }}
+              accessibilityLabel={`Include ${member.display_name}`}
+              style={[styles.check, isSelected ? styles.checkOn : styles.checkOff]}
+            >
+              {isSelected && <Ionicons name="checkmark" size={14} color={inkOnPastel} />}
+            </TouchableOpacity>
           </View>
         );
       })}
+      {selectedMembers.length > 0 && totalAmount > 0 && (
+        <View style={styles.footerRow}>
+          <Text style={styles.footerText}>Rounding cents are balanced automatically</Text>
+          <Text style={[styles.footerLeft, { color: balanced ? theme.colors.success : theme.colors.error }]}>
+            {balanced ? '$0.00' : `${left < 0 ? '−' : ''}$${Math.abs(left).toFixed(2)}`} left
+          </Text>
+        </View>
+      )}
       {!isValid && (
         <Text style={styles.warning}>{validationMessage}</Text>
       )}
@@ -296,89 +316,39 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
 
 const createStyles = (theme: AppTheme) =>
   StyleSheet.create({
-    container: { marginTop: 8 },
-    label: {
-      fontFamily: 'InstrumentSans-SemiBold',
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-      marginBottom: 8,
-    },
+    container: { marginTop: 4 },
+    // V2 segmented control: hairline-filled track, the active option is the light "ink" pill.
     typeSelector: {
-      flexDirection: 'row',
-      marginBottom: 12,
-      gap: 8,
+      flexDirection: 'row', gap: 4, padding: 3, marginBottom: 6,
+      borderRadius: 12, backgroundColor: theme.colors.surfaceSecondary,
     },
-    typeBtn: {
-      paddingHorizontal: 16,
-      paddingVertical: 8,
-      borderRadius: 16,
-      backgroundColor: theme.colors.surfaceSecondary,
-    },
-    typeBtnActive: {
-      backgroundColor: theme.colors.primary,
-    },
-    typeBtnText: {
-      fontFamily: 'InstrumentSans-Medium',
-      fontSize: 14,
-      color: theme.colors.textSecondary,
-    },
-    typeBtnTextActive: {
-      color: theme.colors.textInverse,
-    },
+    typeBtn: { flex: 1, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+    typeBtnActive: { backgroundColor: theme.colors.text },
+    typeBtnText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, color: theme.colors.textSecondary },
+    typeBtnTextActive: { fontFamily: 'InstrumentSans-Bold', color: theme.colors.background },
     row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 8,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.borderLight,
+      flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.colors.borderLight,
     },
-    rowDisabled: {
-      opacity: 0.5,
-    },
-    avatarBox: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginRight: 10,
-    },
-    avatarText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 14 },
-    memberName: {
-      flex: 1,
-      fontFamily: 'InstrumentSans-Regular',
-      fontSize: 15,
-      color: theme.colors.text,
-    },
-    rightContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
+    avatarBox: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+    // memberColor() is a fixed pastel palette in both modes — ink text always.
+    avatarText: { color: inkOnPastel, fontFamily: 'InstrumentSans-Bold', fontSize: 13 },
+    memberName: { flex: 1, fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
+    dim: { color: theme.colors.textTertiary },
     numberInput: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: 6,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      width: 60,
-      textAlign: 'center',
-      marginRight: 12,
-      fontFamily: 'InstrumentSans-Medium',
-      fontSize: 14,
-      color: theme.colors.text,
+      borderWidth: 1, borderColor: theme.colors.border, borderRadius: 9,
+      paddingHorizontal: 8, paddingVertical: 5, width: 62, textAlign: 'center',
+      fontFamily: 'InstrumentSans-Medium', fontSize: 14, color: theme.colors.text,
     },
     shareAmount: {
-      fontFamily: 'InstrumentSans-SemiBold',
-      fontSize: 14,
-      color: theme.colors.primary,
-      minWidth: 60,
-      textAlign: 'right',
+      fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.text,
+      minWidth: 58, textAlign: 'right', fontVariant: ['tabular-nums'],
     },
-    warning: {
-      fontFamily: 'InstrumentSans-Regular',
-      fontSize: 13,
-      color: theme.colors.error,
-      marginTop: 8,
-    },
+    check: { width: 22, height: 22, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+    checkOn: { backgroundColor: theme.colors.success },
+    checkOff: { borderWidth: 1.5, borderColor: theme.colors.border },
+    footerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12 },
+    footerText: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textTertiary, flex: 1 },
+    footerLeft: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 13, fontVariant: ['tabular-nums'] },
+    warning: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.error, marginTop: 8 },
   });
