@@ -43,7 +43,8 @@ import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
 import { onExpenseChanged } from '../utils/expenseEvents';
-import { shortDate, ordinal, nextRecurringOccurrence } from '../utils/expenseInsights';
+import { ordinal, nextRecurringOccurrence } from '../utils/expenseInsights';
+import { groupRowsByDay } from '../utils/dayGroups';
 import { matchesSpendFilters, SpendScope } from '../utils/spendFilters';
 
 /** Mock's `r.ran`/"Logged today" pill — derived from `last_processed_iso` (persists across
@@ -359,8 +360,8 @@ export default function ExpensesScreen() {
             date: e.date,
             desc: e.description,
             meta: (e.tags || []).length > 0
-                ? `${shortDate(e.date)} · ${e.category} · ${e.tags!.map((t) => t.name).join(', ')}`
-                : `${shortDate(e.date)} · ${e.category}`,
+                ? `${e.category} · ${e.tags!.map((t) => t.name).join(', ')}`
+                : e.category,
             amount: e.cost,
             category: e.category,
             onPress: () => setDetailExpense(e),
@@ -374,8 +375,8 @@ export default function ExpensesScreen() {
             date: e.date,
             desc: e.description,
             meta: (e.tags || []).length > 0
-                ? `${shortDate(e.date)} · ${e.group_name} · your share · ${e.tags!.map((t) => t.name).join(', ')}`
-                : `${shortDate(e.date)} · ${e.group_name} · your share`,
+                ? `${e.group_name} · your share · ${e.tags!.map((t) => t.name).join(', ')}`
+                : `${e.group_name} · your share`,
             amount: e.my_share,
             category: e.category,
             onPress: () => navigation.navigate('GroupDetail', { groupId: e.group_id }),
@@ -392,6 +393,9 @@ export default function ExpensesScreen() {
         [allFeedRows, searchQuery, monthFilter, categoryFilter, scopeFilter],
     );
     const visibleTotal = useMemo(() => visibleRows.reduce((sum, r) => sum + r.amount, 0), [visibleRows]);
+    // TS-DES-102 parity with web's ExpenseFeed.tsx — Today/Yesterday/"Sep 20" sections,
+    // each with its own subtotal, instead of one flat list that's hard to scan by date.
+    const dayGroups = useMemo(() => groupRowsByDay(visibleRows), [visibleRows]);
     const currentMonthKey = useMemo(() => {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -549,15 +553,23 @@ export default function ExpensesScreen() {
                             </Text>
                         </View>
                     ) : (
-                        visibleRows.map((row) => (
-                            <ListRow
-                                key={row.key}
-                                category={row.category}
-                                title={row.desc}
-                                meta={row.meta}
-                                amount={formatCurrency(row.amount)}
-                                onPress={row.onPress}
-                            />
+                        dayGroups.map((group) => (
+                            <View key={group.dateKey}>
+                                <View style={styles.daySectionHeader}>
+                                    <SectionLabel>{group.label}</SectionLabel>
+                                    <Text style={styles.daySectionSubtotal}>{formatCurrency(group.subtotal)}</Text>
+                                </View>
+                                {group.items.map((row) => (
+                                    <ListRow
+                                        key={row.key}
+                                        category={row.category}
+                                        title={row.desc}
+                                        meta={row.meta}
+                                        amount={formatCurrency(row.amount)}
+                                        onPress={row.onPress}
+                                    />
+                                ))}
+                            </View>
                         ))
                     )
                 ) : loadingRecurring ? (
@@ -935,6 +947,11 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
     },
     gutter: { paddingHorizontal: 22 },
     subtotal: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingTop: 4, paddingBottom: 6 },
+    daySectionHeader: {
+        flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+        paddingTop: 18, paddingBottom: 6,
+    },
+    daySectionSubtotal: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.textTertiary, fontVariant: ['tabular-nums'] },
     subtotalAmount: { fontFamily: 'InstrumentSans-Bold', fontSize: 15, color: theme.colors.text, fontVariant: ['tabular-nums'] },
     dueCard: {
         borderWidth: 1, borderColor: withAlpha(theme.colors.secondary, 0.25), backgroundColor: withAlpha(theme.colors.secondary, 0.07),
