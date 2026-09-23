@@ -30,6 +30,15 @@ export interface RefreshRequest {
   refresh_token: string;
 }
 
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  password: string;
+}
+
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
   console.log(`Logging in to ${API_BASE_URL}...`);
   const params = new URLSearchParams();
@@ -84,6 +93,46 @@ export async function logout(refresh_token: string): Promise<void> {
     body: JSON.stringify({ refresh_token }),
     credentials: 'omit',
   });
+}
+
+/**
+ * Requests a password-reset email. Always resolves — the backend reports success whether or
+ * not the address is registered (an "email not found" response would let a caller enumerate
+ * accounts), so there is deliberately no way to distinguish the two from here either.
+ */
+export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    credentials: 'omit',
+  });
+  if (!response.ok) {
+    throw new Error('Something went wrong. Please try again.');
+  }
+}
+
+/**
+ * Redeems a password-reset token (from the emailed link) and sets a new password. The backend
+ * rejects an unknown, already-used, wrong-purpose, or expired (1 hour) token with the same
+ * generic 400 either way, so this surfaces its `detail` message as-is rather than guessing
+ * which case applies.
+ */
+export async function resetPassword(payload: ResetPasswordPayload): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/reset-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    credentials: 'omit',
+  });
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error((errData as any).detail || 'Failed to reset password');
+  }
 }
 
 export async function refresh(refresh_token: string): Promise<LoginResponse> {

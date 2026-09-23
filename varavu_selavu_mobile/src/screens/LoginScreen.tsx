@@ -80,6 +80,9 @@ export default function LoginScreen() {
             onSubmitEditing={handleLogin}
             returnKeyType="go"
           />
+          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotLink}>
+            <Text style={styles.forgotLinkText}>Forgot password?</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity activeOpacity={0.85} onPress={handleLogin} disabled={loading} accessibilityRole="button">
             <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.cta, loading && { opacity: 0.7 }]}>
@@ -122,6 +125,8 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     color: theme.colors.textSecondary, marginTop: 16, maxWidth: 290,
   },
   form: { marginTop: 'auto', paddingTop: 36, gap: 12 },
+  forgotLink: { alignSelf: 'flex-end', paddingVertical: 2 },
+  forgotLinkText: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 13.5, color: theme.colors.primary },
   cta: { height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', ...theme.shadows.fab },
   ctaText: { fontFamily: theme.typography.fontFamily.bold, fontSize: 17, color: inkOnPastel },
   footer: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
