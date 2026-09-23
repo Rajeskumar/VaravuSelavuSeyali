@@ -2,7 +2,9 @@
  * GroupDetailScreen.tsx — Two-tab screen for a single group.
  *
  * Tab 1 (Expenses): list of group expenses, each showing the user's share.
- * Tab 2 (Balances): BalanceRow list + "Settle Up" button.
+ * Tab 2 (Balances): BalanceRow list — tap a row to settle with that member. No separate
+ * "Settle Up" button here; the header's own "Settle up" (above the tabs) already covers the
+ * general case, a second one on this tab was redundant.
  *
  * Scope note (TS-GRP-109): Stats and Activity tabs are listed in §12.2 as
  * optional for Phase 1 — omitted here, to be added in a follow-up.
@@ -417,7 +419,7 @@ export default function GroupDetailScreen() {
             data={balances}
             keyExtractor={(item) => item.member_id}
             renderItem={renderBalance}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
             refreshControl={<RefreshControl refreshing={balancesRefetching} onRefresh={refetchBalances} tintColor={theme.colors.primary} />}
             ListHeaderComponent={() => (
               <View style={{ marginBottom: 16 }}>
@@ -447,21 +449,6 @@ export default function GroupDetailScreen() {
               </View>
             )}
           />
-          {/* Settle Up FAB */}
-          {!isArchived && (
-            <TouchableOpacity
-              style={[styles.settleBtn, { bottom: insets.bottom + 16 }]}
-              onPress={() => {
-                setSettleTransfers(null);
-                setSettleFrom(null);
-                setSettleTo(null);
-                setSettleSuggested(0);
-                setSettleUpVisible(true);
-              }}
-            >
-              <Text style={styles.settleBtnText}>Settle Up</Text>
-            </TouchableOpacity>
-          )}
         </View>
       )}
 
@@ -655,14 +642,6 @@ const createStyles = (theme: AppTheme) =>
       fontSize: 14,
       color: theme.colors.text,
     },
-    settleBtn: {
-      position: 'absolute',
-      backgroundColor: theme.colors.primary,
-      paddingVertical: 14,
-      borderRadius: 14,
-      alignItems: 'center',
-    },
-    settleBtnText: { color: theme.colors.textInverse, fontFamily: 'InstrumentSans-Bold', fontSize: 16 },
     modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
     inviteSheet: {
       backgroundColor: theme.colors.background,
