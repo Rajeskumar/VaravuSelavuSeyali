@@ -94,6 +94,12 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
+      # PUBLIC_APP_URL was never set here (or on the service directly), so every deploy has been
+      # silently falling back to Settings' local-dev default (http://localhost:3000) — the actual
+      # link mailed in password-reset, email-verification and group-invite emails. --update-env-vars
+      # only touches this one key; every other env var configured on the service (MAIL_*, secrets,
+      # etc.) is left exactly as Cloud Run already carries it forward on a redeploy.
+      - '--update-env-vars=PUBLIC_APP_URL=${_PUBLIC_APP_URL}'
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -105,3 +111,4 @@ substitutions:
   _PROJECT_ID: 'gold-circlet-424313-r7'
   _BACKEND_SERVICE: 'varavu-selavu-backend'
   _IMAGE_TAG: '${SHORT_SHA}'
+  _PUBLIC_APP_URL: 'https://expense.cerebroos.com'
