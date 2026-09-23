@@ -13,6 +13,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  SectionList,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -41,7 +42,8 @@ import { useAuth } from '../context/AuthContext';
 import { useAppTheme } from '../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppTheme, inkOnPastel, directionalColor } from '../theme';
-import { shortDate, myShareDelta } from '../utils/expenseInsights';
+import { myShareDelta } from '../utils/expenseInsights';
+import { groupRowsByDay } from '../utils/dayGroups';
 import TopTabs from '../components/TopTabs';
 import TintGlow from '../components/TintGlow';
 import IconButton from '../components/IconButton';
@@ -127,6 +129,18 @@ export default function GroupDetailScreen() {
   const members: MemberDTO[] = detail?.members ?? [];
   const expenses: GroupExpenseRow[] = expenseData?.items ?? [];
   const balances: MemberBalance[] = balanceData?.members ?? [];
+  // Same Today/Yesterday/"Sep 20" day sections as the personal Expenses tab (parity fix) —
+  // GroupExpenseRow has no `amount` field, so each row is given one aliased from `cost` for
+  // groupRowsByDay's generic constraint; every other field (payer_summary, category, ...) is
+  // preserved untouched for renderExpense below.
+  const dayGroups = React.useMemo(
+    () => groupRowsByDay(expenses.map((e) => ({ ...e, amount: e.cost }))),
+    [expenses],
+  );
+  const expenseSections = React.useMemo(
+    () => dayGroups.map((g) => ({ key: g.dateKey, label: g.label, subtotal: g.subtotal, data: g.items })),
+    [dayGroups],
+  );
 
   const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name ?? 'Unknown';
 
@@ -253,7 +267,7 @@ export default function GroupDetailScreen() {
       <ListRow
         category={item.category}
         title={item.description}
-        meta={`${shortDate(item.date)} · paid by ${payerNames}`}
+        meta={`paid by ${payerNames}`}
         onPress={() => setSelectedExpense(item)}
         trailing={(
           <View style={styles.expenseTrailing}>
@@ -379,10 +393,17 @@ export default function GroupDetailScreen() {
       {activeTab === 'expenses' && (
         <>
           <View style={styles.expensesList}>
-            <FlatList
-              data={expenses}
+            <SectionList
+              sections={expenseSections}
               keyExtractor={(item) => item.row_id}
               renderItem={renderExpense}
+              renderSectionHeader={({ section }) => (
+                <View style={styles.daySectionHeader}>
+                  <SectionLabel>{section.label}</SectionLabel>
+                  <Text style={styles.daySectionSubtotal}>{formatCurrency(section.subtotal)}</Text>
+                </View>
+              )}
+              stickySectionHeadersEnabled={false}
               contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
               refreshControl={<RefreshControl refreshing={expensesRefetching} onRefresh={refetchExpenses} tintColor={theme.colors.primary} />}
             />
@@ -582,6 +603,11 @@ const createStyles = (theme: AppTheme) =>
     settleUpLinkText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
     tabBar: { paddingHorizontal: 22, marginTop: 20 },
     expensesList: { flex: 1, paddingHorizontal: 22 },
+    daySectionHeader: {
+      flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+      paddingTop: 18, paddingBottom: 6,
+    },
+    daySectionSubtotal: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.textTertiary, fontVariant: ['tabular-nums'] },
     expenseTrailing: { flexDirection: 'row', alignItems: 'center' },
     expenseTotal: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text, fontVariant: ['tabular-nums'] },
     expenseDelta: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 11, marginTop: 2 },
