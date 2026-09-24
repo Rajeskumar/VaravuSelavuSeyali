@@ -205,6 +205,9 @@ export async function addExpenseWithItems(payload: {
   header: Record<string, any>;
   items: Record<string, any>[];
   card_id?: string | null;
+  // TS-TAG-104 — same top-level (sibling to header/items) field the backend's
+  // ExpenseWithItemsRequest declares; applied inline on create, same as the plain addExpense().
+  tag_names?: string[];
 }): Promise<{ expense_id: string; item_ids: string[] }> {
   const response = await apiFetch(`/api/v1/expenses/with_items`, {
     method: 'POST',

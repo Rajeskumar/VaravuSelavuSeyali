@@ -14,10 +14,11 @@ interface Props {
 }
 
 /**
- * TS-TAG-112 — mobile's reduced-scope tag editor: pick from EXISTING active tags only, no
- * inline creation (PRD §11.2 — creation stays web-only in v1). A tap-to-toggle list rather than
- * web's chip-plus-typeahead `TagInput`, since there's no MUI Autocomplete equivalent on RN and
- * the full tag list is expected to be short enough to just scroll.
+ * TS-TAG-112 — picks from EXISTING active tags only; no inline creation here. New tags are made
+ * on the Account → Categories & tags screen (TagsScreen.tsx), which is where this modal's empty
+ * state now points. A tap-to-toggle list rather than web's chip-plus-typeahead `TagInput`, since
+ * there's no MUI Autocomplete equivalent on RN and the full tag list is expected to be short
+ * enough to just scroll.
  */
 export default function TagPickerModal({ visible, value, onChange, onClose }: Props) {
   const { theme } = useAppTheme();
@@ -69,7 +70,7 @@ export default function TagPickerModal({ visible, value, onChange, onClose }: Pr
           <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: 24 }} />
         ) : tags.length === 0 ? (
           <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
-            No tags yet — create one on the web app first.
+            No tags yet — create one from Account → Categories & tags first.
           </Text>
         ) : (
           <FlatList

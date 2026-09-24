@@ -48,6 +48,9 @@ import OptionSheet from '../components/OptionSheet';
 import ToggleSwitch from '../components/ToggleSwitch';
 import { listMyCards } from '../api/cards';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
+import { useTagsEnabled } from '../hooks/useTagsEnabled';
+import { applyTagsToExpense } from '../api/tags';
+import TagPickerModal from '../components/tags/TagPickerModal';
 import { suggestMerchants } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 import SplitSheet, { paidByName } from '../components/SplitSheet';
@@ -138,6 +141,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [recurring, setRecurring] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
   const { enabled: cardCoachEnabled } = useCardCoachEnabled();
+  const { enabled: tagsEnabled } = useTagsEnabled();
+  const [tagNames, setTagNames] = useState<string[]>([]);
+  const [tagPickerVisible, setTagPickerVisible] = useState(false);
   const { data: myCards = [] } = useQuery({ queryKey: ['cards-mine'], queryFn: listMyCards, enabled: cardCoachEnabled });
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -197,6 +203,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setItemsVisible(false);
     setSplitVisible(false);
     setAssignments({});
+    setTagNames([]);
+    setTagPickerVisible(false);
     setGroupDetail(null);
     setPayers([]);
     setSplitValue({ type: 'equal', entries: [] });
@@ -439,7 +447,11 @@ export default function AddExpenseProvider({ children }: { children: React.React
           unit_price: it.unit_price ?? null,
           line_total: it.line_total,
         }));
-        await addExpenseWithItems({ user_email: userEmail, header, items, card_id: cardCoachEnabled ? cardId : undefined });
+        await addExpenseWithItems({
+          user_email: userEmail, header, items,
+          card_id: cardCoachEnabled ? cardId : undefined,
+          tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
+        });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notifyExpenseChanged();
         setSavedAmt(numAmount);
@@ -455,6 +467,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             user_id: userEmail,
             merchant_name: merchantName || undefined,
             card_id: cardCoachEnabled ? cardId : undefined,
+            tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
           },
           accessToken
         );
@@ -486,6 +499,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
         // already required a loaded groupDetail plus both computeXValid checks to pass before
         // Save was even enabled, so both are guaranteed populated and valid here.
         let myShare: number;
+        let groupExpenseRowId: string;
         if (itemsToSave.length > 0) {
           // Each line is split equally among the people it was assigned to in the Items sheet, or
           // among every participant when nobody was.
@@ -514,6 +528,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             card_id: cardCoachEnabled ? cardId : undefined,
           });
           myShare = row.my_share;
+          groupExpenseRowId = row.row_id;
         } else {
           const row = await addGroupExpense(who, {
             date: formatMMDDYYYY(expenseDate),
@@ -526,6 +541,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
             card_id: cardCoachEnabled ? cardId : undefined,
           });
           myShare = row.my_share;
+          groupExpenseRowId = row.row_id;
+        }
+        if (tagsEnabled && tagNames.length > 0) {
+          await applyTagsToExpense(groupExpenseRowId, { tag_names: tagNames });
         }
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notifyExpenseChanged();
@@ -677,12 +696,26 @@ export default function AddExpenseProvider({ children }: { children: React.React
                         onPress={() => setPickerSheet('card')}
                       />
                     )}
+                    {tagsEnabled && (
+                      <Chip
+                        label={tagNames.length > 0 ? `Tags · ${tagNames.length}` : 'Tags'}
+                        variant={tagNames.length > 0 ? 'accent' : 'outline'}
+                        style={styles.captureChip}
+                        onPress={() => setTagPickerVisible(true)}
+                      />
+                    )}
                     <Chip
                       label={detailsOpen ? 'Less' : 'More'}
                       style={styles.captureChip}
                       onPress={() => setDetailsOpen((v) => !v)}
                     />
                   </ScrollView>
+                  <TagPickerModal
+                    visible={tagPickerVisible}
+                    value={tagNames}
+                    onChange={setTagNames}
+                    onClose={() => setTagPickerVisible(false)}
+                  />
                   <SplitSheet
                     visible={splitVisible}
                     onClose={() => setSplitVisible(false)}
