@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks, Request
 from datetime import datetime
 from decimal import Decimal
@@ -8,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
     ReceiptParseResponse,
+    OcrParseRequest,
     ExpenseWithItemsRequest,
     ExpenseWithItemsResponse,
     CategorizeRequest,
@@ -15,6 +17,7 @@ from varavu_selavu_service.models.api_models import (
     ChatRequest,
     HealthResponse,
     FeatureFlagsResponse,
+    AiUsageResponse,
     ExpenseCreatedResponse,
     ExpenseRow,
     AnalysisResponse,
@@ -30,12 +33,11 @@ from varavu_selavu_service.core.money import to_decimal, validate_money_amount
 from varavu_selavu_service.services.expense_service import ExpenseService, NOTES_UNCHANGED
 from varavu_selavu_service.services.personal_export_service import PersonalExportService
 from varavu_selavu_service.services.receipt_service import ReceiptService
+from varavu_selavu_service.services.ocr.layout import OcrFragment, group_rows
+from varavu_selavu_service.services.category_memory_service import CategoryMemoryService
 from varavu_selavu_service.repo.postgres_repo import PostgresRepo
 from varavu_selavu_service.services.chat_service import (
     call_chat_model,
-    list_openai_models,
-    list_ollama_models,
-    list_gemini_models,
 )
 from varavu_selavu_service.services.analysis_service import AnalysisService
 from varavu_selavu_service.services.analytics_service import AnalyticsService
@@ -106,6 +108,14 @@ from varavu_selavu_service.api.groups_routes import get_group_expense_service, g
 from varavu_selavu_service.db.models import ExpenseSplit, Expense
 import uuid as _uuid
 from varavu_selavu_service.core.limiter import limiter
+from varavu_selavu_service.services.ai_quota_service import (
+    AiQuotaError,
+    AiQuotaService,
+    FEATURE_CATEGORIZE,
+    FEATURE_CHAT,
+    FEATURE_RECEIPT,
+    get_ai_quota_service,
+)
 
 settings = Settings()
 
@@ -196,7 +206,37 @@ def get_config():
         "budgets_enabled": settings_now.BUDGETS_ENABLED,
         "card_coach_enabled": settings_now.CARD_COACH_ENABLED,
         "tags_enabled": settings_now.TAGS_ENABLED,
+        "ai_enabled": settings_now.AI_ENABLED,
     }
+
+
+def _allowed_chat_models() -> list[tuple[str, str]]:
+    """(provider, model) pairs clients may request, from AI_CHAT_ALLOWED_MODELS."""
+    pairs = []
+    for entry in Settings().AI_CHAT_ALLOWED_MODELS.split(","):
+        provider, _, model = entry.strip().partition(":")
+        if provider and model:
+            pairs.append((provider.lower(), model))
+    return pairs
+
+
+def _resolve_chat_model(provider: Optional[str], model: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """Clients used to be able to pick any provider/model, including expensive pro-tier ones.
+    Now only the server allowlist is accepted; omitting both uses the server default."""
+    if not provider and not model:
+        return None, None
+    for allowed_provider, allowed_model in _allowed_chat_models():
+        if (not provider or provider.lower() == allowed_provider) and (not model or model == allowed_model):
+            return allowed_provider, allowed_model
+    raise HTTPException(status_code=400, detail="That AI model isn't available.")
+
+
+@router.get("/ai/usage", response_model=AiUsageResponse, tags=["Analysis"], summary="Today's AI usage and limits")
+def get_ai_usage(
+    quota: AiQuotaService = Depends(get_ai_quota_service),
+    user_id: str = Depends(auth_required),
+):
+    return quota.usage(user_id)
 
 
 @router.post(
@@ -205,15 +245,43 @@ def get_config():
     tags=["Expenses"],
     summary="Suggest category and subcategory for a description",
 )
-@limiter.limit("10/minute")
+@limiter.limit("60/minute")
 def categorize_expense(
     request: Request,
     data: CategorizeRequest,
     categorizer: CategorizationService = Depends(get_categorization_service),
-    _: str = Depends(auth_required),
+    quota: AiQuotaService = Depends(get_ai_quota_service),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(auth_required),
 ):
+    # Local tiers first (the user's own past pick, merchant dictionary, keyword rules): no
+    # network and no quota, which is why this endpoint can afford a keystroke-debounce rate.
+    local = categorizer.suggest_local(data.description, user_email=user_id, db=db)
+    if local:
+        return local
+    # Categorization is a convenience on the add-expense form, so running out of AI quota
+    # must never break that form: fall back to the same default classify() uses on failure.
+    fallback = {"main_category": "Other", "subcategory": "General", "merchant_name": None, "source": "default"}
+    if not Settings().CATEGORIZE_LLM_FALLBACK:
+        return fallback
+    try:
+        reservation = quota.reserve(user_id, FEATURE_CATEGORIZE)
+    except AiQuotaError:
+        return fallback
+    except Exception:
+        # A metering failure must not make the LLM call unmetered, nor break the form.
+        import logging
+        logging.getLogger("varavu_selavu.routes").exception("AI quota reserve failed for categorize")
+        return fallback
     main, sub, merchant = categorizer.classify(data.description)
-    return {"main_category": main, "subcategory": sub, "merchant_name": merchant}
+    if categorizer.last_usage is None and (main, sub, merchant) == ("Other", "General", None):
+        # The LLM call failed or never happened; don't charge the user for it.
+        quota.refund(reservation)
+    else:
+        usage = categorizer.last_usage or (None, None)
+        quota.settle(reservation, categorizer.model, *usage)
+        return {"main_category": main, "subcategory": sub, "merchant_name": merchant, "source": "llm"}
+    return fallback
 
 
 @router.post(
@@ -262,6 +330,7 @@ def create_expense(
     # doesn't matter here (both mean "no tags"); only skip the call entirely when there's nothing
     # to apply, since apply_tags_to_expense 422s on an empty tag set.
     tags = tag_service.apply_tags_to_expense(user_id, saved["row_id"], tag_names=data.tag_names) if data.tag_names else []
+    CategoryMemoryService(expense_service.db).record(user_id, data.description, data.category, data.merchant_name)
     card = None
     if data.card_id:
         cid = _uuid.UUID(data.card_id)
@@ -379,6 +448,8 @@ def update_expense(
     else:
         eid = _uuid.UUID(saved["row_id"])
         tags = get_tags_for_expenses(tag_service.db, [eid], user_id).get(str(eid), [])
+    # An edit is the strongest signal: the user looked at the category and changed it.
+    CategoryMemoryService(expense_service.db).record(user_id, data.description, data.category, data.merchant_name)
 
     card = None
     if data.card_id:
@@ -616,12 +687,18 @@ def analysis_chat(
     group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
     card_service: CardService = Depends(get_card_service),
     tag_service: TagService = Depends(get_tag_service),
+    quota: AiQuotaService = Depends(get_ai_quota_service),
     user_id: str = Depends(auth_required),
 ):
     """
     Accepts a chat query and returns a response generated by the AI model.
     The user is derived from the JWT token for security.
     """
+    provider, model = _resolve_chat_model(body.provider, body.model)
+    max_chars = Settings().AI_CHAT_MAX_INPUT_CHARS
+    if body.messages and len(body.messages[-1].get("content", "")) > max_chars:
+        raise HTTPException(status_code=422, detail=f"Question is too long (max {max_chars} characters).")
+    reservation = quota.reserve(user_id, FEATURE_CHAT)
     try:
         result = call_chat_model(
             messages=body.messages,
@@ -638,26 +715,40 @@ def analysis_chat(
             card_coach_enabled=Settings().CARD_COACH_ENABLED,
             tag_service=tag_service,
             tags_enabled=Settings().TAGS_ENABLED,
-            model=body.model,
-            provider=body.provider,
+            model=model,
+            provider=provider,
             year=body.year,
             month=body.month,
             start_date=body.start_date,
             end_date=body.end_date,
         )
-        return {
-            "response": result.response,
-            "resolved_period": result.resolved_period,
-            "resolved_scope": result.resolved_scope,
-        }
-    except HTTPException:
-        raise
     except Exception as exc:
+        quota.refund(reservation)
+        if isinstance(exc, HTTPException):
+            raise
         import logging
         logging.getLogger("varavu_selavu.routes").exception("AI chat failed: %s", exc)
         raise HTTPException(
             status_code=503,
             detail="The AI analyst is temporarily unavailable. Please try again later."
+        )
+    _settle_chat(quota, reservation, result)
+    return {
+        "response": result.response,
+        "resolved_period": result.resolved_period,
+        "resolved_scope": result.resolved_scope,
+    }
+
+
+def _settle_chat(quota: AiQuotaService, reservation, result) -> None:
+    if getattr(result, "llm_called", True) is False:
+        quota.refund(reservation)
+    else:
+        quota.settle(
+            reservation,
+            getattr(result, "model_name", None) or Settings().GEMINI_MODEL,
+            getattr(result, "input_tokens", 0),
+            getattr(result, "output_tokens", 0),
         )
 
 
@@ -673,7 +764,8 @@ def parse_receipt(
     file: UploadFile = File(...),
     save_ocr_text: bool = False,
     receipt_service: ReceiptService = Depends(get_receipt_service),
-    _: str = Depends(auth_required),
+    quota: AiQuotaService = Depends(get_ai_quota_service),
+    user_id: str = Depends(auth_required),
 ):
     content_type = file.content_type or "image/png"
     allowed_mimes = {m.strip() for m in settings.ALLOWED_MIME.split(",")}
@@ -696,11 +788,113 @@ def parse_receipt(
             detail="File content does not match its declared type",
         )
 
-    return receipt_service.parse(
-        data,
-        content_type=content_type,
-        save_ocr_text=save_ocr_text,
-    )
+    if receipt_service.uses_local_ocr:
+        return _parse_receipt_locally(receipt_service, quota, user_id, data, content_type, save_ocr_text)
+
+    # Reserved only after validation, so rejected uploads never cost the user a scan. The mock
+    # engine (tests/local) makes no provider call and is not metered.
+    metered = receipt_service.engine != "mock"
+    reservation = quota.reserve(user_id, FEATURE_RECEIPT) if metered else None
+    try:
+        parsed = receipt_service.parse(
+            data,
+            content_type=content_type,
+            save_ocr_text=save_ocr_text,
+        )
+    except Exception:
+        if reservation:
+            quota.refund(reservation)
+        raise
+    if reservation:
+        usage = receipt_service.last_usage or (None, None)
+        model = receipt_service.model if receipt_service.engine == "gemini" else "ollama"
+        quota.settle(reservation, model, *usage)
+    return parsed
+
+
+_receipt_log = logging.getLogger("varavu_selavu.receipts")
+
+
+def _parse_receipt_locally(
+    receipt_service: ReceiptService,
+    quota: AiQuotaService,
+    user_id: str,
+    data: bytes,
+    content_type: str,
+    save_ocr_text: bool,
+) -> dict:
+    """OCR on our own server, then rules. With the "hybrid" engine, a low-confidence read is
+    re-done by the LLM — the only path here that costs AI quota, and never a failure if the
+    quota is exhausted (the user still gets the OCR result, with a note to review it)."""
+    hybrid = receipt_service.engine == "hybrid"
+    local = None
+    try:
+        local = receipt_service.parse_ocr(data, content_type=content_type, save_ocr_text=save_ocr_text)
+    except Exception:
+        _receipt_log.exception("local receipt OCR failed")
+        if not hybrid:
+            raise HTTPException(status_code=422, detail="Couldn't read this receipt. Try a clearer photo.")
+
+    if local is not None and (not hybrid or local["confidence"] >= Settings().OCR_LLM_FALLBACK_MIN_CONF):
+        return local
+
+    try:
+        reservation = quota.reserve(user_id, FEATURE_RECEIPT)
+    except AiQuotaError:
+        if local is None:
+            raise
+        local["warnings"].append("Read without AI assist (today's AI limit reached) — please review the details.")
+        return local
+    try:
+        parsed = receipt_service.parse(data, content_type=content_type, save_ocr_text=save_ocr_text, engine="gemini")
+    except Exception:
+        quota.refund(reservation)
+        _receipt_log.exception("LLM receipt fallback failed")
+        if local is None:
+            raise HTTPException(status_code=502, detail="Couldn't read this receipt right now. Please try again.")
+        return local
+    quota.settle(reservation, receipt_service.model, *(receipt_service.last_usage or (None, None)))
+    parsed["source"] = "ocr+llm" if local is not None else "llm"
+    parsed["confidence"] = local["confidence"] if local is not None else None
+    return parsed
+
+
+@router.post(
+    "/ingest/receipt/parse_ocr",
+    response_model=ReceiptParseResponse,
+    tags=["Expenses"],
+    summary="Parse receipt text recognized on-device (no image upload, no LLM)",
+)
+@limiter.limit("10/minute")
+def parse_receipt_ocr(
+    request: Request,
+    payload: OcrParseRequest,
+    receipt_service: ReceiptService = Depends(get_receipt_service),
+    user_id: str = Depends(auth_required),
+):
+    fragments = [
+        OcrFragment(
+            text=line.text,
+            x=line.box[0], y=line.box[1], w=line.box[2], h=line.box[3],
+            conf=line.conf if line.conf is not None else 1.0,
+            angle=line.angle or 0.0,
+        )
+        for line in payload.lines
+        if line.box
+    ]
+    if len(fragments) == len(payload.lines):
+        grouped = group_rows(fragments, image_width=payload.image_width)
+        rows = [r.text for r in grouped]
+        scores = [r.conf for r in grouped]
+    else:
+        # No geometry from the device: trust its reading order as-is.
+        rows = [line.text for line in payload.lines]
+        scores = [line.conf if line.conf is not None else 1.0 for line in payload.lines]
+    result = receipt_service.parse_ocr_rows(rows, recognition_scores=scores)
+    # Below the bar, the client re-uploads the image to /parse, where server OCR and (for the
+    # hybrid engine) the metered LLM fallback get a turn. This endpoint never calls an LLM.
+    result["needs_image"] = result["confidence"] < Settings().OCR_LLM_FALLBACK_MIN_CONF
+    return result
 
 
 @router.post(
@@ -767,6 +961,13 @@ def create_expense_with_items(
     if payload.tag_names:
         tag_service.apply_tags_to_expense(user_id, expense_id, tag_names=payload.tag_names)
 
+    CategoryMemoryService(tag_service.db).record(
+        user_id,
+        header.get("description"),
+        header.get("category_name") or header.get("category_id"),
+        header.get("merchant_name"),
+        main_category=header.get("main_category_name"),
+    )
     return {"expense_id": expense_id, "item_ids": item_ids}
 
 
@@ -855,38 +1056,17 @@ def update_expense_items(
     summary="List available LLM models",
 )
 def list_models(_: str = Depends(auth_required)):
-    """Return provider and available model ids based on environment.
+    """Return the chat models clients may request (the AI_CHAT_ALLOWED_MODELS allowlist).
 
-    Authenticated: the response enumerates which LLM providers have credentials configured,
-    and each call fans out to those providers' APIs — not something to expose anonymously.
+    This used to enumerate every model each configured provider offered, which let clients
+    pick expensive pro-tier models; only the allowlist is accepted now, so only it is listed.
     """
-    models_list = []
-    
-    # Try to load Gemini models
-    try:
-        gemini_models = list_gemini_models()
-        for m in gemini_models:
-            models_list.append({"provider": "gemini", "id": m, "name": f"Gemini: {m}"})
-    except Exception:
-        pass
-
-    # Try to load OpenAI models
-    try:
-        openai_models = list_openai_models()
-        for m in openai_models:
-            models_list.append({"provider": "openai", "id": m, "name": f"OpenAI: {m}"})
-    except Exception:
-        pass
-    
-    # Try to load Ollama models
-    try:
-        ollama_models = list_ollama_models()
-        for m in ollama_models:
-            models_list.append({"provider": "ollama", "id": m, "name": f"Ollama: {m}"})
-    except Exception:
-        pass
-
-    return {"models": models_list}
+    return {
+        "models": [
+            {"provider": provider, "id": model, "name": f"{provider.capitalize()}: {model}"}
+            for provider, model in _allowed_chat_models()
+        ]
+    }
 
 
 # ---------------------- Recurring ---------------------- #
@@ -1364,6 +1544,7 @@ def budget_ask_why(
     balance_service: BalanceService = Depends(get_balance_service),
     expense_service: ExpenseService = Depends(get_expense_service),
     group_expense_service: GroupExpenseService = Depends(get_group_expense_service),
+    quota: AiQuotaService = Depends(get_ai_quota_service),
     user_id: str = Depends(auth_required),
     _: None = Depends(require_budgets_enabled),
 ):
@@ -1372,6 +1553,7 @@ def budget_ask_why(
     general chat surface, then reuses the same call_chat_model dispatch /analysis/chat uses."""
     breakdown = svc.get_breakdown(user_id, budget_id, period_str=period)
     query_text = svc.build_ask_why_prompt(breakdown)
+    reservation = quota.reserve(user_id, FEATURE_CHAT)
     try:
         result = call_chat_model(
             messages=[{"role": "user", "content": query_text}],
@@ -1385,16 +1567,18 @@ def budget_ask_why(
             group_expense_service=group_expense_service,
             groups_enabled=settings.GROUPS_ENABLED,
         )
-        return {"response": result.response}
-    except HTTPException:
-        raise
     except Exception as exc:
+        quota.refund(reservation)
+        if isinstance(exc, HTTPException):
+            raise
         import logging
         logging.getLogger("varavu_selavu.routes").exception("Budget ask-why failed: %s", exc)
         raise HTTPException(
             status_code=503,
             detail="The AI analyst is temporarily unavailable. Please try again later."
         )
+    _settle_chat(quota, reservation, result)
+    return {"response": result.response}
 
 
 # ---------------------- Card Coach (TS-CARD-103) ---------------------- #

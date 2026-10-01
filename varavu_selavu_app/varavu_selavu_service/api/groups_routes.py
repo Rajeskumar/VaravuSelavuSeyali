@@ -44,6 +44,7 @@ from varavu_selavu_service.models.api_models import (
 )
 from varavu_selavu_service.services.balance_service import BalanceService
 from varavu_selavu_service.services.card_service import CardService
+from varavu_selavu_service.services.category_memory_service import CategoryMemoryService
 from varavu_selavu_service.services.expense_comment_service import ExpenseCommentService
 from varavu_selavu_service.services.friend_balance_service import FriendBalanceService
 from varavu_selavu_service.services.expense_service import NOTES_UNCHANGED
@@ -478,6 +479,7 @@ def create_group_expense(
         notes=data.notes,
     )
     analysis_service.invalidate_cache()
+    CategoryMemoryService(db).record(user_email, data.description, data.category, data.merchant_name)
     eid = _to_uuid(row["row_id"])
     shares = (
         {
@@ -543,6 +545,7 @@ def create_itemized_group_expense(
         card_id=data.card_id,
     )
     analysis_service.invalidate_cache()
+    CategoryMemoryService(db).record(user_email, data.description, data.category, data.merchant_name)
     eid = _to_uuid(row["row_id"])
     shares = (
         {
@@ -651,6 +654,7 @@ def update_group_expense(
         notes=data.notes if "notes" in data.model_fields_set else NOTES_UNCHANGED,
     )
     analysis_service.invalidate_cache()
+    CategoryMemoryService(db).record(user_email, data.description, data.category, data.merchant_name)
     new_shares = {
         str(s.member_id): float(s.amount_owed)
         for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()

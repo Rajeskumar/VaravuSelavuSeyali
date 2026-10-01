@@ -12,6 +12,8 @@ export interface ScannedItem {
   quantity?: number | null;
   unit_price?: number | null;
   normalized_name?: string;
+  /** Per-item subcategory from the parser (e.g. paper towels on a grocery receipt). */
+  category_name?: string;
 }
 
 interface ScannedItemsCardProps {

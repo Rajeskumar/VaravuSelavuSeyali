@@ -9,6 +9,9 @@ import { useAppTheme } from '../../context/ThemeContext';
 import { AppTheme } from '../../theme';
 import { ChangeInsight } from '../../api/analytics';
 import { sendChatMessage } from '../../api/chat';
+import { AiLimitError } from '../../api/aiUsage';
+import { useAiUsage } from '../../hooks/useAiUsage';
+import AiQuotaNote from '../AiQuotaNote';
 
 interface AskSheetProps {
     insight: ChangeInsight | null;
@@ -32,6 +35,8 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
     const [draft, setDraft] = useState('');
     const [seededFor, setSeededFor] = useState<string | null>(null);
     const scrollViewRef = useRef<ScrollView>(null);
+    const { usage, feature: chatUsage, exhausted, unavailable, refresh: refreshUsage } = useAiUsage('chat');
+    const aiBlocked = exhausted || unavailable;
 
     useEffect(() => {
         if (insight && seededFor !== insight.metric_name) {
@@ -55,14 +60,18 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
             });
             setMessages(prev => [...prev, { role: 'assistant', content: response }]);
         } catch (e) {
-            setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I ran into an error getting that information for you.' }]);
+            const content = e instanceof AiLimitError
+                ? e.message
+                : 'Sorry, I ran into an error getting that information for you.';
+            setMessages(prev => [...prev, { role: 'assistant', content }]);
         } finally {
             setThinking(false);
+            refreshUsage();
         }
     };
 
     const handleFollowUp = () => {
-        if (!draft.trim() || thinking) return;
+        if (!draft.trim() || thinking || aiBlocked) return;
         const newMsgs = [...messages, { role: 'user', content: draft } as Message];
         setMessages(newMsgs);
         setDraft('');
@@ -126,18 +135,19 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
                             onChangeText={setDraft}
                             placeholder="Ask a follow-up..."
                             placeholderTextColor={theme.colors.textTertiary}
-                            editable={!thinking}
+                            editable={!thinking && !aiBlocked}
                             onSubmitEditing={handleFollowUp}
                             returnKeyType="send"
                         />
                         <TouchableOpacity
                             onPress={handleFollowUp}
-                            disabled={!draft.trim() || thinking}
-                            style={[styles.sendButton, (!draft.trim() || thinking) && { opacity: 0.5 }]}
+                            disabled={!draft.trim() || thinking || aiBlocked}
+                            style={[styles.sendButton, (!draft.trim() || thinking || aiBlocked) && { opacity: 0.5 }]}
                         >
                             <Ionicons name="send" size={20} color={theme.colors.primary} />
                         </TouchableOpacity>
                     </View>
+                    <AiQuotaNote usage={usage} feature={chatUsage} />
                 </View>
             </KeyboardAvoidingView>
         </Modal>

@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
 
+from varavu_selavu_service.core.config import Settings
 from varavu_selavu_service.models.api_models import ResolvedPeriod, ResolvedScope
 
 logger = logging.getLogger("varavu_selavu.chat_service")
@@ -31,6 +32,12 @@ class ChatResult:
     response: str
     resolved_period: ResolvedPeriod
     resolved_scope: ResolvedScope
+    # Usage for AI cost gating (services/ai_quota_service.py). llm_called is False when the
+    # request was answered without reaching the model, so the caller can refund the quota.
+    model_name: Optional[str] = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    llm_called: bool = False
 
 
 def _parse_period_from_text(query: str, today: date) -> Optional[tuple[str, str, str]]:
@@ -202,6 +209,22 @@ _CATEGORY_GUIDE = (
 )
 
 
+def _resolve_agent_category(category: Optional[str], description: str, merchant_name: Optional[str]) -> str:
+    """The agent is told to fall back to 'General'; before accepting that (or a label outside the
+    taxonomy), give the deterministic rules a chance — "coffee at starbucks" should land in
+    Dining out even when the model didn't commit to a category."""
+    from varavu_selavu_service.services.categorization_service import CATEGORY_GROUPS
+    from varavu_selavu_service.services.category_rules import get_rule_categorizer
+
+    valid = {sub for subs in CATEGORY_GROUPS.values() for sub in subs}
+    if category and category != "General" and category in valid:
+        return category
+    rules = get_rule_categorizer()
+    match = rules.classify(merchant_name) if merchant_name else None
+    match = match or rules.classify(description)
+    return match.subcategory if match else "General"
+
+
 def _create_personal_expense_from_agent(
     expense_service,
     user_id: str,
@@ -228,7 +251,7 @@ def _create_personal_expense_from_agent(
             user_id=user_id,
             date=expense_date or date.today().isoformat(),
             description=description.strip(),
-            category=category or "General",
+            category=_resolve_agent_category(category, description, merchant_name),
             cost=float(amount),
             merchant_name=merchant_name,
         )
@@ -453,7 +476,7 @@ def _create_group_expense_from_agent(
             actor_email=actor_email,
             date=mmddyyyy,
             description=description.strip(),
-            category=category or "General",
+            category=_resolve_agent_category(category, description, merchant_name),
             amount=float(amount),
             merchant_name=merchant_name,
             payers=[{"member_id": payer["member_id"], "amount_paid": float(amount)}],
@@ -787,6 +810,8 @@ def call_chat_model(
 
     # 2. Select Model
     env = os.getenv("ENVIRONMENT") or os.getenv("ENV") or "local"
+    ai_settings = Settings()
+    chat_timeout = ai_settings.AI_CHAT_TIMEOUT_SEC
     if not provider:
         provider = "gemini"
     else:
@@ -800,27 +825,33 @@ def call_chat_model(
             raise HTTPException(status_code=500, detail="OPENAI_API_KEY not configured")
         
         # We fallback to gpt-4o-mini as it supports tool calling natively
+        model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         llm = ChatOpenAI(
-            model=model or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            model=model,
             api_key=api_key,
-            temperature=0
+            temperature=0,
+            timeout=chat_timeout,
         )
     elif provider == "gemini":
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise HTTPException(status_code=500, detail="GEMINI_API_KEY not configured")
             
+        model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
         llm = ChatGoogleGenerativeAI(
-            model=model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"),
+            model=model,
             google_api_key=api_key,
-            temperature=0
+            temperature=0,
+            timeout=chat_timeout,
         )
     else:
         # We fallback to llama3 for Ollama local usage
+        model = model or os.getenv("OLLAMA_MODEL", "llama3.1")
         llm = ChatOllama(
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-            model=model or os.getenv("OLLAMA_MODEL", "llama3.1"),
-            temperature=0
+            model=model,
+            temperature=0,
+            client_kwargs={"timeout": chat_timeout},
         )
         
     if not messages:
@@ -973,8 +1004,11 @@ def call_chat_model(
 
     agent = create_react_agent(llm, tools, prompt=system_prompt)
 
+    # Every turn resends the whole history, so cap it: input tokens (and cost) otherwise grow
+    # without bound over a long conversation.
+    history = messages[:-1][-max(ai_settings.AI_CHAT_MAX_HISTORY_MESSAGES, 0):] if ai_settings.AI_CHAT_MAX_HISTORY_MESSAGES > 0 else []
     lc_messages: list = []
-    for m in messages[:-1]:
+    for m in history:
         content = m.get("content", "")
         if m.get("role") == "user":
             lc_messages.append(HumanMessage(content=content))
@@ -983,16 +1017,35 @@ def call_chat_model(
     lc_messages.append(HumanMessage(content=query_text))
 
     def _result(response_text: str) -> ChatResult:
-        return ChatResult(response=response_text, resolved_period=resolved_period, resolved_scope=resolved_scope)
+        return ChatResult(
+            response=response_text,
+            resolved_period=resolved_period,
+            resolved_scope=resolved_scope,
+            model_name=model,
+            input_tokens=usage["input_tokens"],
+            output_tokens=usage["output_tokens"],
+            llm_called=True,
+        )
 
+    usage = {"input_tokens": 0, "output_tokens": 0}
     try:
         final_message = None
         # Stream intermediate steps to see exactly what Gemini returns
         logger.info(f"Starting agent execution with model {model} and provider {provider}...")
-        for event in agent.stream({"messages": lc_messages}):
+        # recursion_limit bounds how many model/tool steps one question can take; each step
+        # is a paid LLM call.
+        for event in agent.stream(
+            {"messages": lc_messages},
+            config={"recursion_limit": ai_settings.AI_AGENT_RECURSION_LIMIT},
+        ):
             for node_name, node_output in event.items():
                 logger.info(f"Agent step [{node_name}]: {node_output}")
                 if "messages" in node_output:
+                    for msg in node_output["messages"]:
+                        meta = getattr(msg, "usage_metadata", None) if isinstance(msg, AIMessage) else None
+                        if meta:
+                            usage["input_tokens"] += int(meta.get("input_tokens") or 0)
+                            usage["output_tokens"] += int(meta.get("output_tokens") or 0)
                     final_message = node_output["messages"][-1]
 
         if final_message is None:
@@ -1001,11 +1054,11 @@ def call_chat_model(
         # Check for Gemini tool calling failures
         finish_reason = final_message.response_metadata.get('finish_reason') if getattr(final_message, 'response_metadata', None) else None
         if finish_reason == 'MALFORMED_FUNCTION_CALL':
-            return _result("I encountered a technical issue while analyzing your data (Malformed Function Call). Please try rephrasing your question or selecting the 'gemini-2.5-pro' model, which handles complex queries better.")
+            return _result("I encountered a technical issue while analyzing your data (Malformed Function Call). Please try rephrasing your question.")
 
         content = final_message.content
         if not content and not getattr(final_message, 'tool_calls', []):
-             return _result("I couldn't generate a response. Please try again or switch to a different model.")
+             return _result("I couldn't generate a response. Please try again.")
 
         if isinstance(content, list):
             text_parts = [chunk.get("text", "") if isinstance(chunk, dict) else str(chunk) for chunk in content]

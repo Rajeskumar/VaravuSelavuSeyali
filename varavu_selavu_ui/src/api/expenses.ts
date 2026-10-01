@@ -1,4 +1,5 @@
 import { fetchWithAuth } from './api';
+import { aiErrorFromResponse } from './aiUsage';
 import { TagRefDTO } from './tags';
 import { CardRefDTO } from './cards';
 
@@ -98,7 +99,7 @@ export async function parseReceipt(file: File): Promise<ReceiptParseDraft> {
     method: 'POST',
     body: form,
   });
-  if (!res.ok) throw new Error('Failed to parse receipt');
+  if (!res.ok) throw await aiErrorFromResponse(res, 'Failed to parse receipt');
   return res.json();
 }
 

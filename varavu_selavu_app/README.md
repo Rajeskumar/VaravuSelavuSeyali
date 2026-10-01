@@ -226,10 +226,48 @@ OLLAMA_MODEL=gpt-oss:20b
 OLLAMA_TIMEOUT_SEC=300
 
 # Receipt OCR
-OCR_ENGINE=openai                    # openai | ollama | mock
-OCR_MODEL=gpt-4o-mini
+OCR_ENGINE=hybrid                    # hybrid | local | gemini | ollama | mock
+OCR_MODEL=gemini-2.5-flash
+OCR_LLM_FALLBACK_MIN_CONF=0.75
 LLM_TIMEOUT_SEC=180
 ```
+
+---
+
+## Local receipt OCR
+
+`hybrid` tries RapidOCR and the receipt rule parser before the existing metered
+Gemini fallback. `local` never calls an LLM. Receipt images are EXIF-oriented,
+conservatively cropped to bright paper before resizing, and processed in
+bounded overlapping tiles. Ambiguous crops retain the original scene. Very wide
+receipt crops are rotated to portrait; this is a heuristic, not a general
+orientation classifier.
+
+Weak reads can receive a contrast-normalized 1100px crop and then an uncropped
+recovery pass. There are at most three passes; no new pass starts after 20 seconds.
+This is a retry scheduling budget, not a hard timeout on an active native OCR call.
+PDFs retain the existing single-page, single-pass behavior. The best confidence
+result is retained if recovery fails. OCR metrics log pass count, row count,
+confidence, warning count and elapsed time, without logging receipt text.
+
+Missing items, inferred money adjustments, inconsistent totals/quantities and
+low-confidence money recognition require review. Items are never silently deleted
+to force totals to balance. Recognition confidence is also retained for on-device
+text. Weighted quantities and product suffixes such as `PC` and `LB` are preserved.
+These confidence values are heuristics, not calibrated probabilities.
+
+Run receipt checks from this directory:
+
+```bash
+poetry run pytest tests/test_receipt_text_parser.py tests/test_receipt_ocr_routes.py tests/test_receipt_ocr_recovery.py tests/test_receipt_ingestion.py -q
+# Optional private sample tests (IMG_3302.jpg and test_receipt.png):
+RECEIPT_SAMPLE_DIR=/path/to/receipts poetry run pytest tests/test_receipt_ocr_recovery.py -q
+# Local-only evaluation; does not call an LLM:
+poetry run python scripts/eval_receipts.py --engines local -v
+```
+
+Personal sample photos are not stored in the repository. Test other stores and
+capture conditions before interpreting these examples as a general accuracy rate.
 
 ---
 

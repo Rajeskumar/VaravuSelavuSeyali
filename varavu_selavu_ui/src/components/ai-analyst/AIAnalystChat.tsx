@@ -8,6 +8,9 @@ import { getModels, ModelsResponse, ModelOption } from '../../api/models';
 import SegmentedTabs from '../common/SegmentedTabs';
 import { typeScale } from '../../theme';
 import { escapeHtml } from '../../utils/html';
+import { aiErrorFromResponse, AiLimitError } from '../../api/aiUsage';
+import { useAiUsage } from '../../hooks/useAiUsage';
+import AiQuotaNote from '../common/AiQuotaNote';
 
 interface AIAnalystChatProps {
   userId: string | null;
@@ -40,6 +43,11 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
   const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedSpeed, setSelectedSpeed] = useState<'fast' | 'deep'>('fast');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { usage, feature: chatUsage, exhausted, unavailable, refresh: refreshUsage } = useAiUsage('chat');
+  const aiBlocked = exhausted || unavailable;
+  // The server only accepts its model allowlist; with a single allowed model the Quick/Thorough
+  // choice would be a no-op, so it's only shown when there really are two models to pick from.
+  const hasModelChoice = new Set(models.map(m => m.id)).size > 1;
 
   useEffect(() => {
     const ac = new AbortController();
@@ -69,7 +77,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
   const handleSubmit = async (e?: React.FormEvent, overrideQuery?: string) => {
     if (e) e.preventDefault();
     const finalQuery = overrideQuery || query;
-    if (!finalQuery.trim()) return;
+    if (!finalQuery.trim() || aiBlocked) return;
 
     const newMessages: Message[] = [...messages, { role: 'user', content: finalQuery }];
     setMessages(newMessages);
@@ -100,8 +108,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).detail || "Unknown error");
+        throw await aiErrorFromResponse(res, "Unknown error");
       }
 
       const data = await res.json();
@@ -118,9 +125,10 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
     } catch (err: any) {
       const msg = err.message ?? "An error occurred";
       const isTechnical = /quota|429|500|502|503|api.key|insufficient/i.test(msg);
-      setError(isTechnical ? "The AI analyst is temporarily unavailable. Please try again later." : msg);
+      setError(err instanceof AiLimitError || !isTechnical ? msg : "The AI analyst is temporarily unavailable. Please try again later.");
     } finally {
       setLoading(false);
+      refreshUsage();
     }
   };
 
@@ -187,6 +195,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {/* UI-12: "Fast/Deep" named the mechanism, not the choice. These pick a smaller vs a
               larger model (see the model resolution in handleSend) — say what that means. */}
+          {hasModelChoice && (
           <Box sx={{ width: 170, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
             <SegmentedTabs
               options={[
@@ -203,6 +212,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
               {selectedSpeed === 'fast' ? 'Faster model, good for totals and lookups' : 'Larger model, better for multi-step questions'}
             </Typography>
           </Box>
+          )}
           {onClose && (
             <IconButton size="small" onClick={onClose} aria-label="Close Ask">
               <CloseRoundedIcon fontSize="small" />
@@ -314,7 +324,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
       </Box>
 
       {/* Input */}
-      <Box sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ px: 3, py: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <TextField
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -327,7 +338,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
           placeholder="Ask about your spending…"
           fullWidth
           size="small"
-          disabled={loading}
+          disabled={loading || aiBlocked}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 999,
@@ -340,7 +351,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
         <IconButton
           onClick={handleSubmit}
           aria-label="Send message"
-          disabled={!query.trim() || loading}
+          disabled={!query.trim() || loading || aiBlocked}
           sx={{ 
             bgcolor: 'primary.main', 
             color: 'primary.contrastText',
@@ -350,6 +361,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
         >
           <SendIcon fontSize="small" sx={{ ml: 0.5 }} />
         </IconButton>
+      </Box>
+      <AiQuotaNote usage={usage} feature={chatUsage} />
       </Box>
     </Box>
   );

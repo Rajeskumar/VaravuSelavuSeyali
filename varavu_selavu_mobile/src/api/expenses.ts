@@ -1,7 +1,9 @@
 import { apiFetch } from './apiFetch';
+import { aiErrorFromResponse } from './aiUsage';
 import API_BASE_URL from './apiconfig';
 import { TagRefDTO } from './tags';
 import { CardRefDTO } from './cards';
+import type { OcrResult } from '../utils/onDeviceOcr';
 
 export interface ExpensePayload {
   description: string;
@@ -42,6 +44,8 @@ export interface CategorizeResult {
   main_category: string;
   subcategory: string;
   merchant_name?: string;
+  /** Which tier answered: memory | merchant | keyword | llm | default. */
+  source?: string;
 }
 
 export async function addExpense(payload: ExpensePayload, token: string): Promise<void> {
@@ -114,9 +118,25 @@ export async function uploadReceipt(uri: string, token: string): Promise<any> {
   });
 
   if (!response.ok) {
-    throw new Error('Failed to parse receipt');
+    throw await aiErrorFromResponse(response, 'Failed to parse receipt');
   }
 
+  return response.json();
+}
+
+/**
+ * Parse receipt text recognized on-device. The server only runs its rule parser (no LLM, no
+ * quota); `needs_image` means the read wasn't good enough and the photo should be uploaded.
+ */
+export async function parseReceiptOcr(ocr: OcrResult): Promise<any> {
+  const response = await apiFetch(`/api/v1/ingest/receipt/parse_ocr`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ocr),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to parse receipt');
+  }
   return response.json();
 }
 

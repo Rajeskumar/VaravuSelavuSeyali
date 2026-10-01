@@ -15,6 +15,18 @@
       "autoPort": true
     },
     {
+      "name": "backend-ocr-e2e",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["DATABASE_URL=postgresql://postgres@localhost:5544/ocr_e2e", "GEMINI_API_KEY=", "OCR_ENGINE=hybrid", "ENVIRONMENT=local", "poetry", "-C", "varavu_selavu_app", "run", "uvicorn", "varavu_selavu_service.main:app", "--host", "0.0.0.0", "--port", "8090"],
+      "port": 8090
+    },
+    {
+      "name": "metro-ocr-e2e",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["EXPO_PUBLIC_API_URL=http://localhost:8090", "npm", "--prefix", "varavu_selavu_mobile", "run", "start", "--", "--port", "8081"],
+      "port": 8081
+    },
+    {
       "name": "mobile-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "varavu_selavu_mobile", "run", "web", "--", "--port", "19006"],

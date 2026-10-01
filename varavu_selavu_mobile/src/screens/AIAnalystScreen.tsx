@@ -12,6 +12,9 @@ import { useAuth } from '../context/AuthContext';
 import { sendChatMessageFull, ChatPayload, ChatMessage } from '../api/chat';
 import { scopeLine } from '../utils/chatScope';
 import { apiFetch } from '../api/apiFetch';
+import { AiLimitError } from '../api/aiUsage';
+import { useAiUsage } from '../hooks/useAiUsage';
+import AiQuotaNote from '../components/AiQuotaNote';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, withAlpha, inkOnPastel } from '../theme';
 import ScreenHeader from '../components/ScreenHeader';
@@ -53,6 +56,11 @@ export default function AIAnalystScreen() {
     const [models, setModels] = useState<ModelOption[]>([]);
     const [provider, setProvider] = useState<string>('');
     const [selectedSpeed, setSelectedSpeed] = useState<'fast' | 'deep'>('fast');
+    const { usage, feature: chatUsage, exhausted, unavailable, refresh: refreshUsage } = useAiUsage('chat');
+    const aiBlocked = exhausted || unavailable;
+    // The server only accepts its model allowlist; with a single allowed model the FAST/DEEP
+    // chip would be a no-op, so it's only shown when there really are two models (web parity).
+    const hasModelChoice = new Set(models.map((m) => m.id)).size > 1;
 
     // Typing indicator animation
     const dot1 = useRef(new Animated.Value(0)).current;
@@ -108,7 +116,7 @@ export default function AIAnalystScreen() {
 
     const handleSend = async (textOverride?: string) => {
         const text = textOverride || inputText.trim();
-        if (!text || loading) return;
+        if (!text || loading || aiBlocked) return;
 
         const userMsg: DisplayMessage = { id: Date.now().toString(), role: 'user', content: text };
         
@@ -166,11 +174,14 @@ export default function AIAnalystScreen() {
             const errorMsg: DisplayMessage = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: `❌ Error: ${error.message || 'Something went wrong'}`,
+                content: error instanceof AiLimitError
+                    ? error.message
+                    : `❌ Error: ${error.message || 'Something went wrong'}`,
             };
             setMessages((prev) => [...prev, errorMsg]);
         } finally {
             setLoading(false);
+            refreshUsage();
         }
     };
 
@@ -233,7 +244,7 @@ export default function AIAnalystScreen() {
             <ScreenHeader
                 title="Ask"
                 style={{ paddingHorizontal: 22 }}
-                right={(
+                right={hasModelChoice ? (
                     <TouchableOpacity
                         style={styles.speedChip}
                         activeOpacity={0.7}
@@ -243,7 +254,7 @@ export default function AIAnalystScreen() {
                     >
                         <Text style={styles.speedChipText}>{selectedSpeed.toUpperCase()} ▾</Text>
                     </TouchableOpacity>
-                )}
+                ) : undefined}
             />
 
             {/* Chat messages — takes all available space */}
@@ -310,10 +321,11 @@ export default function AIAnalystScreen() {
                             onSubmitEditing={() => handleSend()}
                             multiline
                             maxLength={500}
+                            editable={!aiBlocked}
                         />
                         <TouchableOpacity
                             onPress={() => handleSend()}
-                            disabled={!inputText.trim() || loading}
+                            disabled={!inputText.trim() || loading || aiBlocked}
                             activeOpacity={0.7}
                             accessibilityRole="button"
                             accessibilityLabel="Send"
@@ -322,7 +334,7 @@ export default function AIAnalystScreen() {
                                 colors={theme.gradients.primary}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 0 }}
-                                style={[styles.sendBtn, (!inputText.trim() || loading) && styles.sendBtnDisabled]}
+                                style={[styles.sendBtn, (!inputText.trim() || loading || aiBlocked) && styles.sendBtnDisabled]}
                             >
                                 {loading ? (
                                     <ActivityIndicator size="small" color={inkOnPastel} />
@@ -332,6 +344,7 @@ export default function AIAnalystScreen() {
                             </LinearGradient>
                         </TouchableOpacity>
                     </View>
+                    <AiQuotaNote usage={usage} feature={chatUsage} />
                 </View>
             </KeyboardAvoidingView>
 

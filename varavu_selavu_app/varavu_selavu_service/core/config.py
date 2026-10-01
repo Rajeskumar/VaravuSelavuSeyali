@@ -44,11 +44,19 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
 
     # OCR / receipts
-    OCR_ENGINE: str = "gemini"
+    # "hybrid" = on-server RapidOCR + rule parser, falling back to the LLM (quota-metered) only
+    # when the parse confidence is below OCR_LLM_FALLBACK_MIN_CONF. "local" never calls an LLM.
+    # "gemini" / "ollama" send the image straight to the LLM; "mock" is for tests.
+    OCR_ENGINE: str = "hybrid"
+    OCR_LLM_FALLBACK_MIN_CONF: float = 0.75
     OCR_MODEL: str = "gemini-2.5-flash"
     MAX_UPLOAD_MB: int = 12
-    ALLOWED_MIME: str = "image/png,image/jpeg,application/pdf"
+    ALLOWED_MIME: str = "image/png,image/jpeg,image/webp,image/heic,image/heif,application/pdf"
     LLM_TIMEOUT_SEC: int = 180
+
+    # Categorization: user memory -> merchant dictionary -> keyword rules run locally; the LLM
+    # is only tried (quota-metered) when all of them miss and this is on.
+    CATEGORIZE_LLM_FALLBACK: bool = True
 
     # Email
     MAIL_USERNAME: str = ""
@@ -105,6 +113,26 @@ class Settings(BaseSettings):
     TAG_MAX_PER_EXPENSE: int = 5
     TAG_MAX_PER_USER: int = 100
     TAG_BULK_MAX: int = 1000
+
+    # AI cost gating (services/ai_quota_service.py). The app is free, so every LLM-backed
+    # endpoint draws from a per-user daily allowance, and a global daily $ cap pauses AI for
+    # everyone if total estimated spend runs away. AI_ENABLED is the instant off switch.
+    AI_ENABLED: bool = True
+    AI_REQUIRE_VERIFIED_EMAIL: bool = True
+    # Chat and budget "Ask why" share the chat pool.
+    AI_CHAT_DAILY_LIMIT: int = 10
+    AI_RECEIPT_DAILY_LIMIT: int = 5
+    AI_CATEGORIZE_DAILY_LIMIT: int = 50
+    AI_GLOBAL_DAILY_BUDGET_USD: float = 5.0
+    # Chat input hardening: bound what one request can cost regardless of quota.
+    AI_CHAT_MAX_HISTORY_MESSAGES: int = 20
+    AI_CHAT_MAX_INPUT_CHARS: int = 4000
+    AI_AGENT_RECURSION_LIMIT: int = 12
+    AI_CHAT_TIMEOUT_SEC: int = 60
+    # Server-side model allowlist for chat. Clients may only pick from this list; anything
+    # else (e.g. a pro-tier model) is rejected. Comma-separated "provider:model" entries.
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    AI_CHAT_ALLOWED_MODELS: str = "gemini:gemini-3.1-flash-lite"
 
     class Config:
         env_file = ".env"

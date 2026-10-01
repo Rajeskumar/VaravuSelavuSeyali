@@ -1,4 +1,5 @@
 import { fetchWithAuth } from './api';
+import { aiErrorFromResponse } from './aiUsage';
 
 export type BudgetScope = 'personal' | 'combined';
 export type BudgetTargetType = 'overall' | 'category';
@@ -112,6 +113,6 @@ export async function getBudgetSuggestions(scope: BudgetScope = 'personal'): Pro
 export async function getBudgetAskWhy(id: string, period?: string): Promise<{ response: string }> {
   const qs = period ? `?period=${encodeURIComponent(period)}` : '';
   const res = await fetchWithAuth(`/api/v1/budgets/${id}/ask-why${qs}`, { method: 'POST' });
-  if (!res.ok) throw new Error('Failed to get an explanation for this budget');
+  if (!res.ok) throw await aiErrorFromResponse(res, 'Failed to get an explanation for this budget');
   return res.json();
 }

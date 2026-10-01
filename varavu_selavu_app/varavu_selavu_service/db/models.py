@@ -26,6 +26,42 @@ class User(Base):
     # backfills pre-existing rows to True via a server_default so this doesn't suddenly nag
     # the entire existing user base the day it ships.
     email_verified = Column(Boolean, nullable=False, default=False)
+    # AI cost gating (see services/ai_quota_service.py). 'default' users get the configured
+    # daily limits, 'unlimited' skips them (usage is still counted), 'blocked' gets no AI.
+    # ai_limits_override is a per-feature limit map, e.g. {"chat": 50}, set via scripts/ai_access.py.
+    ai_access = Column(String(20), nullable=False, default="default", server_default="default")
+    ai_limits_override = Column(JSON, nullable=True)
+
+
+class AiUsageDaily(Base):
+    """Per-user, per-feature, per-UTC-day counter for LLM-backed calls. `count` is reserved
+    atomically before the LLM call (and refunded if the call fails on our side); tokens and
+    estimated cost are added after it returns, and their daily SUM drives the global spend cap."""
+    __tablename__ = "ai_usage_daily"
+    __table_args__ = {"schema": "trackspense"}
+
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), primary_key=True)
+    feature = Column(String(20), primary_key=True)
+    day = Column(Date, primary_key=True)
+    count = Column(Integer, nullable=False, default=0, server_default="0")
+    input_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    output_tokens = Column(Integer, nullable=False, default=0, server_default="0")
+    est_cost_usd = Column(Numeric(12, 6), nullable=False, default=0, server_default="0")
+
+
+class CategoryMemory(Base):
+    """What category this user last saved for a description/merchant — the first tier of
+    categorization, so a correction sticks ("Costco" -> Household for this user) without any
+    LLM call. `key` is category_rules.normalize_text() of the description or merchant name."""
+    __tablename__ = "category_memory"
+    __table_args__ = {"schema": "trackspense"}
+
+    user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), primary_key=True)
+    key = Column(String(120), primary_key=True)
+    main_category = Column(String(100), nullable=False)
+    category_id = Column(String(100), nullable=False)
+    hits = Column(Integer, nullable=False, default=1, server_default="1")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class EmailToken(Base):

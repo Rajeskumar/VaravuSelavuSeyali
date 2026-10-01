@@ -9,6 +9,7 @@ export interface FeatureFlags {
   budgets_enabled: boolean;
   card_coach_enabled: boolean;
   tags_enabled: boolean;
+  ai_enabled?: boolean;
 }
 
 /** Never requires auth and never 404s, unlike probing /groups directly. */

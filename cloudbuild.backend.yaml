@@ -100,6 +100,9 @@ steps:
       # only touches this one key; every other env var configured on the service (MAIL_*, secrets,
       # etc.) is left exactly as Cloud Run already carries it forward on a redeploy.
       - '--update-env-vars=PUBLIC_APP_URL=${_PUBLIC_APP_URL}'
+      # Receipt OCR runs on this service (RapidOCR / ONNX Runtime, ~300MB resident once the
+      # models load), which doesn't fit the old 512Mi alongside the app.
+      - '--memory=1Gi'
 
 options:
   logging: CLOUD_LOGGING_ONLY

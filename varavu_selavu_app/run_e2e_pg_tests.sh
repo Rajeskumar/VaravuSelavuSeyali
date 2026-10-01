@@ -64,6 +64,6 @@ print('All PostgreSQL tables created successfully via SQLAlchemy metadata.')
 echo "Running E2E tests against PostgreSQL..."
 export E2E_DATABASE_URL="postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME"
 export PYTHONPATH=.
-poetry run pytest tests/test_analytics_e2e_pg.py tests/test_groups_e2e_pg.py -v
+poetry run pytest tests/test_analytics_e2e_pg.py tests/test_groups_e2e_pg.py tests/test_ai_quota.py -v
 
 echo "E2E Testing completed successfully!"

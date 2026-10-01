@@ -387,6 +387,12 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     />
   );
 
+  // Scan failures (including the daily scan limit) used to be swallowed here; the rest of the
+  // form stays usable, so the user can just type the expense in.
+  const scanErrorLine = scan.error ? (
+    <Typography sx={{ fontSize: 12.5, color: 'error.main', mt: 1 }}>{scan.error}</Typography>
+  ) : null;
+
   const whoChips = groupsEnabled && (
     <Box sx={{ display: 'flex', gap: 0.75, mt: 1.25, flexWrap: 'wrap' }}>
       {[{ id: 'me', name: 'Just me' }, ...groups.map((g) => ({ id: g.group_id, name: g.name }))].map((chip) => {
@@ -572,6 +578,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 </IconButton>
               </Box>
             </Box>
+            {scanErrorLine}
 
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, pt: 1.5, pb: 0.5 }}>
               <Typography
@@ -698,6 +705,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               </IconButton>
             </Box>
           </Box>
+          {scanErrorLine}
 
           <Box sx={{ textAlign: 'center', pt: 1.25, pb: 0.5 }}>
             <Typography component="div" sx={{ ...typeScale.displayHero, fontSize: 42, minHeight: 52 }}>

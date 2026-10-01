@@ -1,6 +1,8 @@
 import base64
 import hashlib
 import json
+import logging
+import time
 import os
 import re
 from typing import Any, Dict, List, Tuple, Optional
@@ -8,6 +10,10 @@ from typing import Any, Dict, List, Tuple, Optional
 import requests
 
 from .categorization_service import CATEGORY_GROUPS
+from .receipt_text_parser import ReceiptTextParser
+
+# Engines that read the image with OCR on our own server instead of sending it to an LLM.
+LOCAL_ENGINES = ("local", "hybrid")
 
 CATEGORY_PROMPT = "; ".join(
     f"{main}: {', '.join(subs)}" for main, subs in CATEGORY_GROUPS.items()
@@ -41,14 +47,18 @@ def _validate_item_category(sub: Any, fallback_sub: str) -> str:
 
 
 class ReceiptService:
-    """Parse receipts via Gemini or Ollama; supports mock parsing for tests."""
+    """Parse receipts with on-server OCR + rules ("local"/"hybrid"), or via Gemini/Ollama;
+    supports mock parsing for tests."""
 
     def __init__(self, engine: Optional[str] = None) -> None:
-        self.engine = engine or os.getenv("OCR_ENGINE", "gemini")
+        self.engine = engine or os.getenv("OCR_ENGINE", "hybrid")
         self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.model = os.getenv("OCR_MODEL", "gemini-2.5-flash")
         self.timeout = float(os.getenv("LLM_TIMEOUT_SEC", "180"))
+        # (input_tokens, output_tokens) reported by the provider for the last parse, read by
+        # the route to settle the AI quota. None when the provider reported nothing.
+        self.last_usage: Optional[Tuple[int, int]] = None
 
     # ------------------- mock helpers -------------------
     @staticmethod
@@ -162,6 +172,12 @@ class ReceiptService:
         resp.raise_for_status()
         
         resp_data = resp.json()
+        usage_meta = resp_data.get("usageMetadata") or {}
+        if usage_meta:
+            self.last_usage = (
+                int(usage_meta.get("promptTokenCount") or 0),
+                int(usage_meta.get("candidatesTokenCount") or 0),
+            )
         try:
             content = resp_data["candidates"][0]["content"]["parts"][0]["text"]
             # Sometimes model wraps response in ```json ... ``` despite responseMimeType
@@ -205,24 +221,94 @@ class ReceiptService:
         return json.loads(data.get("response", "{}"))
 
     # ------------------- public API -------------------
+    @property
+    def uses_local_ocr(self) -> bool:
+        return self.engine in LOCAL_ENGINES
+
+    def parse_ocr(self, data: bytes, content_type: str = "image/png", save_ocr_text: bool = False) -> Dict[str, Any]:
+        """Server OCR (RapidOCR) + rule-based parsing. No LLM, no network."""
+        from varavu_selavu_service.services.ocr.engine import read_receipt
+
+        started = time.monotonic()
+        best = None
+        # Bound work to three passes; do not start another after 20 seconds.
+        # An in-flight native OCR call cannot be interrupted by this budget.
+        for variant in range(3):
+            if variant and time.monotonic() - started >= 20:
+                break
+            try:
+                rows = read_receipt(data, content_type, variant=variant)
+                candidate = self.parse_ocr_rows(
+                    [r.text for r in rows], save_ocr_text=save_ocr_text,
+                    recognition_scores=[r.conf for r in rows],
+                )
+            except Exception:
+                if best is None:
+                    raise
+                logging.getLogger("varavu_selavu.ocr").exception("Receipt recovery pass failed")
+                break
+            if best is None or candidate["confidence"] > best["confidence"]:
+                best = candidate
+            logging.getLogger("varavu_selavu.ocr").info(
+                "receipt_ocr pass=%d rows=%d confidence=%.3f warnings=%d elapsed=%.2f",
+                variant, len(rows), candidate["confidence"], len(candidate["warnings"]),
+                time.monotonic() - started,
+            )
+            if candidate["confidence"] >= 0.85 and not candidate["warnings"]:
+                break
+            if data[:5] == b"%PDF-" or content_type == "application/pdf":
+                break
+        return best
+
+    def parse_ocr_rows(self, rows: List[str], save_ocr_text: bool = False, recognition_scores: Optional[List[float]] = None) -> Dict[str, Any]:
+        """Rule-based parsing of already-recognized rows (server OCR or on-device OCR)."""
+        parsed = ReceiptTextParser().parse(rows)
+        if recognition_scores is not None:
+            # Low-quality money tokens must not become trustworthy just because
+            # their (possibly incorrect) values happen to balance.
+            uncertain_money = any(
+                score < 0.8 and re.search(r"\d[.,]\d{2}", text)
+                for text, score in zip(rows, recognition_scores)
+            )
+            if uncertain_money:
+                parsed.confidence = min(parsed.confidence, 0.6)
+                parsed.warnings.append("Some amounts have low OCR confidence; please review.")
+        if any(len(re.sub(r"[^A-Za-z]", "", i["item_name"])) < 3 for i in parsed.items):
+            parsed.confidence = min(parsed.confidence, 0.6)
+            parsed.warnings.append("An item description appears incomplete; please review.")
+        result = self._finalize(
+            {"header": parsed.header, "items": parsed.items, "warnings": parsed.warnings, "ocr_text": parsed.ocr_text},
+            save_ocr_text,
+        )
+        result["source"] = "ocr"
+        result["confidence"] = parsed.confidence
+        return result
+
     def parse(
         self,
         data: bytes,
         content_type: str = "image/png",
         save_ocr_text: bool = False,
+        engine: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Parse receipt bytes into structured data."""
-        if self.engine == "mock":
+        """Parse receipt bytes with an LLM engine (or the mock). `engine` overrides
+        self.engine — the hybrid route uses it to ask Gemini for a second opinion."""
+        engine = engine or self.engine
+        if engine == "mock":
             text = data.decode("utf-8", errors="ignore")
             header, items = self._parse_text(text)
             parsed: Dict[str, Any] = {"header": header, "items": items, "ocr_text": text}
         else:
-            if self.engine == "ollama":
+            if engine == "ollama":
                 b64 = base64.b64encode(data).decode()
                 parsed = self._call_ollama(b64)
             else:
                 parsed = self._call_gemini(data, content_type)
+        result = self._finalize(parsed, save_ocr_text)
+        result["source"] = "llm"
+        return result
 
+    def _finalize(self, parsed: Dict[str, Any], save_ocr_text: bool) -> Dict[str, Any]:
         header = parsed.get("header", {})
         items = parsed.get("items", [])
 

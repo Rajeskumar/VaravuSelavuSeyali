@@ -4,6 +4,12 @@ FROM python:3.12-slim
 # Set the working directory
 WORKDIR /app
 
+# Receipt OCR (rapidocr-onnxruntime) pulls in opencv-python, which needs libGL and glib at
+# import time; the slim image ships neither.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the Poetry files
 COPY pyproject.toml poetry.lock /app/
 

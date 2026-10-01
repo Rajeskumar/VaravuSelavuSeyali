@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import heic2any from 'heic2any';
 import { parseReceipt, ReceiptParseDraft } from '../api/expenses';
+import { AiLimitError } from '../api/aiUsage';
 
 // OpenAI only accepts PNG or JPEG. Any other image format (e.g. HEIC) must be
 // converted in-browser before sending to the backend.
@@ -35,8 +36,10 @@ export function useReceiptScan(options: UseReceiptScanOptions = {}) {
       setParsing(true);
       setError(null);
       return await parseReceipt(f);
-    } catch {
-      setError('Failed to parse receipt');
+    } catch (err) {
+      // Daily scan limit / AI paused get their own copy (e.g. "enter this one manually");
+      // anything else stays generic.
+      setError(err instanceof AiLimitError ? err.message : 'Failed to parse receipt');
       return null;
     } finally {
       setParsing(false);

@@ -31,7 +31,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useAuth } from '../context/AuthContext';
-import { addExpense, addExpenseWithItems, categorizeExpense, uploadReceipt } from '../api/expenses';
+import { addExpense, addExpenseWithItems, categorizeExpense, parseReceiptOcr, uploadReceipt } from '../api/expenses';
+import { recognizeReceipt, toUploadableJpeg } from '../utils/onDeviceOcr';
 import {
   listGroups, getGroupDetail, addGroupExpense, addGroupExpenseWithItems,
   GroupSummary, GroupDetail, GroupExpenseItemEntry, PayerSummaryItem, ApiError,
@@ -300,16 +301,30 @@ export default function AddExpenseProvider({ children }: { children: React.React
         quantity: it.quantity != null ? Number(it.quantity) : null,
         unit_price: it.unit_price != null ? Number(it.unit_price) : null,
         normalized_name: it.normalized_name,
+        category_name: it.category_name,
       }))
     );
   };
 
   // Reads a receipt photo into the form. On success the scanner closes and — when line items were
   // found — the Items review sheet opens; otherwise the filled-in capture sheet is left showing.
-  const parseReceiptUri = async (uri: string) => {
+  const parseReceiptUri = async (uri: string, width?: number) => {
     setScanning(true);
     try {
-      const res = await uploadReceipt(uri, accessToken || '');
+      // On-device OCR first: only the recognized text leaves the phone. When ML Kit is
+      // unavailable or the server can't vouch for that read (needs_image), upload the photo so
+      // server OCR — and, if needed, its metered AI fallback — get a turn.
+      let res: any = null;
+      const ocr = await recognizeReceipt(uri);
+      if (ocr) {
+        try {
+          const parsed = await parseReceiptOcr(ocr);
+          if (!parsed.needs_image) res = parsed;
+        } catch {
+          // fall through to the upload
+        }
+      }
+      if (!res) res = await uploadReceipt(await toUploadableJpeg(uri, width), accessToken || '');
       applyParseResult(res);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setScanVisible(false);
@@ -335,7 +350,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
         ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
       if (result.canceled || !result.assets?.[0]) return;
-      await parseReceiptUri(result.assets[0].uri);
+      await parseReceiptUri(result.assets[0].uri, result.assets[0].width);
     } catch {
       showToast({ message: 'Failed to open camera or photo library', type: 'error' });
     }
@@ -446,6 +461,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
           quantity: it.quantity ?? null,
           unit_price: it.unit_price ?? null,
           line_total: it.line_total,
+          category_name: it.category_name,
         }));
         await addExpenseWithItems({
           user_email: userEmail, header, items,

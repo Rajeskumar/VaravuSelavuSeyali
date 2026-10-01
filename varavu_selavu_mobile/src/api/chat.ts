@@ -1,4 +1,5 @@
 import { apiFetch } from './apiFetch';
+import { aiErrorFromResponse } from './aiUsage';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -55,8 +56,7 @@ export async function sendChatMessageFull(_token: string, payload: ChatPayload):
   });
 
   if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error((errData as any).detail || 'Failed to send message');
+    throw await aiErrorFromResponse(response, 'Failed to send message');
   }
 
   const data = await response.json();

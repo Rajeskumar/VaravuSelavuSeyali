@@ -6,6 +6,7 @@ export interface FeatureFlags {
   budgets_enabled: boolean;
   card_coach_enabled: boolean;
   tags_enabled: boolean;
+  ai_enabled?: boolean;
 }
 
 /** Client-visible feature flag surface (TS-GRP-111) — never requires auth and

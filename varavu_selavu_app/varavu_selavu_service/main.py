@@ -26,6 +26,20 @@ assert_signing_secret_is_safe(settings.ENVIRONMENT, settings.JWT_SECRET)
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
 app.state.limiter = limiter
+
+
+@app.on_event("startup")
+def _warm_up_receipt_ocr() -> None:
+    # Loading the OCR models takes seconds; do it off the request path so the
+    # first receipt scan after a cold start isn't the one that pays for it.
+    if settings.OCR_ENGINE in ("local", "hybrid"):
+        import threading
+
+        from varavu_selavu_service.services.ocr.engine import warm_up
+
+        threading.Thread(target=warm_up, name="ocr-warmup", daemon=True).start()
+
+
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Include the API router (versioned only)

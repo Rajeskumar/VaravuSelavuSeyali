@@ -4,6 +4,9 @@ import CloseIcon from '@mui/icons-material/CloseRounded';
 import SendIcon from '@mui/icons-material/SendRounded';
 import { ChangeInsight } from '../../api/analytics';
 import { fetchWithAuth } from '../../api/api';
+import { aiErrorFromResponse, AiLimitError } from '../../api/aiUsage';
+import { useAiUsage } from '../../hooks/useAiUsage';
+import AiQuotaNote from '../common/AiQuotaNote';
 
 interface AskSheetProps {
   insight: ChangeInsight | null;
@@ -24,6 +27,8 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
   const [draft, setDraft] = useState('');
   const [seededFor, setSeededFor] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { usage, feature: chatUsage, exhausted, unavailable, refresh: refreshUsage } = useAiUsage('chat');
+  const aiBlocked = exhausted || unavailable;
 
   useEffect(() => {
     if (insight && seededFor !== insight.metric_name) {
@@ -54,20 +59,24 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
       });
 
       if (!res.ok) {
-        throw new Error("Chat failed");
+        throw await aiErrorFromResponse(res, "Chat failed");
       }
       
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.response || data.reply || 'No response' }]);
     } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I ran into an error getting that information for you.' }]);
+      const content = e instanceof AiLimitError
+        ? e.message
+        : 'Sorry, I ran into an error getting that information for you.';
+      setMessages(prev => [...prev, { role: 'assistant', content }]);
     } finally {
       setThinking(false);
+      refreshUsage();
     }
   };
 
   const handleFollowUp = () => {
-    if (!draft.trim() || thinking) return;
+    if (!draft.trim() || thinking || aiBlocked) return;
     const newMsgs = [...messages, { role: 'user', content: draft } as Message];
     setMessages(newMsgs);
     setDraft('');
@@ -149,7 +158,8 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
         )}
       </Box>
 
-      <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}` }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <TextField
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -157,7 +167,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
           placeholder="Ask a follow-up..."
           fullWidth
           size="small"
-          disabled={thinking}
+          disabled={thinking || aiBlocked}
           sx={{
             '& .MuiOutlinedInput-root': {
               borderRadius: 999,
@@ -167,9 +177,11 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
             }
           }}
         />
-        <IconButton onClick={handleFollowUp} aria-label="Send question" color="primary" disabled={!draft.trim() || thinking}>
+        <IconButton onClick={handleFollowUp} aria-label="Send question" color="primary" disabled={!draft.trim() || thinking || aiBlocked}>
           <SendIcon fontSize="small" />
         </IconButton>
+      </Box>
+      <AiQuotaNote usage={usage} feature={chatUsage} />
       </Box>
     </Drawer>
   );

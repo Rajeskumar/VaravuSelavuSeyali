@@ -73,6 +73,28 @@ class ReceiptParseResponse(BaseModel):
     warnings: List[str]
     fingerprint: str
     ocr_text: str | None = None
+    # How the receipt was read: "ocr" (no LLM), "ocr+llm" (OCR was unsure, LLM re-read it),
+    # "llm" (LLM-only engine). confidence is the OCR parser's own 0..1 score.
+    source: str | None = None
+    confidence: float | None = None
+    # /parse_ocr only: the on-device text wasn't enough; re-upload the image to /parse.
+    needs_image: bool = False
+
+
+class OcrLineIn(BaseModel):
+    text: str = Field(..., max_length=200)
+    # [x, y, width, height] in image pixels; omit when the OCR source has no geometry.
+    box: Optional[List[float]] = Field(None, min_length=4, max_length=4)
+    conf: Optional[float] = None
+    # Baseline angle in radians, used to undo photo skew before grouping rows.
+    angle: Optional[float] = None
+
+
+class OcrParseRequest(BaseModel):
+    """Text recognized on-device (ML Kit / Apple Vision); the server only parses it."""
+    lines: List[OcrLineIn] = Field(..., min_length=1, max_length=400)
+    image_width: Optional[float] = None
+    image_height: Optional[float] = None
 
 
 class ExpenseItem(BaseModel):
@@ -144,6 +166,9 @@ class CategorizeResponse(BaseModel):
     main_category: str
     subcategory: str
     merchant_name: Optional[str] = None
+    # Which tier answered: memory | merchant | keyword | llm | default.
+    source: Optional[str] = None
+    confidence: Optional[float] = None
 
 
 class ChatRequest(BaseModel):
@@ -189,6 +214,27 @@ class FeatureFlagsResponse(BaseModel):
     # TS-TAG-101: same pattern, for TagInput/tag filter surfaces on web/mobile — defaults False
     # until the retrieval surfaces (filter + bulk apply) ship (PRD §4.2).
     tags_enabled: bool
+    # AI cost gating kill switch (Settings.AI_ENABLED) — lets clients hide AI entry points
+    # instead of letting users hit a 503.
+    ai_enabled: bool = True
+
+
+class AiFeatureUsage(BaseModel):
+    used: int
+    limit: Optional[int] = None  # None = unlimited
+    remaining: Optional[int] = None
+
+
+class AiUsageResponse(BaseModel):
+    """Today's per-feature AI usage for the caller (services/ai_quota_service.py). Days are
+    UTC; `resets_at` is the next UTC midnight."""
+    features: Dict[str, AiFeatureUsage]
+    resets_at: str
+    ai_enabled: bool
+    paused: bool
+    blocked: bool
+    email_verified: bool
+    requires_verified_email: bool
 
 
 class DashboardResponse(BaseModel):

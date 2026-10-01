@@ -4,6 +4,10 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import os
 import requests
+from sqlalchemy.orm import Session
+
+from varavu_selavu_service.services.category_memory_service import CategoryMemoryService
+from varavu_selavu_service.services.category_rules import get_rule_categorizer
 
 logger = logging.getLogger("varavu_selavu.categorization")
 
@@ -72,6 +76,13 @@ VALID_CATEGORY_IDS = frozenset(
 class CategorizationService:
     """Classify expense descriptions into categories and subcategories."""
 
+    # (input_tokens, output_tokens) from the last LLM call, for AI quota settlement.
+    last_usage: Optional[Tuple[int, int]] = None
+
+    @property
+    def model(self) -> str:
+        return os.getenv("OCR_MODEL", "gemini-2.5-flash")
+
     def _parse_json_response(self, text: str) -> dict:
         """
         Normalize various LLM response shapes into a JSON object.
@@ -134,7 +145,7 @@ class CategorizationService:
             if not api_key:
                 raise ValueError("GEMINI_API_KEY not configured")
                 
-            model = os.getenv("OCR_MODEL", "gemini-2.5-flash") # Use same model as receipt, or default 2.5-flash
+            model = self.model  # same model as receipt parsing
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             
             body = {
@@ -150,6 +161,12 @@ class CategorizationService:
             resp.raise_for_status()
             
             resp_data = resp.json()
+            usage_meta = resp_data.get("usageMetadata") or {}
+            if usage_meta:
+                self.last_usage = (
+                    int(usage_meta.get("promptTokenCount") or 0),
+                    int(usage_meta.get("candidatesTokenCount") or 0),
+                )
             response = resp_data["candidates"][0]["content"]["parts"][0]["text"]
             
             data = self._parse_json_response(response)
@@ -161,6 +178,39 @@ class CategorizationService:
             raise ValueError(f"Invalid category combination: {main} / {sub}")
         except Exception as exc:  # pragma: no cover - network or parsing errors
             logger.warning("LLM classification failed: %s", exc)
+        return None
+
+    def suggest_local(
+        self,
+        description: str,
+        user_email: Optional[str] = None,
+        db: Optional[Session] = None,
+    ) -> Optional[Dict[str, object]]:
+        """Non-LLM tiers, in order: this user's own past pick, the merchant dictionary, keyword
+        rules. Returns None when none of them has an answer (the caller may then try the LLM)."""
+        rules = get_rule_categorizer()
+        rule = rules.classify(description)
+        if user_email and db is not None:
+            remembered = CategoryMemoryService(db).lookup(
+                user_email, description, rule.merchant_name if rule else None
+            )
+            if remembered:
+                main, sub = remembered
+                return {
+                    "main_category": main,
+                    "subcategory": sub,
+                    "merchant_name": rule.merchant_name if rule else None,
+                    "source": "memory",
+                    "confidence": 0.99,
+                }
+        if rule:
+            return {
+                "main_category": rule.main_category,
+                "subcategory": rule.subcategory,
+                "merchant_name": rule.merchant_name,
+                "source": rule.source,
+                "confidence": rule.confidence,
+            }
         return None
 
     def classify(self, description: str) -> Tuple[str, str, Optional[str]]:
