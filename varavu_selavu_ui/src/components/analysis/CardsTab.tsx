@@ -10,14 +10,75 @@ import StarIcon from '@mui/icons-material/StarRounded';
 import StarBorderIcon from '@mui/icons-material/StarBorderRounded';
 import {
   listMyCards, addMyCard, removeMyCard, setMyDefaultCard, searchCardCatalog, getCardCoach,
-  UserCardDTO, CardCatalogSummary,
+  UserCardDTO, CardCatalogSummary, CardCoachResponse, CardCoachPreset, CARD_COACH_PRESETS, cardCoachPeriodParams,
 } from '../../api/cards';
 import CardDetailDialog from './CardDetailDialog';
 import CustomCardForm from './CustomCardForm';
+import SegmentedTabs from '../common/SegmentedTabs';
 
 function formatMoney(n: number): string {
   return `$${n.toFixed(2)}`;
 }
+
+function formatPoints(n: number, rewardType: string): string {
+  return `${Math.round(n).toLocaleString()} ${rewardType === 'miles' ? 'miles' : 'pts'}`;
+}
+
+/** "Which card benefited me most" — every card's actual earnings for the period, best first. */
+const EarnedByCard: React.FC<{ coach: CardCoachResponse; phrase: string }> = ({ coach, phrase }) => {
+  const cards = coach.by_card ?? [];
+  if (cards.length === 0) return null;
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography sx={{ fontSize: 13, fontWeight: 700, color: 'text.secondary', mb: 0.5 }}>Earned by card</Typography>
+      <Typography sx={{ fontSize: 22, fontWeight: 700, mb: 1.5 }}>
+        Your cards earned {formatMoney(coach.total_earned_usd ?? 0)}
+        <Typography component="span" sx={{ fontSize: 13, fontWeight: 500, color: 'text.secondary', ml: 1 }}>{phrase}</Typography>
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {cards.map((c) => {
+          const top = c.card_id === coach.best_card_id;
+          return (
+            <Box
+              key={c.card_id}
+              sx={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5,
+                backgroundColor: 'background.paper', border: '1px solid',
+                borderColor: top ? 'primary.main' : 'divider', borderRadius: 1.2, p: 1.5,
+              }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                  <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>{c.card_name}</Typography>
+                  {top && <Chip size="small" color="primary" label="Top earner" sx={{ height: 20, fontSize: 11 }} />}
+                  {!c.still_held && <Chip size="small" variant="outlined" label="Removed" sx={{ height: 20, fontSize: 11 }} />}
+                </Box>
+                <Typography sx={{ fontSize: 12, color: 'text.secondary' }}>
+                  {c.spend > 0
+                    ? `${formatMoney(c.spend)} spent${c.effective_rate != null ? ` · ${c.effective_rate.toFixed(1)}% back` : ''}${c.top_category ? ` · mostly ${c.top_category}` : ''}`
+                    : `No spend ${phrase}`}
+                </Typography>
+                {c.cap_hit && (
+                  <Typography sx={{ fontSize: 11.5, color: 'warning.main' }}>
+                    Hit a bonus cap — spend above it earned the base rate
+                  </Typography>
+                )}
+              </Box>
+              <Typography sx={{ fontWeight: 700, fontSize: 15, flexShrink: 0 }}>
+                {c.earned_usd != null ? formatMoney(c.earned_usd) : formatPoints(c.earned_raw, c.reward_type)}
+              </Typography>
+            </Box>
+          );
+        })}
+      </Box>
+      {coach.unassigned_spend > 0 && (
+        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 1 }}>
+          {formatMoney(coach.unassigned_spend)} of spend isn't linked to a card — set a default card, or pick the card when adding an expense.
+        </Typography>
+      )}
+    </Box>
+  );
+};
 
 interface GapRowShape {
   actual_spend: number;
@@ -165,10 +226,12 @@ const CardsTab: React.FC = () => {
     enabled: pickerOpen,
   });
 
-  const now = new Date();
+  // Rewards are about everything you've spent, not just this month — default to all time.
+  const [preset, setPreset] = React.useState<CardCoachPreset>('all');
+  const phrase = CARD_COACH_PRESETS.find((p) => p.value === preset)?.phrase ?? 'all time';
   const { data: coach, isLoading: coachLoading, isError: coachError } = useQuery({
-    queryKey: ['card-coach', now.getFullYear(), now.getMonth() + 1],
-    queryFn: () => getCardCoach({ year: now.getFullYear(), month: now.getMonth() + 1 }),
+    queryKey: ['card-coach', preset],
+    queryFn: () => getCardCoach(cardCoachPeriodParams(preset)),
     enabled: myCards.length > 0,
   });
 
@@ -282,6 +345,18 @@ const CardsTab: React.FC = () => {
 
   return (
     <Box>
+      <Box sx={{ mb: 2, maxWidth: 440 }}>
+        <SegmentedTabs
+          options={CARD_COACH_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
+          value={preset}
+          onChange={(v) => setPreset(v as CardCoachPreset)}
+          size="small"
+          fullWidth
+          ariaLabel="Rewards period"
+        />
+      </Box>
+      {coach && <EarnedByCard coach={coach} phrase={phrase} />}
+
       <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 700, color: 'text.secondary' }}>Your cards</Typography>
@@ -325,16 +400,16 @@ const CardsTab: React.FC = () => {
         <>
           {coach.total_estimated_gap > 0 ? (
             <Alert severity="info" sx={{ mb: 2 }}>
-              You left an estimated {formatMoney(coach.total_estimated_gap)} in rewards on the table this month, using cards you already hold.
+              You left an estimated {formatMoney(coach.total_estimated_gap)} in rewards on the table {phrase}, using cards you already hold.
             </Alert>
           ) : (
             <Alert severity="success" sx={{ mb: 2 }}>
-              You're using your best held card for every category with spend this month.
+              You're using your best held card for every category with spend {phrase}.
             </Alert>
           )}
           {coach.by_category.length === 0 && (
             <Typography sx={{ fontSize: 13, color: 'text.secondary', textAlign: 'center', py: 3 }}>
-              No categorized spend yet this month.
+              No categorized spend {phrase === 'all time' ? 'yet' : phrase}.
             </Typography>
           )}
           {coach.by_category.map((row) => (

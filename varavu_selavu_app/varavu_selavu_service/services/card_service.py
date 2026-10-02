@@ -14,7 +14,8 @@ from varavu_selavu_service.services.card_rewards_engine import (
     CategoryRewardGap,
     MerchantRewardGap,
     best_card_for_category,
-    compute_coach_summary,
+    CoachReport,
+    compute_coach_report,
     estimate_reward,
 )
 from varavu_selavu_service.services.categorization_service import VALID_CATEGORY_IDS
@@ -350,6 +351,21 @@ class CardService:
         end_date: Optional[str] = None,
         groups_enabled: bool = False,
     ) -> Tuple[List[CategoryRewardGap], List[MerchantRewardGap], bool]:
+        """(category_gaps, merchant_gaps, group_share_included) — see compute_coach_report."""
+        report, group_share_included = self.compute_coach_report(
+            user_id, year=year, month=month, start_date=start_date, end_date=end_date, groups_enabled=groups_enabled,
+        )
+        return report.category_gaps, report.merchant_gaps, group_share_included
+
+    def compute_coach_report(
+        self,
+        user_id: str,
+        year: Optional[int] = None,
+        month: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        groups_enabled: bool = False,
+    ) -> Tuple[CoachReport, bool]:
         """Returns (category_gaps, merchant_gaps, group_share_included). TS-CARD-105: when Groups
         is enabled, the (category, merchant) buckets include the *full amount the user paid* on
         group expenses (spec §8.2) — never just their split "my share". TS-CARD-113: buckets
@@ -357,7 +373,7 @@ class CardService:
         category rule precedence correctly per dollar."""
         buckets = self.analysis_service.compute_category_merchant_buckets(
             user_id, year=year, month=month, start_date=start_date, end_date=end_date,
-            include_group_i_paid=groups_enabled,
+            include_group_i_paid=groups_enabled, by_month=True,
         )
         held_cards, default_card_id = self.get_engine_ready_held_cards(user_id)
         catalog_cards = self.get_engine_ready_catalog()
@@ -375,10 +391,10 @@ class CardService:
             rules_by_card = self._rules_by_card_id([c.id for c in missing_cards])
             attributed_cards = [_card_to_engine_dict(c, rules_by_card.get(c.id, [])) for c in missing_cards]
 
-        category_gaps, merchant_gaps = compute_coach_summary(
+        report = compute_coach_report(
             buckets, held_cards, catalog_cards, default_card_id, attributed_cards=attributed_cards,
         )
-        return category_gaps, merchant_gaps, groups_enabled
+        return report, groups_enabled
 
     # ------------------------------------------------------------------
     # Phase 2: prospective "which card should I use for this purchase" — deliberately searches

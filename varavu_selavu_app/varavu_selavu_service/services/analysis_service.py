@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple, List
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, Integer
+from sqlalchemy import func, extract, Integer, String, literal
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, ExpenseTag, Group, GroupMember
 
 
@@ -383,9 +383,11 @@ class AnalysisService:
         start_date: str | None = None,
         end_date: str | None = None,
         include_group_i_paid: bool = False,
+        by_month: bool = False,
     ) -> List[Dict[str, Any]]:
         """Returns [{"category": str, "merchant": Optional[str], "card_id": Optional[str],
-        "total": float}, ...] — one row per distinct (category, merchant, card_id) combination
+        "total": float}, ...] (plus "month": "YYYY-MM" when `by_month`, which Card Coach uses to
+        enforce reward caps per cap window) — one row per distinct (category, merchant, card_id) combination
         with nonzero spend. `merchant` is None for expenses with no merchant captured (matches
         Expense.merchant_name being nullable). `card_id` (TS-CARD-114) is None for expenses with
         no held-card attribution — CardRewardsEngine treats those as "assume the default card,"
@@ -393,39 +395,47 @@ class AnalysisService:
         is what lets the engine apply each dollar's *actual* attributed card instead of blindly
         crediting 100% of a category's spend to the default card."""
         is_sqlite = "sqlite" in str(self.db.bind.url)
-        buckets: Dict[Tuple[str, Optional[str], Optional[str]], float] = {}
+        buckets: Dict[Tuple[str, Optional[str], Optional[str], Optional[str]], float] = {}
+        if by_month:
+            month_expr = (
+                func.strftime("%Y-%m", Expense.purchased_at, type_=String) if is_sqlite
+                else func.to_char(Expense.purchased_at, "YYYY-MM", type_=String)
+            )
+        else:
+            month_expr = literal(None)
 
         personal_filters = [Expense.user_email == user_id, Expense.group_id.is_(None)]
         personal_filters += self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
         personal_rows = (
-            self.db.query(Expense.category_id, Expense.merchant_name, Expense.card_id, func.sum(Expense.amount))
+            self.db.query(Expense.category_id, Expense.merchant_name, Expense.card_id, month_expr, func.sum(Expense.amount))
             .filter(*personal_filters)
-            .group_by(Expense.category_id, Expense.merchant_name, Expense.card_id)
+            .group_by(Expense.category_id, Expense.merchant_name, Expense.card_id, *([month_expr] if by_month else []))
             .all()
         )
-        for cat, merchant, card_id, amt in personal_rows:
-            key = (cat or "Uncategorized", merchant or None, str(card_id) if card_id else None)
+        for cat, merchant, card_id, row_month, amt in personal_rows:
+            key = (cat or "Uncategorized", merchant or None, str(card_id) if card_id else None, row_month)
             buckets[key] = buckets.get(key, 0.0) + float(amt or 0)
 
         if include_group_i_paid:
             group_filters = [Expense.group_id.isnot(None)]
             group_filters += self._date_filters(Expense.purchased_at, year, month, start_date, end_date, is_sqlite)
             group_rows = (
-                self.db.query(Expense.category_id, Expense.merchant_name, Expense.card_id, func.sum(ExpensePayer.amount_paid))
+                self.db.query(Expense.category_id, Expense.merchant_name, Expense.card_id, month_expr, func.sum(ExpensePayer.amount_paid))
                 .join(ExpensePayer, ExpensePayer.expense_id == Expense.id)
                 .join(GroupMember, GroupMember.id == ExpensePayer.member_id)
                 .filter(GroupMember.user_email == user_id)
                 .filter(*group_filters)
-                .group_by(Expense.category_id, Expense.merchant_name, Expense.card_id)
+                .group_by(Expense.category_id, Expense.merchant_name, Expense.card_id, *([month_expr] if by_month else []))
                 .all()
             )
-            for cat, merchant, card_id, amt in group_rows:
-                key = (cat or "Uncategorized", merchant or None, str(card_id) if card_id else None)
+            for cat, merchant, card_id, row_month, amt in group_rows:
+                key = (cat or "Uncategorized", merchant or None, str(card_id) if card_id else None, row_month)
                 buckets[key] = buckets.get(key, 0.0) + float(amt or 0)
 
         return [
-            {"category": cat, "merchant": merchant, "card_id": card_id, "total": round(total, 2)}
-            for (cat, merchant, card_id), total in buckets.items()
+            {"category": cat, "merchant": merchant, "card_id": card_id, "total": round(total, 2),
+             **({"month": row_month} if by_month else {})}
+            for (cat, merchant, card_id, row_month), total in buckets.items()
             if total > 0
         ]
 

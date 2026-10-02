@@ -1124,8 +1124,11 @@ class CardCorrectionDTO(BaseModel):
 
 
 class CardCoachPeriod(BaseModel):
+    # All None = all time.
     year: Optional[int] = None
     month: Optional[int] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
 
 
 class CardCoachCategoryDTO(BaseModel):
@@ -1173,7 +1176,25 @@ class CardCoachMerchantDTO(BaseModel):
 class CardCoachFilterInfo(BaseModel):
     year: Optional[int] = None
     month: Optional[int] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
     group_share_included: bool
+
+
+class CardCoachCardDTO(BaseModel):
+    """What one card actually earned over the period (attributed spend, else the default card).
+    Ranked by earned_usd; points/miles cards with no point value have earned_usd None and sort last."""
+    card_id: str
+    card_name: str
+    reward_type: str
+    spend: float
+    earned_raw: float
+    earned_usd: Optional[float] = None
+    effective_rate: Optional[float] = None  # percent of spend returned, when earned_usd is known
+    top_category: Optional[str] = None
+    is_default: bool = False
+    still_held: bool = True
+    cap_hit: bool = False
 
 
 class CardCoachResponse(BaseModel):
@@ -1182,6 +1203,12 @@ class CardCoachResponse(BaseModel):
     by_category: List[CardCoachCategoryDTO]
     by_merchant: List[CardCoachMerchantDTO] = Field(default_factory=list)
     filter_info: CardCoachFilterInfo
+    # "Which card benefited me most": per-card earnings, best first.
+    by_card: List[CardCoachCardDTO] = Field(default_factory=list)
+    total_earned_usd: float = 0.0
+    best_card_id: Optional[str] = None
+    # Spend with no attributed card and no default card — earns nothing above.
+    unassigned_spend: float = 0.0
 
 
 # ---------------------- TS-TAG-102: Tag CRUD ---------------------- #

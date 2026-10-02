@@ -12,7 +12,9 @@ import {
   listMyCards, addMyCard, removeMyCard, setMyDefaultCard, searchCardCatalog, getCardCoach,
   getCardCatalogDetail, fileCardCorrection,
   UserCardDTO, CardCatalogSummary, CardCoachCategoryDTO, CardCoachMerchantDTO, CardCatalogDetail,
+  CardCoachResponse, CardCoachPreset, CARD_COACH_PRESETS, cardCoachPeriodParams,
 } from '../api/cards';
+import SegmentedTabs from './SegmentedTabs';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { ListSkeleton } from './SkeletonLoader';
@@ -48,10 +50,13 @@ export default function CardsTabContent() {
     enabled: pickerOpen,
   });
 
-  const now = new Date();
+  // Rewards are about everything you've spent, not just this month — default to all time
+  // (web CardsTab.tsx parity).
+  const [preset, setPreset] = useState<CardCoachPreset>('all');
+  const phrase = CARD_COACH_PRESETS.find((p) => p.value === preset)?.phrase ?? 'all time';
   const { data: coach, isLoading: coachLoading } = useQuery({
-    queryKey: ['card-coach', now.getFullYear(), now.getMonth() + 1],
-    queryFn: () => getCardCoach({ year: now.getFullYear(), month: now.getMonth() + 1 }),
+    queryKey: ['card-coach', preset],
+    queryFn: () => getCardCoach(cardCoachPeriodParams(preset)),
     enabled: myCards.length > 0,
   });
 
@@ -142,6 +147,13 @@ export default function CardsTabContent() {
 
   return (
     <View style={styles.section}>
+      <SegmentedTabs<CardCoachPreset>
+        value={preset}
+        onChange={setPreset}
+        options={CARD_COACH_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
+      />
+      {coach && <EarnedByCard coach={coach} phrase={phrase} theme={theme} />}
+
       <View style={styles.headerRow}>
         <Text style={styles.summaryText}>Your cards</Text>
         <TouchableOpacity style={styles.addBtnSmall} onPress={() => setPickerOpen((o) => !o)} activeOpacity={0.8}>
@@ -190,13 +202,13 @@ export default function CardsTabContent() {
           <View style={[styles.banner, coach.total_estimated_gap > 0 ? styles.bannerInfo : styles.bannerSuccess]}>
             <Text style={styles.bannerText}>
               {coach.total_estimated_gap > 0
-                ? `You left an estimated ${formatMoney(coach.total_estimated_gap)} in rewards on the table this month, using cards you already hold.`
-                : "You're using your best held card for every category with spend this month."}
+                ? `You left an estimated ${formatMoney(coach.total_estimated_gap)} in rewards on the table ${phrase}, using cards you already hold.`
+                : `You're using your best held card for every category with spend ${phrase}.`}
             </Text>
           </View>
 
           {coach.by_category.length === 0 && (
-            <Text style={styles.emptyHint}>No categorized spend yet this month.</Text>
+            <Text style={styles.emptyHint}>No categorized spend {phrase === 'all time' ? 'yet' : phrase}.</Text>
           )}
 
           <View style={{ gap: 12, marginTop: 4 }}>
@@ -222,6 +234,56 @@ export default function CardsTabContent() {
       )}
 
       <CardDetailModal cardId={detailCardId} onClose={() => setDetailCardId(null)} theme={theme} />
+    </View>
+  );
+}
+
+function formatPoints(n: number, rewardType: string): string {
+  return `${Math.round(n).toLocaleString()} ${rewardType === 'miles' ? 'miles' : 'pts'}`;
+}
+
+/** "Which card benefited me most" — every card's actual earnings for the period, best first. */
+function EarnedByCard({ coach, phrase, theme }: { coach: CardCoachResponse; phrase: string; theme: AppTheme }) {
+  const styles = createStyles(theme);
+  const cards = coach.by_card ?? [];
+  if (cards.length === 0) return null;
+  return (
+    <View style={{ marginTop: 14, marginBottom: 18 }}>
+      <Text style={styles.summaryText}>Earned by card</Text>
+      <Text style={styles.earnedHeadline}>
+        Your cards earned {formatMoney(coach.total_earned_usd ?? 0)}
+        <Text style={styles.earnedPhrase}>  {phrase}</Text>
+      </Text>
+      <View style={{ gap: 8 }}>
+        {cards.map((c) => {
+          const top = c.card_id === coach.best_card_id;
+          return (
+            <View key={c.card_id} style={[styles.earnedRow, top && styles.earnedRowTop]}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{c.card_name}</Text>
+                  {top && <View style={styles.topBadge}><Text style={styles.topBadgeText}>Top earner</Text></View>}
+                  {!c.still_held && <Text style={styles.footerText}>Removed</Text>}
+                </View>
+                <Text style={styles.gapLine}>
+                  {c.spend > 0
+                    ? `${formatMoney(c.spend)} spent${c.effective_rate != null ? ` · ${c.effective_rate.toFixed(1)}% back` : ''}${c.top_category ? ` · mostly ${c.top_category}` : ''}`
+                    : `No spend ${phrase}`}
+                </Text>
+                {c.cap_hit && <Text style={styles.capHint}>Hit a bonus cap — spend above it earned the base rate</Text>}
+              </View>
+              <Text style={styles.earnedAmount}>
+                {c.earned_usd != null ? formatMoney(c.earned_usd) : formatPoints(c.earned_raw, c.reward_type)}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+      {coach.unassigned_spend > 0 && (
+        <Text style={[styles.footerText, { marginTop: 8 }]}>
+          {formatMoney(coach.unassigned_spend)} of spend isn't linked to a card — set a default card, or pick the card when adding an expense.
+        </Text>
+      )}
     </View>
   );
 }
@@ -423,6 +485,18 @@ const createStyles = (theme: AppTheme) =>
     bannerSuccess: { backgroundColor: theme.colors.successSurface },
     bannerText: { fontFamily: 'InstrumentSans-Regular', fontSize: 12.5, color: theme.colors.text, lineHeight: 17 },
 
+    earnedHeadline: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 22, color: theme.colors.text, marginTop: 2, marginBottom: 10 },
+    earnedPhrase: { fontFamily: 'InstrumentSans-Regular', fontSize: 13, color: theme.colors.textSecondary },
+    earnedRow: {
+      flexDirection: 'row', alignItems: 'center', gap: 12,
+      backgroundColor: theme.colors.surface, borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.colors.borderLight, borderRadius: 14, padding: 12,
+    },
+    earnedRowTop: { borderColor: theme.colors.primary, borderWidth: 1 },
+    earnedAmount: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 15, color: theme.colors.text },
+    topBadge: { backgroundColor: theme.colors.primarySurface, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+    topBadgeText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 10.5, color: theme.colors.primary },
+    capHint: { fontFamily: 'InstrumentSans-Regular', fontSize: 11, color: theme.colors.warning, marginTop: 2 },
     gapCard: {
       backgroundColor: theme.colors.surface, borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.colors.borderLight, borderRadius: 14, padding: 14,

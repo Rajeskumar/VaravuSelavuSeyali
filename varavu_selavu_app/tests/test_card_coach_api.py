@@ -253,3 +253,58 @@ def test_total_estimated_gap_excludes_merchant_gaps(test_client, db_session):
         for c in body["by_category"] if c["actual_earned_estimate"] is not None and c["optimal_in_wallet_earned_estimate"] is not None
     ), 2)
     assert body["total_estimated_gap"] == category_gap_sum
+
+
+# ---------------------------------------------------------------------------
+# All-time / custom periods and the per-card "earned by card" breakdown
+# ---------------------------------------------------------------------------
+
+def _seed_multi_month_two_cards(test_client, db_session):
+    grocery = _seed_card(db_session, "Amex", "Grocery 5%", rules=[
+        {"category_id": "All Purchases", "multiplier": 1.0},
+        {"category_id": "Groceries", "multiplier": 5.0, "cap_amount": 1500, "cap_period": "quarterly"},
+    ])
+    flat = _seed_card(db_session, "Citi", "Flat 2%", rules=[{"category_id": "All Purchases", "multiplier": 2.0}])
+    test_client.post("/api/v1/cards/mine", json={"card_id": str(grocery.id)})  # default
+    test_client.post("/api/v1/cards/mine", json={"card_id": str(flat.id)})
+    for m in (1, 2, 3):
+        db_session.add(Expense(id=uuid.uuid4(), user_email="test@user.com", purchased_at=datetime(2026, m, 10),
+                               category_id="Groceries", amount=1000, description="Groceries"))
+    db_session.add(Expense(id=uuid.uuid4(), user_email="test@user.com", purchased_at=datetime(2026, 5, 2),
+                           category_id="Travel", amount=500, description="Flight", card_id=flat.id))
+    db_session.commit()
+    AnalysisService(db_session).invalidate_cache()
+    return grocery, flat
+
+
+def test_no_params_means_all_time_with_caps_and_by_card(test_client, db_session):
+    grocery, flat = _seed_multi_month_two_cards(test_client, db_session)
+    body = test_client.get("/api/v1/cards/coach").json()
+    assert body["period"] == {"year": None, "month": None, "start_date": None, "end_date": None}
+    by_card = {c["card_id"]: c for c in body["by_card"]}
+    # $3,000 groceries in Q1: $1,500 at 5% + $1,500 at 1% = $90 (uncapped would claim $150).
+    assert by_card[str(grocery.id)]["earned_usd"] == pytest.approx(90.0)
+    assert by_card[str(grocery.id)]["cap_hit"] is True
+    assert by_card[str(flat.id)]["earned_usd"] == pytest.approx(10.0)
+    assert body["best_card_id"] == str(grocery.id)
+    assert body["total_earned_usd"] == pytest.approx(100.0)
+    assert body["unassigned_spend"] == 0
+    groceries = next(r for r in body["by_category"] if r["category"] == "Groceries")
+    assert groceries["actual_earned_estimate"] == pytest.approx(90.0)
+
+
+def test_start_end_dates_filter_and_echo(test_client, db_session):
+    grocery, flat = _seed_multi_month_two_cards(test_client, db_session)
+    body = test_client.get("/api/v1/cards/coach", params={"start_date": "2026-02-01", "end_date": "2026-05-31"}).json()
+    assert body["period"]["start_date"] == "2026-02-01" and body["filter_info"]["end_date"] == "2026-05-31"
+    by_card = {c["card_id"]: c for c in body["by_card"]}
+    assert by_card[str(grocery.id)]["spend"] == pytest.approx(2000)
+    assert by_card[str(grocery.id)]["earned_usd"] == pytest.approx(80.0)  # $1,500 at 5% + $500 at 1%
+
+
+def test_single_month_still_supported(test_client, db_session):
+    grocery, _ = _seed_multi_month_two_cards(test_client, db_session)
+    body = test_client.get("/api/v1/cards/coach", params={"year": 2026, "month": 1}).json()
+    by_card = {c["card_id"]: c for c in body["by_card"]}
+    assert by_card[str(grocery.id)]["earned_usd"] == pytest.approx(50.0)
+    assert by_card[str(grocery.id)]["cap_hit"] is False

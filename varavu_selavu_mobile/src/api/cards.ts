@@ -85,12 +85,38 @@ export interface CardCoachMerchantDTO {
     is_using_best_held_card: boolean;
 }
 
+export interface CardCoachCardDTO {
+  card_id: string;
+  card_name: string;
+  reward_type: 'cashback' | 'points' | 'miles' | string;
+  spend: number;
+  earned_raw: number; // dollars for cashback, points/miles otherwise
+  earned_usd: number | null; // null for points/miles cards with no point value
+  effective_rate: number | null; // percent of spend returned
+  top_category: string | null;
+  is_default: boolean;
+  still_held: boolean;
+  cap_hit: boolean;
+}
+
+export interface CardCoachPeriodParams {
+  year?: number;
+  month?: number;
+  start_date?: string;
+  end_date?: string;
+}
+
 export interface CardCoachResponse {
-    period: { year: number | null; month: number | null };
-    total_estimated_gap: number;
-    by_category: CardCoachCategoryDTO[];
-    by_merchant: CardCoachMerchantDTO[];
-    filter_info: { year: number | null; month: number | null; group_share_included: boolean };
+  period: { year: number | null; month: number | null; start_date?: string | null; end_date?: string | null };
+  total_estimated_gap: number;
+  by_category: CardCoachCategoryDTO[];
+  by_merchant: CardCoachMerchantDTO[];
+  filter_info: { year: number | null; month: number | null; group_share_included: boolean };
+  // "Which card benefited me most" — best first.
+  by_card: CardCoachCardDTO[];
+  total_earned_usd: number;
+  best_card_id: string | null;
+  unassigned_spend: number;
 }
 
 export interface CardCorrectionDTO {
@@ -162,14 +188,49 @@ export async function setMyDefaultCard(userCardId: string): Promise<UserCardDTO>
 
 // ─── Coach + corrections ────────────────────────────────────────────────────
 
-export async function getCardCoach(params?: { year?: number; month?: number }): Promise<CardCoachResponse> {
+/** Omit every param for all time. */
+export async function getCardCoach(params?: CardCoachPeriodParams): Promise<CardCoachResponse> {
     const qs = new URLSearchParams();
     if (params?.year) qs.set('year', String(params.year));
     if (params?.month) qs.set('month', String(params.month));
+    if (params?.start_date) qs.set('start_date', params.start_date);
+    if (params?.end_date) qs.set('end_date', params.end_date);
     const suffix = qs.toString() ? `?${qs.toString()}` : '';
     const res = await apiFetch(`/api/v1/cards/coach${suffix}`, { method: 'GET' });
     if (!res.ok) throw new Error('Failed to load Card Coach analysis');
     return res.json();
+}
+
+export type CardCoachPreset = 'all' | '12m' | 'ytd' | 'month';
+
+export const CARD_COACH_PRESETS: { value: CardCoachPreset; label: string; phrase: string }[] = [
+  { value: 'all', label: 'All time', phrase: 'all time' },
+  { value: '12m', label: '12 months', phrase: 'in the last 12 months' },
+  { value: 'ytd', label: 'This year', phrase: 'this year' },
+  { value: 'month', label: 'This month', phrase: 'this month' },
+];
+
+function isoDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Period preset -> /cards/coach params, in the user's local calendar (mirrors web api/cards.ts). */
+export function cardCoachPeriodParams(preset: CardCoachPreset, now: Date = new Date()): CardCoachPeriodParams {
+  switch (preset) {
+    case 'month':
+      return { year: now.getFullYear(), month: now.getMonth() + 1 };
+    case 'ytd':
+      return { year: now.getFullYear() };
+    case '12m': {
+      const start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate() + 1);
+      // end_date is compared against a timestamp, so use tomorrow's date to include all of today.
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      return { start_date: isoDate(start), end_date: isoDate(end) };
+    }
+    default:
+      return {};
+  }
 }
 
 export async function fileCardCorrection(cardId: string, note: string): Promise<CardCorrectionDTO> {

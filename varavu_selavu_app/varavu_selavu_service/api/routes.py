@@ -17,6 +17,7 @@ from varavu_selavu_service.models.api_models import (
     ChatRequest,
     HealthResponse,
     FeatureFlagsResponse,
+    CardCoachCardDTO,
     AiUsageResponse,
     ExpenseCreatedResponse,
     ExpenseRow,
@@ -1816,10 +1817,11 @@ def get_card_coach(
 ):
     # Same GROUPS_ENABLED gate as the plain /analysis route — group data must not leak through
     # here if Groups itself is off, regardless of what a client requests.
-    category_gaps, merchant_gaps, group_share_included = card_service.compute_coach_gaps(
+    report, group_share_included = card_service.compute_coach_report(
         user_id, year=year, month=month, start_date=start_date, end_date=end_date,
         groups_enabled=Settings().GROUPS_ENABLED,
     )
+    category_gaps, merchant_gaps = report.category_gaps, report.merchant_gaps
 
     spend_source = "personal_plus_group_paid" if group_share_included else "personal_only"
     by_category = []
@@ -1839,12 +1841,19 @@ def get_card_coach(
     # already included in its category's own gap and summing both would double-count it.
     total_gap = round(sum(g.gap_usd for g in category_gaps), 2)
 
+    by_card = [CardCoachCardDTO(**c.dict()) for c in report.by_card]
+    earning = [c for c in by_card if c.earned_usd]
+    period = dict(year=year, month=month, start_date=start_date, end_date=end_date)
     return CardCoachResponse(
-        period=CardCoachPeriod(year=year, month=month),
+        period=CardCoachPeriod(**period),
         total_estimated_gap=total_gap,
         by_category=by_category,
         by_merchant=by_merchant,
-        filter_info=CardCoachFilterInfo(year=year, month=month, group_share_included=group_share_included),
+        filter_info=CardCoachFilterInfo(**period, group_share_included=group_share_included),
+        by_card=by_card,
+        total_earned_usd=round(sum(c.earned_usd for c in earning), 2),
+        best_card_id=earning[0].card_id if earning else None,
+        unassigned_spend=report.unassigned_spend,
     )
 
 
