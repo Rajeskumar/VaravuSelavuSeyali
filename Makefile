@@ -1,4 +1,4 @@
-.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check
+.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check typecheck-web typecheck-mobile precommit-check install-hooks
 
 # Backend
 install-backend:
@@ -103,8 +103,23 @@ audit-all: audit-backend audit-web audit-mobile audit-qa
 # confirm what's actually live — run it by hand once the deploy lands.
 release-check: test-backend audit-all qa-all
 
+# Fast checks that catch build-breaking type errors in seconds-to-minutes, no servers needed.
+# scripts/pre-commit.sh runs only the subset matching the staged paths; this runs them all.
+typecheck-web:
+	cd varavu_selavu_ui && npx tsc --noEmit -p .
+
+typecheck-mobile:
+	cd varavu_selavu_mobile && npx tsc --noEmit -p .
+
+precommit-check: test-backend typecheck-web typecheck-mobile
+
+# Point git at the versioned hooks in .githooks/ (pre-commit: fast checks on commits to main;
+# pre-push: release-check on pushes to main). Once per clone.
+install-hooks:
+	git config core.hooksPath .githooks
+
 # Utilities
-install-all: install-backend install-web install-mobile install-qa
+install-all: install-backend install-web install-mobile install-qa install-hooks
 
 generate-mobile-assets:
 	node varavu_selavu_mobile/generate_assets.js

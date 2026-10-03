@@ -21,6 +21,7 @@ feature log or reference docs. Keep it short; put detail in the files below.
 ## Always
 - Web ↔ mobile parity: a feature or fix in one client must be checked in the other.
 - Git: leave changes uncommitted unless asked; one commit per logical item; never push without asking.
+- Git hooks (`make install-hooks`): commits to main run fast checks for the staged areas; pushes to main run `make release-check`. Don't bypass with `--no-verify` unless the user asks.
 
 ## Key Decisions
 - **Money is `Decimal`, never float** (`core/money.py`) — float totals produced rounding artifacts.
