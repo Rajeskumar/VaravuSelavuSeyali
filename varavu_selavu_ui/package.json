@@ -15,7 +15,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-plotly.js": "^2.6.0",
-    "react-router-dom": "^6.30.6",
+    "react-router-dom": "^7.18.4",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
@@ -75,5 +75,10 @@
   },
   "overrides": {
     "maplibre-gl": "^6.9.0"
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js"
+    }
   }
 }

@@ -4,6 +4,12 @@
 // learn more: https://github.com/testing-library/jest-dom
 import '@testing-library/jest-dom';
 
+// react-router v7 uses TextEncoder/TextDecoder, which CRA's Jest 27 jsdom environment
+// doesn't provide.
+import { TextEncoder, TextDecoder } from 'util';
+if (typeof global.TextEncoder === 'undefined') global.TextEncoder = TextEncoder;
+if (typeof global.TextDecoder === 'undefined') global.TextDecoder = TextDecoder;
+
 // Polyfill for framer-motion's `whileInView` (used by DashboardPage cards), which
 // JSDOM doesn't implement.
 window.IntersectionObserver = class MockIntersectionObserver {
