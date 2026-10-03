@@ -32,7 +32,11 @@ CurrencyCode = Annotated[str, StringConstraints(pattern=r"^[A-Za-z]{3}$", strip_
 # Venmo/PayPal/UPI handles are unbounded free text today. They decide where another member
 # sends money and are rendered to other people, so give them a conservative character set and
 # a ceiling. Security audit VS-16.
-PaymentHandle = Optional[Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._@+-]{1,64}$", strip_whitespace=True)]]
+# Empty is allowed and means "clear this handle": both the web and mobile profile forms send
+# "" for a handle left blank, and requiring 1+ chars here made every profile save fail with a
+# 422 for any user who hadn't filled in all three handles. AuthService.update_profile stores
+# "" as NULL.
+PaymentHandle = Optional[Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9._@+-]{0,64}$", strip_whitespace=True)]]
 
 
 class LoginRequest(BaseModel):

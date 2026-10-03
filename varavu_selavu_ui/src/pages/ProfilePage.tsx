@@ -114,13 +114,15 @@ const ProfilePage: React.FC = () => {
                 <TextField label="Email" fullWidth value={email} InputProps={{ readOnly: true }} />
               </Grid>
               <Grid size={12}>
-                <TextField label="Name" fullWidth value={name} onChange={e => setName(e.target.value)} />
+                {/* Fields stay disabled until getProfile() lands: anything typed earlier was
+                    silently overwritten by the loaded values, then saved as the old ones. */}
+                <TextField label="Name" disabled={loading} fullWidth value={name} onChange={e => setName(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="Phone (optional)" fullWidth value={phone} onChange={e => setPhone(e.target.value)} />
+                <TextField label="Phone (optional)" disabled={loading} fullWidth value={phone} onChange={e => setPhone(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="Address (optional)" fullWidth multiline rows={2} value={address} onChange={e => setAddress(e.target.value)} />
+                <TextField label="Address (optional)" disabled={loading} fullWidth multiline rows={2} value={address} onChange={e => setAddress(e.target.value)} />
               </Grid>
               <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mt: 1 }}>
@@ -131,13 +133,13 @@ const ProfilePage: React.FC = () => {
                 </Typography>
               </Grid>
               <Grid size={12}>
-                <TextField label="Venmo username" placeholder="@yourname" fullWidth value={venmoHandle} onChange={e => setVenmoHandle(e.target.value)} />
+                <TextField label="Venmo username" disabled={loading} placeholder="@yourname" fullWidth value={venmoHandle} onChange={e => setVenmoHandle(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="PayPal.me username" fullWidth value={paypalHandle} onChange={e => setPaypalHandle(e.target.value)} />
+                <TextField label="PayPal.me username" disabled={loading} fullWidth value={paypalHandle} onChange={e => setPaypalHandle(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="UPI ID" placeholder="yourname@bank" fullWidth value={upiId} onChange={e => setUpiId(e.target.value)} />
+                <TextField label="UPI ID" disabled={loading} placeholder="yourname@bank" fullWidth value={upiId} onChange={e => setUpiId(e.target.value)} />
               </Grid>
               <Grid size={12}>
                 <Button type="submit" variant="contained" fullWidth disabled={saving || loading}>

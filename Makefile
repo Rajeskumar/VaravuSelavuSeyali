@@ -1,4 +1,4 @@
-.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check typecheck-web typecheck-mobile precommit-check install-hooks
+.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check release-check-full typecheck-web typecheck-mobile precommit-check install-hooks
 
 # Backend
 install-backend:
@@ -63,6 +63,13 @@ qa-report:
 # (.github/workflows/qa.yml), just local and Chromium-only for speed.
 qa-all: qa-smoke qa-regression qa-api
 
+# One QA run ID shared by all three steps above (and so by release-check-full), the local
+# equivalent of CI's GITHUB_RUN_ID. Without it every `playwright test` invocation minted
+# its own run ID, so each step registered and logged in a fresh pair of QA personas, and
+# the backend's real 5/hour register and 5/minute login limits turned the run into 429s.
+# Target-specific, so it's inherited by qa-all's prerequisites; `:=` evaluates it once.
+qa-all: export QA_RUN_ID := local$(shell date +%s)
+
 # Vulnerability audits — dependency-only checks (pip-audit / npm audit), not source-code
 # scanning. Requires `make install-backend`/`install-web`/`install-mobile`/`install-qa` to
 # have been run first (they read the installed lockfile state, same as CI would).
@@ -95,13 +102,18 @@ audit-qa:
 
 audit-all: audit-backend audit-web audit-mobile audit-qa
 
-# What to run before a prod deploy: the backend's own pytest suite (fast, in-process), the
-# dependency-vulnerability audits (fast, no server needed), then the full qa/ gate
-# (smoke+regression+api, against a real local stack). Doesn't include qa-regression-full or
-# qa-mobile — those are for deliberate cross-browser/mobile checks, not every release.
-# Doesn't include qa-prod-smoke either: that only makes sense to run AFTER a deploy, to
-# confirm what's actually live — run it by hand once the deploy lands.
-release-check: test-backend audit-all qa-all
+# Fast local release gate, no servers needed: the backend's pytest suite plus the dependency
+# audits. The pre-push hook runs this on pushes to main. The browser/API QA suites (qa-all) run
+# in GitHub Actions (.github/workflows/qa.yml) on every push to main, against a clean stack,
+# and pushing a release-* tag is refused unless that CI run passed on the tagged commit
+# (scripts/pre-push.sh). So qa-all is no longer required locally.
+release-check: test-backend audit-all
+
+# release-check plus the full qa/ gate (smoke+regression+api) run locally. Needs the local stack
+# up first (qa/README.md) and a backend restarted since the last run (in-memory rate limits).
+# Doesn't include qa-regression-full, qa-mobile or qa-prod-smoke (run qa-prod-smoke by hand
+# after a deploy lands).
+release-check-full: release-check qa-all
 
 # Fast checks that catch build-breaking type errors in seconds-to-minutes, no servers needed.
 # scripts/pre-commit.sh runs only the subset matching the staged paths; this runs them all.
@@ -114,7 +126,7 @@ typecheck-mobile:
 precommit-check: test-backend typecheck-web typecheck-mobile
 
 # Point git at the versioned hooks in .githooks/ (pre-commit: fast checks on commits to main;
-# pre-push: release-check on pushes to main). Once per clone.
+# pre-push: release-check on pushes to main, CI must be green to push a release-* tag). Once per clone.
 install-hooks:
 	git config core.hooksPath .githooks
 

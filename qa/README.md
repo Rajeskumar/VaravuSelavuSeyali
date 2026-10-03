@@ -48,9 +48,9 @@ cp .env.example .env   # then edit as needed
 
 Or, from the repo root: `make install-qa`. The root `Makefile` has a shortcut for every
 `npm run qa:*` script below (`make qa-smoke`, `make qa-regression`, `make qa-api`, ...),
-plus two composites: `make qa-all` (smoke → regression → API, same order as CI) and
-`make release-check` (the backend's own `pytest` suite + `qa-all` — see "Before deploying
-to prod" below). `make -n <target>` shows what any of them actually run.
+plus composites: `make qa-all` (smoke → regression → API, same order as CI) and
+`make release-check-full` (`make release-check`, i.e. backend `pytest` + dependency audits,
+then `qa-all` — see "Before deploying to prod" below). `make -n <target>` shows what any of them actually run.
 
 ## Configuration (`.env`)
 
@@ -116,6 +116,13 @@ Failed tests automatically capture a screenshot, a trace, and (CI only, `retain-
 a video — all under `qa/reports/`.
 
 ## Real rate limits — read this before adding a test that logs in or registers
+
+**Current budget (2026-10-02), per `make qa-all` / `make release-check-full` run:**
+- **Logins, smoke + regression (one 60s window):** setup 2 + smoke 1 + registration's auto-login 1 + session.spec logout 1 = **5**, exactly at the limit.
+  - login.spec's wrong-password test stubs the response, and the empty-form test sends nothing.
+  - The unknown-email check lives in `api/tests/auth-api.spec.ts`, whose login calls wait out one 429 if they land in the same window.
+- **Registrations:** setup 2 + registration.spec 1 + auth-api.spec 2 = **5/hour**. The counter is in-memory, so **restart the backend before re-running** within the hour.
+- **Shared run ID:** `make qa-all` exports one `QA_RUN_ID` for all three steps (CI uses `GITHUB_RUN_ID`). Running the `npm run qa:*` scripts separately mints a new run ID each time, re-provisions the personas, and blows both budgets.
 
 The real backend rate-limits `POST /auth/login` to **5/minute** and `POST /auth/register`
 to **5/hour**, both keyed by IP — and every Playwright project/script in a run shares one
@@ -228,11 +235,12 @@ Pushing a `release-vX.Y.Z` tag *is* the deploy trigger (`cloudbuild.backend.yaml
 manual gate; merging to `main` alone deploys nothing — see `.cloudbuild/README.md`) — so
 "before prod" means before you run `scripts/release.sh`:
 
-1. **`make release-check`** (or `npm run qa:api && npm run qa:regression && npm run
-   qa:smoke` — order doesn't matter locally, but this is fail-fast-cheapest-first) — the
-   backend's own `pytest` suite plus the full `qa/` gate against a real local stack.
-   This is the same thing `.github/workflows/qa.yml` runs on the PR; running it locally
-   first just gets you a faster loop than waiting on CI.
+1. **GitHub Actions must be green on the commit you tag.** `.github/workflows/qa.yml` runs
+   this whole suite on every push to `main`, and the repo's pre-push hook
+   (`scripts/pre-push.sh`, `make install-hooks`) refuses to push a `release-*` tag unless
+   that run passed, including tags pushed by hand. Locally, `make release-check` (pytest +
+   audits) runs on every push to `main`. `make release-check-full` adds this suite against
+   a local stack when you want a faster loop than waiting on CI; it's optional.
 2. For a larger/riskier change (auth, payments-adjacent, group splits, a dependency
    bump): **`make qa-regression-full`** — the same regression suite across Firefox,
    WebKit and one mobile viewport too, not just Chromium.

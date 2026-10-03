@@ -16,8 +16,10 @@ a failure in one does not block the other.
 scripts/release.sh 1.4.0        # checks main is clean + up to date, tags release-v1.4.0, pushes it
 ```
 
-Run `make release-check` (the QA gate) first — the tag is the deploy, and there is no staging
-slot. Watch the two builds at <https://console.cloud.google.com/cloud-build/builds?project=gold-circlet-424313-r7>.
+The tag is the deploy and there is no staging slot. The QA gate is GitHub Actions
+(`.github/workflows/qa.yml`, run on every push to `main`): the repo's pre-push hook refuses to
+push a `release-*` tag (by `scripts/release.sh` or by hand) unless that workflow passed on the
+tagged commit. Cloud Build itself runs only the dependency audits; it doesn't re-check CI. Watch the two builds at <https://console.cloud.google.com/cloud-build/builds?project=gold-circlet-424313-r7>.
 
 ## Images, rollback
 

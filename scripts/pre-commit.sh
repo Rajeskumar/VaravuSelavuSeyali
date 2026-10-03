@@ -4,8 +4,8 @@
 #   backend (varavu_selavu_app/) -> make test-backend
 #   web     (varavu_selavu_ui/)  -> make typecheck-web
 #   mobile  (varavu_selavu_mobile/) -> make typecheck-mobile
-# The full `make release-check` runs on push to main instead (scripts/pre-push.sh), because
-# it needs the local QA stack running and takes minutes.
+# `make release-check` (pytest + audits) runs on push to main instead, and the browser/API QA
+# suites gate release tags via GitHub Actions — see scripts/pre-push.sh.
 #
 # Checks run against the working tree, not just the staged snapshot — unstaged edits in the
 # same area can mask or cause a failure. Bypass in an emergency: git commit --no-verify

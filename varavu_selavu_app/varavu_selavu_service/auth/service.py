@@ -192,11 +192,11 @@ class AuthService:
         if address is not None:
             user.address = address
         if venmo_handle is not None:
-            user.venmo_handle = venmo_handle
+            user.venmo_handle = venmo_handle or None  # "" clears the handle
         if paypal_handle is not None:
-            user.paypal_handle = paypal_handle
+            user.paypal_handle = paypal_handle or None  # "" clears the handle
         if upi_id is not None:
-            user.upi_id = upi_id
+            user.upi_id = upi_id or None  # "" clears the handle
         self.db.commit()
         return True
 

@@ -14,15 +14,10 @@ test.describe('registration @regression @auth', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('a new account can register and lands on the dashboard', async ({ page }) => {
-    // NOTE: this test showed intermittent hangs at getByLabel('Name') while verifying this
-    // framework in a sandboxed local dev environment — not reproducible via a manual
-    // browser session (the same field resolves instantly there), and the equivalent
-    // registration flow is independently proven working by global.setup.ts (every run) and
-    // api/tests/auth-api.spec.ts's register-validation tests. Recorded traces showed zero
-    // network activity during the hang, which points at something environment-specific
-    // (sandboxed Chromium networking/DNS) rather than an app or framework bug — flagged as
-    // a watch item for real CI rather than "fixed" outright. The extended timeout is
-    // deliberate headroom either way.
+    // The "hang at getByLabel('Name')" this test used to show (locally and in CI, on every
+    // run) was RegisterPage's exact label match against MUI's required-field "Name *"
+    // label, not the environment; see RegisterPage.register. The extended timeout is just
+    // headroom for /register's Google Sign-In script load.
     test.setTimeout(120_000);
 
     const register = new RegisterPage(page);

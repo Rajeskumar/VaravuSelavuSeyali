@@ -33,7 +33,7 @@ An engineering summary for developers and AI agents. Read it when a task needs t
 - **Backend:** `make test-backend` runs `pytest` on in-memory SQLite. `tests/conftest.py` overrides `get_db`/`auth_required`, and the test user is `test@user.com`.
 - **Postgres-only behaviour:** `tests/*_e2e_pg.py`, skipped unless `E2E_DATABASE_URL` is set; run them via `varavu_selavu_app/run_e2e_pg_tests.sh`.
 - **Clients:** web uses Jest/RTL (`react-scripts test`); mobile uses Jest. End-to-end coverage is Playwright in `qa/`.
-- **Git hooks** (`.githooks/`, enabled with `make install-hooks`): `scripts/pre-commit.sh` runs `test-backend` / `typecheck-web` / `typecheck-mobile` for the staged areas on commits to main. `scripts/pre-push.sh` runs `make release-check` on pushes to main, which needs the local QA stack running.
+- **Git hooks** (`.githooks/`, enabled with `make install-hooks`): `scripts/pre-commit.sh` runs `test-backend` / `typecheck-web` / `typecheck-mobile` for the staged areas on commits to main. `scripts/pre-push.sh` runs `make release-check` (pytest + audits) on pushes to main, and refuses a `release-*` tag push unless GitHub Actions' QA workflow passed on that commit. `make release-check-full` adds the local QA suites.
 - **Local verification:** use a scratch Postgres with `Base.metadata.create_all` (Alembic can't upgrade from an empty DB).
 
 ## Conventions

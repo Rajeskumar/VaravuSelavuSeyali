@@ -48,11 +48,8 @@ test.describe('expenses API @api @critical', () => {
   });
 
   test('a malformed expense id is rejected, not a 500', async ({ primaryApi }) => {
-    // Confirmed application defect, left failing intentionally — see TEST-PLAN.md §7d.
-    // ExpenseService.delete_expense (and update_expense, same pattern) catches a
-    // non-UUID row_id's ValueError and falls back to querying with the raw string, which
-    // Postgres then rejects with "invalid input syntax for type uuid" — an unhandled
-    // DataError that surfaces as a bare 500, not the 404 a client-supplied bad id should get.
+    // Regression test for TEST-PLAN.md §7d (fixed 2026-10-02): a non-UUID id used to reach
+    // Postgres as-is and surface as a bare 500 instead of a 404.
     const res = await primaryApi.deleteExpense('not-a-uuid');
     expect(res.status()).toBeLessThan(500);
   });

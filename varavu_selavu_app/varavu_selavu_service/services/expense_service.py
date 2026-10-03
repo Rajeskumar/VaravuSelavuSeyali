@@ -83,7 +83,10 @@ class ExpenseService:
         try:
             parsed_id = uuid.UUID(str(row_id))
         except ValueError:
-            parsed_id = row_id # Fallback if someone passed an int ID before migrations
+            # Expense ids are UUIDs. Falling back to querying with the raw string made
+            # Postgres raise "invalid input syntax for type uuid" -> an unhandled 500; a
+            # malformed id simply matches nothing (the route turns this into a 404).
+            return None
 
         expense = self.db.query(Expense).filter(
             Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None)
@@ -177,8 +180,9 @@ class ExpenseService:
         try:
             parsed_id = uuid.UUID(str(row_id))
         except ValueError:
-            parsed_id = row_id
-        
+            # See delete_expense: a malformed id matches nothing, rather than a DB-level 500.
+            raise HTTPException(status_code=404, detail="Expense not found")
+
         expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None)).first()
         if expense is None:
             # The scoped lookup missing means the expense does not exist, belongs to someone

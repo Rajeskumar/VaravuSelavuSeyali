@@ -148,3 +148,14 @@ def test_update_expense_notes_round_trip(test_client, db_session):
     assert res.status_code == 200
     db_session.refresh(stored)
     assert stored.notes is None
+
+
+def test_malformed_expense_id_is_404_not_500(test_client, db_session):
+    """A non-UUID id used to be passed straight to the query, which Postgres rejects with a
+    DataError -> bare 500 (SQLite tolerated it, so only the qa/ suite against Postgres saw it)."""
+    assert test_client.delete("/api/v1/expenses/not-a-uuid").status_code == 404
+    res = test_client.put("/api/v1/expenses/not-a-uuid", json={
+        "user_id": "test@user.com", "date": "01/05/2026", "description": "x",
+        "category": "Dining out", "cost": 5,
+    })
+    assert res.status_code == 404

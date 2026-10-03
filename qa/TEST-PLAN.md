@@ -191,6 +191,9 @@ regression test for this until it's fixed.
 
 ### 7d. Application defect: a malformed expense id crashes with a 500 instead of 404
 
+**Fixed 2026-10-02:** both methods now treat a non-UUID id as not found (404); covered by
+`tests/test_expenses_api.py::test_malformed_expense_id_is_404_not_500` and the qa/ test below.
+
 Found by `api/tests/expenses-api.spec.ts`. `ExpenseService.delete_expense` and
 `update_expense` (`varavu_selavu_app/varavu_selavu_service/services/expense_service.py`)
 both do:

@@ -21,7 +21,7 @@ feature log or reference docs. Keep it short; put detail in the files below.
 ## Always
 - Web ↔ mobile parity: a feature or fix in one client must be checked in the other.
 - Git: leave changes uncommitted unless asked; one commit per logical item; never push without asking.
-- Git hooks (`make install-hooks`): commits to main run fast checks for the staged areas; pushes to main run `make release-check`. Don't bypass with `--no-verify` unless the user asks.
+- Git hooks (`make install-hooks`): commits to main run fast checks for the staged areas; pushes to main run `make release-check` (pytest + audits); pushing a `release-*` tag requires the GitHub Actions QA run to have passed on that commit. Don't bypass with `--no-verify` unless the user asks.
 
 ## Key Decisions
 - **Money is `Decimal`, never float** (`core/money.py`) — float totals produced rounding artifacts.
@@ -33,3 +33,4 @@ feature log or reference docs. Keep it short; put detail in the files below.
 - **Card Coach** counts group spend at the full `amount_paid`, not "my share" (spec §8.2). It defaults to all time, and caps are enforced per calendar window by `CapLedger`. New surfaces should use `compute_coach_report`.
 - **Mobile OCR uses a local Expo module, not `@react-native-ml-kit`** — ML Kit's iOS pods break arm64 simulator builds.
 - **Alembic revision IDs must be random hex** — `a1b2c3d4e5f6` is taken. Tests and local DBs use `Base.metadata.create_all`.
+- **The qa/ Playwright suite runs at the real auth rate limits** (5 logins/min, 5 registrations/hour, in-memory per backend process). The budget is spent exactly, so don't add real logins or registrations to qa tests; stub or use the API (see `qa/README.md`). Restart the backend between local `make release-check-full` runs.

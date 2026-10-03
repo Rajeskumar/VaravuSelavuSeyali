@@ -87,6 +87,13 @@ const LoginPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    // The form is noValidate, so `required` doesn't stop an empty submit. Without this an
+    // empty form hit the server (422 -> "Something went wrong on our end") and spent one of
+    // the user's 5 login attempts per minute. Mirrors mobile's LoginScreen check.
+    if (!email.trim() || !password) {
+      setError('Enter your email and password.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
