@@ -51,7 +51,10 @@ const InsightOfTheDay: React.FC<Props> = ({ insight }) => {
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
         <TrendingUpRoundedIcon sx={{ fontSize: 18, color: accentColor, flexShrink: 0, mt: '1px' }} />
-        <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: '0.8125rem', color: 'text.primary', ...tabularNums }}>
+        {/* overflowWrap: headlines embed user text ("Biggest expense this month: <description>"),
+            and a long unbroken description (an order number, a URL) otherwise overflowed the
+            card and made the whole dashboard scroll sideways on a phone. */}
+        <Typography sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere', fontWeight: 600, fontSize: '0.8125rem', color: 'text.primary', ...tabularNums }}>
           {insight.headline}
         </Typography>
         {insight.detail && (
@@ -61,7 +64,7 @@ const InsightOfTheDay: React.FC<Props> = ({ insight }) => {
         )}
       </Box>
       {expanded && insight.detail && (
-        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.75, lineHeight: 1.5 }}>
+        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.75, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
           {insight.detail}
         </Typography>
       )}

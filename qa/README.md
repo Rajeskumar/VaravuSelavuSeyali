@@ -121,7 +121,7 @@ a video — all under `qa/reports/`.
 - **Logins, smoke + regression (one 60s window):** setup 2 + smoke 1 + registration's auto-login 1 + session.spec logout 1 = **5**, exactly at the limit.
   - login.spec's wrong-password test stubs the response, and the empty-form test sends nothing.
   - The unknown-email check lives in `api/tests/auth-api.spec.ts`, whose login calls wait out one 429 if they land in the same window.
-- **Registrations:** setup 2 + registration.spec 1 + auth-api.spec 2 = **5/hour**. The counter is in-memory, so **restart the backend before re-running** within the hour.
+- **Registrations:** setup 2 + registration.spec 1 (Chromium only, also in CI's multi-browser step) + auth-api.spec 2 = **5/hour**. The counter is in-memory, so **restart the backend before re-running** within the hour.
 - **Shared run ID:** `make qa-all` exports one `QA_RUN_ID` for all three steps (CI uses `GITHUB_RUN_ID`). Running the `npm run qa:*` scripts separately mints a new run ID each time, re-provisions the personas, and blows both budgets.
 
 The real backend rate-limits `POST /auth/login` to **5/minute** and `POST /auth/register`

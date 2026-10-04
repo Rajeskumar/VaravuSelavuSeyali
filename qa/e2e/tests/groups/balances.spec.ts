@@ -30,8 +30,10 @@ test.describe('group balances (UI) @regression', () => {
     // .first(): "You're owed" legitimately renders twice more as an sr-only caption
     // ("you're owed $25.00") elsewhere in the balances panel — all render the same
     // direction, so matching the first is enough to confirm it.
-    await expect(page.getByText("You're owed").first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('$25.00').first()).toBeVisible();
+    // Visible matches only: at phone width the first DOM match for '$25.00' is a hidden
+    // "you're owed $25.00" caption, which made this fail on mobile-iphone only.
+    await expect(page.getByText("You're owed").filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('$25.00').filter({ visible: true }).first()).toBeVisible();
   });
 
   test('a group with no expenses reads "all settled up"', async ({ page, primaryApi }) => {

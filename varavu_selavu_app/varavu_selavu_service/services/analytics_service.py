@@ -148,7 +148,9 @@ class AnalyticsService:
             self.db.query(MerchantInsight)
             .filter(
                 MerchantInsight.user_email == user_email,
-                MerchantInsight.merchant_name == merchant_name,
+                # Case-insensitive: callers (notably the chat agent) pass free text such as
+                # "porkbun" for a merchant stored as "Porkbun".
+                func.lower(MerchantInsight.merchant_name) == (merchant_name or "").strip().lower(),
             )
             .first()
         )

@@ -55,6 +55,31 @@ def test_parse_period_from_text_recognized_phrases(query, expected):
     assert _parse_period_from_text(query, _TODAY) == expected
 
 
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        # The real failing question: "last few months" used to fall through to the
+        # current-month default, so an August purchase was reported as "not found".
+        ("did i paid my porkbun subscription in last few months", ("2026-04-15", "2026-07-15", "the last 3 months")),
+        ("anything from Netflix in the past couple of months?", ("2026-05-15", "2026-07-15", "the last 2 months")),
+        ("past couple months spending", ("2026-05-15", "2026-07-15", "the last 2 months")),
+        ("last several months", ("2026-01-15", "2026-07-15", "the last 6 months")),
+        ("over the last six months", ("2026-01-15", "2026-07-15", "the last 6 months")),
+        ("last two weeks", ("2026-07-01", "2026-07-15", "the last 2 weeks")),
+        ("past 3 weeks", ("2026-06-24", "2026-07-15", "the last 3 weeks")),
+        ("have I bought coffee recently", ("2026-04-15", "2026-07-15", "the last 3 months")),
+        ("what have I been spending on lately", ("2026-04-15", "2026-07-15", "the last 3 months")),
+    ],
+)
+def test_parse_period_from_text_vague_phrases(query, expected):
+    assert _parse_period_from_text(query, _TODAY) == expected
+
+
+def test_vague_phrases_do_not_shadow_exact_ones():
+    assert _parse_period_from_text("last month", _TODAY) == ("2026-06-01", "2026-06-30", "June 2026")
+    assert _parse_period_from_text("past 4 months", _TODAY)[2] == "the last 4 months"
+
+
 def test_parse_period_from_text_no_recognizable_phrase_returns_none():
     assert _parse_period_from_text("what did I spend on eggs", _TODAY) is None
     assert _parse_period_from_text("how much do I owe Priya", _TODAY) is None

@@ -19,6 +19,10 @@ import { formatMoney as formatMoneyShared } from '../../utils/money';
 // into the amount column), an invisible centered hit area expands only the tappable region.
 const rowActionHitSlopSx = {
   position: 'relative',
+  // On touch devices the buttons themselves are 44x44. The invisible 44px ::after below
+  // wasn't enough there: edit and delete sit side by side, so their hit areas overlapped
+  // (~42px each), and the last row's was clipped by the card edge.
+  '@media (hover: none)': { width: 44, height: 44 },
   '&::after': {
     content: '""',
     position: 'absolute',

@@ -176,3 +176,23 @@ def test_merchant_insight_reuses_same_canonical_id_on_repeat_writes(db_session):
     )
     db_session.refresh(first)
     assert first.canonical_merchant_id == first_canonical_id
+
+
+def test_repeat_merchant_with_decimal_amounts_accumulates(db_session):
+    """Routes pass Decimal amounts (money is Decimal end to end). The repeat-merchant branch did
+    float + Decimal and raised TypeError, so merchant totals froze after the first expense. The
+    tests above all pass floats, which is why this went unnoticed."""
+    from varavu_selavu_service.db.models import MerchantAggregate
+    service = InsightsAggregationService(db_session)
+    for amt in (Decimal("10.10"), Decimal("20.20"), Decimal("0.30")):
+        service.on_simple_expense_created(
+            user_email="decimal@example.com",
+            merchant_name="Decimal Mart",
+            purchased_at=datetime(2026, 9, 5),
+            amount=amt,
+        )
+    insight = db_session.query(MerchantInsight).filter_by(user_email="decimal@example.com", merchant_name="Decimal Mart").one()
+    assert insight.total_spent == Decimal("30.60")
+    assert insight.transaction_count == 3
+    agg = db_session.query(MerchantAggregate).filter_by(merchant_insight_id=insight.id, year=2026, month=9).one()
+    assert agg.total_spent == Decimal("30.60")

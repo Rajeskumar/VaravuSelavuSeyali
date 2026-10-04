@@ -13,6 +13,7 @@ Format: `- [ ] [enhancement] — context: [why/when this came up]`
 - [ ] AI chat: update/delete tools — context: deliberately out of scope (no undo). Revisit only with a confirm step.
 
 ## Quality / launch readiness
+- [ ] Expo SDK major upgrade (54 -> current) + React Navigation 7 — context: clears most of the remaining 34 mobile `npm audit` findings (metro, jest via react-native, @expo/cli, expo-constants/notifications, react-navigation's decode-uri-component); `braces`/`node-forge` have no patched release yet. Overrides can't fix these safely (2026-10-04).
 - [ ] Automated cross-user IDOR tests across endpoints — context: FEATURE_STATUS §4. Auth logic looks right, but nothing proves it.
 - [ ] Reproducible reviewer demo-account seed script for app-store review — context: FEATURE_STATUS §4.
 - [ ] Budgets: bound `alert_thresholds` (0–100, max length) and add client tests — context: FEATURE_STATUS §6a known gaps (as of 2026-08-14; worth re-verifying).

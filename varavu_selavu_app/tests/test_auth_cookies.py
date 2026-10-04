@@ -197,6 +197,30 @@ class TestCSRF:
         assert res.status_code == 200, res.text
 
 
+    def test_bearer_request_with_a_leftover_cookie_is_exempt_and_uses_the_header(self, test_client, db_session, registered):
+        """The mobile bug: native HTTP stacks keep the vs_token cookie from /auth/login and resend
+        it alongside the Bearer header, with no CSRF header — every POST used to 403."""
+        assert _login(test_client).status_code == 200
+        assert test_client.cookies.get(ACCESS_COOKIE)  # the leftover cookie is really in the jar
+        db_session.add(User(id=uuid.uuid4(), email="native3@test.com", password_hash="h", name="N"))
+        db_session.commit()
+        token = create_access_token({"sub": "native3@test.com"})
+
+        res = test_client.put(
+            "/api/v1/auth/profile",
+            json={"name": "From Native"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert res.status_code == 200, res.text
+        # Identity comes from the header, not the leftover cookie.
+        assert res.json()["email"] == "native3@test.com"
+
+    def test_cookie_only_mutation_still_requires_csrf_after_bearer_exemption(self, test_client, registered):
+        _login(test_client)
+        res = test_client.put("/api/v1/auth/profile", json={"name": "x"}, headers={"Authorization": "Basic abc"})
+        assert res.status_code == 403
+
+
 class TestRefreshRotation:
     def test_refresh_from_cookie_issues_a_new_pair(self, test_client, registered):
         _login(test_client)

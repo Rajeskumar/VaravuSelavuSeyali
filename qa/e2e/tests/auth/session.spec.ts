@@ -13,9 +13,8 @@ test.describe('session persistence @regression @auth', () => {
   });
 
   test('logout clears the session and returns to /login', async ({ browser }) => {
-    // Verified locally: /login can take well over 60s to become interactive here — see
-    // registration.spec.ts's identical note (Google Sign-In's external script load).
-    test.setTimeout(120_000);
+    // Headroom for one 61s rate-limit wait below, plus /login's Google Sign-In script load.
+    test.setTimeout(150_000);
 
     // Fresh login in an isolated, unauthenticated context — deliberately NOT reusing the
     // shared primary/secondary storageState files, since logging out here revokes that
@@ -33,7 +32,22 @@ test.describe('session persistence @regression @auth', () => {
     const context = await browser.newContext({ baseURL: env.BASE_URL, storageState: { cookies: [], origins: [] } });
     const page = await context.newPage();
     const login = new LoginPage(page);
-    await login.loginAndWaitForDashboard(QA_USERS.secondary.email, QA_USERS.secondary.password);
+    // CI's multi-browser step runs this on firefox, webkit and mobile-iphone in parallel: three
+    // real logins in the same minute as the earlier steps' logins can exceed the 5/minute
+    // limit. A 429 here is the shared budget, not the behaviour under test, so wait out the
+    // window once and retry.
+    await login.goto();
+    await login.login(QA_USERS.secondary.email, QA_USERS.secondary.password);
+    const rateLimited = page.getByText(/too many attempts/i);
+    const landed = await Promise.race([
+      page.waitForURL(/\/dashboard/, { timeout: 20_000 }).then(() => 'dashboard' as const),
+      rateLimited.waitFor({ timeout: 20_000 }).then(() => 'rate-limited' as const),
+    ]);
+    if (landed === 'rate-limited') {
+      await page.waitForTimeout(61_000);
+      await login.login(QA_USERS.secondary.email, QA_USERS.secondary.password);
+      await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+    }
 
     await page.goto('/account');
     await page.getByRole('button', { name: 'Log out' }).click();

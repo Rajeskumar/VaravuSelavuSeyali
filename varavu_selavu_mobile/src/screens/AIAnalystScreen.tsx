@@ -13,6 +13,7 @@ import { sendChatMessageFull, ChatPayload, ChatMessage } from '../api/chat';
 import { scopeLine } from '../utils/chatScope';
 import { apiFetch } from '../api/apiFetch';
 import { AiLimitError } from '../api/aiUsage';
+import { toApiHistory } from '../utils/chatHistory';
 import { useAiUsage } from '../hooks/useAiUsage';
 import AiQuotaNote from '../components/AiQuotaNote';
 import { useAppTheme } from '../context/ThemeContext';
@@ -32,6 +33,8 @@ interface DisplayMessage {
     role: 'user' | 'assistant';
     content: string;
     scope?: string;
+    // Client-produced error bubble (network failure, 403, AI limit): shown, never sent back.
+    isError?: boolean;
 }
 
 interface ModelOption {
@@ -138,10 +141,8 @@ export default function AIAnalystScreen() {
             }
 
             // Map our DisplayMessage to ChatMessage for the API
-            const apiMessages: ChatMessage[] = newHistory.map(m => ({
-                role: m.role,
-                content: m.content
-            }));
+            // Error bubbles (and the question that failed) are never sent back to the model.
+            const apiMessages: ChatMessage[] = toApiHistory(newHistory);
             
             const payload: ChatPayload = {
                 user_id: userEmail || '',
@@ -177,6 +178,7 @@ export default function AIAnalystScreen() {
                 content: error instanceof AiLimitError
                     ? error.message
                     : `❌ Error: ${error.message || 'Something went wrong'}`,
+                isError: true,
             };
             setMessages((prev) => [...prev, errorMsg]);
         } finally {

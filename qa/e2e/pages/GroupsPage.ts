@@ -31,7 +31,10 @@ export class GroupsPage extends BasePage {
    * enough; without `.first()` this is a strict-mode violation.
    */
   groupInRail(name: string) {
-    return this.page.getByText(name, { exact: true }).first();
+    // Visible matches only: at phone width, creating or opening a group navigates into its
+    // detail view and the rail is hidden, so the first DOM match can be a hidden rail entry
+    // while the same name is plainly visible in the detail header.
+    return this.page.getByText(name, { exact: true }).filter({ visible: true }).first();
   }
 
   async openGroup(name: string): Promise<void> {

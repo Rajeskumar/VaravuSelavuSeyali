@@ -45,6 +45,17 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if not request.cookies.get(ACCESS_COOKIE):
             return await call_next(request)
 
+        # An explicit Bearer credential is never ambient: a cross-site page can't attach an
+        # Authorization header without a CORS preflight our allowlist refuses, and
+        # auth_required authenticates from that header whenever it's present (never from the
+        # cookie). Native HTTP stacks (iOS NSURLSession, Android OkHttp's cookie jar) store the
+        # Set-Cookie from /auth/login and /auth/refresh and resend it, so mobile requests
+        # carried vs_token too and got 403 on every POST (AI chat, categorize) until the
+        # cookie expired. The mobile app now sends credentials: 'omit', but Android doesn't
+        # reliably honour that, so the exemption lives here.
+        if request.headers.get("authorization", "").lower().startswith("bearer "):
+            return await call_next(request)
+
         cookie_token = request.cookies.get(CSRF_COOKIE)
         header_token = request.headers.get(CSRF_HEADER)
         if not cookie_token or not header_token or not hmac.compare_digest(cookie_token, header_token):

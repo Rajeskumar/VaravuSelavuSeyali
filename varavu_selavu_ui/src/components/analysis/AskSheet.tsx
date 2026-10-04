@@ -5,6 +5,7 @@ import SendIcon from '@mui/icons-material/SendRounded';
 import { ChangeInsight } from '../../api/analytics';
 import { fetchWithAuth } from '../../api/api';
 import { aiErrorFromResponse, AiLimitError } from '../../api/aiUsage';
+import { toApiHistory } from '../../utils/chatHistory';
 import { useAiUsage } from '../../hooks/useAiUsage';
 import AiQuotaNote from '../common/AiQuotaNote';
 
@@ -18,6 +19,7 @@ interface AskSheetProps {
 interface Message {
   role: 'user' | 'assistant';
   content: string;
+  isError?: boolean; // client-side error bubble: shown, never sent back to the model
 }
 
 export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, month }) => {
@@ -52,7 +54,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
       const res = await fetchWithAuth(`/api/v1/analysis/chat`, {
         method: "POST",
         body: JSON.stringify({
-          messages: msgs,
+          messages: toApiHistory(msgs),
           year,
           month,
         }),
@@ -68,7 +70,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
       const content = e instanceof AiLimitError
         ? e.message
         : 'Sorry, I ran into an error getting that information for you.';
-      setMessages(prev => [...prev, { role: 'assistant', content }]);
+      setMessages(prev => [...prev, { role: 'assistant', content, isError: true }]);
     } finally {
       setThinking(false);
       refreshUsage();

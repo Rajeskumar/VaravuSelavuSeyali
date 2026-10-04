@@ -393,7 +393,10 @@ class InsightsAggregationService:
             self.db.add(insight)
             self.db.flush()
         else:
-            insight.total_spent = Decimal(str(float(insight.total_spent or 0) + amount))
+            # Exact Decimal arithmetic: callers now pass Decimal amounts (money is Decimal end to end),
+            # and float + Decimal raised TypeError here for every repeat merchant, so totals stopped
+            # updating after a merchant's first expense (and the crash dropped the connection).
+            insight.total_spent = Decimal(str(insight.total_spent or 0)) + Decimal(str(amount))
             insight.transaction_count = (insight.transaction_count or 0) + count_delta
 
         self._dual_write_canonical_merchant(insight, merchant_name, user_email)
@@ -421,7 +424,7 @@ class InsightsAggregationService:
                 )
                 self.db.add(agg)
         else:
-            agg.total_spent = Decimal(str(float(agg.total_spent or 0) + amount))
+            agg.total_spent = Decimal(str(agg.total_spent or 0)) + Decimal(str(amount))
             agg.transaction_count = (agg.transaction_count or 0) + count_delta
 
     # ------------------------------------------------------------------

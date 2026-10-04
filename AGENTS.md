@@ -34,3 +34,4 @@ feature log or reference docs. Keep it short; put detail in the files below.
 - **Mobile OCR uses a local Expo module, not `@react-native-ml-kit`** — ML Kit's iOS pods break arm64 simulator builds.
 - **Alembic revision IDs must be random hex** — `a1b2c3d4e5f6` is taken. Tests and local DBs use `Base.metadata.create_all`.
 - **The qa/ Playwright suite runs at the real auth rate limits** (5 logins/min, 5 registrations/hour, in-memory per backend process). The budget is spent exactly, so don't add real logins or registrations to qa tests; stub or use the API (see `qa/README.md`). Restart the backend between local `make release-check-full` runs.
+- **Auth: an `Authorization: Bearer` header wins over the `vs_token` cookie, and Bearer requests are exempt from CSRF** (`auth/security.py`, `core/csrf.py`). Native HTTP stacks keep and resend the login cookie, which made every mobile POST 403. Mobile also sends `credentials: 'omit'`; keep both.

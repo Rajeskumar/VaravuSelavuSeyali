@@ -27,8 +27,13 @@ test.describe('profile settings @regression', () => {
     await account.updateName(newName);
     await account.expectSuccessToast();
 
+    // Let /dashboard finish loading before the reload: interrupting an in-flight load with
+    // page.reload() intermittently crashed headless Firefox ("Page crashed"), locally and in
+    // CI. Settled reloads never did (8/8). Not an app bug: nobody reloads mid-navigation.
     await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
     await page.reload();
+    await page.waitForLoadState('networkidle');
     await account.goto();
     await expect(account.nameField).toHaveValue(newName, { timeout: 10_000 });
   });

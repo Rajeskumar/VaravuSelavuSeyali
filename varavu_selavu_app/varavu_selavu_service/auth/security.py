@@ -98,11 +98,14 @@ def decode_token(token: str, token_type: str) -> dict:
 
 
 def auth_required(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> str:
-    """Resolves the caller's identity from the access cookie, falling back to the
-    Authorization header so native clients keep working unchanged."""
+    """Resolves the caller's identity from the Authorization header when one is sent (native
+    clients), otherwise from the access cookie (web). The header wins when both are present:
+    it's the credential the client chose to send, a stale cookie left in a native cookie jar
+    must not override it, and core/csrf.py exempts header-authenticated requests on exactly
+    that basis."""
     from varavu_selavu_service.auth.cookies import ACCESS_COOKIE
 
-    access_token = request.cookies.get(ACCESS_COOKIE) or token
+    access_token = token or request.cookies.get(ACCESS_COOKIE)
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

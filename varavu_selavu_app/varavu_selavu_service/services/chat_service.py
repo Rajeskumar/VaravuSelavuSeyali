@@ -40,6 +40,17 @@ class ChatResult:
     llm_called: bool = False
 
 
+# Word amounts for "last few/couple of/three months". "few" is read as 3 and "several" as 6:
+# generous on purpose, since a too-wide window still finds the purchase and a too-narrow one
+# answers "no" for something that happened.
+_VAGUE_COUNTS = {
+    "couple": 2, "couple of": 2, "few": 3, "several": 6,
+    "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+}
+_VAGUE_COUNT_PATTERN = r"couple\s+of|couple|few|several|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
+
+
 def _parse_period_from_text(query: str, today: date) -> Optional[tuple[str, str, str]]:
     """
     Deterministic keyword/regex parse of common natural-language period phrases
@@ -81,6 +92,28 @@ def _parse_period_from_text(query: str, today: date) -> Optional[tuple[str, str,
         n = int(m.group(1))
         start = today - relativedelta(months=n)
         return start.isoformat(), today.isoformat(), f"the last {n} months"
+
+    # Vague and spelled-out amounts ("last few months", "past couple of months", "last six
+    # weeks"). These used to fall through to the current-month default, so "did I pay X in the
+    # last few months?" only ever looked at this month and answered "no" for anything older.
+    m = re.search(rf"\b(?:last|past)\s+({_VAGUE_COUNT_PATTERN})\s+(months?|weeks?)\b", q)
+    if m:
+        n = _VAGUE_COUNTS[re.sub(r"\s+", " ", m.group(1))]
+        if m.group(2).startswith("month"):
+            start = today - relativedelta(months=n)
+            return start.isoformat(), today.isoformat(), f"the last {n} months"
+        start = today - relativedelta(weeks=n)
+        return start.isoformat(), today.isoformat(), f"the last {n} weeks"
+
+    m = re.search(r"\b(?:last|past)\s+(\d+)\s+weeks?\b", q)
+    if m:
+        n = int(m.group(1))
+        start = today - relativedelta(weeks=n)
+        return start.isoformat(), today.isoformat(), f"the last {n} weeks"
+
+    if re.search(r"\b(?:recently|lately|recent months|in recent weeks)\b", q):
+        start = today - relativedelta(months=3)
+        return start.isoformat(), today.isoformat(), "the last 3 months"
 
     m = re.search(r"\bsince\s+([a-z]+)\.?\s*(\d{4})?\b", q)
     if m and m.group(1) in _MONTH_NAMES:
@@ -223,6 +256,60 @@ def _resolve_agent_category(category: Optional[str], description: str, merchant_
     match = rules.classify(merchant_name) if merchant_name else None
     match = match or rules.classify(description)
     return match.subcategory if match else "General"
+
+
+_SEARCH_EXPENSES_MAX = 25
+
+
+def _search_expenses_for_agent(
+    db,
+    user_id: str,
+    query: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    include_groups: bool = False,
+    limit: int = 10,
+) -> str:
+    """Find the user's individual expenses whose description or merchant contains every word of
+    `query`, newest first. LLM-free so it can be tested directly.
+
+    The agent previously had only summary/insight tools, so "when did I renew X?" was answered
+    only when X happened to appear in a summary's top list, and otherwise refused ("I can only
+    access summaries…"), inconsistently across identical requests."""
+    from sqlalchemy import and_, or_
+    from varavu_selavu_service.db.models import Expense, Group, GroupMember
+
+    words = [w for w in re.split(r"\s+", (query or "").strip()) if w]
+    if not words:
+        return "Give me a word or phrase to search for (e.g. a merchant or what you bought)."
+    limit = max(1, min(int(limit or 10), _SEARCH_EXPENSES_MAX))
+
+    owner = and_(Expense.user_email == user_id, Expense.group_id.is_(None))
+    if include_groups:
+        my_groups = db.query(GroupMember.group_id).filter(GroupMember.user_email == user_id)
+        owner = or_(owner, Expense.group_id.in_(my_groups))
+
+    q = db.query(Expense, Group.name).outerjoin(Group, Group.id == Expense.group_id).filter(owner)
+    for w in words:
+        pattern = f"%{w}%"
+        q = q.filter(or_(Expense.description.ilike(pattern), Expense.merchant_name.ilike(pattern)))
+    if start_date:
+        q = q.filter(Expense.purchased_at >= start_date)
+    if end_date:
+        q = q.filter(Expense.purchased_at < (date.fromisoformat(end_date) + relativedelta(days=1)).isoformat())
+    rows = q.order_by(Expense.purchased_at.desc()).limit(limit + 1).all()
+
+    if not rows:
+        span = f" between {start_date or 'the beginning'} and {end_date or 'today'}" if (start_date or end_date) else ""
+        return f'No expenses matching "{query}"{span}.'
+    lines = []
+    for exp, group_name in rows[:limit]:
+        when = exp.purchased_at.date().isoformat() if exp.purchased_at else "unknown date"
+        merchant = f" at {exp.merchant_name}" if exp.merchant_name else ""
+        where = f" (group: {group_name}, full amount)" if group_name else ""
+        lines.append(f"- {when}: {exp.description}{merchant} — ${float(exp.amount):,.2f}{where}")
+    more = f"\n(showing the {limit} most recent; narrow the dates or wording for older ones)" if len(rows) > limit else ""
+    return f'Expenses matching "{query}", newest first:\n' + "\n".join(lines) + more
 
 
 def _create_personal_expense_from_agent(
@@ -606,13 +693,33 @@ def call_chat_model(
             return f"Error fetching expense summary: {str(e)}"
 
     @tool
+    def search_expenses(query: str, start_date: str = None, end_date: str = None, limit: int = 10) -> str:
+        """Find the user's individual transactions by text in the description or merchant (e.g.
+        "porkbun", "netflix", "dentist"), newest first, with date, description, merchant and amount.
+        Use this for "when did I…", "how much did I pay for…", "did I pay…" questions about
+        specific purchases. Dates are optional YYYY-MM-DD; omit them to search all history."""
+        try:
+            return _search_expenses_for_agent(
+                expense_service.db, user_id, query, start_date, end_date,
+                include_groups=groups_enabled, limit=limit,
+            )
+        except Exception as e:
+            return f"Error searching expenses: {str(e)}"
+
+    @tool
     def get_item_insights(item_name: str, start_date: str = None, end_date: str = None) -> str:
         """Get price metrics and insights for a specific item over a period. Dates are optional YYYY-MM-DD."""
         try:
             res = insight_service.calculate_item_detail(
                 user_id=user_id, item_name=item_name, start_date=start_date, end_date=end_date
             )
-            return str(res) if res else f"No data found for item: {item_name}"
+            if res:
+                return str(res)
+            # Same as get_merchant_insights: item insights only cover itemized receipts.
+            return (
+                f"No item insights for '{item_name}' (this only covers itemized receipts). It does "
+                "NOT mean the user never bought it: call search_expenses to check transactions."
+            )
         except Exception as e:
             return f"Error fetching item insights: {str(e)}"
 
@@ -621,11 +728,20 @@ def call_chat_model(
         """Get metrics and spending trends for a specific merchant."""
         try:
             res = analytics_service.get_merchant_detail(user_email=user_id, merchant_name=merchant_name)
-            return str(res) if res else f"No data found for merchant: {merchant_name}"
+            if res:
+                return str(res)
+            # Not proof of absence: merchant insights only cover expenses saved with a merchant
+            # name. Returning a bare "No data found" here made the model answer "you didn't pay
+            # X" without ever checking the transactions themselves.
+            return (
+                f"No merchant insights for '{merchant_name}'. This only covers expenses saved with "
+                "that merchant name, so it does NOT mean there were no such purchases: call "
+                "search_expenses to check the individual transactions before answering."
+            )
         except Exception as e:
             return f"Error fetching merchant insights: {str(e)}"
 
-    tools = [get_expense_summary, get_item_insights, get_merchant_insights]
+    tools = [get_expense_summary, search_expenses, get_item_insights, get_merchant_insights]
 
     # Create-only for now (TS-CHAT-01x) — deliberately no update/delete tools yet. Those need a
     # search-then-confirm gate (resolve the target expense, show it to the user, get an explicit
@@ -996,7 +1112,12 @@ def call_chat_model(
         f"({resolved_period.start_date} to {resolved_period.end_date}) — the "
         "expense summary for this period is provided below. "
         "Use your tools to query the database for anything not already provided, and answer the "
-        "user's questions clearly and concisely. "
+        "user's questions clearly and concisely. For questions about a specific purchase (when, "
+        "how much, whether it happened) always call search_expenses rather than saying you can't "
+        "see individual transactions. Never tell the user a purchase didn't happen based on an "
+        "empty merchant/item insight or on the summary above alone (it only covers "
+        f"{resolved_period.label}): search_expenses must have come back empty for the period they "
+        "asked about first, and if they didn't name one, search all history (omit the dates). "
         "Format your answer using markdown. "
     ) + logging_guidance + injection_boundary + (
         default_summary_text + rag_context_text + group_context_text + scope_text

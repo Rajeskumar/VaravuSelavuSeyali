@@ -2,6 +2,8 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { useTheme } from '@mui/material/styles';
 import { typeScale } from '../theme';
 import SegmentedTabs from '../components/common/SegmentedTabs';
 import OverviewTab from '../components/analysis/OverviewTab';
@@ -27,6 +29,10 @@ type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets' | 'cards';
 const ExpenseAnalysisPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { enabled: budgetsEnabled } = useBudgetsEnabled();
+  const theme = useTheme();
+  // Five tabs (with Budgets + Cards on) at the default size are ~10px wider than a phone's
+  // content width, which made the whole page scroll sideways; the compact size fits.
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const { enabled: cardCoachEnabled } = useCardCoachEnabled();
   const tabParam = searchParams.get('tab');
   const tab: AnalysisTab =
@@ -57,7 +63,7 @@ const ExpenseAnalysisPage: React.FC = () => {
         <Typography sx={{ ...typeScale.display, fontSize: 28, color: 'text.primary' }}>
           Analysis
         </Typography>
-        <Box sx={{ maxWidth: 300 + (budgetsEnabled ? 80 : 0) + (cardCoachEnabled ? 80 : 0) }}>
+        <Box sx={{ maxWidth: { xs: '100%', sm: 300 + (budgetsEnabled ? 80 : 0) + (cardCoachEnabled ? 80 : 0) }, minWidth: 0 }}>
           <SegmentedTabs<AnalysisTab>
             value={tab}
             onChange={handleTabChange}
@@ -69,6 +75,7 @@ const ExpenseAnalysisPage: React.FC = () => {
               ...(cardCoachEnabled ? [{ value: 'cards' as const, label: 'Cards' }] : []),
             ]}
             fullWidth
+            size={isPhone ? 'small' : 'medium'}
             ariaLabel="Analysis section"
           />
         </Box>

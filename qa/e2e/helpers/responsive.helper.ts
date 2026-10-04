@@ -115,13 +115,28 @@ export async function findSmallTouchTargets(
   }, min);
 }
 
-/** Elements using ellipsis truncation, which must not push layout wider. */
+/**
+ * Elements using ellipsis truncation, which must not push layout wider. Like
+ * findBleedingElements, anything inside a clipping or scrolling ancestor is excluded: the
+ * dashboard's horizontally-scrolling group strip legitimately has cards past the viewport
+ * edge once a user has a few groups, and that never widens the page.
+ */
 export async function findOverflowingTruncatedText(page: Page): Promise<string[]> {
   return page.evaluate(() => {
+    const clipped = (el: Element) => {
+      let a = el.parentElement;
+      while (a) {
+        const ov = getComputedStyle(a).overflowX;
+        if (ov === 'hidden' || ov === 'clip' || ov === 'auto' || ov === 'scroll') return true;
+        a = a.parentElement;
+      }
+      return false;
+    };
     const out: string[] = [];
     document.querySelectorAll('*').forEach((el) => {
       const cs = getComputedStyle(el);
       if (cs.textOverflow !== 'ellipsis') return;
+      if (clipped(el)) return;
       if (el.scrollWidth > el.clientWidth + 1 && el.getBoundingClientRect().right > window.innerWidth + 1) {
         out.push((el.textContent || '').trim().slice(0, 40));
       }

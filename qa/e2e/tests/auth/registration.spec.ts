@@ -13,7 +13,12 @@ import { RUN_ID, uniqueSuffix } from '../../helpers/test-data.helper';
 test.describe('registration @regression @auth', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('a new account can register and lands on the dashboard', async ({ page }) => {
+  test('a new account can register and lands on the dashboard', async ({ page }, testInfo) => {
+    // Chromium only: POST /auth/register allows 5/hour per IP, and CI's main-branch job also
+    // runs regression on firefox/webkit/mobile-iphone. One registration per extra project
+    // made mobile-iphone the 6th call of the hour (setup 2 + chromium + firefox + webkit),
+    // and starved api/tests/auth-api.spec.ts's two register tests after it.
+    test.skip(testInfo.project.name !== 'chromium', 'register budget: 5/hour per CI job, see qa/README.md');
     // The "hang at getByLabel('Name')" this test used to show (locally and in CI, on every
     // run) was RegisterPage's exact label match against MUI's required-field "Name *"
     // label, not the environment; see RegisterPage.register. The extended timeout is just
