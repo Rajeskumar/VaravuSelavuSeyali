@@ -742,7 +742,16 @@ def analysis_chat(
 
 
 def _settle_chat(quota: AiQuotaService, reservation, result) -> None:
-    if getattr(result, "llm_called", True) is False:
+    if getattr(result, "off_topic", False) is True:
+        # Refused by the topic gate: the user keeps their daily question, but the small
+        # classifier call still counts toward the global spend cap.
+        quota.refund(
+            reservation,
+            getattr(result, "model_name", None) or Settings().GEMINI_MODEL,
+            getattr(result, "input_tokens", 0),
+            getattr(result, "output_tokens", 0),
+        )
+    elif getattr(result, "llm_called", True) is False:
         quota.refund(reservation)
     else:
         quota.settle(
@@ -1567,6 +1576,8 @@ def budget_ask_why(
             expense_service=expense_service,
             group_expense_service=group_expense_service,
             groups_enabled=settings.GROUPS_ENABLED,
+            # A server-built prompt about the user's own budget: always in scope.
+            enforce_scope=False,
         )
     except Exception as exc:
         quota.refund(reservation)

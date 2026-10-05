@@ -254,9 +254,36 @@ class AiQuotaService:
             logger.warning("ai_spend_high day=%s est_total_usd=%.4f budget_usd=%.2f", reservation.day, total, budget)
         return cost
 
-    def refund(self, reservation: Reservation) -> None:
+    def refund(
+        self,
+        reservation: Reservation,
+        model: Optional[str] = None,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> None:
+        """Give the unit back. Tokens passed here (e.g. an off-topic question's classifier call)
+        are still recorded, so they count toward the global spend cap, without using one of the
+        user's daily questions."""
         if reservation.settled:
             return
+        if input_tokens or output_tokens:
+            cost = estimate_cost_usd(model, int(input_tokens), int(output_tokens))
+            self.db.execute(
+                update(AiUsageDaily)
+                .where(
+                    AiUsageDaily.user_email == reservation.user_email,
+                    AiUsageDaily.feature == reservation.feature,
+                    AiUsageDaily.day == reservation.day,
+                )
+                .values(
+                    input_tokens=AiUsageDaily.input_tokens + int(input_tokens),
+                    output_tokens=AiUsageDaily.output_tokens + int(output_tokens),
+                    est_cost_usd=AiUsageDaily.est_cost_usd + Decimal(str(round(cost, 6))),
+                )
+            )
+            with _spend_lock:
+                if _spend_cache["day"] == reservation.day:
+                    _spend_cache["value"] += cost
         self.db.execute(
             update(AiUsageDaily)
             .where(
