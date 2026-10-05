@@ -188,8 +188,10 @@ export default function CardsTabContent() {
 
       {picker}
 
+      {/* Via MainTabs: React Navigation 7 no longer reaches a tab nested there by bare name from a
+          stack screen (CardsScreen is one). */}
       <TouchableOpacity
-        onPress={() => navigation.navigate('AI Analyst', { initialQuery: 'Which card should I use for a purchase?' })}
+        onPress={() => navigation.navigate('MainTabs', { screen: 'AI Analyst', params: { initialQuery: 'Which card should I use for a purchase?' } })}
         activeOpacity={0.7}
         style={{ marginBottom: 4 }}
       >

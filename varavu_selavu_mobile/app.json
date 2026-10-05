@@ -7,12 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "trackspense",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
-    "jsEngine": "hermes",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -57,6 +51,15 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF",
+          "imageWidth": 200
+        }
+      ],
       "expo-asset",
       [
         "expo-image-picker",
@@ -67,7 +70,11 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "./withDisablePush"
+      "./withDisablePush",
+      "expo-font",
+      "expo-secure-store",
+      "expo-status-bar",
+      "./withSceneLifecycle"
     ]
   }
 }

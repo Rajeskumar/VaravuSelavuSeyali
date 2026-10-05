@@ -8,16 +8,16 @@ The React Native (Expo) mobile application for TrackSpense, providing a native e
 
 | Component | Technology | Version |
 |:---|:---|:---|
-| Language | TypeScript | ~5.9.2 |
-| Framework | React Native | 0.81.5 |
-| Platform | Expo SDK | ~54.0.0 |
-| Navigation | React Navigation v6 | Stack + Bottom Tabs |
+| Language | TypeScript | ~6.0.3 |
+| Framework | React Native | 0.86.3 |
+| Platform | Expo SDK | ^57.0.26 |
+| Navigation | React Navigation v7 | Stack + Bottom Tabs |
 | HTTP Client | Axios | ≥1.6.8 |
-| Secure Storage | expo-secure-store | ~15.0.8 |
-| Camera/Gallery | expo-image-picker | ~17.0.10 |
+| Secure Storage | expo-secure-store | ~57.0.4 |
+| Camera/Gallery | expo-image-picker | ~57.0.20 |
 | Charts | react-native-chart-kit | ≥6.12.0 |
-| SVG | react-native-svg | 15.12.1 |
-| Gradients | expo-linear-gradient | ~15.0.8 |
+| SVG | react-native-svg | 15.15.4 |
+| Gradients | expo-linear-gradient | ~57.0.2 |
 | State Management | React Context API | — |
 
 ---

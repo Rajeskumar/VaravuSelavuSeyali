@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { NavigationContainer, useNavigation, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
@@ -270,6 +270,8 @@ function RootNavigator() {
       linking={linking}
       theme={{
         dark: isDark,
+        // React Navigation 7 themes require a `fonts` block; reuse the library's defaults.
+        fonts: (isDark ? DarkTheme : DefaultTheme).fonts,
         colors: {
           primary: theme.colors.primary,
           background: theme.colors.background,
@@ -298,7 +300,9 @@ function ThemedStatusBarAndNav() {
   const { isDark } = useAppTheme();
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor="transparent" translucent />
+      {/* SDK 57 is edge-to-edge only: the status bar is always transparent, so the old
+          backgroundColor/translucent props no longer exist. */}
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <RootNavigator />
     </>
   );

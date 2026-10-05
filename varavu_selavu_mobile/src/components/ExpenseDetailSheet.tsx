@@ -370,7 +370,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
 }
 
 const styles = StyleSheet.create({
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.4)' },
   keyboardView: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: 24,

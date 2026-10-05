@@ -56,7 +56,9 @@ export function useQuickLogBar() {
       if (isQuestion) {
         const question = text;
         setText('');
-        navigation.navigate('AI Analyst', { initialQuery: question });
+        // Via the parent: React Navigation 7 doesn't resolve a nested tab by bare name from screens
+        // outside MainTabs, and this hook is used from both.
+        navigation.navigate('MainTabs', { screen: 'AI Analyst', params: { initialQuery: question } });
       } else {
         setText('');
         openAddExpense();

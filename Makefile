@@ -88,14 +88,15 @@ audit-backend:
 audit-web:
 	cd varavu_selavu_ui && npm audit --omit=dev --audit-level=high
 
-# Mobile's Expo/Metro build toolchain currently carries known high-severity advisories
-# (metro, metro-config, metro-transform-worker, @expo/metro, image-size, postcss — all
-# transitive of @expo/config) that only clear with an Expo SDK major-version bump, not a
-# routine dependency patch. Gated at critical here so the check stays meaningful without
-# permanently red-lining every release on a pre-existing, tracked-separately issue; revisit
-# this threshold once the Expo SDK is upgraded.
+# Gated at high, like web, with a reviewed allowlist (varavu_selavu_mobile/audit-allowlist.json)
+# for advisories that have no patched release and reach only build/test tooling: braces (Metro,
+# Jest) and node-forge (@expo/cli code signing). npm audit can't accept individual advisories, so
+# the previous workaround was a critical-only threshold, which also let any NEW high through.
+# Each allowlist entry carries a reviewBy date; past it, the gate fails until it's re-checked.
+# (No pipefail needed: npm audit exits non-zero whenever anything is found, and the pipeline's
+# status is check-audit's.)
 audit-mobile:
-	cd varavu_selavu_mobile && npm audit --omit=dev --audit-level=critical
+	cd varavu_selavu_mobile && npm audit --omit=dev --json | node ../scripts/check-audit.js --level high --allowlist audit-allowlist.json
 
 audit-qa:
 	cd qa && npm audit --audit-level=high

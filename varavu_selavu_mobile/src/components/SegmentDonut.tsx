@@ -51,7 +51,7 @@ export default function SegmentDonut({ segments, centerValue, centerLabel = 'TOT
 }
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
-  center: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+  center: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
   value: { fontFamily: theme.typography.fontFamily.display, fontSize: 19, letterSpacing: -0.6, color: theme.colors.text, fontVariant: ['tabular-nums'] },
   label: { fontFamily: theme.typography.fontFamily.monoRegular, fontSize: 9, letterSpacing: 1.1, color: theme.colors.textTertiary },
 });

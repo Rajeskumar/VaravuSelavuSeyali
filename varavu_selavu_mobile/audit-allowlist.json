@@ -1,0 +1,19 @@
+{
+  "_comment": "Advisories `make audit-mobile` tolerates. Only for advisories with NO patched release that reach only build/test tooling, never the app binary. Every entry needs a reason and a reviewBy date; the gate fails once reviewBy passes, forcing a re-check.",
+  "advisories": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "No patched release (latest 3.0.3 is in range <=3.0.3). Reached only via micromatch in Metro's file map and Jest, which run at build/test time and never ship in the app.",
+      "added": "2026-10-04",
+      "reviewBy": "2026-11-04"
+    },
+    {
+      "id": "GHSA-86w9-cpqp-85rv",
+      "package": "node-forge",
+      "reason": "No patched release (latest 1.4.0 is in range <=1.4.0). Reached only via @expo/cli -> @expo/code-signing-certificates, used for EAS Update code signing, which this app does not configure. Build tooling, never in the app.",
+      "added": "2026-10-04",
+      "reviewBy": "2026-11-04"
+    }
+  ]
+}
