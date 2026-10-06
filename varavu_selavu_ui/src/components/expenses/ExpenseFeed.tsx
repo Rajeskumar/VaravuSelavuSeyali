@@ -64,10 +64,6 @@ export interface FeedExpense {
    * single currency can't represent every row) falls back to `formatMoney`'s own USD default. */
   currency?: string;
   notes?: string;
-  /** Only set for group rows — the original payer(s), preserved as-is when an
-   * edit re-submits the (Phase-1, always-equal) split. See ExpensesPage's
-   * `handleDetailSave` for why this is threaded through rather than rebuilt. */
-  payerSummary?: { member_id: string; amount_paid: number }[];
   /** "Has line items worth viewing/editing" signal — split_type is the reliable marker
    * (set at creation for both personal and group itemized expenses); itemCount is a
    * fallback for personal rows created before that marker existed (every personal expense
@@ -144,6 +140,9 @@ interface ExpenseRowProps {
   /** Archived-group lockdown: hides the edit/delete row actions, keeping
    * `onSelect` (view) usable so history stays browsable. */
   readOnly?: boolean;
+  /** Phones (touch, <600px): drop the always-visible edit/delete icons — only for feeds whose
+   * row tap opens a dialog offering both. */
+  hideTouchActionsOnPhone?: boolean;
   /** TS-TAG-108 — bulk-tagging select mode: a row click toggles the checkbox
    * instead of opening the detail sheet, and edit/delete hover actions hide. */
   selectable?: boolean;
@@ -151,7 +150,7 @@ interface ExpenseRowProps {
   onToggleSelect?: (expense: FeedExpense) => void;
 }
 
-const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDelete, deleting, readOnly, selectable, checked, onToggleSelect }) => {
+const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDelete, deleting, readOnly, hideTouchActionsOnPhone, selectable, checked, onToggleSelect }) => {
   const theme = useTheme();
   const dot = categoryTint(expense.mainCategory);
   const handleRowClick = () => (selectable ? onToggleSelect?.(expense) : onSelect(expense));
@@ -200,7 +199,20 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
         }}
       />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem' }} noWrap>
+        {/* Up to two lines, then ellipsis: one line cut "Rent - October" to "Rent - Octo…" in the
+            narrow middle column of the group page. */}
+        <Typography
+          title={expense.merchantName || expense.description}
+          sx={{
+            fontWeight: 600,
+            fontSize: '0.8125rem',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            overflowWrap: 'anywhere',
+          }}
+        >
           {expense.merchantName || expense.description}
         </Typography>
         <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ fontSize: '0.6875rem' }}>
@@ -254,6 +266,11 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
             transition: 'opacity 0.15s ease',
             // Always visible on touch/coarse-pointer devices where hover doesn't apply.
             '@media (hover: none)': { opacity: 1, pointerEvents: 'auto' },
+            // ...except on phones where the row's tap target already opens a dialog with these
+            // actions: two always-on icons squeezed titles to "AUDIT groce…".
+            ...(hideTouchActionsOnPhone ? { '@media (hover: none) and (max-width: 599.95px)': { display: 'none' } } : {}),
+            // Keyboard users tab onto these buttons, so show them while focused.
+            '&:focus-within': { opacity: 1, pointerEvents: 'auto' },
           }}
         >
           <IconButton
@@ -304,6 +321,9 @@ interface ExpenseFeedProps {
   /** Archived-group lockdown: hides edit/delete row actions across the whole
    * feed, keeping viewing (`onSelect`) usable. */
   readOnly?: boolean;
+  /** Phones (touch, <600px): drop the always-visible edit/delete icons — only for feeds whose
+   * row tap opens a dialog offering both. */
+  hideTouchActionsOnPhone?: boolean;
   /** TS-TAG-108 — bulk-tagging select mode across the whole feed. */
   selectable?: boolean;
   selectedKeys?: Set<string>;
@@ -331,6 +351,7 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
   hasMore,
   loadingMore,
   readOnly,
+  hideTouchActionsOnPhone,
   selectable,
   selectedKeys,
   onToggleSelect,
@@ -409,6 +430,7 @@ const ExpenseFeed: React.FC<ExpenseFeedProps> = ({
               onDelete={onDelete}
               deleting={deletingKey === expense.key}
               readOnly={readOnly}
+              hideTouchActionsOnPhone={hideTouchActionsOnPhone}
               selectable={selectable}
               checked={selectedKeys?.has(expense.key)}
               onToggleSelect={onToggleSelect}

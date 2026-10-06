@@ -7,10 +7,10 @@ import { useTheme } from '@mui/material/styles';
 import { typeScale } from '../../theme';
 import { AnalysisGroupSummary, SpendBreakdown } from '../../api/analysis';
 import SegmentedTabs from '../common/SegmentedTabs';
+import { formatMoney as formatAbsMoney } from '../../utils/money';
 
 function formatMoney(n: number): string {
-  const sign = n < 0 ? '−' : '';
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return `${n < 0 ? '−' : ''}${formatAbsMoney(n)}`;
 }
 
 /** Sums personal spend + each group's `my_share` — the one number this hero shows.
@@ -139,7 +139,7 @@ const TrueTotalHero: React.FC<Props> = ({ personalTotal, groupSummaries, groupsE
               variant="caption"
               sx={{ color: momDelta.amount > 0 ? negativeColor : momDelta.amount < 0 ? positiveColor : 'text.secondary', mt: 0.5, fontWeight: 600 }}
             >
-              {momDelta.amount > 0 ? '+' : ''}{momDelta.percent.toFixed(0)}% vs last month
+              {momDelta.amount > 0 ? '+' : ''}{momDelta.percent.toFixed(0)}% vs this point last month
             </Typography>
           )}
         </Box>

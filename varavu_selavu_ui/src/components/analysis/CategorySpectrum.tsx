@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import ChevronDownIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import ChevronUpIcon from '@mui/icons-material/KeyboardArrowUpRounded';
-import { typeScale, withAlpha } from '../../theme';
-import { categoryTint } from '../expenses/categoryColors';
+import { typeScale } from '../../theme';
+import { spectrumColor } from '../expenses/categoryColors';
 import { BudgetDTO } from '../../api/budgets';
 import BudgetProgressBar, { STATUS_LABEL, statusColor } from '../budgets/BudgetProgressBar';
+import { formatMoney } from '../../utils/money';
 
 interface CategorySpectrumProps {
   total: number;
@@ -17,12 +18,6 @@ interface CategorySpectrumProps {
   budgetsByCategory?: Record<string, BudgetDTO>;
 }
 
-// Reuses the same category→color mapping as ExpenseFeed's tint dots (was its own
-// hex-for-hex-identical duplicate table before) — one source of truth so a category
-// is always the same color everywhere in the app, not just internally consistent here.
-function getCatColor(cat: string) {
-  return categoryTint(cat);
-}
 
 export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categoryTotals, details, budgetsByCategory }) => {
   const theme = useTheme();
@@ -30,6 +25,8 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
 
   // Sort descending by total
   const sorted = [...categoryTotals].sort((a, b) => b.total - a.total);
+  const colorByCategory = new Map(sorted.map((c, i) => [c.category, spectrumColor(i)]));
+  const getCatColor = (cat: string) => colorByCategory.get(cat) ?? spectrumColor(0);
 
   return (
     <Box sx={{ px: 2, pb: 4 }}>
@@ -38,10 +35,11 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
           CATEGORY BREAKDOWN
         </Typography>
         <Typography sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
-          ${total.toFixed(2)}
+          {formatMoney(total)}
         </Typography>
       </Box>
 
+      {/* Colors by rank, so every row in this chart is distinguishable (see SPECTRUM_COLORS). */}
       {/* The Spectrum Bar */}
       <Box sx={{ display: 'flex', w: '100%', mb: 2, height: 10, borderRadius: 999, overflow: 'hidden', backgroundColor: theme.palette.divider }}>
         {sorted.map(c => {
@@ -75,11 +73,13 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                   border: 'none',
                   padding: 0,
                   cursor: 'pointer',
-                  outline: 'none',
-                  my: 1.5
+                  my: 1.5,
+                  '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2, borderRadius: 1 },
                 }}
               >
                 <Box sx={{ width: 12, height: 12, borderRadius: 999, flexShrink: 0, backgroundColor: getCatColor(c.category) }} />
+                {/* Plain text color: tinted text on a tint of the same color failed contrast;
+                    the dot beside it already carries the category color. */}
                 <Typography
                   sx={{
                     flex: 1,
@@ -87,11 +87,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                     fontFamily: 'Instrument Sans',
                     fontSize: 13,
                     fontWeight: 600,
-                    color: getCatColor(c.category),
-                    backgroundColor: withAlpha(getCatColor(c.category), theme.palette.mode === 'dark' ? 0.22 : 0.14),
-                    borderRadius: 999,
-                    px: 1.25,
-                    py: 0.375,
+                    color: 'text.primary',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
@@ -105,7 +101,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                 </Box>
                 
                 <Typography sx={{ ...typeScale.amount, width: 64, textAlign: 'right', fontSize: 14, color: 'text.primary' }}>
-                  ${c.total.toFixed(2)}
+                  {formatMoney(c.total)}
                 </Typography>
                 
                 {isExpanded ? (
@@ -133,7 +129,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
                           {t.description}
                         </Typography>
                         <Typography sx={{ ...typeScale.amount, fontSize: 13, color: 'text.primary' }}>
-                          ${t.cost.toFixed(2)}
+                          {formatMoney(t.cost)}
                         </Typography>
                       </Box>
                     ))

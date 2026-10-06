@@ -15,10 +15,8 @@ import {
 import CardDetailDialog from './CardDetailDialog';
 import CustomCardForm from './CustomCardForm';
 import SegmentedTabs from '../common/SegmentedTabs';
+import { formatMoney } from '../../utils/money';
 
-function formatMoney(n: number): string {
-  return `$${n.toFixed(2)}`;
-}
 
 function formatPoints(n: number, rewardType: string): string {
   return `${Math.round(n).toLocaleString()} ${rewardType === 'miles' ? 'miles' : 'pts'}`;
@@ -28,11 +26,15 @@ function formatPoints(n: number, rewardType: string): string {
 const EarnedByCard: React.FC<{ coach: CardCoachResponse; phrase: string }> = ({ coach, phrase }) => {
   const cards = coach.by_card ?? [];
   if (cards.length === 0) return null;
+  // When most spend has no card recorded the total is priced as if it went on the default card —
+  // say so in the headline instead of claiming it was "earned".
+  const totalSpend = cards.reduce((s, c) => s + (c.spend || 0), 0);
+  const mostlyAssumed = totalSpend > 0 && (coach.default_assumed_spend ?? 0) / totalSpend > 0.5;
   return (
     <Box sx={{ mb: 3 }}>
       <Typography sx={{ fontSize: 13, fontWeight: 700, color: 'text.secondary', mb: 0.5 }}>Earned by card</Typography>
       <Typography sx={{ fontSize: 22, fontWeight: 700, mb: 1.5 }}>
-        Your cards earned {formatMoney(coach.total_earned_usd ?? 0)}
+        {mostlyAssumed ? 'Your cards would have earned about ' : 'Your cards earned '}{formatMoney(coach.total_earned_usd ?? 0)}
         <Typography component="span" sx={{ fontSize: 13, fontWeight: 500, color: 'text.secondary', ml: 1 }}>{phrase}</Typography>
       </Typography>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -76,6 +78,16 @@ const EarnedByCard: React.FC<{ coach: CardCoachResponse; phrase: string }> = ({ 
           {formatMoney(coach.unassigned_spend)} of spend isn't linked to a card — set a default card, or pick the card when adding an expense.
         </Typography>
       )}
+      {(coach.default_assumed_spend ?? 0) > 0 && (
+        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 1 }}>
+          Estimate: {formatMoney(coach.default_assumed_spend ?? 0)} of spending has no card recorded, so it's counted as if it went on your default card. Pick the card when you add an expense for exact figures.
+        </Typography>
+      )}
+      {(coach.excluded_spend ?? 0) > 0 && (
+        <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.5 }}>
+          Rent and mortgage ({formatMoney(coach.excluded_spend ?? 0)}) aren't counted — most landlords don't take cards without a fee.
+        </Typography>
+      )}
     </Box>
   );
 };
@@ -110,7 +122,9 @@ const GapCard: React.FC<{ label: string; row: GapRowShape }> = ({ label, row }) 
         <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
           Actual: {row.held_card_used ? `${row.held_card_used} earned ${formatMoney(row.actual_earned_estimate ?? 0)}` : 'no default card set'}
         </Typography>
-        {row.optimal_in_wallet_card && (
+        {/* Only when it's a different card: repeating the same card here showed two figures a
+            cent apart (per-purchase vs per-category rounding) for one card. */}
+        {row.optimal_in_wallet_card && row.optimal_in_wallet_card !== row.held_card_used && (
           <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
             Best you hold: {row.optimal_in_wallet_card} — {formatMoney(row.optimal_in_wallet_earned_estimate ?? 0)}
           </Typography>
@@ -154,9 +168,10 @@ const GapCard: React.FC<{ label: string; row: GapRowShape }> = ({ label, row }) 
 function splitCardName(issuer: string, cardName: string): { issuer: string; name: string } {
   const trimmed = cardName.trim();
   const prefix = issuer.trim();
-  const name = prefix && trimmed.toLowerCase().startsWith(prefix.toLowerCase())
-    ? trimmed.slice(prefix.length).trim() || trimmed
-    : trimmed;
+  const rest = prefix && trimmed.toLowerCase().startsWith(prefix.toLowerCase()) ? trimmed.slice(prefix.length).trim() : '';
+  // Keep the full name when stripping the issuer would leave only a generic word ("Apple Card"
+  // became "APPLE / Card").
+  const name = rest && !/^(card|credit card)$/i.test(rest) ? rest : trimmed;
   return { issuer: prefix, name };
 }
 
@@ -328,8 +343,12 @@ const CardsTab: React.FC = () => {
     return (
       <Box>
         <Box sx={{ textAlign: 'center', py: pickerOpen ? 0 : 4 }}>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-            Add the cards you carry to see how they're performing.
+          <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Get more back from the cards you already have
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, maxWidth: 460, mx: 'auto' }}>
+            Add your cards and Card Coach shows what each one earned, which card to use for groceries,
+            dining or gas, and how much you'd gain by switching. No card numbers needed — just pick the card.
           </Typography>
           {!pickerOpen && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setPickerOpen(true)} sx={{ borderRadius: 999, fontWeight: 600 }}>

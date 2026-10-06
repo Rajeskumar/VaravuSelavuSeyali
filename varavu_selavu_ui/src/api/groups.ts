@@ -56,6 +56,8 @@ export interface MemberDTO {
   role: string;
   status: string;
   user_email?: string | null;
+  /** An email invite was sent for this name-only seat and hasn't been accepted yet. */
+  invite_pending?: boolean;
 }
 
 export interface GroupDetailResponse {
@@ -422,10 +424,16 @@ export async function listAllMyGroupExpenses(): Promise<UnifiedGroupExpenseRow[]
   return perGroup.flat();
 }
 
+/** Edit payload: omit `payers` and `split` together to keep the expense's stored split (the
+ * server rescales it if `amount` changed). Only send them from a real split editor. */
+export type GroupExpenseUpdatePayload =
+  | GroupExpensePayload
+  | Omit<GroupExpensePayload, 'payers' | 'split'>;
+
 export async function updateGroupExpense(
   groupId: string,
   expenseId: string,
-  payload: GroupExpensePayload
+  payload: GroupExpenseUpdatePayload
 ): Promise<GroupExpenseRow> {
   const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}`, {
     method: 'PUT',

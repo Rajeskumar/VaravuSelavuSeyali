@@ -207,7 +207,7 @@ A LangGraph **ReAct tool-calling agent** (§11.3) that answers from the user's d
 ### 3.7 Budgets (`BUDGETS_ENABLED`, **on**)
 
 - **Model:** monthly only; `scope` = `personal` or `combined` (includes group shares); `target_type` = `overall` or `category`; one live budget per (scope, target); creating a duplicate edits the existing one. Soft-delete keeps history.
-- **Live figures** for the current period: `spent`, `committed` (recurring charges still due this month), `remaining`, `projected` (spent ÷ fraction of month elapsed) and a **status**: `exceeded` (spent > amount), otherwise by projected ÷ amount: `on_track` (≤ 100%), `at_risk` (≤ 110%), `over_pace` (> 110%).
+- **Live figures** for the current period: `spent`, `committed` (recurring charges still due this month), `remaining`, `projected` (fixed bills — rent/mortgage or expenses matching an active recurring template — at face value, plus the rest ÷ fraction of month elapsed) and a **status**: `exceeded` (spent > amount), otherwise by projected ÷ amount: `on_track` (≤ 100%), `at_risk` (≤ 110%), `over_pace` (> 110%); pace statuses only apply from day 5 of the period.
 - **History:** the first read of an already-ended period writes an immutable `budget_period_snapshots` row (lazily — no scheduler exists), so past figures never drift.
 - **Extras:** transaction breakdown per budget, **suggested amounts** (median of the last three months per category), AI **Ask why** (grounded in the budget's contributing transactions), alert thresholds and a mute switch.
 - **Known gaps:** `rollover` is stored and returned but does not yet alter the calculation; `alert_thresholds` has no per-element bounds validation.
@@ -499,13 +499,13 @@ All tables live in the PostgreSQL schema **`trackspense`** (not `public`); Alemb
 | **Insights** | `item_insights`, `item_price_history` | Per-user item rollups (avg/min/max price, quantity, spent) and per-purchase price points |
 | | `merchant_insights`, `merchant_aggregates` | Per-user merchant totals and per-month aggregates |
 | **Groups** | `groups` | `name`, `group_type`, `cover`, `currency`, `simplify_debts`, `default_split_json`, `created_by`, `status`, `archived_at`, `deleted_at` |
-| | `group_members` | `group_id`, `user_email` (null for placeholders), `display_name`, `role`, `status`; unique (group, email) |
+| | `group_members` | `group_id`, `user_email` (null for placeholders), `display_name`, `role`, `status`; unique (group, email). Placeholders are `status=invited`; the member DTO's computed `invite_pending` is true only while an unaccepted, unexpired invitation exists for the seat |
 | | `group_invitations` | `member_id` (the seat), `invited_email`, `token`, `expires_at`, `accepted_at` |
 | | `expense_payers` | Who paid: (`expense_id`, `member_id`, `amount_paid`) — unique per pair |
 | | `expense_splits` | Who owes: `amount_owed`, `basis_type`, `basis_value`, `settled_via_settlement_id` |
 | | `expense_item_splits` | Itemized ratios per line item (`ratio` in (0,1], `amount`) |
 | | `settlements` | `from_member_id`, `to_member_id` (must differ), `amount`, `method`, `settled_at`, `notes`, `created_by` |
-| | `group_activity` | Append-only feed: `action`, `actor_member_id`, `entity_id`, `payload_json`; indexed by (group, created) |
+| | `group_activity` | Append-only feed: `action`, `actor_member_id`, `entity_id`, `payload_json` (`settlement_created` carries `amount`, `from_member_id`, `to_member_id`; `member_added` carries `display_name`, `user_email`); indexed by (group, created) |
 | | `expense_comments` | Flat comments: `member_id`, `body`, `edited_at` |
 | | `group_notification_preferences` | Per (user, group): `muted`, `muted_events` |
 | | `device_tokens` | Expo push tokens per user/device |
@@ -685,7 +685,7 @@ Migrations are applied automatically before every backend deploy by the `migrate
 | POST | `/groups/{group_id}/expenses` | Create a group expense | Bearer / cookie | GROUPS | — |
 | POST | `/groups/{group_id}/expenses/itemized` | Create an itemized group expense | Bearer / cookie | GROUPS | — |
 | GET | `/groups/{group_id}/expenses` | List group expenses | Bearer / cookie | GROUPS | — |
-| PUT | `/groups/{group_id}/expenses/{expense_id}` | Edit a group expense (any member) | Bearer / cookie | GROUPS | — |
+| PUT | `/groups/{group_id}/expenses/{expense_id}` | Edit a group expense (any member). `payers` and `split` are optional together: omit both to keep the stored split (rescaled if `amount` changed) | Bearer / cookie | GROUPS | — |
 | GET | `/groups/{group_id}/expenses/{expense_id}/items` | Get line items for an itemized group expense | Bearer / cookie | GROUPS | — |
 | PUT | `/groups/{group_id}/expenses/{expense_id}/items` | Replace line items on an already-saved itemized group expense | Bearer / cookie | GROUPS | — |
 | DELETE | `/groups/{group_id}/expenses/{expense_id}` | Delete a group expense (any member) | Bearer / cookie | GROUPS | — |
@@ -752,7 +752,7 @@ Migrations are applied automatically before every backend deploy by the `migrate
 | DELETE | `/cards/mine/{user_card_id}` | Remove a held card | Bearer / cookie | CARD_COACH | — |
 | POST | `/cards/mine/{user_card_id}/set_default` | Mark a held card as the default used for CardRewardsEngine's actual-earned figure | Bearer / cookie | CARD_COACH | — |
 | POST | `/cards/custom` | Add a user-created custom card (outside the curated catalog) and hold it in one call | Bearer / cookie | CARD_COACH | — |
-| GET | `/cards/coach` | Card Coach analysis: per-category and per-merchant actual vs. optimal reward estimate for the given period | Bearer / cookie | CARD_COACH | — |
+| GET | `/cards/coach` | Card Coach analysis: per-category and per-merchant actual vs. optimal reward estimate for the given period. Rent/Mortgage are excluded (`excluded_spend`); `default_assumed_spend` is spend with no card recorded, priced on the default card | Bearer / cookie | CARD_COACH | — |
 | POST | `/cards/corrections` | File a data-correction report against a catalog card | Bearer / cookie | CARD_COACH | — |
 
 ### 8.12 Smart entity resolution
@@ -918,7 +918,7 @@ Each line item carries `member_ratios` summing to 1 (±0.001, then normalized). 
 
 ### 10.5 Budget math (`services/budget_service.py`)
 
-Period bounds are the calendar month (`period_str = YYYY-MM`). For the current period: `spent` (from the same unified ledger `AnalysisService` uses — no third calculation path), `committed` (due recurring occurrences not yet posted), `remaining = amount − spent − committed`, `projected = spent ÷ fraction_of_period_elapsed`. **Status:** `exceeded` if `spent > amount`; otherwise by `projected ÷ amount` — `on_track` ≤ 1.0, `at_risk` ≤ 1.10, `over_pace` > 1.10. Ended periods are frozen in `budget_period_snapshots` on first read. Suggestions use the median of the previous three months per category.
+Period bounds are the calendar month (`period_str = YYYY-MM`). For the current period: `spent` (from the same unified ledger `AnalysisService` uses — no third calculation path), `committed` (due recurring occurrences not yet posted), `remaining = amount − spent − committed`, `projected = fixed + (spent − fixed) ÷ fraction_of_period_elapsed`, where `fixed` is rent/mortgage plus expenses matching an active recurring template (same description and category). **Status:** `exceeded` if `spent > amount`; before day 5 (`MIN_PACE_DAYS`) otherwise `on_track`; then by `projected ÷ amount` — `on_track` ≤ 1.0, `at_risk` ≤ 1.10, `over_pace` > 1.10. Ended periods are frozen in `budget_period_snapshots` on first read. Suggestions use the median of the previous three months per category.
 
 ### 10.6 CardRewardsEngine (`services/card_rewards_engine.py`)
 

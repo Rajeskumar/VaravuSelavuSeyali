@@ -8,6 +8,7 @@
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { registerDevice, unregisterDevice } from './api/devices';
 
 Notifications.setNotificationHandler({
@@ -27,6 +28,23 @@ export async function registerForPushNotifications(): Promise<void> {
       return; // Simulators/emulators have no push capability.
     }
 
+    // Android 8+ shows nothing without a channel, and on Android 13+ the permission prompt only
+    // appears once one exists — so create it before asking.
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Group activity',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    }
+
+    // Expo push tokens are issued per EAS project. Without `extra.eas.projectId` in app.json
+    // (created by `eas init`) getExpoPushTokenAsync throws and no device ever registers.
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    if (!projectId) {
+      console.warn('Push notifications are off: no EAS projectId (run `eas init` in varavu_selavu_mobile).');
+      return;
+    }
+
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
@@ -37,7 +55,7 @@ export async function registerForPushNotifications(): Promise<void> {
       return; // Permission denied — no-op, not an error.
     }
 
-    const tokenResponse = await Notifications.getExpoPushTokenAsync();
+    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
     const expoPushToken = tokenResponse.data;
     const platform: 'ios' | 'android' = Platform.OS === 'ios' ? 'ios' : 'android';
 
@@ -46,7 +64,8 @@ export async function registerForPushNotifications(): Promise<void> {
   } catch (e: any) {
     // Fire-and-forget: registration failing must never block login/app start.
     if (e?.message?.includes('aps-environment')) {
-      console.log('Push notifications are disabled for local personal Apple ID builds.');
+      // withDisablePush.js strips the entitlement unless TRACKSPENSE_ENABLE_PUSH=1 at build time.
+      console.log('Push notifications are disabled in this build (no aps-environment entitlement).');
     } else {
       console.warn('Push notification registration failed', e);
     }

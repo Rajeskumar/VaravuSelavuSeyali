@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Link } from '@mui/material';
-import { logout as apiLogout } from '../api/auth';
+import { logout as apiLogout, forgotPassword } from '../api/auth';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
+import { exportMyExpensesCsv } from '../api/expenses';
 import { motion } from 'framer-motion';
 import TagManagementSection from '../components/tags/TagManagementSection';
 
@@ -10,7 +11,6 @@ const ProfilePage: React.FC = () => {
   const [email, setEmail] = React.useState('');
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
-  const [address, setAddress] = React.useState('');
   const [venmoHandle, setVenmoHandle] = React.useState('');
   const [paypalHandle, setPaypalHandle] = React.useState('');
   const [upiId, setUpiId] = React.useState('');
@@ -21,6 +21,33 @@ const ProfilePage: React.FC = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = React.useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = React.useState('');
   const [deleting, setDeleting] = React.useState(false);
+  const [exporting, setExporting] = React.useState(false);
+  const [resetState, setResetState] = React.useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  // Changing a password reuses the reset-by-email flow, so it needs no new endpoint and still
+  // proves control of the inbox.
+  const handleSendReset = async () => {
+    setResetState('sending');
+    try {
+      await forgotPassword({ email });
+      setResetState('sent');
+    } catch {
+      setResetState('error');
+    }
+  };
+  const [exportError, setExportError] = React.useState<string | null>(null);
+
+  const handleExport = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await exportMyExpensesCsv();
+    } catch {
+      setExportError("Couldn't export your expenses. Check your connection and try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   React.useEffect(() => {
     let mounted = true;
@@ -31,7 +58,6 @@ const ProfilePage: React.FC = () => {
         setEmail(p.email || localStorage.getItem('vs_user') || '');
         setName(p.name || '');
         setPhone(p.phone || '');
-        setAddress(p.address || '');
         setVenmoHandle(p.venmo_handle || '');
         setPaypalHandle(p.paypal_handle || '');
         setUpiId(p.upi_id || '');
@@ -59,12 +85,11 @@ const ProfilePage: React.FC = () => {
     setSuccess(null);
     try {
       const updated = await updateProfile({
-        name, phone, address,
+        name, phone,
         venmo_handle: venmoHandle, paypal_handle: paypalHandle, upi_id: upiId,
       });
       setName(updated.name || '');
       setPhone(updated.phone || '');
-      setAddress(updated.address || '');
       setVenmoHandle(updated.venmo_handle || '');
       setPaypalHandle(updated.paypal_handle || '');
       setUpiId(updated.upi_id || '');
@@ -122,9 +147,6 @@ const ProfilePage: React.FC = () => {
                 <TextField label="Phone (optional)" disabled={loading} fullWidth value={phone} onChange={e => setPhone(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="Address (optional)" disabled={loading} fullWidth multiline rows={2} value={address} onChange={e => setAddress(e.target.value)} />
-              </Grid>
-              <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mt: 1 }}>
                   How people can pay you
                 </Typography>
@@ -152,6 +174,37 @@ const ProfilePage: React.FC = () => {
       </Card>
 
       <TagManagementSection />
+
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Password
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            We'll email {email || 'you'} a link to set a new password. If you sign in with Google, this adds a password too.
+          </Typography>
+          {resetState === 'sent' && <Alert severity="success" sx={{ mb: 2 }}>Check your inbox for the reset link.</Alert>}
+          {resetState === 'error' && <Alert severity="error" sx={{ mb: 2 }}>Couldn't send the email. Try again in a minute.</Alert>}
+          <Button variant="outlined" fullWidth onClick={handleSendReset} disabled={!email || resetState === 'sending' || resetState === 'sent'}>
+            {resetState === 'sending' ? 'Sending…' : resetState === 'sent' ? 'Email sent' : 'Change password'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ mt: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Your data
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Download every expense as a CSV: your personal expenses plus your share of each group expense, with tags, notes and card.
+          </Typography>
+          {exportError && <Alert severity="error" sx={{ mb: 2 }}>{exportError}</Alert>}
+          <Button variant="outlined" fullWidth onClick={handleExport} disabled={exporting}>
+            {exporting ? 'Exporting…' : 'Export all expenses (CSV)'}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card sx={{ mt: 3 }}>
         <CardContent>

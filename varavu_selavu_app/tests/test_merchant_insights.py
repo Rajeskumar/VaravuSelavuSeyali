@@ -23,27 +23,27 @@ def test_calculate_merchant_metrics_no_data(mock_db_session):
 
     assert result == []
 
-def test_calculate_merchant_metrics_with_data(mock_db_session):
-    """Test that merchant metrics are calculated correctly."""
-    # Query now selects (canon_name, merchant_name, total_spent, transaction_count, first_seen, last_seen)
-    mock_expenses = [
-        ("costco", "Costco", 500.0, 2, datetime(2023, 1, 10), datetime(2023, 1, 20)),
-        ("amazon", "Amazon", 300.0, 3, datetime(2023, 1, 5), datetime(2023, 1, 25)),
-    ]
-    mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = mock_expenses
-    
-    service = InsightAnalyticsService(db=mock_db_session)
-    results = service.calculate_merchant_metrics(user_id="test@example.com")
-    
+def test_calculate_merchant_metrics_with_data(db_session):
+    """Totals, counts and first/last seen per merchant, from real rows."""
+    import uuid
+    from varavu_selavu_service.db.models import Expense
+    for merchant, amount, day in [("Costco", 200.0, 10), ("Costco", 300.0, 20),
+                                  ("Amazon", 100.0, 5), ("Amazon", 100.0, 15), ("Amazon", 100.0, 25)]:
+        db_session.add(Expense(id=uuid.uuid4(), user_email="test@user.com", merchant_name=merchant,
+                               amount=amount, purchased_at=datetime(2023, 1, day), category_id="Shopping",
+                               description=merchant))
+    db_session.commit()
+
+    results = InsightAnalyticsService(db=db_session).calculate_merchant_metrics(user_id="test@user.com")
     assert len(results) == 2
-    
+
     costco_summary = next(r for r in results if r.merchant_name == "Costco")
     assert costco_summary.total_spent == 500.0
     assert costco_summary.transaction_count == 2
     assert costco_summary.average_transaction_amount == 250.0
     assert costco_summary.first_seen_at == "2023-01-10"
     assert costco_summary.last_seen_at == "2023-01-20"
-    
+
     amazon_summary = next(r for r in results if r.merchant_name == "Amazon")
     assert amazon_summary.total_spent == 300.0
     assert amazon_summary.transaction_count == 3

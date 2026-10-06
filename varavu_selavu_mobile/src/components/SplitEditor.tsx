@@ -10,6 +10,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, inkOnPastel } from '../theme';
 import { MemberDTO } from '../api/groups';
 import { memberColor } from './BalanceRow';
+import { formatCurrency } from '../utils/currencyMath';
 
 export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
 
@@ -208,7 +209,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
     const sum = value.entries.reduce((acc, e) => acc + (e.value || 0), 0);
     if (Math.abs(sum - totalAmount) > 0.01) {
       isValid = false;
-      validationMessage = `Exact amounts must total $${totalAmount.toFixed(2)} (currently $${sum.toFixed(2)})`;
+      validationMessage = `Exact amounts must total ${formatCurrency(totalAmount)} (currently ${formatCurrency(sum)})`;
     }
   } else if (value.type === 'shares') {
     preview = previewSharesSplit(value.entries, totalAmount);
@@ -281,7 +282,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
               />
             )}
             {isSelected && totalAmount > 0 && (
-              <Text style={styles.shareAmount}>${memberPreview.toFixed(2)}</Text>
+              <Text style={styles.shareAmount}>{formatCurrency(memberPreview)}</Text>
             )}
             <TouchableOpacity
               onPress={() => toggleMember(member.member_id, !isSelected)}
@@ -300,7 +301,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>Rounding cents are balanced automatically</Text>
           <Text style={[styles.footerLeft, { color: balanced ? theme.colors.success : theme.colors.error }]}>
-            {balanced ? '$0.00' : `${left < 0 ? '−' : ''}$${Math.abs(left).toFixed(2)}`} left
+            {balanced ? '$0.00' : `${left < 0 ? '−' : ''}${formatCurrency(Math.abs(left))}`} left
           </Text>
         </View>
       )}

@@ -485,3 +485,78 @@ def test_group_expense_notes_round_trip_and_omitted_is_unchanged(test_client, db
     res = test_client.put(f"/api/v1/groups/{group_id}/expenses/{expense_id}", json={**payload, "amount": 30.00, "payers": [{"member_id": m["test@user.com"], "amount_paid": 30.00}]})
     assert res.status_code == 200
     assert res.json()["expense"]["notes"] == "Paper towels"
+
+
+def _create_rent(test_client, group_id, m, split):
+    res = test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": "10/01/2026",
+            "description": "Rent",
+            "category": "Rent",
+            "amount": 3600.00,
+            "payers": [{"member_id": m["test@user.com"], "amount_paid": 3600.00}],
+            "split": split,
+        },
+    )
+    assert res.status_code == 201
+    return res.json()["expense"]["row_id"]
+
+
+def _shares(db_session, expense_id):
+    rows = db_session.query(ExpenseSplit).filter(ExpenseSplit.expense_id == uuid.UUID(expense_id)).all()
+    return {str(s.member_id): float(s.amount_owed) for s in rows}
+
+
+def test_edit_without_split_keeps_every_member(test_client, db_session):
+    """Regression: the web Expenses page used to rebuild the split from the payers alone, so a
+    description-only edit moved a 3-way rent entirely onto the payer. Omitting payers/split
+    must keep the stored split untouched."""
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
+    expense_id = _create_rent(test_client, group_id, m, {"type": "equal", "entries": [{"member_id": v} for v in m.values()]})
+    before = _shares(db_session, expense_id)
+
+    res = test_client.put(
+        f"/api/v1/groups/{group_id}/expenses/{expense_id}",
+        json={"date": "10/01/2026", "description": "Rent - October", "category": "Rent", "amount": 3600.00},
+    )
+    assert res.status_code == 200
+    assert res.json()["expense"]["my_share"] == 1200.00
+    assert _shares(db_session, expense_id) == before
+    payers = db_session.query(ExpensePayer).filter(ExpensePayer.expense_id == uuid.UUID(expense_id)).all()
+    assert [(str(p.member_id), float(p.amount_paid)) for p in payers] == [(m["test@user.com"], 3600.00)]
+
+
+def test_edit_without_split_rescales_on_amount_change(test_client, db_session):
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
+    equal_id = _create_rent(test_client, group_id, m, {"type": "equal", "entries": [{"member_id": v} for v in m.values()]})
+    res = test_client.put(
+        f"/api/v1/groups/{group_id}/expenses/{equal_id}",
+        json={"date": "10/01/2026", "description": "Rent", "category": "Rent", "amount": 100.00},
+    )
+    assert res.status_code == 200
+    assert sorted(_shares(db_session, equal_id).values()) == [33.33, 33.33, 33.34]
+    payer = db_session.query(ExpensePayer).filter(ExpensePayer.expense_id == uuid.UUID(equal_id)).one()
+    assert float(payer.amount_paid) == 100.00
+
+    exact = [2000.00, 1000.00, 600.00]
+    exact_id = _create_rent(test_client, group_id, m, {
+        "type": "exact", "entries": [{"member_id": v, "value": a} for v, a in zip(m.values(), exact)]})
+    res = test_client.put(
+        f"/api/v1/groups/{group_id}/expenses/{exact_id}",
+        json={"date": "10/01/2026", "description": "Rent", "category": "Rent", "amount": 1800.00},
+    )
+    assert res.status_code == 200
+    shares = _shares(db_session, exact_id)
+    assert [shares[v] for v in m.values()] == [1000.00, 500.00, 300.00]
+
+
+def test_edit_rejects_payers_without_split(test_client, db_session):
+    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
+    expense_id = _create_rent(test_client, group_id, m, {"type": "equal", "entries": [{"member_id": v} for v in m.values()]})
+    res = test_client.put(
+        f"/api/v1/groups/{group_id}/expenses/{expense_id}",
+        json={"date": "10/01/2026", "description": "Rent", "category": "Rent", "amount": 3600.00,
+              "payers": [{"member_id": m["test@user.com"], "amount_paid": 3600.00}]},
+    )
+    assert res.status_code == 422

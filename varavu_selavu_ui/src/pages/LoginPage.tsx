@@ -37,15 +37,16 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const googleDiv = useRef<HTMLDivElement>(null);
+  // The Google button (and its "or" divider) only show once GSI actually loaded and rendered —
+  // a missing client ID, blocked script or failed load leaves just the email form, not an empty gap.
+  const [googleReady, setGoogleReady] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
     if (!clientId) {
-      // Surface a friendly error rather than letting GSI throw
-      setError('Google login not configured (missing REACT_APP_GOOGLE_CLIENT_ID)');
-      // Helpful hint in console for developers
+      // Developer hint only — customers just don't see the Google button.
       // eslint-disable-next-line no-console
       console.warn('Set REACT_APP_GOOGLE_CLIENT_ID in .env.development/.env.production');
       return;
@@ -55,6 +56,7 @@ const LoginPage: React.FC = () => {
     script.src = 'https://accounts.google.com/gsi/client';
     script.async = true;
     script.defer = true;
+    script.onerror = () => setGoogleReady(false);
     script.onload = () => {
       const w = window as any;
       if (!w.google || !googleDiv.current) return;
@@ -79,8 +81,10 @@ const LoginPage: React.FC = () => {
       w.google.accounts.id.renderButton(googleDiv.current, {
         theme: 'outline',
         size: 'large',
-        width: '100%',
+        // GSI wants a pixel width (max 400); '100%' was ignored with a console warning.
+        width: String(Math.min(400, googleDiv.current.offsetWidth || 400)),
       });
+      setGoogleReady(true);
     };
     document.head.appendChild(script);
   }, [navigate]);
@@ -139,8 +143,8 @@ const LoginPage: React.FC = () => {
             <Typography variant="h6" gutterBottom align="center">
               Login
             </Typography>
-            <div ref={googleDiv} style={{ width: '100%', marginBottom: 16 }} />
-            <Divider sx={{ mb: 2 }}>or</Divider>
+            <div ref={googleDiv} style={{ width: '100%', display: 'flex', justifyContent: 'center', ...(googleReady ? { marginBottom: 16 } : { height: 0, overflow: 'hidden', visibility: 'hidden' }) }} />
+            {googleReady && <Divider sx={{ mb: 2 }}>or</Divider>}
             <Box component="form" onSubmit={handleLogin} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {error && (
                 <Typography color="error" align="center" variant="body2">{error}</Typography>

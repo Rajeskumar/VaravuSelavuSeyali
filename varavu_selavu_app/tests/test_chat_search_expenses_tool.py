@@ -106,3 +106,24 @@ def test_merchant_detail_lookup_is_case_insensitive(db_session):
     db_session.commit()
     detail = AnalyticsService(db_session).get_merchant_detail(user_email=ME, merchant_name="porkbun")
     assert detail is not None
+
+
+def test_falls_back_to_receipt_line_items_with_store_and_price(db_session):
+    """Regression: "Where did I buy eggs cheapest?" found nothing because eggs only appear as
+    receipt line items, never in an expense description."""
+    from varavu_selavu_service.db.models import ExpenseItem
+    for store, price, day in [("Safeway", 4.19, 1), ("Costco", 3.49, 8)]:
+        exp = Expense(
+            id=uuid.uuid4(), user_email=ME, purchased_at=datetime(2026, 9, day, 12, tzinfo=timezone.utc),
+            category_id="Groceries", amount=price, description=f"Groceries at {store}", merchant_name=store,
+            split_type="itemized",
+        )
+        db_session.add(exp)
+        db_session.add(ExpenseItem(id=uuid.uuid4(), expense_id=exp.id, user_email=ME, line_no=1,
+                                   item_name="Eggs (dozen)", normalized_name="Eggs (dozen)",
+                                   line_total=price, unit_price=price, quantity=1))
+    db_session.commit()
+    out = _search_expenses_for_agent(db_session, ME, "eggs")
+    assert "receipt line items" in out
+    assert "2026-09-08: Eggs (dozen) at Costco — $3.49" in out
+    assert "2026-09-01: Eggs (dozen) at Safeway — $4.19" in out

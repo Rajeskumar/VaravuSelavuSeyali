@@ -50,14 +50,20 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ groupId, group }) =>
     );
   }
 
+  const meEmail = (localStorage.getItem('vs_user') || '').toLowerCase();
+  const memberFor = (memberId: string | null | undefined) => group.members.find((m) => m.member_id === memberId);
+  const isMe = (memberId: string | null | undefined) => !!meEmail && memberFor(memberId)?.user_email?.toLowerCase() === meEmail;
   const nameFor = (memberId: string | null) => {
     if (!memberId) return 'Someone';
-    return group.members.find((m) => m.member_id === memberId)?.display_name || 'A member';
+    return memberFor(memberId)?.display_name || 'A member';
   };
+  /** "You"/"you" for the viewer, the member's name otherwise. */
+  const who = (memberId: string | null | undefined, subject: boolean) =>
+    isMe(memberId) ? (subject ? 'You' : 'you') : nameFor(memberId ?? null);
 
   const getActionInfo = (item: GroupActivityDTO) => {
     const p = item.payload || {};
-    const actor = nameFor(item.actor_member_id);
+    const actor = who(item.actor_member_id, true);
     
     switch (item.action) {
       case 'group_created':
@@ -71,13 +77,20 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ groupId, group }) =>
         return { icon: <ReceiptLongRoundedIcon color="warning" />, text: `${actor} updated the expense "${p.description}".` };
       case 'expense_deleted':
         return { icon: <ReceiptLongRoundedIcon color="error" />, text: `${actor} deleted the expense "${p.description}".` };
+      // A name-only seat never "joined" — someone added it. Only an accepted invite is a join.
       case 'member_added':
+        return { icon: <PersonAddAlt1RoundedIcon color="success" />, text: `${actor} added ${p.display_name}.` };
       case 'member_joined':
         return { icon: <PersonAddAlt1RoundedIcon color="success" />, text: `${p.display_name} joined the group.` };
       case 'member_removed':
       case 'member_left':
         return { icon: <PersonRemoveRoundedIcon color="error" />, text: `${p.display_name} left the group.` };
       case 'settlement_created':
+        if (p.from_member_id && p.to_member_id) {
+          const recordedBy = p.from_member_id === item.actor_member_id || p.to_member_id === item.actor_member_id
+            ? '' : ` (recorded by ${who(item.actor_member_id, false)})`;
+          return { icon: <HandshakeRoundedIcon color="success" />, text: `${who(p.from_member_id, true)} paid ${who(p.to_member_id, false)} ${formatMoney(p.amount || 0, group.currency)}${recordedBy}.` };
+        }
         return { icon: <HandshakeRoundedIcon color="success" />, text: `${actor} recorded a settlement of ${formatMoney(p.amount || 0, group.currency)}.` };
       case 'settlement_deleted':
         return { icon: <HandshakeRoundedIcon color="action" />, text: `${actor} deleted a settlement.` };

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import { typeScale } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 interface PurchaseHistory {
   date: string;
@@ -55,7 +56,7 @@ export const PurchaseTape: React.FC<PurchaseTapeProps> = ({ history }) => {
                 color: 'text.primary',
               }}
             >
-              ${(h.unit_price ?? 0).toFixed(2)}
+              {formatMoney(h.unit_price ?? 0)}
             </Typography>
             {h.quantity > 1 && (
               <Typography sx={{ fontFamily: typeScale.amount.fontFamily, fontSize: 11, color: 'text.secondary' }}>

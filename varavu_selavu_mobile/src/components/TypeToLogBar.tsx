@@ -10,6 +10,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AppTheme, withAlpha } from '../theme';
 import { useQuickLogBar } from '../hooks/useQuickLogBar';
+import { formatCurrency } from '../utils/currencyMath';
 
 export default function TypeToLogBar() {
   const { theme } = useAppTheme();
@@ -41,7 +42,7 @@ export default function TypeToLogBar() {
       {parsed && (
         <View style={styles.previewRow}>
           <Text style={styles.previewText} numberOfLines={1}>
-            Will log: ${parsed.amount.toFixed(2)} · {parsed.category}
+            Will log: {formatCurrency(parsed.amount)} · {parsed.category}
             {parsed.merchant ? ` · ${parsed.merchant}` : ''}
             {parsed.groupName ? ` · ${parsed.groupName}` : parsed.splitRequested ? ' · no matching group' : ''}
           </Text>

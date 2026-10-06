@@ -1,4 +1,5 @@
 import React from 'react';
+import Box from '@mui/material/Box';
 import { useParams, useNavigate } from 'react-router-dom';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -7,6 +8,7 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import { acceptInvite, ApiError } from '../api/groups';
 import PageContainer from '../components/layout/PageContainer';
+import VerifyEmailPrompt from '../components/common/VerifyEmailPrompt';
 
 export const PENDING_INVITE_KEY = 'vs_pending_invite_token';
 
@@ -24,6 +26,9 @@ const JoinGroupPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const [state, setState] = React.useState<'checking' | 'need-login' | 'accepting' | 'error' | 'success'>('checking');
+  // Email not verified yet. The invite stays pending (sessionStorage), so after verifying
+  // the user can retry here instead of being sent away to an empty Groups page.
+  const [needsVerify, setNeedsVerify] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -45,7 +50,10 @@ const JoinGroupPage: React.FC = () => {
       })
       .catch((e) => {
         const status = e instanceof ApiError ? e.status : 0;
-        setMessage((e instanceof ApiError && STATUS_MESSAGES[status]) || (e instanceof ApiError ? e.message : 'Failed to accept invite'));
+        // 403 covers two cases; the unverified-email one is told apart by its server message.
+        const unverified = status === 403 && e instanceof ApiError && /verify your email/i.test(e.message);
+        setMessage((e instanceof ApiError && !unverified && STATUS_MESSAGES[status]) || (e instanceof ApiError ? e.message : 'Failed to accept invite'));
+        setNeedsVerify(unverified);
         setState('error');
       });
   }, [token, navigate]);
@@ -75,15 +83,23 @@ const JoinGroupPage: React.FC = () => {
           )}
           {state === 'error' && (
             <>
-              <Typography variant="h6" color="error" gutterBottom>
-                Couldn't join group
+              <Typography variant="h6" color={needsVerify ? 'text.primary' : 'error'} gutterBottom>
+                {needsVerify ? 'Verify your email to join' : "Couldn't join group"}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                {message}
-              </Typography>
-              <Button variant="contained" onClick={() => navigate('/groups')}>
-                Go to Groups
-              </Button>
+              {needsVerify ? (
+                <Box sx={{ mb: 2 }}>
+                  <VerifyEmailPrompt onCheckAgain={() => window.location.reload()} />
+                </Box>
+              ) : (
+                <>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                    {message}
+                  </Typography>
+                  <Button variant="contained" onClick={() => navigate('/groups')}>
+                    Go to Groups
+                  </Button>
+                </>
+              )}
             </>
           )}
         </CardContent>

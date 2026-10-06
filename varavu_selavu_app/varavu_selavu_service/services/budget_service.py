@@ -15,6 +15,12 @@ from varavu_selavu_service.services.recurring_service import RecurringService
 
 DEFAULT_ALERT_THRESHOLDS = [80, 100]
 PACE_AT_RISK_RATIO = 1.10  # projected 100-110% of amount -> at_risk; > 110% -> over_pace
+# Before this many days into the period a straight-line pace is mostly noise (one dinner on the
+# 2nd projects to 15 dinners), so pace never flags at_risk/over_pace earlier — exceeded still does.
+MIN_PACE_DAYS = 5
+# Bills that land once a period: extrapolating them is what made $1,200 of rent on the 1st
+# project an $8,696 month. Same rarely-card-payable set Card Coach leaves out.
+FIXED_BILL_CATEGORIES = {"rent", "mortgage"}
 
 
 def _period_bounds(period_str: Optional[str], today: Optional[date] = None) -> Tuple[date, date]:
@@ -84,19 +90,42 @@ class BudgetService:
     # Live compute — spent/committed/remaining/projected/status
     # ------------------------------------------------------------------
 
-    def _spent_for(self, user_id: str, scope: str, target_type: str, category: Optional[str], period_start: date) -> float:
+    def _spent_for(self, user_id: str, scope: str, target_type: str, category: Optional[str], period_start: date, result: Optional[Dict[str, Any]] = None) -> float:
         # Reuses AnalysisService.analyze() — the same balance/scope function GET /analysis uses —
         # rather than a third calculation path (spec §8 consistency requirement). use_cache=False
         # so a budget reflects an expense saved a moment ago (FR-5), not a stale 60s cache entry.
-        result = self.analysis_service.analyze(
-            user_id=user_id, year=period_start.year, month=period_start.month, scope=scope, use_cache=False
-        )
+        if result is None:
+            result = self._analysis_for(user_id, scope, period_start)
         if target_type == "overall":
             return _round(result.get("total_expenses", 0))
         for row in result.get("category_totals", []):
             if row.get("category") == category:
                 return _round(row.get("total", 0))
         return 0.0
+
+    def _analysis_for(self, user_id: str, scope: str, period_start: date) -> Dict[str, Any]:
+        return self.analysis_service.analyze(
+            user_id=user_id, year=period_start.year, month=period_start.month, scope=scope, use_cache=False
+        )
+
+    def _fixed_spent_for(self, user_id: str, target_type: str, category: Optional[str], result: Dict[str, Any]) -> float:
+        """The part of `spent` that's a once-a-period bill — rent/mortgage, or an expense matching
+        one of the user's recurring templates (same description and category). The pace
+        projection carries these at face value instead of extrapolating them across the month."""
+        templates = {
+            ((t.get("description") or "").strip().lower(), (t.get("category") or "").strip().lower())
+            for t in self.recurring_service.list_templates(user_id)
+            if (t.get("status") or "Active") == "Active"
+        }
+        fixed = 0.0
+        for cat, rows in (result.get("category_expense_details") or {}).items():
+            if target_type == "category" and cat != category:
+                continue
+            cat_l = (cat or "").strip().lower()
+            for row in rows:
+                if cat_l in FIXED_BILL_CATEGORIES or ((row.get("description") or "").strip().lower(), cat_l) in templates:
+                    fixed += float(row.get("cost") or 0)
+        return _round(fixed)
 
     def _committed_for(self, user_id: str, target_type: str, category: Optional[str], period_start: date, period_end: date) -> float:
         # FR-4: known recurring charges not yet posted as an expense, due within the rest of this
@@ -116,11 +145,13 @@ class BudgetService:
             total += float(occ.get("suggested_cost") or 0)
         return _round(total)
 
-    def _status_for(self, spent: float, projected: float, amount: float) -> str:
+    def _status_for(self, spent: float, projected: float, amount: float, elapsed_days: Optional[int] = None) -> str:
         if amount <= 0:
             return "exceeded" if spent > 0 else "on_track"
         if spent > amount:
             return "exceeded"
+        if elapsed_days is not None and elapsed_days < MIN_PACE_DAYS:
+            return "on_track"
         ratio = projected / amount
         if ratio <= 1.0:
             return "on_track"
@@ -129,7 +160,8 @@ class BudgetService:
         return "over_pace"
 
     def _live_figures(self, budget: Budget, period_start: date, period_end: date, today: date) -> Dict[str, Any]:
-        spent = self._spent_for(budget.user_email, budget.scope, budget.target_type, budget.category, period_start)
+        analysis = self._analysis_for(budget.user_email, budget.scope, period_start)
+        spent = self._spent_for(budget.user_email, budget.scope, budget.target_type, budget.category, period_start, analysis)
         committed = self._committed_for(budget.user_email, budget.target_type, budget.category, period_start, period_end)
         amount = float(budget.amount)
         remaining = _round(amount - spent - committed)
@@ -140,9 +172,12 @@ class BudgetService:
         total_days = (period_end - period_start).days + 1
         elapsed_days = max(1, min(total_days, (today - period_start).days + 1))
         fraction_elapsed = elapsed_days / total_days
-        projected = _round(spent / fraction_elapsed) if fraction_elapsed > 0 else spent
+        # Bills paid once a period are carried at face value; only the rest is extrapolated.
+        fixed = min(spent, self._fixed_spent_for(budget.user_email, budget.target_type, budget.category, analysis)) if spent > 0 else 0.0
+        variable = spent - fixed
+        projected = _round(fixed + (variable / fraction_elapsed if fraction_elapsed > 0 else variable))
 
-        status = self._status_for(spent, projected, amount)
+        status = self._status_for(spent, projected, amount, elapsed_days)
         return {
             "spent": spent,
             "committed": committed,

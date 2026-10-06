@@ -23,6 +23,8 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [agreed, setAgreed] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const clearField = (f: string) => setFieldErrors((prev) => (prev[f] ? { ...prev, [f]: '' } : prev));
 
   const { signUp } = useAuth();
   const navigation = useNavigation<any>();
@@ -31,10 +33,14 @@ export default function RegisterScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const handleRegister = async () => {
-    if (!name || !email || !password) {
-      showToast({ message: 'Please fill in all fields', type: 'warning' });
-      return;
-    }
+    // Same rules the server enforces, checked first so the message sits under the field it's
+    // about (and a typo doesn't spend one of the few sign-up attempts allowed per hour).
+    const errs: Record<string, string> = {};
+    if (!name.trim()) errs.name = 'Enter your name.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) errs.email = 'Enter a valid email address, like name@example.com.';
+    if (password.length < 8) errs.password = 'Use at least 8 characters.';
+    setFieldErrors(errs);
+    if (Object.keys(errs).length) return;
     if (!agreed) {
       showToast({ message: 'Please accept the Terms and Privacy Policy', type: 'warning' });
       return;
@@ -46,7 +52,8 @@ export default function RegisterScreen() {
       showToast({ message: 'Registration successful! Please login.', type: 'success' });
       navigation.goBack();
     } catch (error: any) {
-      showToast({ message: error.message || 'Registration failed', type: 'error' });
+      if (error?.fieldErrors && Object.keys(error.fieldErrors).length) setFieldErrors(error.fieldErrors);
+      else showToast({ message: error?.message || 'Registration failed', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -68,7 +75,8 @@ export default function RegisterScreen() {
             label="Name"
             placeholder="Your name"
             value={name}
-            onChangeText={setName}
+            onChangeText={(v) => { setName(v); clearField('name'); }}
+            error={fieldErrors.name}
             textContentType="name"
             autoComplete="name"
           />
@@ -76,7 +84,8 @@ export default function RegisterScreen() {
             label="Email"
             placeholder="you@example.com"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(v) => { setEmail(v); clearField('email'); }}
+            error={fieldErrors.email}
             autoCapitalize="none"
             keyboardType="email-address"
             textContentType="emailAddress"
@@ -86,7 +95,8 @@ export default function RegisterScreen() {
             label="Password"
             placeholder="At least 8 characters"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(v) => { setPassword(v); clearField('password'); }}
+            error={fieldErrors.password}
             secureToggle
             textContentType="newPassword"
           />

@@ -9,6 +9,7 @@ import TableCell from '@mui/material/TableCell';
 import TableBody from '@mui/material/TableBody';
 import IconButton from '@mui/material/IconButton';
 import CloseIcon from '@mui/icons-material/Close';
+import { formatMoney } from '../../utils/money';
 
 export interface ExpenseItem {
   date: string;
@@ -50,7 +51,7 @@ const CategoryDetailsDrawer: React.FC<Props> = ({ open, title, items, onClose })
                 <TableRow key={`${it.date}-${idx}`}>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{new Date(it.date).toLocaleDateString()}</TableCell>
                   <TableCell sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{it.description}</TableCell>
-                  <TableCell align="right">${it.cost.toFixed(2)}</TableCell>
+                  <TableCell align="right">{formatMoney(it.cost)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

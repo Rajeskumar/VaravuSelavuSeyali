@@ -15,19 +15,24 @@ interface BalanceListProps {
   balances: BalanceResponse;
   simplifyDebts?: boolean;
   currency?: string;
+  /** The viewer's member id — their own rows read "You" instead of their full name. */
+  myMemberId?: string;
 }
 
-const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts, currency = 'USD' }) => {
+const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts, currency = 'USD', myMemberId }) => {
   const theme = useTheme();
   const nameFor = (memberId: string) =>
-    balances.members.find((m) => m.member_id === memberId)?.display_name || 'Unknown';
+    memberId === myMemberId ? 'You' : balances.members.find((m) => m.member_id === memberId)?.display_name || 'Unknown';
   const allSettled = balances.members.every((m) => m.net === 0);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
       <Paper sx={{ borderRadius: 1, overflow: 'hidden' }}>
         {balances.members.map((m, idx) => {
-          const label = m.net > 0 ? `is owed ${formatMoney(m.net, currency)}` : m.net < 0 ? `owes ${formatMoney(m.net, currency)}` : 'is settled up';
+          const isMe = m.member_id === myMemberId;
+          const label = m.net > 0
+            ? `${isMe ? 'are' : 'is'} owed ${formatMoney(m.net, currency)}`
+            : m.net < 0 ? `${isMe ? 'owe' : 'owes'} ${formatMoney(m.net, currency)}` : `${isMe ? 'are' : 'is'} settled up`;
           const color = m.net > 0 ? theme.palette.success.main : m.net < 0 ? theme.palette.error.main : theme.palette.text.secondary;
           return (
             <Box
@@ -44,8 +49,8 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts, curr
               <Avatar sx={{ width: 30, height: 30, fontSize: 13, bgcolor: colorFromMemberId(m.member_id) }}>
                 {initialsFromName(m.display_name)}
               </Avatar>
-              <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', flex: 1 }}>
-                {m.display_name}
+              <Typography sx={{ fontWeight: 600, fontSize: '0.875rem', flex: 1, minWidth: 0 }} noWrap>
+                {nameFor(m.member_id)}
               </Typography>
               <Typography sx={{ color, fontWeight: 600, fontSize: '0.8125rem' }}>
                 {label}
@@ -78,20 +83,22 @@ const BalanceList: React.FC<BalanceListProps> = ({ balances, simplifyDebts, curr
                   borderTop: idx === 0 ? 'none' : `1px solid ${theme.palette.divider}`,
                 }}
               >
-                <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: colorFromMemberId(t.from_member_id) }}>
+                <Avatar sx={{ width: 28, height: 28, fontSize: 12, flexShrink: 0, display: { xs: 'none', sm: 'flex' }, bgcolor: colorFromMemberId(t.from_member_id) }}>
                   {initialsFromName(nameFor(t.from_member_id))}
                 </Avatar>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem' }}>
+                {/* minWidth 0 + noWrap: long names ellipsize instead of wrapping to three lines and
+                    pushing the amount off the edge at phone widths. */}
+                <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', minWidth: 0, flexShrink: 1 }} noWrap>
                   {nameFor(t.from_member_id)}
                 </Typography>
-                <ArrowForwardRoundedIcon fontSize="small" sx={{ color: 'text.disabled', mx: 0.5 }} />
-                <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: colorFromMemberId(t.to_member_id) }}>
+                <ArrowForwardRoundedIcon fontSize="small" sx={{ color: 'text.disabled', mx: 0.5, flexShrink: 0 }} />
+                <Avatar sx={{ width: 28, height: 28, fontSize: 12, flexShrink: 0, display: { xs: 'none', sm: 'flex' }, bgcolor: colorFromMemberId(t.to_member_id) }}>
                   {initialsFromName(nameFor(t.to_member_id))}
                 </Avatar>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', flex: 1 }}>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.8125rem', flex: 1, minWidth: 0 }} noWrap>
                   {nameFor(t.to_member_id)}
                 </Typography>
-                <Chip size="small" label={formatMoney(t.amount, currency)} sx={{ fontWeight: 700, fontSize: '0.75rem' }} />
+                <Chip size="small" label={formatMoney(t.amount, currency)} sx={{ fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }} />
               </Box>
             ))}
           </Paper>

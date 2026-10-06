@@ -16,6 +16,29 @@ export interface QuickLogParsed {
   description: string;
 }
 
+const AMOUNT_RE = /(?:(\$|£|€|₹)\s?)?(\d+(?:[.,]\d{1,2})?)(\s?(?:dollars?|bucks|usd|eur|gbp|inr|rs)\b)?(?![\d%])/gi;
+
+/** Every number in the text, so the amount isn't just "the first digits" — in "2 coffees 9.50"
+ * that was the quantity. A currency-marked number wins, then one with cents, then the last one. */
+function pickAmount(text: string): { value: number; index: number; length: number } | null {
+  const found: { value: number; index: number; length: number; marked: boolean; decimal: boolean }[] = [];
+  for (const m of Array.from(text.matchAll(AMOUNT_RE))) {
+    const start = m.index ?? 0;
+    // Skip digits glued to letters ("7-Eleven" is fine, "B2B" / "3rd" are not amounts).
+    if (start > 0 && /[A-Za-z]/.test(text[start - 1])) continue;
+    if (/^[A-Za-z]/.test(text.slice(start + m[0].length)) && !m[3]) continue;
+    found.push({
+      value: parseFloat(m[2].replace(',', '.')),
+      index: start,
+      length: m[0].length,
+      marked: !!(m[1] || m[3]),
+      decimal: /[.,]/.test(m[2]),
+    });
+  }
+  if (!found.length) return null;
+  return found.find((f) => f.marked) || found.find((f) => f.decimal) || found[found.length - 1];
+}
+
 /**
  * Home's "type to log" bar (TrackSpense v3 Mobile design) — a lightweight, purely client-side
  * regex parser ported from the mock's own `parseLine`, not real NLP. Good enough for phrasing
@@ -25,11 +48,14 @@ export interface QuickLogParsed {
 export function parseQuickLog(text: string, groups: QuickLogGroupLike[]): QuickLogParsed | null {
   if (!text || !text.trim()) return null;
 
-  const amountMatch = text.match(/(\d+(?:\.\d{1,2})?)/);
-  if (!amountMatch) return null;
-  const amount = parseFloat(amountMatch[1]);
+  const picked = pickAmount(text);
+  if (!picked || !(picked.value > 0)) return null;
+  const amount = picked.value;
+  // Everything else is worked out on the text with the amount taken out, so a merchant or the
+  // description never swallows it ("lunch at Chipotle 18.40").
+  const rest = (text.slice(0, picked.index) + ' ' + text.slice(picked.index + picked.length)).replace(/\s+/g, ' ').trim();
 
-  const merchantMatch = text.match(/at ([A-Za-z][A-Za-z' ]*?)(?: with| for| split|$)/i);
+  const merchantMatch = rest.match(/\bat ([A-Za-z0-9][A-Za-z0-9'&.\- ]*?)(?= (?:with|for|split|in)\b|$)/i);
   const merchant = merchantMatch ? merchantMatch[1].trim() : null;
 
   const lower = text.toLowerCase();
@@ -47,12 +73,24 @@ export function parseQuickLog(text: string, groups: QuickLogGroupLike[]): QuickL
   }
 
   let category = 'General';
-  if (/coffee|lunch|dinner|breakfast|pizza|taco/i.test(text)) category = 'Dining out';
-  else if (/grocer|costco|market/i.test(text)) category = 'Groceries';
-  else if (/uber|lyft|taxi|\bgas\b/i.test(text)) category = 'Gas/fuel';
+  if (/uber ?eats|doordash|grubhub|coffee|lunch|dinner|breakfast|brunch|pizza|taco|burger|sushi/i.test(text)) category = 'Dining out';
+  else if (/grocer|costco|market|trader joe|whole foods/i.test(text)) category = 'Groceries';
+  else if (/\b(uber|lyft|taxi|cab|rides?)\b/i.test(text)) category = 'Taxi';
+  else if (/\b(gas|fuel|petrol)\b/i.test(text)) category = 'Gas/fuel';
 
-  const firstWord = text.trim().split(/\s+/)[0];
-  const description = firstWord.charAt(0).toUpperCase() + firstWord.slice(1) + (merchant ? ` at ${merchant}` : '');
+  // Description = the words the user typed, minus the amount, the "at <merchant>" clause and the
+  // group/split clause (those show as their own fields). It used to keep only the first word, so
+  // "lunch with team" became "Lunch".
+  let desc = rest;
+  if (merchantMatch) desc = desc.replace(merchantMatch[0], ' ');
+  if (matchedGroup) {
+    const name = matchedGroup.name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    desc = desc.replace(new RegExp(`\\b(?:split\\s+)?(?:with|for|in)?\\s*(?:the\\s+)?${name}(?:\\s+group)?\\b`, 'i'), ' ');
+  }
+  desc = desc.replace(/\bsplit\b(?:\s+(?:it|equally|evenly))?/gi, ' ').replace(/\s+/g, ' ').trim();
+  desc = desc.replace(/\s+(?:with|for|in|at|and)$/i, '').trim();
+  if (!desc) desc = merchant || category;
+  const description = desc.charAt(0).toUpperCase() + desc.slice(1) + (merchant && desc !== merchant ? ` at ${merchant}` : '');
 
   return {
     amount,

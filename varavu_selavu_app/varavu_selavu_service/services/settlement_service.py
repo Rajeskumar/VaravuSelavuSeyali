@@ -100,7 +100,13 @@ class SettlementService:
             actor_email=actor_email,
             action="settlement_created",
             entity_id=str(settlement.id),
-            payload={"amount": float(settlement.amount)}
+            # Who paid whom, so the feed can say "Alex paid you $10" rather than only
+            # "<recorder> recorded a settlement" (older rows carry just the amount).
+            payload={
+                "amount": float(settlement.amount),
+                "from_member_id": str(settlement.from_member_id),
+                "to_member_id": str(settlement.to_member_id),
+            }
         )
         # Deliberately no AnalysisService.invalidate_cache() call and no Expense row
         # created — settlements never count as spend (spec rule TS-GRP-R2).

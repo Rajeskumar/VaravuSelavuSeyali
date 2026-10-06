@@ -137,3 +137,21 @@ def test_points_card_without_value_sorts_last():
     )
     assert [c.card_id for c in report.by_card] == ["flat2", "pts"]
     assert report.by_card[1].earned_usd is None and report.by_card[1].earned_raw == pytest.approx(3000)
+
+
+def test_rent_and_mortgage_are_left_out_of_the_coach():
+    """Most landlords don't take cards without a fee; counting rent credited a just-added card
+    with rewards on thousands of dollars and recommended cards for paying it."""
+    buckets = [_b("Rent", 3600, "2026-09"), _b("Mortgage", 2000, "2026-09"), _b("Groceries", 100, "2026-09")]
+    report = compute_coach_report(buckets, [FLAT2], [FLAT2], "flat2")
+    assert [g.category for g in report.category_gaps] == ["Groceries"]
+    assert report.excluded_spend == 5600
+    assert report.by_card[0].spend == 100
+
+
+def test_categories_sorted_by_spend_and_default_assumed_spend_reported():
+    buckets = [_b("Groceries", 50, "2026-09"), _b("Dining out", 300, "2026-09", card_id="capped"), _b("Gas", 120, "2026-09")]
+    report = compute_coach_report(buckets, [CAPPED, FLAT2], [], "flat2")
+    assert [g.category for g in report.category_gaps] == ["Dining out", "Gas", "Groceries"]
+    # Groceries + Gas had no card recorded and were priced on the default card.
+    assert report.default_assumed_spend == 170

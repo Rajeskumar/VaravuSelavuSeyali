@@ -4,6 +4,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { MemberDTO, PayerSummaryItem } from '../api/groups';
 import { memberColor } from './BalanceRow';
+import { formatCurrency } from '../utils/currencyMath';
 
 interface Props {
   amount: number;
@@ -105,7 +106,7 @@ export default function PayerPicker({
 
       {!isValid && (
         <Text style={styles.warning}>
-          Amounts paid must equal total expense (${amount.toFixed(2)}). Currently: ${totalEntered.toFixed(2)}.
+          Amounts paid must equal total expense ({formatCurrency(amount)}). Currently: {formatCurrency(totalEntered)}.
         </Text>
       )}
       {isValid && (

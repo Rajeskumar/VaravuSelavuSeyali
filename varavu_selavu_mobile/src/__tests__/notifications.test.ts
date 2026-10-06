@@ -12,9 +12,17 @@ jest.mock('expo-notifications', () => ({
   getPermissionsAsync: jest.fn(),
   requestPermissionsAsync: jest.fn(),
   getExpoPushTokenAsync: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
+  AndroidImportance: { DEFAULT: 3 },
 }));
 
 jest.mock('expo-device', () => ({ isDevice: true }));
+
+// Mutated per test (via the imported module) to simulate an app.json with no EAS projectId.
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { extra: { eas: { projectId: 'test-project-id' } } }, easConfig: null },
+}));
 
 jest.mock('../api/devices', () => ({
   registerDevice: jest.fn(),
@@ -23,6 +31,7 @@ jest.mock('../api/devices', () => ({
 
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { registerDevice, unregisterDevice } from '../api/devices';
 import {
   registerForPushNotifications,
@@ -36,10 +45,12 @@ const mockGetExpoPushTokenAsync = Notifications.getExpoPushTokenAsync as jest.Mo
 const mockRegisterDevice = registerDevice as jest.Mock;
 const mockUnregisterDevice = unregisterDevice as jest.Mock;
 const mockDevice = Device as unknown as { isDevice: boolean };
+const mockConstants = Constants as unknown as { expoConfig: any };
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockDevice.isDevice = true;
+  mockConstants.expoConfig = { extra: { eas: { projectId: 'test-project-id' } } };
 });
 
 describe('unregisterPushNotifications (before any registration)', () => {
@@ -71,6 +82,7 @@ describe('registerForPushNotifications', () => {
     mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[abc]' });
     await registerForPushNotifications();
     expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockGetExpoPushTokenAsync).toHaveBeenCalledWith({ projectId: 'test-project-id' });
     expect(mockRegisterDevice).toHaveBeenCalledWith(
       'ExponentPushToken[abc]',
       Platform.OS === 'ios' ? 'ios' : 'android',
@@ -84,6 +96,31 @@ describe('registerForPushNotifications', () => {
     await registerForPushNotifications();
     expect(mockRequestPermissionsAsync).toHaveBeenCalled();
     expect(mockRegisterDevice).toHaveBeenCalledWith('ExponentPushToken[xyz]', expect.any(String));
+  });
+
+  test('without an EAS projectId it registers nothing (and never asks for a token)', async () => {
+    mockConstants.expoConfig = { extra: {} };
+    mockGetPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await registerForPushNotifications();
+    expect(mockGetExpoPushTokenAsync).not.toHaveBeenCalled();
+    expect(mockRegisterDevice).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('eas init'));
+    warn.mockRestore();
+  });
+
+  test('creates the Android channel before requesting permission', async () => {
+    const original = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    mockGetPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    mockGetExpoPushTokenAsync.mockResolvedValue({ data: 'ExponentPushToken[android]' });
+    try {
+      await registerForPushNotifications();
+      expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith('default', expect.objectContaining({ importance: 3 }));
+      expect(mockRegisterDevice).toHaveBeenCalledWith('ExponentPushToken[android]', 'android');
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: original, configurable: true });
+    }
   });
 
   test('a thrown error during registration does not propagate', async () => {

@@ -82,6 +82,19 @@ def _create_personal_itemized(test_client):
     return res.json()["expense_id"]
 
 
+def test_items_without_normalized_name_still_show_in_month_view(test_client, db_session):
+    """Regression: rows saved with no normalized_name were filtered out of month-scoped item
+    insights (the Items tab) while still appearing all-time."""
+    _create_personal_itemized(test_client)
+    rows = db_session.query(ExpenseItem).filter(ExpenseItem.item_name.in_(["Milk", "Eggs"])).all()
+    assert sorted(r.normalized_name for r in rows) == ["Eggs", "Milk"]
+
+    res = test_client.get("/api/v1/analytics/items?year=2026&month=1")
+    assert res.status_code == 200, res.text
+    names = sorted(i.get("item_name") or i.get("normalized_name") for i in res.json())
+    assert names == ["Eggs", "Milk"]
+
+
 def test_get_items_returns_items_after_creation(test_client, db_session):
     expense_id = _create_personal_itemized(test_client)
 

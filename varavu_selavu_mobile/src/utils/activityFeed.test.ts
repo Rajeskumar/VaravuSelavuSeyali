@@ -38,6 +38,17 @@ describe('describeGroupActivity', () => {
     expect(f.title).toBe('Jay joined RSJ');
   });
 
+  it('says who paid whom when the settlement carries both members', () => {
+    const names = (id: string | null) => (id === 'm1' ? 'You' : id === 'm2' ? 'Alex' : 'Someone');
+    const f = describeGroupActivity(act('settlement_created', { amount: 10, from_member_id: 'm2', to_member_id: 'm1' }), 'RSJ', names)!;
+    expect(f.title).toBe('Alex paid you in RSJ');
+  });
+
+  it('describes a name-only seat as added, not joined', () => {
+    const f = describeGroupActivity(act('member_added', { display_name: 'Alex', user_email: null }), 'RSJ', nameFor)!;
+    expect(f.title).toBe('Suresh added Alex to RSJ');
+  });
+
   it('drops noise actions', () => {
     expect(describeGroupActivity(act('group_updated'), 'RSJ', nameFor)).toBeNull();
     expect(describeGroupActivity(act('something_new'), 'RSJ', nameFor)).toBeNull();

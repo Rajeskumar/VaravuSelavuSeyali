@@ -53,6 +53,8 @@ import {
 import { typeScale, tabularNums } from '../theme';
 import { formatMoney } from '../utils/money';
 import ConfirmDialog from '../components/common/ConfirmDialog';
+import VerifyEmailPrompt from '../components/common/VerifyEmailPrompt';
+import { useEmailVerified } from '../hooks/useEmailVerified';
 
 type TabKey = 'expenses' | 'activity';
 type RailTab = 'active' | 'archived';
@@ -124,11 +126,15 @@ const GroupsPage: React.FC = () => {
   const [newType, setNewType] = React.useState('other');
   const [creating, setCreating] = React.useState(false);
   const [createError, setCreateError] = React.useState<string | null>(null);
+  // Groups require a verified email (403 server-side); say so up front instead of after the form.
+  const { verified: emailVerified, refetch: recheckVerified } = useEmailVerified();
+  const [createNeedsVerify, setCreateNeedsVerify] = React.useState(false);
 
   const openCreateDialog = () => {
     setNewName('');
     setNewType('other');
     setCreateError(null);
+    setCreateNeedsVerify(false);
     setCreateOpen(true);
   };
 
@@ -141,6 +147,7 @@ const GroupsPage: React.FC = () => {
       setCreateOpen(false);
       navigate(`/groups/${created.group_id}`);
     } catch (e) {
+      if (e instanceof ApiError && e.status === 403 && /verify your email/i.test(e.message)) setCreateNeedsVerify(true);
       setCreateError(e instanceof ApiError ? e.message : 'Failed to create group');
     } finally {
       setCreating(false);
@@ -152,7 +159,11 @@ const GroupsPage: React.FC = () => {
     queryKey: ['group', groupId],
     queryFn: () => getGroup(groupId as string),
     enabled: !!groupId,
+    // A missing group (bad/stale link, or one you've left) won't appear on retry; retrying left
+    // the panel blank for several seconds before the error showed.
+    retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 2,
   });
+  const groupMissing = groupQuery.error instanceof ApiError && (groupQuery.error.status === 404 || groupQuery.error.status === 403);
   const expensesQuery = useQuery({
     queryKey: ['group-expenses', groupId],
     queryFn: () => listGroupExpenses(groupId as string),
@@ -250,6 +261,7 @@ const GroupsPage: React.FC = () => {
       });
       queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
       queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
       setToast({ open: true, message: 'Expense restored', severity: 'success' });
     } catch (e) {
       setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to restore expense', severity: 'error' });
@@ -264,6 +276,7 @@ const GroupsPage: React.FC = () => {
       await deleteGroupExpense(groupId, row.row_id);
       queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
       queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
       setToast({
         open: true,
         message: 'Expense deleted',
@@ -294,7 +307,6 @@ const GroupsPage: React.FC = () => {
         groupAmount: row.cost,
         groupName: group?.name,
         currency: row.currency || group?.currency,
-        payerSummary: row.payer_summary,
       })),
     [expensesQuery.data, groupId, group?.name, group?.currency]
   );
@@ -322,10 +334,13 @@ const GroupsPage: React.FC = () => {
   const negativeColor = theme.palette.error.main;
   const balanceDirectionLabel = myBalance > 0 ? "You're owed" : myBalance < 0 ? 'You owe' : "You're all settled up";
   const balanceColor = myBalance > 0 ? positiveColor : myBalance < 0 ? negativeColor : theme.palette.text.secondary;
-  const invitedMembers = members.filter((m) => m.status === 'invited');
+  // Only seats with an outstanding email invite are "pending" — a name-only seat isn't waiting on anything.
+  const invitedMembers = members.filter((m) => m.invite_pending);
 
   return (
-    <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 176px)', minHeight: 480, border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: 'hidden' }}>
+    // Below `md` the page scrolls as a whole: a fixed-height box with its own inner scroll put
+    // the end of the content under the mobile bottom bar and the floating + button.
+    <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', height: { xs: 'auto', md: 'calc(100vh - 176px)' }, minHeight: 480, border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: { xs: 'visible', md: 'hidden' } }}>
       {/* Groups/People root tabs — a shared header above the rail+detail row (not nested inside
           the detail pane) specifically so it's reachable on mobile regardless of which of the
           two panes below is currently visible there; see the rail/center `display.xs` logic
@@ -366,16 +381,22 @@ const GroupsPage: React.FC = () => {
               <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', p: 4, gap: 1.5 }}>
                 <GroupsRoundedIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
                 <Typography variant="subtitle1" fontWeight={700}>
-                  {railGroups.length === 0 ? 'No groups yet' : 'Select a group'}
+                  {railGroups.length > 0 ? 'Select a group' : emailVerified === false ? 'Verify your email to start a group' : 'No groups yet'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
                   {railGroups.length === 0
                     ? 'Create a group to split rent, trips, or shared bills with roommates and friends.'
                     : 'Choose a group from the list to see its expenses and balances.'}
                 </Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog} sx={{ mt: 1 }}>
-                  Create Group
-                </Button>
+                {railGroups.length === 0 && emailVerified === false ? (
+                  <Box sx={{ mt: 1 }}>
+                    <VerifyEmailPrompt onCheckAgain={() => recheckVerified()} />
+                  </Box>
+                ) : (
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog} sx={{ mt: 1 }}>
+                    Create Group
+                  </Button>
+                )}
               </Box>
             )
           )}
@@ -388,7 +409,11 @@ const GroupsPage: React.FC = () => {
 
         {groupId && groupQuery.isError && (
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1.5 }}>
-            <Typography color="error">Failed to load this group.</Typography>
+            <Typography color={groupMissing ? 'text.primary' : 'error'} sx={{ textAlign: 'center', px: 2 }}>
+              {groupMissing
+                ? "This group doesn't exist, or you're no longer a member."
+                : "Couldn't load this group. Check your connection and try again."}
+            </Typography>
             <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/groups')}>
               Back to Groups
             </Button>
@@ -396,14 +421,24 @@ const GroupsPage: React.FC = () => {
         )}
 
         {groupId && group && (
-          <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', px: { xs: 1.5, sm: 3 }, py: 3 }}>
+          <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflowY: { md: 'auto' }, px: { xs: 1.5, sm: 3 }, py: 3, pb: { xs: 12, md: 3 } }}>
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}>
+              {/* Phones see this pane on its own (no group rail), so name the group and offer the
+                  way back before anything else. */}
+              <Box sx={{ display: { xs: 'flex', md: 'none' }, alignItems: 'center', gap: 1, mb: 1.5, minWidth: 0 }}>
+                <IconButton onClick={() => navigate('/groups')} aria-label="Back to groups" size="small" sx={{ ml: -0.75 }}>
+                  <ArrowBackIcon />
+                </IconButton>
+                <Typography sx={{ fontWeight: 700, minWidth: 0 }} noWrap>{group.name}</Typography>
+              </Box>
               {/* Design review (2026-09): this used to be a management-controls-first header
                   (name, Add Member button, settings gear) with the balance either hidden below
                   `lg` or off in the side panel — never leading. The compact "You're owed/owe"
                   line is now the first thing in the column at every width; management controls
                   (Add Member) drop to a plain text affordance rather than a bordered button. */}
-              <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
+              {/* Hidden at `lg+`, where the side panel leads with the same figure (it appeared
+                  three times on one screen). */}
+              <Box sx={{ display: { xs: 'flex', lg: 'none' }, alignItems: 'baseline', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
                 <Typography sx={{ ...typeScale.label, color: 'text.secondary' }}>{balanceDirectionLabel}</Typography>
                 {myBalance !== 0 && (
                   <Typography component="span" sx={{ ...typeScale.display, ...tabularNums, color: balanceColor }}>
@@ -414,7 +449,7 @@ const GroupsPage: React.FC = () => {
               {invitedMembers.length > 0 && (
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                   {invitedMembers.map((m) => (
-                    <Chip key={m.member_id} label={`${m.display_name} · pending`} size="small" variant="outlined" />
+                    <Chip key={m.member_id} label={`${m.display_name} · invite sent`} size="small" variant="outlined" />
                   ))}
                 </Box>
               )}
@@ -466,7 +501,7 @@ const GroupsPage: React.FC = () => {
                         </Box>
                       ) : balancesQuery.data ? (
                         <>
-                          <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} currency={group.currency} />
+                          <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} currency={group.currency} myMemberId={myMember?.member_id} />
                           <Button
                             fullWidth
                             variant="contained"
@@ -487,13 +522,12 @@ const GroupsPage: React.FC = () => {
                   "UX Aud…" on phones); the management controls wrap onto their own row
                   instead of squeezing the name. */}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, mt: 2, flexWrap: 'wrap' }}>
-                <IconButton onClick={() => navigate('/groups')} aria-label="Back to groups" size="small" sx={{ display: { xs: 'inline-flex', md: 'none' } }}>
-                  <ArrowBackIcon />
-                </IconButton>
                 <GroupAvatar seed={group.group_id} groupType={group.group_type} size={40} />
                 <Box sx={{ flex: '1 1 180px', minWidth: 0 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
+                    {/* Below md the back-header above already names the group — showing it twice
+                        pushed the expenses below the fold on phones. */}
+                    <Typography variant="h6" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
                       {group.name}
                     </Typography>
                     {isArchived && <Chip label="Archived" size="small" color="warning" variant="outlined" />}
@@ -557,6 +591,8 @@ const GroupsPage: React.FC = () => {
                     loading={expensesQuery.isLoading}
                     emptyMessage="No group expenses yet."
                     readOnly={isArchived}
+                    // Tapping a row opens the detail dialog, which has Edit and Delete.
+                    hideTouchActionsOnPhone
                     onSelect={(feedRow) => {
                       const row = resolveGroupExpense(feedRow);
                       if (row) {
@@ -590,7 +626,7 @@ const GroupsPage: React.FC = () => {
       </Box>
 
         {groupId && group && balancesQuery.data && (
-          <GroupBalancesPanel members={balancesQuery.data.members} myMemberId={myMember?.member_id} onSettleUp={() => setSettleOpen(true)} disabled={members.length < 2} currency={group.currency} />
+          <GroupBalancesPanel members={balancesQuery.data.members} transfers={balancesQuery.data.transfers} myMemberId={myMember?.member_id} onSettleUp={() => setSettleOpen(true)} disabled={members.length < 2} currency={group.currency} onAddMember={isArchived ? undefined : () => setMemberDialogOpen(true)} />
         )}
       </Box>
 
@@ -614,6 +650,7 @@ const GroupsPage: React.FC = () => {
                 {createError}
               </Typography>
             )}
+            {createNeedsVerify && <VerifyEmailPrompt align="left" onCheckAgain={() => { recheckVerified(); setCreateNeedsVerify(false); setCreateError(null); }} />}
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
             <Button onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -676,6 +713,11 @@ const GroupsPage: React.FC = () => {
           onClose={() => setSettleOpen(false)}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+            // The rail's per-group balance, the People tab and the dashboard's "owed to you" all
+            // read these — without this they kept showing the pre-settlement amount until reload.
+            queryClient.invalidateQueries({ queryKey: ['groups'] });
+            queryClient.invalidateQueries({ queryKey: ['friend-balances'] });
+            queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
             setToast({ open: true, message: 'Settlement recorded', severity: 'success' });
           }}
         />
@@ -696,16 +738,19 @@ const GroupsPage: React.FC = () => {
           onSettled={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
             queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+            queryClient.invalidateQueries({ queryKey: ['groups'] });
             setSelectedExpense(null);
           }}
           onDeleted={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
             queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+            queryClient.invalidateQueries({ queryKey: ['groups'] });
             setSelectedExpense(null);
           }}
           onUpdated={() => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
             queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+            queryClient.invalidateQueries({ queryKey: ['groups'] });
             setSelectedExpense(null);
             setToast({ open: true, message: 'Expense updated', severity: 'success' });
           }}

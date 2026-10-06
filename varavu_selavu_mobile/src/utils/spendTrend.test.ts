@@ -1,4 +1,4 @@
-import { lastMonthsTrend, barFractions, monthOverMonthPercent } from './spendTrend';
+import { lastMonthsTrend, barFractions, percentChange, previousMonthToDateRange } from './spendTrend';
 
 const NOW = new Date(2026, 8, 19); // 19 Sep 2026
 
@@ -39,13 +39,27 @@ describe('barFractions', () => {
   });
 });
 
-describe('monthOverMonthPercent', () => {
+describe('percentChange', () => {
   it('rounds to a whole percent, negative when spend fell', () => {
-    const pts = lastMonthsTrend([{ month: '2026-08', total: 200 }, { month: '2026-09', total: 176 }], NOW);
-    expect(monthOverMonthPercent(pts)).toBe(-12);
+    expect(percentChange(176, 200)).toBe(-12);
   });
 
-  it('is null with no previous-month baseline', () => {
-    expect(monthOverMonthPercent(lastMonthsTrend([{ month: '2026-09', total: 100 }], NOW))).toBeNull();
+  it('is null with no baseline', () => {
+    expect(percentChange(100, 0)).toBeNull();
+    expect(percentChange(100, undefined)).toBeNull();
+  });
+});
+
+describe('previousMonthToDateRange', () => {
+  it('covers the same days of last month', () => {
+    expect(previousMonthToDateRange(new Date(2026, 9, 5))).toEqual({ start_date: '2026-09-01', end_date: '2026-09-05' });
+  });
+
+  it('clamps to the end of a shorter previous month', () => {
+    expect(previousMonthToDateRange(new Date(2026, 2, 31))).toEqual({ start_date: '2026-02-01', end_date: '2026-02-28' });
+  });
+
+  it('crosses the year boundary in January', () => {
+    expect(previousMonthToDateRange(new Date(2027, 0, 10))).toEqual({ start_date: '2026-12-01', end_date: '2026-12-10' });
   });
 });

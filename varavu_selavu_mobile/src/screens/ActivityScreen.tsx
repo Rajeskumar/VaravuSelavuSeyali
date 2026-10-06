@@ -16,8 +16,10 @@ import { checkGroupsEnabled, listGroups, getGroupActivity, getGroupDetail } from
 import { getRecurringDue } from '../api/recurring';
 import { listBudgets } from '../api/budgets';
 import { getChangeInsights } from '../api/analytics';
+import { describeChangeInsight } from '../utils/insightsFormat';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import { describeGroupActivity, mergeFeed, relativeShort, FeedItem, FeedTone } from '../utils/activityFeed';
+import { formatCurrency } from '../utils/currencyMath';
 
 const PER_GROUP = 8;
 
@@ -48,8 +50,12 @@ export default function ActivityScreen() {
           getGroupDetail(g.group_id),
           getGroupActivity(g.group_id, PER_GROUP, 0),
         ]);
-        const nameFor = (id: string | null) =>
-          (id && detail.members.find((m) => m.member_id === id)?.display_name) || 'Someone';
+        const me = (userEmail || '').toLowerCase();
+        const nameFor = (id: string | null) => {
+          const m = id ? detail.members.find((x) => x.member_id === id) : undefined;
+          if (m && me && m.user_email?.toLowerCase() === me) return 'You';
+          return m?.display_name || 'Someone';
+        };
         return activity.items
           .map((a) => describeGroupActivity(a, g.name, nameFor))
           .filter((x): x is FeedItem => x !== null);
@@ -66,7 +72,7 @@ export default function ActivityScreen() {
       return due.map((d) => ({
         id: `r-${d.template_id}-${d.date_iso}`,
         title: `${d.description} due ${relativeShort(new Date(`${d.date_iso}T12:00:00`), now)}`,
-        body: `Recurring · $${d.suggested_cost.toFixed(2)} on ${new Date(`${d.date_iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+        body: `Recurring · ${formatCurrency(d.suggested_cost)} on ${new Date(`${d.date_iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
         at: new Date(`${d.date_iso}T12:00:00`),
         tone: 'violet' as const,
       }));
@@ -83,7 +89,7 @@ export default function ActivityScreen() {
         .map((b) => ({
           id: `b-${b.id}`,
           title: `${b.category ?? 'Overall'} budget ${b.status === 'exceeded' ? 'exceeded' : b.status === 'over_pace' ? 'is over pace' : 'is at risk'}`,
-          body: `$${b.spent.toFixed(2)} of $${b.amount.toFixed(2)}`,
+          body: `${formatCurrency(b.spent)} of ${formatCurrency(b.amount)}`,
           at: now,
           tone: 'amber' as const,
         }));
@@ -97,8 +103,8 @@ export default function ActivityScreen() {
       const changes = await getChangeInsights(userEmail!, { year: now.getFullYear(), month: now.getMonth() + 1 }).catch(() => []);
       return changes.slice(0, 2).map((c, i) => ({
         id: `c-${i}-${c.metric_name}`,
-        title: `${c.metric_name} is ${c.change_percent > 0 ? 'up' : 'down'} ${Math.abs(c.change_percent).toFixed(0)}% vs last month`,
-        body: c.entity_name || 'Tap Insights to see what drove it',
+        title: describeChangeInsight(c).headline,
+        body: describeChangeInsight(c).detail,
         at: now,
         tone: 'amber' as const,
       }));

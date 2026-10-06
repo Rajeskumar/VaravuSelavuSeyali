@@ -43,6 +43,9 @@ export interface AnalysisResponse {
 export async function getAnalysis(opts?: {
   year?: number;
   month?: number;
+  /** YYYY-MM-DD, inclusive. Takes precedence over year/month server-side. */
+  start_date?: string;
+  end_date?: string;
   scope?: AnalysisScope;
   group_id?: string;
   tag_ids?: string[];
@@ -50,6 +53,8 @@ export async function getAnalysis(opts?: {
   const params = new URLSearchParams();
   if (opts?.year !== undefined) params.set('year', String(opts.year));
   if (opts?.month !== undefined) params.set('month', String(opts.month));
+  if (opts?.start_date) params.set('start_date', opts.start_date);
+  if (opts?.end_date) params.set('end_date', opts.end_date);
   if (opts?.scope !== undefined) params.set('scope', opts.scope);
   if (opts?.group_id !== undefined) params.set('group_id', opts.group_id);
   (opts?.tag_ids || []).forEach((id) => params.append('tag_ids', id));

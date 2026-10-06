@@ -12,13 +12,14 @@ import {
   getTopMerchants, getMerchantDetail,
   MerchantInsightSummary,
 } from '../../api/analytics';
-import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../common/InsightScopeFilter';
+import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters, setAnalysisPeriod } from '../common/InsightScopeFilter';
 import { motion } from 'framer-motion';
 
 import { StatBlock } from './StatBlock';
 import { MonthlySpendSparkline } from './MonthlySpendSparkline';
 import { WhatChangedCallout } from './WhatChangedCallout';
 import { typeScale } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -156,9 +157,9 @@ const MerchantsTab: React.FC = () => {
 
           {/* KPI Row */}
           <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
-            <StatBlock label="Lifetime Spent" value={`$${detail.total_spent.toFixed(2)}`} />
+            <StatBlock label="Lifetime Spent" value={formatMoney(detail.total_spent)} />
             <StatBlock label="Visits" value={detail.transaction_count} />
-            <StatBlock label="Avg / visit" value={`$${avgPerVisit.toFixed(2)}`} />
+            <StatBlock label="Avg / visit" value={formatMoney(avgPerVisit)} />
           </Box>
 
           {/* Monthly Spend Sparkline */}
@@ -186,7 +187,7 @@ const MerchantsTab: React.FC = () => {
                 {yearlyRollup.map((y) => (
                   <Box key={y.year}>
                     <Typography sx={{ fontSize: 13, color: 'text.secondary', mb: 0.5 }}>{y.year}</Typography>
-                    <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>${y.total_spent.toFixed(2)}</Typography>
+                    <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>{formatMoney(y.total_spent)}</Typography>
                   </Box>
                 ))}
               </Box>
@@ -235,7 +236,7 @@ const MerchantsTab: React.FC = () => {
                         textAlign: 'right'
                       }}
                     >
-                      ${(item.avg_price ?? 0).toFixed(2)} avg
+                      {formatMoney(item.avg_price ?? 0)} avg
                     </Typography>
                   </Box>
                 ))}
@@ -254,7 +255,16 @@ const MerchantsTab: React.FC = () => {
     <Box>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-          <InsightScopeFilter value={scope} onChange={setScope} />
+          <InsightScopeFilter
+            value={scope}
+            onChange={(next) => {
+              setScope(next);
+              // Keep the Analysis tabs on the same month (see getAnalysisPeriod).
+              if (next.mode === 'period' && typeof next.year === 'number' && typeof next.month === 'number') {
+                setAnalysisPeriod(next.year, next.month);
+              }
+            }}
+          />
         </Box>
         <Typography sx={{ fontSize: 14, color: 'text.secondary', mb: 3 }}>
           Where your money goes, by place
@@ -314,7 +324,7 @@ const MerchantsTab: React.FC = () => {
                     </Typography>
                   </Box>
                   <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>
-                    ${(row.total_spent ?? 0).toFixed(2)}
+                    {formatMoney(row.total_spent ?? 0)}
                   </Typography>
                   <ChevronRightIcon sx={{ color: 'text.disabled', fontSize: 20 }} />
                 </Box>

@@ -16,6 +16,8 @@ import { findMainCategory } from '../expenses/AddExpenseForm';
 import CategoryPickerField from '../expenses/CategoryPickerField';
 import SegmentedTabs from '../common/SegmentedTabs';
 import BudgetCard from '../budgets/BudgetCard';
+import { formatMoney } from '../../utils/money';
+import { CATEGORY_GROUPS } from '../expenses/AddExpenseForm';
 
 const THRESHOLD_OPTIONS = [50, 80, 90, 100, 110];
 const DEFAULT_THRESHOLDS = [80, 100];
@@ -80,6 +82,12 @@ const BudgetsTab: React.FC = () => {
     enabled: formOpen && form.target_type === 'category',
   });
   const suggestion = suggestions?.find((s) => s.category === form.category);
+  // A non-blocking sanity check: a limit far above what this category usually costs is almost
+  // always a typo (a $150 budget saved as $150,150 went through without a word).
+  const amountNum = parseFloat(form.amount);
+  const implausible =
+    Number.isFinite(amountNum) &&
+    ((suggestion && amountNum > Math.max(suggestion.suggested_amount * 10, 1000)) || amountNum >= 100000);
 
   const saveMut = useMutation({
     mutationFn: () => createBudget({
@@ -209,6 +217,11 @@ const BudgetsTab: React.FC = () => {
                   subcategory={form.category}
                   onChange={(_main, sub) => setForm((f) => ({ ...f, category: sub }))}
                 />
+                {sharedSubcategory(form.category) && (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                    Counts every “{form.category}” expense, whichever category group it's in.
+                  </Typography>
+                )}
               </Grid>
             )}
 
@@ -220,11 +233,18 @@ const BudgetsTab: React.FC = () => {
                 value={form.amount}
                 onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
                 InputProps={{ startAdornment: <Box component="span" sx={{ mr: 0.5, color: 'text.secondary' }}>$</Box> }}
+                color={implausible ? 'warning' : undefined}
+                focused={implausible || undefined}
+                helperText={
+                  implausible
+                    ? `That's ${formatMoney(amountNum)} a month${suggestion ? ` — you usually spend about ${formatMoney(suggestion.suggested_amount)}` : ''}. Double-check the amount.`
+                    : undefined
+                }
               />
               {form.target_type === 'category' && suggestion && !form.amount && (
                 <Chip
                   size="small"
-                  label={`Suggested: $${suggestion.suggested_amount.toFixed(0)} — tap to use`}
+                  label={`Suggested: ${formatMoney(suggestion.suggested_amount)} — tap to use`}
                   onClick={() => setForm((f) => ({ ...f, amount: String(suggestion.suggested_amount) }))}
                   sx={{ mt: 1 }}
                 />
@@ -261,6 +281,10 @@ const BudgetsTab: React.FC = () => {
                     onClick={() => toggleThreshold(t)}
                     color={form.alert_thresholds.includes(t) ? 'primary' : undefined}
                     variant={form.alert_thresholds.includes(t) ? 'filled' : 'outlined'}
+                    // Toggle state for screen readers; color alone doesn't convey it.
+                    role="checkbox"
+                    aria-checked={form.alert_thresholds.includes(t)}
+                    aria-label={`Alert at ${t}% of the limit`}
                   />
                 ))}
               </Box>
@@ -325,5 +349,12 @@ const BudgetsTab: React.FC = () => {
     </Box>
   );
 };
+
+/** Expenses store only the subcategory, so a budget on a name that exists under several groups
+ * (“Other”, “Electronics”) counts all of them — say so rather than imply it's scoped to one. */
+function sharedSubcategory(sub: string | undefined): boolean {
+  if (!sub) return false;
+  return Object.values(CATEGORY_GROUPS).filter((subs) => subs.includes(sub)).length > 1;
+}
 
 export default BudgetsTab;

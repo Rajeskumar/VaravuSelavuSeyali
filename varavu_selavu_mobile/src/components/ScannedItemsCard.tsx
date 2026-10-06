@@ -4,6 +4,7 @@ import { AppTheme } from '../theme';
 import TypeaheadInput from './TypeaheadInput';
 import { suggestItems } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
+import { formatCurrency } from '../utils/currencyMath';
 
 export interface ScannedItem {
   line_no: number;
@@ -31,7 +32,7 @@ interface ScannedItemsCardProps {
 
 function fmt(n: number): string {
   const sign = n < 0 ? '-' : '';
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return `${sign}${formatCurrency(Math.abs(n))}`;
 }
 
 /**

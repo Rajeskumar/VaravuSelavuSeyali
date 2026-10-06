@@ -9,6 +9,7 @@ import NewReleasesIcon from '@mui/icons-material/NewReleases';
 import { useNavigate } from 'react-router-dom';
 import { getChangeInsights, ChangeInsight } from '../../api/analytics';
 import { glassCardSx } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 interface SmartChangeInsightsCardProps {
   userId: string | null;
@@ -111,7 +112,7 @@ export default function SmartChangeInsightsCard({ userId, year, month }: SmartCh
 
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
               <Typography variant="h5" fontWeight={800} color={insight.change_amount > 0 && insight.change_percent !== 100 ? 'error.main' : insight.change_percent === 100 ? 'info.main' : 'success.main'}>
-                {insight.change_amount > 0 ? '+' : ''}${Math.abs(insight.change_amount).toFixed(2)}
+                {insight.change_amount > 0 ? '+' : ''}{formatMoney(Math.abs(insight.change_amount))}
               </Typography>
               {insight.change_percent !== 100 && (
                 <Chip
@@ -125,7 +126,7 @@ export default function SmartChangeInsightsCard({ userId, year, month }: SmartCh
 
             {insight.change_percent !== 100 ? (
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                vs ${insight.previous_value.toFixed(2)} last period
+                vs {formatMoney(insight.previous_value)} last period
               </Typography>
             ) : (
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

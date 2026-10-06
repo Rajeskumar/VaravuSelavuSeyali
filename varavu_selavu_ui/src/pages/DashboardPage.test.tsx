@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import DashboardPage from './DashboardPage';
+import { QuickCaptureProvider } from '../context/QuickCaptureContext';
 import * as analysisApi from '../api/analysis';
 import * as analyticsApi from '../api/analytics';
 import * as recurringApi from '../api/recurring';
@@ -10,6 +11,9 @@ import * as expensesApi from '../api/expenses';
 import * as groupsApi from '../api/groups';
 import * as configApi from '../api/config';
 import React from 'react';
+
+// heic2any needs a Web Worker, which jsdom lacks; same mock as ExpensesPage.test.tsx.
+jest.mock('heic2any', () => ({ __esModule: true, default: jest.fn() }));
 
 const combinedPayload: analysisApi.AnalysisResponse = {
   top_categories: ['Food & Drink'],
@@ -25,7 +29,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <DashboardPage />
+        <QuickCaptureProvider>
+          <DashboardPage />
+        </QuickCaptureProvider>
       </MemoryRouter>
     </QueryClientProvider>
   );

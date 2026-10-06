@@ -201,10 +201,10 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
                 onChange={(e) => toggleMember(m.member_id, e.target.checked)}
                 inputProps={{ 'aria-label': `Include ${m.display_name}` }}
               />
-              <Avatar sx={{ width: 32, height: 32, fontSize: 13, bgcolor: colorFromMemberId(m.member_id) }}>
+              <Avatar sx={{ width: 32, height: 32, fontSize: 13, flexShrink: 0, bgcolor: colorFromMemberId(m.member_id) }}>
                 {initialsFromName(m.display_name)}
               </Avatar>
-              <Typography sx={{ flex: 1, fontWeight: 600 }}>{m.display_name}</Typography>
+              <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 600 }} noWrap title={m.display_name}>{m.display_name}</Typography>
               {checked && value.type !== 'equal' && (
                 <TextField
                   size="small"
@@ -241,7 +241,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
                       return next;
                     });
                   }}
-                  sx={{ width: 120 }}
+                  sx={{ width: 120, flexShrink: 0 }}
                   inputProps={{ 'aria-label': `${value.type} for ${m.display_name}` }}
                   InputProps={
                     value.type === 'exact' || value.type === 'adjustment'

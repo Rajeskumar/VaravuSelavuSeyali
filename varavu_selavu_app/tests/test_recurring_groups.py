@@ -121,3 +121,23 @@ def test_recurring_group_expense_confirm(db_session: Session, mock_auth):
     
     expenses_after = db_session.query(Expense).filter(Expense.group_id == group.id, Expense.description == "Phone Bill").all()
     assert len(expenses_after) == 1
+
+
+def test_recurring_group_expense_push_names_the_expense(db_session: Session, mock_auth):
+    """Regression: the recurring paths passed `expense_description`, which the push builder
+    ignores, so members were told someone added "an expense" instead of "Internet Bill"."""
+    import os
+    from varavu_selavu_service.services.notification_service import NotificationService
+    os.environ["GROUPS_ENABLED"] = "true"
+    user, group = setup_user_and_group(db_session)
+    tpl_id = client.post("/api/v1/recurring/upsert", json={
+        "description": "Internet Bill", "category": "Utilities", "day_of_month": 5, "default_cost": 50.0,
+        "group_id": str(group.id), "split_config": {"type": "equal", "entries": []},
+    }).json()["id"]
+
+    with patch.object(NotificationService, "fan_out") as fan_out:
+        res = client.post("/api/v1/recurring/execute_now", json={"template_id": tpl_id, "cost": 50.0})
+    assert res.status_code == 200
+    assert fan_out.called
+    assert fan_out.call_args.kwargs["description"] == "Internet Bill"
+    assert fan_out.call_args.kwargs["event_type"] == "expense_added"

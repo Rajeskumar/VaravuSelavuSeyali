@@ -4,6 +4,7 @@ from datetime import datetime, date, timezone
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy.orm import Session
+from varavu_selavu_service.core.money import to_decimal
 from varavu_selavu_service.db.models import Expense, ExpenseItem
 
 class PostgresRepo:
@@ -126,14 +127,16 @@ class PostgresRepo:
             
             line_no = item.get("line_no", 1)
             item_name = item.get("item_name", "Unknown Item")
-            normalized_name = item.get("normalized_name")
+            # Item analytics group and filter on normalized_name; a row saved without one
+            # dropped out of every month-scoped Items view while still showing all-time.
+            normalized_name = (item.get("normalized_name") or "").strip() or item_name
             category_id = item.get("category_id") or item.get("category_name")
             quantity = item.get("quantity")
             unit = item.get("unit")
             unit_price = item.get("unit_price")
-            line_total = float(item.get("line_total", 0.0))
-            tax = float(item.get("tax", 0.0))
-            discount = float(item.get("discount", 0.0))
+            line_total = to_decimal(item.get("line_total"))
+            tax = to_decimal(item.get("tax"))
+            discount = to_decimal(item.get("discount"))
             attr_json = item.get("attributes_json")
                 
             db_item = ExpenseItem(

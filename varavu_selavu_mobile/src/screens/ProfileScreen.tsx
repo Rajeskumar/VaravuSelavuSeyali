@@ -14,6 +14,7 @@ import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import { listBudgets } from '../api/budgets';
 import { getProfile, updateProfile, deleteProfile } from '../api/profile';
+import { forgotPassword } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '../api/apiFetch';
@@ -27,7 +28,6 @@ export default function ProfileScreen({ navigation }: any) {
   const [email, setEmail] = useState(userEmail || '');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
   const [venmoHandle, setVenmoHandle] = useState('');
   const [paypalHandle, setPaypalHandle] = useState('');
   const [upiId, setUpiId] = useState('');
@@ -82,7 +82,6 @@ export default function ProfileScreen({ navigation }: any) {
       setEmail(p.email || userEmail || '');
       setName(p.name || '');
       setPhone(p.phone || '');
-      setAddress(p.address || '');
       setVenmoHandle(p.venmo_handle || '');
       setPaypalHandle(p.paypal_handle || '');
       setUpiId(p.upi_id || '');
@@ -99,12 +98,11 @@ export default function ProfileScreen({ navigation }: any) {
     setSaving(true);
     try {
       const p = await updateProfile({
-        name, phone, address,
+        name, phone,
         venmo_handle: venmoHandle, paypal_handle: paypalHandle, upi_id: upiId,
       });
       setName(p.name || '');
       setPhone(p.phone || '');
-      setAddress(p.address || '');
       setVenmoHandle(p.venmo_handle || '');
       setPaypalHandle(p.paypal_handle || '');
       setUpiId(p.upi_id || '');
@@ -163,7 +161,6 @@ export default function ProfileScreen({ navigation }: any) {
           <FieldBox label="Email (read only)" value={email} editable={false} style={{ color: theme.colors.textTertiary }} />
           <FieldBox label="Name" value={name} onChangeText={setName} placeholder="John Doe" />
           <FieldBox label="Phone" value={phone} onChangeText={setPhone} placeholder="+1 234 567 8900" keyboardType="phone-pad" />
-          <FieldBox label="Address" value={address} onChangeText={setAddress} placeholder="123 Main St, City, Country" multiline />
           <FieldBox label="Venmo username" value={venmoHandle} onChangeText={setVenmoHandle} placeholder="@yourname" autoCapitalize="none" />
           <FieldBox label="PayPal.me username" value={paypalHandle} onChangeText={setPaypalHandle} placeholder="yourname" autoCapitalize="none" />
           <FieldBox label="UPI ID" value={upiId} onChangeText={setUpiId} placeholder="yourname@bank" autoCapitalize="none" />
@@ -188,6 +185,16 @@ export default function ProfileScreen({ navigation }: any) {
     );
   }
 
+  // Reuses the reset-by-email flow (no new endpoint; proves control of the inbox).
+  const sendPasswordReset = async () => {
+    try {
+      await forgotPassword({ email });
+      Alert.alert('Check your email', `We sent a link to ${email} to set a new password.`);
+    } catch {
+      Alert.alert("Couldn't send the email", 'Try again in a minute.');
+    }
+  };
+
   // Same eight rows, same order as the design. Cards and Budgets drop out only when their backend
   // feature flag is off (no screen to open); everything else is always present.
   const rows: { name: string; hint?: string; onPress: () => void }[] = [
@@ -205,6 +212,7 @@ export default function ProfileScreen({ navigation }: any) {
     { name: 'Notifications', hint: notifsOn === null ? undefined : notifsOn ? 'On' : 'Off', onPress: () => Linking.openSettings() },
     { name: 'Appearance', hint: isSystemDefault ? 'System' : isDark ? 'Dark' : 'Light', onPress: chooseAppearance },
     { name: 'Export data', hint: exporting ? 'Exporting…' : undefined, onPress: exportData },
+    { name: 'Change password', onPress: sendPasswordReset },
     { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
     { name: 'About', onPress: () => navigation.navigate('About') },
   ];

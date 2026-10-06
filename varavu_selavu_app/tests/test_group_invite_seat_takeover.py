@@ -204,3 +204,21 @@ def test_placeholder_invite_flow_still_works(test_client, db_session):
     )
     assert seat.user_email == "meera4@x.com"
     assert seat.status == "active"
+
+
+def test_only_seats_with_an_open_invite_are_pending(test_client, db_session):
+    """Readiness review: every name-only seat read "· pending" though nobody was invited.
+    `invite_pending` is true only once an invite has been minted for the seat."""
+    _seed(db_session, "owner5@x.com")
+    old = _as_user("owner5@x.com")
+    try:
+        group_id = test_client.post("/api/v1/groups", json={"name": "Flat"}).json()["group_id"]
+        alex = test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Alex"}).json()
+        sam = test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Sam"}).json()
+        assert test_client.post(f"/api/v1/groups/{group_id}/invites", json={"member_id": sam["member_id"]}).status_code == 201
+        members = {m["display_name"]: m for m in test_client.get(f"/api/v1/groups/{group_id}").json()["members"]}
+    finally:
+        _restore(old)
+    assert members["Alex"]["invite_pending"] is False
+    assert members["Sam"]["invite_pending"] is True
+    assert members["owner5@x.com"]["invite_pending"] is False

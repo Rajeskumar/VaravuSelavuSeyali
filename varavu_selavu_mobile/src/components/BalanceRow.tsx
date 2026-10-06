@@ -10,6 +10,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, inkOnPastel } from '../theme';
 import { MemberBalance } from '../api/groups';
+import { formatCurrency } from '../utils/currencyMath';
 
 interface Props {
   balance: MemberBalance;
@@ -55,9 +56,9 @@ export default function BalanceRow({ balance, isCurrentUser = false }: Props) {
     : theme.colors.textTertiary;
 
   const netLabel = isPositive
-    ? `Gets back $${net.toFixed(2)}`
+    ? `Gets back ${formatCurrency(net)}`
     : isNegative
-    ? `Owes $${Math.abs(net).toFixed(2)}`
+    ? `Owes ${formatCurrency(Math.abs(net))}`
     : 'Settled up';
 
   const initials = initialsFromName(balance.display_name);
@@ -75,7 +76,7 @@ export default function BalanceRow({ balance, isCurrentUser = false }: Props) {
         <Text style={[styles.netLabel, { color: netColor }]}>{netLabel}</Text>
       </View>
       <Text style={[styles.netAmount, { color: netColor }]}>
-        {isPositive ? '+' : isNegative ? '-' : ''}${Math.abs(net).toFixed(2)}
+        {isPositive ? '+' : isNegative ? '-' : ''}{formatCurrency(Math.abs(net))}
       </Text>
     </View>
   );

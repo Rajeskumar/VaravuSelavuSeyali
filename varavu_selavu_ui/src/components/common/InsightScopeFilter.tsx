@@ -16,12 +16,34 @@ export interface InsightScopeState {
   endDate: string;
 }
 
-export function defaultInsightScopeState(): InsightScopeState {
+const PERIOD_KEY = 'analysis-period';
+
+/** The Analysis tabs share one selected month: picking September on Overview used to leave Items
+ * and Merchants on the current month. Kept per browser tab (sessionStorage), best-effort.
+ * Defaults to the current month: an earlier "before the 8th, show last month" rule sent brand-new
+ * users to an empty previous month where nothing they logged today could appear. */
+export function getAnalysisPeriod(): { year: number; month: number } {
+  try {
+    const raw = sessionStorage.getItem(PERIOD_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (Number.isInteger(p?.year) && Number.isInteger(p?.month)) return p;
+    }
+  } catch { /* storage unavailable — fall through to the default */ }
   const now = new Date();
+  return { year: now.getFullYear(), month: now.getMonth() + 1 };
+}
+
+export function setAnalysisPeriod(year: number, month: number): void {
+  try { sessionStorage.setItem(PERIOD_KEY, JSON.stringify({ year, month })); } catch { /* best-effort */ }
+}
+
+export function defaultInsightScopeState(): InsightScopeState {
+  const { year, month } = getAnalysisPeriod();
   return {
     mode: 'period',
-    year: now.getFullYear(),
-    month: now.getMonth() + 1,
+    year,
+    month,
     startDate: '',
     endDate: '',
   };

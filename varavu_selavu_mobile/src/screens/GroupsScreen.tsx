@@ -20,8 +20,7 @@ import {
   RefreshControl,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
-} from 'react-native';
+  ScrollView, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -43,6 +42,8 @@ import ListRow from '../components/ListRow';
 import PeopleList from '../components/PeopleList';
 import { showToast } from '../components/Toast';
 import { onExpenseChanged } from '../utils/expenseEvents';
+import { formatCurrency } from '../utils/currencyMath';
+import { resendVerification } from '../api/auth';
 
 const GROUP_TYPE_OPTIONS = ['other', 'trip', 'home', 'couple'] as const;
 type GroupTypeOption = typeof GROUP_TYPE_OPTIONS[number];
@@ -111,6 +112,24 @@ export default function GroupsScreen() {
       navigation.navigate('GroupDetail', { groupId: created.group_id });
     },
     onError: (e: any) => {
+      // Groups need a verified email (403). Offer the fix instead of a dead-end toast.
+      if (e instanceof ApiError && e.status === 403 && /verify your email/i.test(e.message ?? '')) {
+        Alert.alert(
+          'Verify your email first',
+          'Groups need a verified email so the people you split with know it is really you. Check your inbox for the link, or send a new one.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            {
+              text: 'Resend email',
+              onPress: () =>
+                resendVerification()
+                  .then(() => showToast({ message: 'Verification email sent — check your inbox', type: 'success' }))
+                  .catch((err: Error) => showToast({ message: err.message, type: 'error' })),
+            },
+          ],
+        );
+        return;
+      }
       showToast({ message: e.message ?? 'Failed to create group', type: 'error' });
     },
   });
@@ -159,7 +178,7 @@ export default function GroupsScreen() {
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={styles.balanceLabel}>{owes ? 'you owe' : owed ? 'you are owed' : 'settled'}</Text>
             <Text style={[styles.balanceAmount, { color: item.my_balance === 0 ? theme.colors.textTertiary : directionalColor(theme, item.my_balance) }]}>
-              ${Math.abs(item.my_balance).toFixed(2)}
+              {formatCurrency(Math.abs(item.my_balance))}
             </Text>
           </View>
         )}
@@ -213,7 +232,7 @@ export default function GroupsScreen() {
           <View style={styles.aggregate}>
             <SectionLabel>{section === 'archived' ? 'Across archived groups' : 'Across all groups'}</SectionLabel>
             <Text style={[styles.aggregateAmount, { color: netAcross === 0 ? theme.colors.textTertiary : directionalColor(theme, netAcross) }]}>
-              {netAcross === 0 ? '$0.00' : `${netAcross > 0 ? '+' : '−'}$${Math.abs(netAcross).toFixed(2)}`}
+              {netAcross === 0 ? '$0.00' : `${netAcross > 0 ? '+' : '−'}${formatCurrency(Math.abs(netAcross))}`}
             </Text>
           </View>
         ) : null}

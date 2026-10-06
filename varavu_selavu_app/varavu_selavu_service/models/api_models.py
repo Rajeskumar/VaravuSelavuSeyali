@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, Field, StringConstraints, conint
+from pydantic import BaseModel, EmailStr, Field, StringConstraints, conint, model_validator
 
 from varavu_selavu_service.core.money import (
     MAX_AMOUNT,
@@ -506,6 +506,7 @@ class MemberDTO(BaseModel):
     role: str
     status: str
     user_email: Optional[str] = None
+    invite_pending: bool = False
 
 
 class GroupSummary(BaseModel):
@@ -636,6 +637,21 @@ class GroupExpenseRequest(BaseModel):
     card_id: Optional[str] = None
     # Same omitted-means-unchanged semantics as personal ExpenseRequest.notes.
     notes: OptionalNotesStr = None
+
+
+class GroupExpenseUpdateRequest(GroupExpenseRequest):
+    """Edit payload. `payers` and `split` are optional together: omit both to keep the stored
+    payers and split (rescaled if `amount` changed). Clients that only edit text/date/category
+    must omit them rather than rebuild a split from partial data, which silently dropped
+    members when the web Expenses page did it."""
+    payers: Optional[List[GroupExpensePayerEntry]] = None
+    split: Optional[GroupSplitConfig] = None
+
+    @model_validator(mode="after")
+    def _payers_and_split_together(self):
+        if (self.payers is None) != (self.split is None):
+            raise ValueError("Send both payers and split, or neither to keep the current split")
+        return self
 
 
 class MoveToGroupRequest(BaseModel):
@@ -1213,6 +1229,10 @@ class CardCoachResponse(BaseModel):
     best_card_id: Optional[str] = None
     # Spend with no attributed card and no default card — earns nothing above.
     unassigned_spend: float = 0.0
+    # No card recorded, priced as the default card (an estimate, not rewards actually earned).
+    default_assumed_spend: float = 0.0
+    # Rent/mortgage spend left out of the coach (rarely payable by card without a fee).
+    excluded_spend: float = 0.0
 
 
 # ---------------------- TS-TAG-102: Tag CRUD ---------------------- #

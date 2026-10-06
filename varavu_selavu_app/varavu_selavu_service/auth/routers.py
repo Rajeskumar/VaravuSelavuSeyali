@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field
 from google.oauth2 import id_token
@@ -142,7 +142,12 @@ def _issue_session(
 
 @router.post("/forgot-password")
 @limiter.limit("5/hour")
-def forgot_password(request: Request, data: ForgotPasswordRequest, auth: AuthService = Depends(get_auth_service)):
+def forgot_password(
+    request: Request,
+    data: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
+    auth: AuthService = Depends(get_auth_service),
+):
     # Always reports success: a "User not found" here tells an attacker which email
     # addresses are registered. If the account exists, email it a one-time reset link —
     # this endpoint never accepts a new password directly (that used to be a critical
@@ -150,7 +155,10 @@ def forgot_password(request: Request, data: ForgotPasswordRequest, auth: AuthSer
     # zero proof of ownership, protected only by a 5/hour rate limit).
     if auth.get_user(data.email):
         token = auth.create_email_token(data.email, "reset_password", PASSWORD_RESET_TOKEN_TTL)
-        _send_password_reset_email(data.email, token)
+        # Sent after the response: an in-request SMTP send made this reply measurably slower
+        # for registered emails than unregistered ones (a timing oracle), and slow mail
+        # servers stalled the request.
+        background_tasks.add_task(_send_password_reset_email, data.email, token)
     return {"success": True}
 
 
@@ -179,23 +187,34 @@ def verify_email(request: Request, data: VerifyEmailRequest, auth: AuthService =
 
 @router.post("/resend-verification")
 @limiter.limit("3/hour")
-def resend_verification(request: Request, user: str = Depends(auth_required), auth: AuthService = Depends(get_auth_service)):
+def resend_verification(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: str = Depends(auth_required),
+    auth: AuthService = Depends(get_auth_service),
+):
     if auth.is_email_verified(user):
         return {"success": True, "already_verified": True}
     token = auth.create_email_token(user, "verify_email", EMAIL_VERIFY_TOKEN_TTL)
-    _send_verification_email(user, token)
+    background_tasks.add_task(_send_verification_email, user, token)
     return {"success": True, "already_verified": False}
 
 
 @router.post("/register")
 @limiter.limit("5/hour")
-def register(request: Request, data: RegisterRequest, auth: AuthService = Depends(get_auth_service)):
+def register(
+    request: Request,
+    data: RegisterRequest,
+    background_tasks: BackgroundTasks,
+    auth: AuthService = Depends(get_auth_service),
+):
     ok = auth.register_user(data.name, data.phone, data.email, data.password)
     if not ok:
         # Deliberately generic — "User already exists" is an enumeration oracle.
         raise HTTPException(status_code=400, detail="Unable to complete registration")
     token = auth.create_email_token(data.email, "verify_email", EMAIL_VERIFY_TOKEN_TTL)
-    _send_verification_email(data.email, token)
+    # After the response, so sign-up doesn't wait on the mail server (it took 4s+).
+    background_tasks.add_task(_send_verification_email, data.email, token)
     return {"success": True}
 
 

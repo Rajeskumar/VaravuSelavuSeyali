@@ -38,7 +38,8 @@ def _rows(test_client, params=None):
 
 def test_export_has_a_header_even_when_empty(test_client, db_session):
     rows = _rows(test_client)
-    assert rows[0] == ["date", "description", "category", "merchant", "amount", "item_count"]
+    assert rows[0] == ["date", "description", "category", "merchant", "amount", "item_count",
+                       "group", "group_total", "tags", "notes", "card"]
     assert len(rows) == 1
 
 
@@ -48,7 +49,7 @@ def test_export_includes_the_users_expenses(test_client, db_session):
     assert len(rows) == 2
     assert rows[1][1] == "Coffee"
     assert rows[1][3] == "Blue Bottle"
-    assert rows[1][4] == "4.5"
+    assert rows[1][4] == "4.50"
 
 
 def test_export_is_scoped_to_the_caller(test_client, db_session):
@@ -107,3 +108,25 @@ def test_ordinary_description_is_untouched(test_client, db_session):
     _add_expense(db_session, description="Dinner at Joe's")
     rows = _rows(test_client)
     assert rows[1][1] == "Dinner at Joe's"
+
+
+def test_export_includes_my_share_of_group_expenses(test_client, db_session, monkeypatch):
+    """The landing page promises the full ledger, so group shares are exported at the share."""
+    monkeypatch.setenv("GROUPS_ENABLED", "true")
+    from varavu_selavu_service.db.models import GroupMember
+    db_session.add(User(id=uuid.uuid4(), email="b@test.com", password_hash="h", name="b"))
+    db_session.commit()
+    gid = test_client.post("/api/v1/groups", json={"name": "Roommates"}).json()["group_id"]
+    other = test_client.post(f"/api/v1/groups/{gid}/members", json={"email": "b@test.com"}).json()["member_id"]
+    me = str(db_session.query(GroupMember).filter(GroupMember.user_email == "test@user.com").one().id)
+    test_client.post(f"/api/v1/groups/{gid}/expenses", json={
+        "date": "01/01/2026", "description": "Rent", "category": "Rent", "amount": 3000.0,
+        "payers": [{"member_id": me, "amount_paid": 3000.0}],
+        "split": {"type": "equal", "entries": [{"member_id": me}, {"member_id": other}]},
+    })
+
+    rows = _rows(test_client)
+    rent = next(r for r in rows[1:] if r[1] == "Rent")
+    assert rent[4] == "1500.00"
+    assert rent[6] == "Roommates"
+    assert rent[7] == "3000.00"

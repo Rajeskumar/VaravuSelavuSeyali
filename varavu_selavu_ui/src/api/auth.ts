@@ -120,7 +120,23 @@ export async function register(payload: RegisterPayload): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new ApiError('Registration failed', response.status);
+    const err = new ApiError('Registration failed', response.status) as ApiError & { fieldErrors?: Record<string, string> };
+    if (response.status === 422) {
+      // FastAPI validation errors: [{ loc: ['body', 'email'], msg: '...' }, ...]. Surface them per
+      // field — the old single "Registration failed" never said which field was wrong.
+      const body = await response.json().catch(() => null);
+      const fieldErrors: Record<string, string> = {};
+      for (const d of (body?.detail || []) as { loc?: string[]; msg?: string; type?: string }[]) {
+        const field = d.loc?.[d.loc.length - 1];
+        if (!field || fieldErrors[field]) continue;
+        fieldErrors[field] =
+          field === 'email' ? "That email address isn't valid. Check for typos, like name@example.com."
+            : field === 'password' ? 'Use at least 8 characters.'
+              : (d.msg || 'Check this field.');
+      }
+      err.fieldErrors = fieldErrors;
+    }
+    throw err;
   }
 }
 

@@ -127,6 +127,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
     setMemberBusy(member.member_id);
     try {
       const inv = await createInvite(group.group_id, member.member_id);
+      refreshGroup();
       await Share.share({ message: inv.url });
     } catch (e) {
       showToast({ message: e instanceof ApiError ? e.message : 'Failed to create invite link', type: 'error' });
@@ -144,6 +145,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
       showToast({ message: `Invite emailed to ${email}`, type: 'success' });
       setInviteFor(null);
       setInviteEmail('');
+      refreshGroup(); // the seat now shows "Invite sent"
     } catch (e) {
       showToast({ message: e instanceof ApiError ? e.message : 'Failed to send invite', type: 'error' });
     } finally {
@@ -256,8 +258,10 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
                             </View>
                           )}
                           {pending && (
-                            <View style={[styles.pillChip, { borderColor: theme.colors.warning }]}>
-                              <Text style={[styles.pillChipText, { color: theme.colors.warning }]}>Hasn't joined yet</Text>
+                            <View style={[styles.pillChip, { borderColor: m.invite_pending ? theme.colors.warning : theme.colors.border }]}>
+                              <Text style={[styles.pillChipText, { color: m.invite_pending ? theme.colors.warning : theme.colors.textSecondary }]}>
+                                {m.invite_pending ? 'Invite sent' : 'Name only'}
+                              </Text>
                             </View>
                           )}
                         </View>

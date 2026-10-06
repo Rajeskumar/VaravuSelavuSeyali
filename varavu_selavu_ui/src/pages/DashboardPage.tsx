@@ -23,19 +23,22 @@ import { useGroupsEnabled } from '../hooks/useGroupsEnabled';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import { listBudgets, BudgetDTO } from '../api/budgets';
 import BudgetsSummaryCard from '../components/dashboard/BudgetsSummaryCard';
+import GettingStartedChecklist, { ChecklistStep } from '../components/dashboard/GettingStartedChecklist';
+import { listMyCards } from '../api/cards';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import CardCoachSummaryCard from '../components/dashboard/CardCoachSummaryCard';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { useQuickCapture } from '../context/QuickCaptureContext';
 import EmptyState from '../components/common/EmptyState';
 import { cerebro, tabularNums } from '../theme';
+import { describeChangeInsight } from '../utils/changeInsight';
+import { formatMoney as formatAbsMoney } from '../utils/money';
 
 const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
 const RECENT_FEED_LIMIT = 6;
 
 function formatMoney(n: number): string {
-  const sign = n < 0 ? '−' : '';
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return `${n < 0 ? '−' : ''}${formatAbsMoney(n)}`;
 }
 
 interface RecentItem {
@@ -63,15 +66,7 @@ function pickInsight(
   recent: RecentItem[]
 ): Insight | null {
   if (changeInsights.length > 0) {
-    const top = changeInsights[0];
-    const isNew = top.change_percent === 100;
-    const isIncrease = top.change_amount > 0;
-    const headline = isNew
-      ? `New this month: ${top.metric_name}`
-      : `${top.metric_name} ${isIncrease ? 'is up' : 'is down'} ${Math.abs(top.change_percent).toFixed(0)}% vs last period`;
-    const detail = isNew
-      ? `${formatMoney(top.current_value)} so far — nothing recorded for this in the comparison period.`
-      : `${formatMoney(top.previous_value)} → ${formatMoney(top.current_value)} (${top.change_amount > 0 ? '+' : ''}${formatMoney(top.change_amount)}).`;
+    const { headline, detail } = describeChangeInsight(changeInsights[0]);
     return { headline, detail };
   }
 
@@ -142,6 +137,23 @@ const DashboardPage: React.FC = () => {
     queryFn: () => getAnalysis({ year, scope: 'combined' }),
     enabled: !!user,
   });
+  // Like-for-like baseline for the hero's month-over-month delta: last month's first N days,
+  // where N is how far into this month we are. Comparing five days of October against all of
+  // September read as "−64% vs last month" on the 5th of every month.
+  const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1;
+  const prevMonthStart = new Date(year, month - 2, 1);
+  const prevMonthDays = new Date(year, month - 1, 0).getDate();
+  const prevSameDay = Math.min(now.getDate(), prevMonthDays);
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const prevToDateRange = {
+    start_date: ymd(prevMonthStart),
+    end_date: ymd(new Date(prevMonthStart.getFullYear(), prevMonthStart.getMonth(), prevSameDay)),
+  };
+  const prevToDateQuery = useQuery({
+    queryKey: ['analysis', user, 'range', prevToDateRange.start_date, prevToDateRange.end_date, 'combined'],
+    queryFn: () => getAnalysis({ ...prevToDateRange, scope: 'combined' }),
+    enabled: !!user && isCurrentMonth,
+  });
   // TS-DES-111, scope reused by TS-DES-203's InsightOfTheDay: ranked change insights for the
   // current month, same scope as the main fetch.
   const changeInsightsQuery = useQuery({
@@ -169,6 +181,12 @@ const DashboardPage: React.FC = () => {
     queryKey: ['budgets'],
     queryFn: () => listBudgets(),
     enabled: budgetsEnabled,
+  });
+
+  const myCardsQuery = useQuery({
+    queryKey: ['cards-mine'],
+    queryFn: listMyCards,
+    enabled: cardCoachEnabled,
   });
 
   React.useEffect(() => onExpenseChanged(() => {
@@ -232,6 +250,21 @@ const DashboardPage: React.FC = () => {
     .sort((a, b) => parseAppDate(b.date).getTime() - parseAppDate(a.date).getTime())
     .slice(0, RECENT_FEED_LIMIT);
 
+  // First-run checklist: only for a new account (few expenses yet) and only once every query it
+  // reads has loaded, so it doesn't flash for an established user. Disabled features are omitted.
+  const checklistReady = expensesQuery.isSuccess
+    && (!groupsEnabled || groupsQuery.isSuccess)
+    && (!budgetsEnabled || budgetsQuery.isSuccess)
+    && (!cardCoachEnabled || myCardsQuery.isSuccess);
+  const isNewAccount = (expensesQuery.data?.items?.length ?? 0) + groupExpenses.length < 10;
+  const checklistSteps: ChecklistStep[] = checklistReady && isNewAccount ? [
+    { key: 'expense', label: 'Log your first expense', hint: 'Type it, or scan a receipt.', done: recent.length > 0, onClick: () => openQuickCapture() },
+    ...(groupsEnabled ? [{ key: 'group', label: 'Split with a group', hint: 'Roommates, trips, couples — see who owes whom.', done: groups.length > 0, onClick: () => navigate('/groups') }] : []),
+    ...(budgetsEnabled ? [{ key: 'budget', label: 'Set a budget', hint: 'Get an early warning before you overspend.', done: budgets.length > 0, onClick: () => navigate('/analysis?tab=budgets') }] : []),
+    ...(cardCoachEnabled ? [{ key: 'card', label: 'Add a credit card', hint: 'Card Coach shows which card to use where. No card numbers.', done: (myCardsQuery.data?.length ?? 0) > 0, onClick: () => navigate('/analysis?tab=cards') }] : []),
+  ] : [];
+  const checklistVisible = checklistSteps.some((s) => !s.done);
+
   const periodLabel = now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
   const groupSummaries = data.group_summaries || [];
   const personalTotal = data.spend_breakdown ? data.spend_breakdown.personal : data.total_expenses;
@@ -249,8 +282,10 @@ const DashboardPage: React.FC = () => {
   const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
   const thisMonthTrend = yearTrend.find(m => m.month === thisMonthKey)?.total;
   const prevMonthTrend = yearTrend.find(m => m.month === prevMonthKey)?.total;
-  const momDelta = (thisMonthTrend != null && prevMonthTrend != null && prevMonthTrend > 0)
-    ? { amount: thisMonthTrend - prevMonthTrend, percent: ((thisMonthTrend - prevMonthTrend) / prevMonthTrend) * 100 }
+  // Mid-month, compare against the same days of last month (see prevToDateQuery).
+  const prevBaseline = isCurrentMonth ? prevToDateQuery.data?.total_expenses : prevMonthTrend;
+  const momDelta = (thisMonthTrend != null && prevBaseline != null && prevBaseline > 0)
+    ? { amount: thisMonthTrend - prevBaseline, percent: ((thisMonthTrend - prevBaseline) / prevBaseline) * 100 }
     : null;
 
   // TS-DES-203: picks the single most notable insight to show — a ranked backend change
@@ -300,7 +335,11 @@ const DashboardPage: React.FC = () => {
         </motion.div>
       )}
 
-      {budgetsEnabled && <BudgetsSummaryCard budgets={budgets} />}
+      {checklistSteps.length > 0 && <GettingStartedChecklist steps={checklistSteps} />}
+
+      {budgetsEnabled && (
+        <BudgetsSummaryCard budgets={budgets} hasSpending={recent.length > 0} hidePrompt={checklistVisible} />
+      )}
       {cardCoachEnabled && <CardCoachSummaryCard />}
 
       {/* DesktopDashboard.jsx puts "Where it went" and "My Groups" side by side

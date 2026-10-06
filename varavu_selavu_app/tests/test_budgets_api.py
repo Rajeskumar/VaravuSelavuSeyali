@@ -283,3 +283,51 @@ def test_never_accepts_client_supplied_user_id(test_client, db_session):
     from varavu_selavu_service.db.models import Budget
     row = db_session.query(Budget).filter(Budget.id == uuid.UUID(res.json()["id"])).first()
     assert row.user_email == "test@user.com"
+
+
+def test_projection_carries_rent_at_face_value_and_holds_pace_early():
+    """Readiness review: $1,200 rent on the 1st projected an $8,696 month. Fixed bills are not
+    extrapolated, and pace can't flag at_risk/over_pace in the first few days."""
+    from varavu_selavu_service.services.budget_service import BudgetService
+
+    svc = BudgetService.__new__(BudgetService)
+    analysis = {
+        "total_expenses": 1240.0,
+        "category_totals": [{"category": "Rent", "total": 1200.0}, {"category": "Dining out", "total": 40.0}],
+        "category_expense_details": {
+            "Rent": [{"description": "Rent", "cost": 1200.0}],
+            "Dining out": [{"description": "Dinner", "cost": 40.0}],
+        },
+    }
+    svc._analysis_for = lambda *a, **k: analysis
+    svc._committed_for = lambda *a, **k: 0.0
+
+    class _Recurring:
+        @staticmethod
+        def list_templates(_user):
+            return []
+
+    svc.recurring_service = _Recurring()
+
+    class _B:
+        user_email = "u@example.com"
+        scope = "personal"
+        target_type = "overall"
+        category = None
+        amount = 3000
+
+    start, end = date(2026, 10, 1), date(2026, 10, 31)
+    # Day 10: rent stays 1200, the $40 variable spend extrapolates to $124 -> 1324, not 3844.
+    fig = svc._live_figures(_B(), start, end, date(2026, 10, 10))
+    assert fig["projected"] == 1324.0
+    assert fig["status"] == "on_track"
+
+    # Day 2 with a big variable spend: pace would say over_pace, but it's too early to tell.
+    analysis["category_totals"][1]["total"] = 400.0
+    analysis["category_expense_details"]["Dining out"][0]["cost"] = 400.0
+    analysis["total_expenses"] = 1600.0
+    fig = svc._live_figures(_B(), start, end, date(2026, 10, 2))
+    assert fig["status"] == "on_track"
+    fig = svc._live_figures(_B(), start, end, date(2026, 10, 6))
+    assert fig["projected"] == 3266.67  # 1200 + 400 * 31/6
+    assert fig["status"] == "at_risk"

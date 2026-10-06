@@ -38,6 +38,7 @@ import {
   listExpenseComments,
   settleExpenseShare,
 } from '../api/groups';
+import { formatCurrency } from '../utils/currencyMath';
 
 interface Props {
   visible: boolean;
@@ -64,7 +65,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 function formatFieldValue(field: string, value: any): string {
   if (value === null || value === undefined) return '—';
-  if (field === 'amount') return `$${Number(value).toFixed(2)}`;
+  if (field === 'amount') return `${formatCurrency(Number(value))}`;
   return String(value);
 }
 
@@ -190,12 +191,12 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
                 {expense.category} · {expense.date}
               </Text>
               <Text style={[styles.amountText, { color: theme.colors.text }]}>
-                ${expense.cost.toFixed(2)} {expense.currency && expense.currency !== 'USD' ? expense.currency : ''}
+                {formatCurrency(expense.cost)} {expense.currency && expense.currency !== 'USD' ? expense.currency : ''}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>My expense</Text>
-              <Text style={[styles.amountText, { color: theme.colors.text }]}>${expense.my_share.toFixed(2)}</Text>
+              <Text style={[styles.amountText, { color: theme.colors.text }]}>{formatCurrency(expense.my_share)}</Text>
             </View>
           </View>
 
@@ -213,7 +214,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
 
           {canSettle && (
             <CustomButton
-              title={settling ? 'Settling...' : `Settle my $${expense.my_share.toFixed(2)} share`}
+              title={settling ? 'Settling...' : `Settle my ${formatCurrency(expense.my_share)} share`}
               onPress={handleSettleMyShare}
               disabled={settling}
               variant="tinted"
@@ -235,7 +236,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
                         {it.item_name}
                       </Text>
                       <Text style={{ color: theme.colors.text, fontFamily: 'InstrumentSans-SemiBold', fontSize: 14 }}>
-                        ${it.line_total.toFixed(2)}
+                        {formatCurrency(it.line_total)}
                       </Text>
                     </View>
                   ))}

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getCardCoach, CardCoachCategoryDTO } from '../../api/cards';
 import { cerebro } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 /** The single category with the biggest actionable "switch to a card you already hold" gap, or
  * null if none exists (either no gaps, or the only gaps need a card not in the wallet). Mirrors
@@ -57,8 +58,8 @@ const CardCoachSummaryCard: React.FC = () => {
 
   const switchRow = biggestSwitchOpportunity(coach.by_category);
   const headline = switchRow
-    ? `Switch to ${switchRow.optimal_in_wallet_card} for ${switchRow.category} to earn $${(switchRow.optimal_in_wallet_earned_estimate! - switchRow.actual_earned_estimate!).toFixed(2)} more this month`
-    : `You left an estimated $${coach.total_estimated_gap.toFixed(2)} in rewards on the table this month`;
+    ? `Switch to ${switchRow.optimal_in_wallet_card} for ${switchRow.category} to earn ${formatMoney((switchRow.optimal_in_wallet_earned_estimate! - switchRow.actual_earned_estimate!))} more this month`
+    : `You left an estimated ${formatMoney(coach.total_estimated_gap)} in rewards on the table this month`;
 
   const goToCards = () => navigate('/analysis?tab=cards');
   const askAboutIt = (e: React.MouseEvent) => {

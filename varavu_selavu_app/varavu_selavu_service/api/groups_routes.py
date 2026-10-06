@@ -28,6 +28,7 @@ from varavu_selavu_service.models.api_models import (
     GroupExpenseCreatedResponse,
     GroupExpenseListResponse,
     GroupExpenseRequest,
+    GroupExpenseUpdateRequest,
     GroupExpenseWithItemsRequest,
     GroupNotificationPreferenceDTO,
     GroupSummary,
@@ -599,7 +600,7 @@ def list_group_expenses(
 def update_group_expense(
     group_id: str,
     expense_id: str,
-    data: GroupExpenseRequest,
+    data: GroupExpenseUpdateRequest,
     background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
@@ -645,9 +646,10 @@ def update_group_expense(
         category=data.category,
         amount=data.amount,
         merchant_name=data.merchant_name,
-        payers=[p.model_dump() for p in data.payers],
-        split_type=data.split.type,
-        split_entries=[e.model_dump() for e in data.split.entries],
+        # None (both omitted) keeps the stored payers/split; see GroupExpenseUpdateRequest.
+        payers=[p.model_dump() for p in data.payers] if data.payers is not None else None,
+        split_type=data.split.type if data.split is not None else None,
+        split_entries=[e.model_dump() for e in data.split.entries] if data.split is not None else None,
         currency=data.currency,
         card_id=data.card_id,
         # Omitted leaves the stored note alone; see GroupExpenseRequest.notes.

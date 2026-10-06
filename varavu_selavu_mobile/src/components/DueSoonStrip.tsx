@@ -3,13 +3,12 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { RecurringTemplateDTO } from '../api/recurring';
+import { formatCurrency } from '../utils/currencyMath';
 
 interface Props {
   templates: RecurringTemplateDTO[];
   onPress: () => void;
 }
-
-const formatCurrency = (n: number) => `$${n.toFixed(2)}`;
 
 /** Next occurrence of `dayOfMonth` on/after `today`, wrapping to next month if it already passed. */
 function nextDueDate(dayOfMonth: number, today: Date): Date {

@@ -19,6 +19,32 @@ export function recentMonths(now: Date, count = 12): MonthOption[] {
 
 const money = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+const GROUP_SUFFIX = '(includes your share of group expenses)';
+
+/**
+ * Plain-language headline/detail per insight type — same wording as the web app's
+ * describeChangeInsight. A one-off outlier used to read "Best Buy is up 4076%", and the backend's
+ * internal label ("Spend Decreased at X (includes …)") leaked into headlines.
+ */
+export function describeChangeInsight(c: ChangeInsight): { kind: 'new' | 'up' | 'down' | 'outlier'; headline: string; detail: string } {
+  const name = (c.entity_name || c.metric_name).trim();
+  const pct = Math.round(Math.abs(c.change_percent));
+  const groupNote = c.metric_name.includes(GROUP_SUFFIX) ? ' Includes your share of group expenses.' : '';
+  if (c.time_scope === 'transaction') {
+    return { kind: 'outlier', headline: `Unusually large: ${name}, ${money(c.current_value)}`, detail: `Your typical expense is about ${money(c.previous_value)}.` };
+  }
+  if (c.previous_value === 0) {
+    return { kind: 'new', headline: `New: ${name}, ${money(c.current_value)}`, detail: `Nothing here in the comparison period.${groupNote}` };
+  }
+  const up = c.change_amount > 0;
+  const subject = c.time_scope === 'item' ? `${name} price` : c.time_scope === 'recurring' ? `${name} bill` : `${name} spending`;
+  return {
+    kind: up ? 'up' : 'down',
+    headline: `${subject} is ${up ? 'up' : 'down'} ${pct}%`,
+    detail: `${money(c.previous_value)} → ${money(c.current_value)}${c.time_scope === 'item' ? ' average price' : ''}.${groupNote}`,
+  };
+}
+
 export type ChangeTone = 'error' | 'warning' | 'success' | 'accent';
 
 export interface ChangeRowModel {
@@ -37,6 +63,10 @@ export interface ChangeRowModel {
  * and a link to the item/merchant behind it when there is one.
  */
 export function changeRow(c: ChangeInsight, prevMonthLabel: string): ChangeRowModel {
+  if (c.time_scope === 'transaction') {
+    const text = describeChangeInsight(c);
+    return { title: text.headline, meta: text.detail, delta: money(c.current_value).replace(/\.00$/, ''), tone: 'warning' };
+  }
   if (c.metric_name === 'New Merchant Detected') {
     return {
       title: `New merchant · ${c.entity_name ?? 'unknown'}`,
@@ -59,7 +89,7 @@ export function changeRow(c: ChangeInsight, prevMonthLabel: string): ChangeRowMo
     if (c.time_scope === 'merchant') link = { kind: 'merchant', name: c.entity_name };
     else if (c.metric_name.startsWith('Price increase for')) link = { kind: 'item', name: c.entity_name };
   }
-  return { title: c.metric_name, meta, delta: `${up ? '+' : '−'}${pct.toFixed(0)}%`, tone, link };
+  return { title: describeChangeInsight(c).headline.replace(/ is (up|down) \d+%$/, ''), meta, delta: `${up ? '+' : '−'}${pct.toFixed(0)}%`, tone, link };
 }
 
 export interface PricePoint { date: string; unit_price: number }

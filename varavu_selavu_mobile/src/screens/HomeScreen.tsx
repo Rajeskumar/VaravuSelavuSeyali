@@ -26,7 +26,7 @@ import AmbientBackground from '../components/AmbientBackground';
 import IconButton from '../components/IconButton';
 import { onExpenseChanged } from '../utils/expenseEvents';
 import { computeNetWithPeople, AnalysisGroupSummary } from '../utils/dashboardTotals';
-import { lastMonthsTrend, barFractions, monthOverMonthPercent } from '../utils/spendTrend';
+import { lastMonthsTrend, barFractions, percentChange, previousMonthToDateRange } from '../utils/spendTrend';
 import { shortDate } from '../utils/expenseInsights';
 import { AddExpenseContext } from './AddExpenseScreen';
 
@@ -58,6 +58,14 @@ export default function HomeScreen() {
   const { data: monthlyData, isLoading: loading } = useQuery({
     queryKey: ['analysis', userEmail, now.getFullYear(), now.getMonth() + 1, 'combined'],
     queryFn: () => getAnalysis(accessToken!, userEmail!, { year: now.getFullYear(), month: now.getMonth() + 1, scope: 'combined' }),
+    enabled: !!accessToken && !!userEmail,
+  });
+
+  // Same days of last month, so the hero's delta is like-for-like mid-month.
+  const prevRange = useMemo(() => previousMonthToDateRange(now), [now]);
+  const { data: prevToDate } = useQuery({
+    queryKey: ['analysis', userEmail, 'range', prevRange.start_date, prevRange.end_date, 'combined'],
+    queryFn: () => getAnalysis(accessToken!, userEmail!, { ...prevRange, scope: 'combined' }),
     enabled: !!accessToken && !!userEmail,
   });
 
@@ -112,7 +120,7 @@ export default function HomeScreen() {
 
   const trend = useMemo(() => lastMonthsTrend(monthlyData?.monthly_trend, now), [monthlyData, now]);
   const fractions = useMemo(() => barFractions(trend), [trend]);
-  const delta = monthOverMonthPercent(trend);
+  const delta = percentChange(total, prevToDate?.total_expenses);
 
   const [whole, cents] = formatCurrency(total).split('.');
   const dateEyebrow = `${now.toLocaleString('en-US', { weekday: 'long' })} · ${now.getDate()} ${now.toLocaleString('en-US', { month: 'short' })}`;

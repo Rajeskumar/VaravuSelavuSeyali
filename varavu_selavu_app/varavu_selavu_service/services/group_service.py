@@ -98,14 +98,32 @@ class GroupService:
     # DTO builders
     # ------------------------------------------------------------------
 
-    def _member_dto(self, member: GroupMember) -> Dict:
+    def _member_dto(self, member: GroupMember, invite_pending: bool = False) -> Dict:
         return {
             "member_id": str(member.id),
             "display_name": member.display_name,
             "role": member.role,
             "status": member.status,
             "user_email": member.user_email,
+            # True only for a seat with an unexpired, unaccepted email invite. Name-only seats are
+            # also status="invited", which made every one of them read "pending" in the UI.
+            "invite_pending": invite_pending,
         }
+
+    def _pending_invite_member_ids(self, members: List[GroupMember]) -> set:
+        seat_ids = [m.id for m in members if m.status == "invited" and not m.user_email]
+        if not seat_ids:
+            return set()
+        rows = (
+            self.db.query(GroupInvitation.member_id)
+            .filter(
+                GroupInvitation.member_id.in_(seat_ids),
+                GroupInvitation.accepted_at.is_(None),
+                GroupInvitation.expires_at > datetime.now(timezone.utc),
+            )
+            .all()
+        )
+        return {r[0] for r in rows}
 
     def _group_summary(self, group: Group, member_count: int, member_id: uuid.UUID) -> Dict:
         from varavu_selavu_service.services.balance_service import BalanceService  # local import: avoids a circular import (BalanceService composes GroupService)
@@ -123,6 +141,7 @@ class GroupService:
         }
 
     def _group_detail(self, group: Group, members: List[GroupMember]) -> Dict:
+        pending = self._pending_invite_member_ids(members)
         return {
             "group_id": str(group.id),
             "name": group.name,
@@ -134,7 +153,7 @@ class GroupService:
             "archived_at": group.archived_at,
             "deleted_at": group.deleted_at,
             "status": group.status,
-            "members": [self._member_dto(m) for m in members],
+            "members": [self._member_dto(m, m.id in pending) for m in members],
         }
 
     def require_verified_email(self, email: str) -> None:
@@ -176,6 +195,10 @@ class GroupService:
             group_type=group_type,
             cover=cover,
             currency=currency,
+            # New groups start simplified: the raw pairwise ledger shows debts that don't match
+            # each member's net balance (e.g. "Sam owes you $1,879" while Sam is owed overall),
+            # which reads as a bug to most people. Existing groups keep their setting.
+            simplify_debts=True,
             created_by=creator_email,
         )
         self.db.add(group)

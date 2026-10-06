@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, ExpenseItem, ExpenseItemSplit, Group, GroupMember
 from varavu_selavu_service.services.group_service import GroupService
-from varavu_selavu_service.services.split_engine import SplitError, resolve_split, validate_payers
+from varavu_selavu_service.services.split_engine import SplitError, SplitResult, resolve_split, validate_payers
 from varavu_selavu_service.services.item_split_engine import resolve_itemized_split
 from varavu_selavu_service.services.tag_service import get_tags_for_expenses
 from varavu_selavu_service.services.card_service import get_card_refs_for_expenses
@@ -223,13 +223,15 @@ class GroupExpenseService:
         category: str,
         amount: float,
         merchant_name: Optional[str],
-        payers: List[dict],
-        split_type: str,
-        split_entries: List[dict],
+        payers: Optional[List[dict]],
+        split_type: Optional[str],
+        split_entries: Optional[List[dict]],
         currency: Optional[str] = None,
         card_id: Optional[str] = None,
         notes=NOTES_UNCHANGED,
     ) -> Dict:
+        """`payers`/`split_type`/`split_entries` all None keeps the stored payers and split,
+        rescaled to the new amount (see `_carry_over_split`)."""
         # Any group member may edit any group expense (spec §5.2, decision §17.2).
         self.group_service.require_membership(group_id, actor_email)
         gid = _to_uuid(group_id)
@@ -240,7 +242,10 @@ class GroupExpenseService:
         if expense is None:
             raise HTTPException(status_code=404, detail="Group expense not found")
 
-        split_results = self._validate_and_resolve(gid, amount, payers, split_type, split_entries)
+        if payers is None:
+            payers, split_type, split_results = self._carry_over_split(expense, amount)
+        else:
+            split_results = self._validate_and_resolve(gid, amount, payers, split_type, split_entries)
         expense_currency, fx_rate = self._resolve_currency(gid, currency)
 
         # Snapshot pre-edit values so the activity log (and TS-GRP-127's edit
@@ -510,7 +515,8 @@ class GroupExpenseService:
                 user_email=actor_email,
                 line_no=item["line_no"],
                 item_name=item["item_name"],
-                normalized_name=item.get("normalized_name"),
+                # Same fallback as PostgresRepo.append_items: item analytics key on this.
+                normalized_name=(item.get("normalized_name") or "").strip() or item["item_name"],
                 category_id=item.get("category_id"),
                 quantity=item.get("quantity"),
                 unit=item.get("unit"),
@@ -578,6 +584,54 @@ class GroupExpenseService:
             "tax": sum(i["tax"] for i in items),
             "discount": sum(i["discount"] for i in items),
         }
+
+    def _carry_over_split(self, expense: Expense, new_amount) -> tuple:
+        """Keeps an edited expense's payers and split when the client didn't send new ones.
+        Same amount: everything is reused exactly. New amount: payers are rescaled
+        proportionally; equal/percentage/shares splits are re-resolved from their stored basis
+        (so equal stays cent-exact across the same members), and any other split type is
+        rescaled proportionally with the rounding remainder on the largest share."""
+        old_amount = Decimal(str(expense.amount or 0))
+        new_amount = Decimal(str(new_amount)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        existing_payers = self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == expense.id).all()
+        existing_splits = self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense.id).all()
+        split_type = expense.split_type or "equal"
+        if not existing_payers or not existing_splits:
+            raise HTTPException(status_code=400, detail="This expense has no split to keep; send payers and split")
+
+        if new_amount == old_amount:
+            payers = [{"member_id": str(p.member_id), "amount_paid": Decimal(str(p.amount_paid))} for p in existing_payers]
+            results = [
+                SplitResult(member_id=str(s.member_id), amount_owed=Decimal(str(s.amount_owed)),
+                            basis_type=s.basis_type, basis_value=s.basis_value)
+                for s in existing_splits
+            ]
+            return payers, split_type, results
+
+        payers = self._rescale_payers(existing_payers, old_amount, new_amount)
+        if split_type in ("equal", "percentage", "shares") and all(
+            split_type == "equal" or s.basis_value is not None for s in existing_splits
+        ):
+            entries = [{"member_id": str(s.member_id), "value": s.basis_value} for s in existing_splits]
+            try:
+                return payers, split_type, resolve_split(new_amount, split_type, entries)
+            except SplitError as e:
+                raise HTTPException(status_code=400, detail={"message": str(e), **e.details})
+
+        total_cents = int(new_amount * 100)
+        if old_amount > 0:
+            raw = [(s, Decimal(str(s.amount_owed)) / old_amount * new_amount) for s in existing_splits]
+        else:
+            raw = [(s, new_amount / len(existing_splits)) for s in existing_splits]
+        cents = [int((amt * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) for _, amt in raw]
+        biggest = max(range(len(cents)), key=lambda i: cents[i])
+        cents[biggest] += total_cents - sum(cents)
+        results = [
+            SplitResult(member_id=str(s.member_id), amount_owed=Decimal(c) / 100,
+                        basis_type="exact", basis_value=Decimal(c) / 100)
+            for (s, _), c in zip(raw, cents)
+        ]
+        return payers, (split_type if split_type == "itemized" else "exact"), results
 
     @staticmethod
     def _rescale_payers(existing_payers: List[ExpensePayer], old_amount: Decimal, new_amount: Decimal) -> List[Dict]:

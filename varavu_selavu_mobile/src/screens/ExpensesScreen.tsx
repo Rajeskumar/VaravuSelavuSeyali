@@ -311,6 +311,11 @@ export default function ExpensesScreen() {
 
     const saveEdit = async () => {
         if (!editingExpense || !accessToken || !userEmail) return;
+        const amountValue = parseFloat(editAmount);
+        if (!Number.isFinite(amountValue) || amountValue <= 0) {
+            showToast({ message: 'Enter an amount greater than 0', type: 'warning' });
+            return;
+        }
         try {
             if (editItemsLoaded && editItems.length > 0) {
                 await updateExpenseItems(editingExpense.row_id, {

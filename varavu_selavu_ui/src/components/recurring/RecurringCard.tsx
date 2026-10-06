@@ -7,6 +7,7 @@ import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { RecurringTemplateDTO } from '../../api/recurring';
 import { typeScale } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 interface RecurringCardProps {
   item: RecurringTemplateDTO;
@@ -87,7 +88,7 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
             whiteSpace: 'nowrap'
           }}
         >
-          ${item.default_cost.toFixed(2)}/mo
+          {formatMoney(item.default_cost)}/mo
         </Typography>
       </Box>
       

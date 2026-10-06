@@ -4,6 +4,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, inkOnPastel } from '../theme';
 import { MemberDTO, GroupExpenseItemEntry, SplitSuggestionDTO, suggestItemAssignment } from '../api/groups';
 import { memberColor } from './BalanceRow';
+import { formatCurrency } from '../utils/currencyMath';
 
 interface Props {
   items: GroupExpenseItemEntry[];
@@ -98,7 +99,7 @@ export default function ItemSplitBoard({
           >
             <View style={styles.itemHeader}>
               <Text style={styles.itemName} numberOfLines={1}>{item.item_name}</Text>
-              <Text style={styles.itemTotal}>${item.line_total.toFixed(2)}</Text>
+              <Text style={styles.itemTotal}>{formatCurrency(item.line_total)}</Text>
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.memberList}>

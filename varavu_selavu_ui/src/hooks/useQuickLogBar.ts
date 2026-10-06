@@ -5,6 +5,7 @@ import { listGroups } from '../api/groups';
 import { useGroupsEnabled } from './useGroupsEnabled';
 import { useLogExpense } from './useLogExpense';
 import { useAsk } from '../context/AskContext';
+import { formatMoney } from '../utils/money';
 
 export interface QuickLogBarState {
   text: string;
@@ -16,6 +17,8 @@ export interface QuickLogBarState {
   isQuestion: boolean;
   submitting: boolean;
   error: string | null;
+  /** Short confirmation of the last saved expense, cleared after a few seconds or on typing. */
+  confirmation: string | null;
   submit: () => Promise<void>;
 }
 
@@ -39,6 +42,12 @@ export function useQuickLogBar(): QuickLogBarState {
   const [text, setText] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [confirmation, setConfirmation] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!confirmation) return undefined;
+    const t = setTimeout(() => setConfirmation(null), 4000);
+    return () => clearTimeout(t);
+  }, [confirmation]);
 
   // Shares DashboardPage's ['groups', false] cache, so a group created mid-session (GroupsPage
   // invalidates ['groups']) is matchable here right away. This used to be a one-shot fetch on
@@ -54,6 +63,7 @@ export function useQuickLogBar(): QuickLogBarState {
   const updateText = (next: string) => {
     setText(next);
     setError(null);
+    setConfirmation(null);
   };
 
   const parsed = parseQuickLog(text, groups.map((g) => ({ group_id: g.group_id, name: g.name })));
@@ -94,6 +104,10 @@ export function useQuickLogBar(): QuickLogBarState {
         });
       }
       setText('');
+      // Saving used to give no sign it worked: the bar just emptied.
+      setConfirmation(
+        `Logged ${formatMoney(parsed.amount)} · ${parsed.description}${matchedGroup ? ` · ${matchedGroup.name}` : ''}`,
+      );
     } catch {
       setError('Failed to log expense. Please try again.');
     } finally {
@@ -101,5 +115,5 @@ export function useQuickLogBar(): QuickLogBarState {
     }
   };
 
-  return { text, setText: updateText, parsed, memberCount, isQuestion, submitting, error, submit };
+  return { text, setText: updateText, parsed, memberCount, isQuestion, submitting, error, confirmation, submit };
 }

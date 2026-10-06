@@ -249,6 +249,9 @@ const AppContent: React.FC = () => {
             {user && (
               <TextField
                 size="small"
+                // fullWidth: without it the input only filled ~225px of its 560px slot, so the
+                // example text in the placeholder was cut off.
+                fullWidth
                 value={quickLog.text}
                 onChange={(e) => quickLog.setText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') quickLog.submit(); }}
@@ -337,6 +340,13 @@ const AppContent: React.FC = () => {
         <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'center', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
           <Typography variant="caption" color="text.secondary">
             Press Enter to ask the AI
+          </Typography>
+        </Box>
+      )}
+      {user && quickLog.confirmation && (
+        <Box sx={{ display: { xs: 'none', md: 'flex' }, justifyContent: 'center', py: 0.75, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 600 }} role="status">
+            ✓ {quickLog.confirmation}
           </Typography>
         </Box>
       )}

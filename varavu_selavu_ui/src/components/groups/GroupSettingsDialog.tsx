@@ -172,6 +172,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
     setMemberBusy(member.member_id);
     try {
       const inv = await createInvite(group.group_id, member.member_id);
+      refreshGroup();
       await navigator.clipboard.writeText(inv.url);
       setToast({ open: true, message: 'Invite link copied — anyone with it can take this seat', severity: 'success' });
     } catch (e) {
@@ -190,6 +191,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
       setToast({ open: true, message: `Invite emailed to ${email}`, severity: 'success' });
       setInviteFor(null);
       setInviteEmail('');
+      refreshGroup(); // the seat now shows "Invite sent"
     } catch (e) {
       setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to send invite', severity: 'error' });
     } finally {
@@ -258,7 +260,9 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                       </Typography>
                       <Box sx={{ display: 'flex', gap: 0.5, mt: 0.25 }}>
                         {m.role === 'admin' && <Chip label="Admin" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />}
-                        {pending && <Chip label="Hasn't joined yet" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />}
+                        {pending && (m.invite_pending
+                          ? <Chip label="Invite sent" size="small" color="warning" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+                          : <Chip label="Name only" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />)}
                       </Box>
                     </Box>
                     <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>

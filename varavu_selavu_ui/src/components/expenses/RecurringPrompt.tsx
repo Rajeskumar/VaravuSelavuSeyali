@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getRecurringDue, confirmRecurring, DueOccurrenceDTO } from '../../api/recurring';
 import { typeScale } from '../../theme';
 import { notifyExpenseChanged } from '../../utils/expenseEvents';
+import { formatMoney } from '../../utils/money';
 
 interface ItemState {
   selected: boolean;
@@ -159,7 +160,7 @@ const RecurringPrompt: React.FC = () => {
                 
                 {done ? (
                    <Typography sx={{ ...typeScale.amount, color: 'text.primary', mr: 2 }}>
-                     ${(st?.cost ?? 0).toFixed(2)}
+                     {formatMoney(st?.cost ?? 0)}
                    </Typography>
                 ) : (
                   <TextField

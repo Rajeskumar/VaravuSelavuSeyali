@@ -132,7 +132,12 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 700, fontSize: 14 }} noWrap>{person.counterparty_display_name}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {person.groups.length} group{person.groups.length === 1 ? '' : 's'}
+                    {/* People without an account can't be matched across groups (two "Sam"s may be
+                        different people), so each shows separately — name the group so same-named
+                        rows are distinguishable, and say how to merge them. */}
+                    {person.counterparty_email
+                      ? `${person.groups.length} group${person.groups.length === 1 ? '' : 's'}`
+                      : `${person.groups.map((g) => g.name).join(', ')} · invite to combine across groups`}
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>

@@ -171,10 +171,12 @@ const PaidBySplitSummary: React.FC<Props> = ({
                 sx: {
                   position: 'fixed',
                   top: '50%',
-                  left: 'calc(50% + 240px)',
+                  // Clamped so the panel never runs off the right edge (it clipped the split-type
+                  // tabs at 1280px); 440 wide so Exact/Percentage inputs show their full value.
+                  left: 'min(calc(50% + 240px), calc(100vw - 456px))',
                   transform: 'translateY(-50%)',
                   m: 0,
-                  width: 360,
+                  width: 440,
                   maxWidth: 'calc(100vw - 32px)',
                   maxHeight: '80vh',
                 },

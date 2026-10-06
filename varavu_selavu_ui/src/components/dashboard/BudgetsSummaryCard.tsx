@@ -12,6 +12,10 @@ const DISMISSED_KEY = 'vs_budgets_prompt_dismissed_v1';
 
 interface BudgetsSummaryCardProps {
   budgets: BudgetDTO[];
+  /** The "Set a budget" prompt waits for some spending — before that there's nothing to budget against. */
+  hasSpending?: boolean;
+  /** The dashboard's getting-started checklist already carries this step. */
+  hidePrompt?: boolean;
 }
 
 const cardSx = {
@@ -30,7 +34,7 @@ const cardSx = {
 
 /** PRD §6.1 — a compact card ("3 of 5 on track · 1 at risk") linking to the Budgets tab, or a
  * single dismissible "Set a budget" prompt for a user with none yet (no clutter otherwise). */
-const BudgetsSummaryCard: React.FC<BudgetsSummaryCardProps> = ({ budgets }) => {
+const BudgetsSummaryCard: React.FC<BudgetsSummaryCardProps> = ({ budgets, hasSpending = true, hidePrompt = false }) => {
   const navigate = useNavigate();
   const [dismissed, setDismissed] = React.useState(() => {
     try {
@@ -43,7 +47,7 @@ const BudgetsSummaryCard: React.FC<BudgetsSummaryCardProps> = ({ budgets }) => {
   const goToBudgets = () => navigate('/analysis?tab=budgets');
 
   if (budgets.length === 0) {
-    if (dismissed) return null;
+    if (dismissed || !hasSpending || hidePrompt) return null;
     return (
       <Box sx={cardSx}>
         <Box sx={{ cursor: 'pointer', flex: 1, minWidth: 0 }} onClick={goToBudgets}>

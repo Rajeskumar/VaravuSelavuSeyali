@@ -312,3 +312,23 @@ eas build --profile production --platform all
 ## License
 
 This project is licensed under the MIT License.
+
+## Group push notifications
+
+The backend pushes to every other registered member of a group when someone adds, edits or
+deletes an expense, records a settlement, comments, or joins (muted groups are skipped). The
+app only receives them once these are in place:
+
+1. **EAS project:** run `eas init` here so `app.json` gets `extra.eas.projectId`. Without it the
+   app logs "Push notifications are off: no EAS projectId" and never registers a device.
+2. **iOS:** a paid Apple Developer account, a real bundle identifier (not `com.anonymous.*`) and
+   an APNs key uploaded with `eas credentials`. Build with `TRACKSPENSE_ENABLE_PUSH=1`;
+   otherwise `withDisablePush.js` strips the push entitlement (needed for free personal-team
+   builds).
+3. **Android:** a Firebase project, `google-services.json` (set `android.googleServicesFile`) and
+   the FCM V1 service-account key uploaded to EAS.
+4. **A physical device:** simulators and emulators can't receive Expo pushes.
+5. Optionally set `EXPO_ACCESS_TOKEN` on the backend if Expo push security is enabled.
+
+Only members who have their own account, have signed in on the mobile app and allowed
+notifications get pushes; name-only placeholder members can't.

@@ -599,6 +599,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 slotProps={{ input: { disableUnderline: true } }}
                 inputProps={{
                   'data-testid': 'quick-capture-amount',
+                  // The visible "AMOUNT" caption isn't a <label>, and a placeholder isn't a name.
+                  'aria-label': 'Amount',
                   style: {
                     textAlign: 'left',
                     fontFamily: "'Bricolage Grotesque', sans-serif",

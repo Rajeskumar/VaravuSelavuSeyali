@@ -14,6 +14,7 @@ import CustomButton from './CustomButton';
 import { memberColor, initialsFromName } from './BalanceRow';
 import { ScannedItem } from './ScannedItemsCard';
 import { Assignments, effectiveAssignees } from '../utils/receiptSplit';
+import { formatCurrency } from '../utils/currencyMath';
 
 export interface ItemsSheetPerson { id: string; name: string }
 
@@ -36,7 +37,7 @@ interface Props {
   onEditItems: () => void;
 }
 
-const money = (n: number) => `$${Math.abs(n).toFixed(2)}`;
+const money = (n: number) => `${formatCurrency(Math.abs(n))}`;
 
 function qtyLine(it: ScannedItem): string {
   if (it.quantity != null && it.unit_price != null) return `${it.quantity} × ${money(it.unit_price)}`;

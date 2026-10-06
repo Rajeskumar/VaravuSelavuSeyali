@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import CheckIcon from '@mui/icons-material/CheckRounded';
 import { typeScale } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 interface StoreComparison {
   store_name: string;
@@ -43,7 +44,7 @@ export const StoreComparisonChips: React.FC<StoreComparisonChipsProps> = ({ stor
               {s.store_name}
             </Typography>
             <Typography sx={{ ...typeScale.amount, fontSize: 13, color: 'text.secondary' }}>
-              avg ${(s.avg_price ?? 0).toFixed(2)}
+              avg {formatMoney(s.avg_price ?? 0)}
             </Typography>
           </Box>
         );

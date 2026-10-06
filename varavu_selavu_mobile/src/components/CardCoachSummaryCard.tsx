@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { getCardCoach, CardCoachCategoryDTO } from '../api/cards';
+import { formatCurrency } from '../utils/currencyMath';
 
 /** The single category with the biggest actionable "switch to a card you already hold" gap, or
  * null if none exists (either no gaps, or the only gaps need a card not in the wallet). Mirrors
@@ -47,8 +48,8 @@ export default function CardCoachSummaryCard({ onPress }: Props) {
 
   const switchRow = biggestSwitchOpportunity(coach.by_category);
   const headline = switchRow
-    ? `Switch to ${switchRow.optimal_in_wallet_card} for ${switchRow.category} to earn $${(switchRow.optimal_in_wallet_earned_estimate! - switchRow.actual_earned_estimate!).toFixed(2)} more this month`
-    : `You left an estimated $${coach.total_estimated_gap.toFixed(2)} in rewards on the table this month`;
+    ? `Switch to ${switchRow.optimal_in_wallet_card} for ${switchRow.category} to earn ${formatCurrency((switchRow.optimal_in_wallet_earned_estimate! - switchRow.actual_earned_estimate!))} more this month`
+    : `You left an estimated ${formatCurrency(coach.total_estimated_gap)} in rewards on the table this month`;
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>

@@ -44,20 +44,23 @@ export const TrendNavigator: React.FC<TrendNavigatorProps> = ({ monthlyTrend, se
   // Find the maximum total to scale the bars
   const max = Math.max(...displayMonths.map(m => m.total), 1);
 
-  // Scroll to center the selected month
+  // Scroll to center the selected month. The first positioning is instant: a smooth scroll on
+  // mount could be cut short by the page's entrance animation, which left a month that isn't the
+  // latest (e.g. September opened on October 5) scrolled out of view behind empty Jan–Jun bars.
+  const hasPositioned = useRef(false);
   useEffect(() => {
     if (containerRef.current && selectedRef.current) {
       const container = containerRef.current;
       const btn = selectedRef.current;
       const containerCenter = container.clientWidth / 2;
       const btnCenter = btn.offsetLeft + btn.clientWidth / 2;
-      // Use smooth scroll behavior
       container.scrollTo({
         left: btnCenter - containerCenter,
-        behavior: 'smooth'
+        behavior: hasPositioned.current ? 'smooth' : 'auto',
       });
+      hasPositioned.current = true;
     }
-  }, [selectedMonth, year, displayMonths.length]);
+  }, [selectedMonth, year, displayMonths.length, monthlyTrend]);
 
   return (
     <Box sx={{ px: 2, pb: 2 }}>

@@ -10,6 +10,7 @@ import EmptyState from '../common/EmptyState';
 import { RecurringCard } from '../recurring/RecurringCard';
 import { findMainCategory } from './AddExpenseForm';
 import CategoryPickerField from './CategoryPickerField';
+import { formatMoney } from '../../utils/money';
 
 /**
  * TS-DES-204 — Recurring, migrated from the standalone `RecurringPage.tsx` (now deleted) into a
@@ -165,7 +166,7 @@ const RecurringTab: React.FC = () => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-          {activeCount} active · ${activeCost.toFixed(2)}/mo
+          {activeCount} active · {formatMoney(activeCost)}/mo
         </Typography>
         <Button
           variant="contained"
@@ -237,7 +238,7 @@ const RecurringTab: React.FC = () => {
               <TextField label="Day of month" type="number" fullWidth value={form.day_of_month} onChange={e => setForm(f => ({ ...f, day_of_month: Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))) }))} />
             </Grid>
             <Grid size={{ xs: 6, sm: 3 }}>
-              <TextField label="Monthly amount" type="number" fullWidth value={form.default_cost} onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
+              <TextField label="Monthly amount" type="number" fullWidth value={form.default_cost || ''} placeholder="0.00" onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Start date" type="date" fullWidth value={form.start_date_iso} onChange={e => setForm(f => ({ ...f, start_date_iso: e.target.value }))} InputLabelProps={{ shrink: true }} />

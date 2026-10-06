@@ -4,14 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { ChangeInsight } from '../api/analytics';
+import { describeChangeInsight } from '../utils/insightsFormat';
 
 interface Props {
   insights: ChangeInsight[];
   onPress: () => void;
 }
-
-const formatCurrency = (val: number) =>
-  `$${Math.abs(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
  * Single top "what changed" teaser (TS-DES-112) — HomeScreen's compact companion to the full
@@ -43,10 +41,10 @@ export default function WhatChangedTeaser({ insights, onPress }: Props) {
         </View>
         <View style={styles.textCol}>
           <Text style={styles.metricName} numberOfLines={1}>
-            {top.entity_name ? `${top.metric_name} · ${top.entity_name}` : top.metric_name}
+            {describeChangeInsight(top).headline}
           </Text>
           <Text style={[styles.amount, { color: isUp ? theme.colors.error : theme.colors.success }]}>
-            {isUp ? '+' : '−'}{formatCurrency(top.change_amount)} ({isUp ? '+' : ''}{top.change_percent.toFixed(0)}% vs last {top.time_scope})
+            {describeChangeInsight(top).detail}
           </Text>
         </View>
       </View>

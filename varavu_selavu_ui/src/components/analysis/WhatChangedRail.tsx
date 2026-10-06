@@ -4,6 +4,7 @@ import ArrowUpRightIcon from '@mui/icons-material/ArrowOutwardRounded';
 import ArrowDownRightIcon from '@mui/icons-material/SubdirectoryArrowRightRounded';
 import { useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
+import { describeChangeInsight } from '../../utils/changeInsight';
 import { getChangeInsights, ChangeInsight } from '../../api/analytics';
 
 interface WhatChangedRailProps {
@@ -54,17 +55,9 @@ export const WhatChangedRail: React.FC<WhatChangedRailProps> = ({ userId, year, 
     // rail), which read as broken layout rather than an intentional scroll affordance.
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, px: 2, pb: 2 }}>
       {insights.map((insight, idx) => {
-        const isNew = insight.change_percent === 100;
-        const isUp = insight.change_amount > 0;
-
-        let headline = '';
-        if (isNew) {
-          headline = `New ${insight.time_scope}: ${insight.entity_name || insight.metric_name} — $${insight.change_amount.toFixed(2)}`;
-        } else {
-          headline = `${insight.entity_name || insight.metric_name} is ${isUp ? 'up' : 'down'} ${Math.abs(insight.change_percent)}% vs last period`;
-        }
-
-        let sub = isNew ? `First time here this ${month ? 'month' : 'year'}` : '';
+        const { kind, headline, detail: sub } = describeChangeInsight(insight);
+        const isNew = kind === 'new' || kind === 'outlier';
+        const isUp = kind === 'up';
 
         return (
           <Box

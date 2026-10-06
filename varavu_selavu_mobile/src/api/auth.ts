@@ -79,8 +79,23 @@ export async function register(payload: RegisterPayload): Promise<void> {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Registration failed: ${errorText}`);
+    // Never show the raw response body — map 422 validation errors to per-field messages.
+    const body = await response.json().catch(() => null);
+    const fieldErrors: Record<string, string> = {};
+    if (response.status === 422 && Array.isArray(body?.detail)) {
+      for (const d of body.detail as { loc?: string[]; msg?: string }[]) {
+        const field = d.loc?.[d.loc.length - 1];
+        if (!field || fieldErrors[field]) continue;
+        fieldErrors[field] =
+          field === 'email' ? "That email address isn't valid. Check for typos, like name@example.com."
+            : field === 'password' ? 'Use at least 8 characters.'
+              : (d.msg || 'Check this field.');
+      }
+    }
+    const message = response.status === 429
+      ? 'Too many attempts — wait a bit and try again.'
+      : 'Registration failed. Please check your details and try again.';
+    throw Object.assign(new Error(message), { status: response.status, fieldErrors });
   }
 }
 
@@ -148,4 +163,14 @@ export async function refresh(refresh_token: string): Promise<LoginResponse> {
     throw new Error('Refresh failed');
   }
   return response.json();
+}
+
+
+/** Re-sends the email-verification link to the signed-in user (needed before creating or
+ * joining groups). Bearer-authenticated via apiFetch. */
+export async function resendVerification(): Promise<void> {
+  // Lazy: apiFetch imports this module (for token refresh), so a static import would be circular.
+  const { apiFetch } = await import('./apiFetch');
+  const res = await apiFetch('/api/v1/auth/resend-verification', { method: 'POST' });
+  if (!res.ok) throw new Error(res.status === 429 ? 'Too many requests — try again later.' : 'Could not send the email.');
 }

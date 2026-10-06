@@ -4,7 +4,7 @@ import requests
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 from langchain_openai import ChatOpenAI
@@ -278,7 +278,12 @@ _IN_SCOPE_FAST_PATH = re.compile(
     r"\b(spen[dt]|spending|expenses?|budget(s|ing)?|owe[sd]?|owing|split(s|ting)?|settle(d|ment)?|"
     r"receipts?|refunds?|reimburse\w*|merchants?|subscriptions?|recurring|groceries|"
     r"credit card|debit card|cashback|rewards?|savings?|income|salary|paycheck|bills?|"
-    r"trackspense|transactions?|purchases?|bought|paid|pay(ing)? for|cost me|how much did i)\b"
+    r"trackspense|transactions?|purchases?|bought|paid|pay(ing)? for|cost me|how much did i|"
+    # Item-price and shopping questions: the app's own starter prompts ("Has the price of milk
+    # gone up?", "Where did I buy eggs cheapest?") were refused by the classifier without these.
+    # Shaped narrowly so "what stock should I buy" still goes to the classifier.
+    r"cheap(er|est)|price of .{1,40}? (gone|go|going|went) up|prices? (have |has )?(gone|went) up|"
+    r"(which|best|different) cards?)\b"
     r"|[$€£₹]\s?\d",
     re.IGNORECASE,
 )
@@ -288,7 +293,9 @@ _SCOPE_CLASSIFIER_PROMPT = (
     "whether the user's latest message is IN SCOPE.\n"
     "IN SCOPE: the user's own expenses, spending, income, budgets, groups, splits and who owes "
     "whom, credit cards and rewards, receipts, logging an expense (even terse ones like "
-    "\"coffee 6.75 at Blue Bottle\"), how to use the TrackSpense app, follow-ups to the previous "
+    "\"coffee 6.75 at Blue Bottle\"), prices of things the user buys and whether they went up, "
+    "where they shop and where an item is cheapest, which card to use for a purchase, "
+    "how to use the TrackSpense app, follow-ups to the previous "
     "assistant reply, greetings or thanks, and GENERAL personal-finance education (budgeting "
     "methods, saving, debt payoff, emergency funds, how credit scores or card rewards work).\n"
     "OUT OF SCOPE: anything else, including coding, writing essays, poems or stories, general "
@@ -323,6 +330,28 @@ def _classify_scope(llm, query: str, previous_reply: Optional[str]) -> tuple[boo
     verdict = str(content).strip().upper()
     in_scope = not verdict.startswith("OUT")
     return in_scope, int(meta.get("input_tokens") or 0), int(meta.get("output_tokens") or 0)
+
+
+def _matching_item_names(db, user_id: str, query: str, limit: int = 8) -> List[str]:
+    """The user's receipt item names containing every word of `query` (case-insensitive), most
+    purchased first. Lets "milk" find "Organic Milk": item insights match names exactly, so the
+    AI's natural shorthand found nothing and it told users they'd never bought milk."""
+    from sqlalchemy import func
+    from varavu_selavu_service.db.models import Expense, ExpenseItem
+
+    words = [w for w in re.split(r"\s+", (query or "").strip()) if w]
+    if not words:
+        return []
+    name = func.coalesce(ExpenseItem.normalized_name, ExpenseItem.item_name)
+    q = (
+        db.query(name, func.count(ExpenseItem.id))
+        .join(Expense, ExpenseItem.expense_id == Expense.id)
+        .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.split_type == "itemized")
+    )
+    for w in words:
+        q = q.filter(name.ilike(f"%{w}%"))
+    rows = q.group_by(name).order_by(func.count(ExpenseItem.id).desc()).limit(limit).all()
+    return [r[0] for r in rows]
 
 
 _SEARCH_EXPENSES_MAX = 25
@@ -367,6 +396,14 @@ def _search_expenses_for_agent(
     rows = q.order_by(Expense.purchased_at.desc()).limit(limit + 1).all()
 
     if not rows:
+        # Things bought on itemized receipts ("eggs") live in line items, not in the expense's
+        # description ("Groceries at Safeway"), so "Where did I buy eggs cheapest?" found nothing.
+        item_lines = _search_receipt_items(db, owner, words, start_date, end_date, limit)
+        if item_lines:
+            return (
+                f'No expense descriptions match "{query}", but these receipt line items do '
+                "(newest first; unit price per purchase):\n" + "\n".join(item_lines)
+            )
         span = f" between {start_date or 'the beginning'} and {end_date or 'today'}" if (start_date or end_date) else ""
         return f'No expenses matching "{query}"{span}.'
     lines = []
@@ -377,6 +414,29 @@ def _search_expenses_for_agent(
         lines.append(f"- {when}: {exp.description}{merchant} — ${float(exp.amount):,.2f}{where}")
     more = f"\n(showing the {limit} most recent; narrow the dates or wording for older ones)" if len(rows) > limit else ""
     return f'Expenses matching "{query}", newest first:\n' + "\n".join(lines) + more
+
+
+def _search_receipt_items(db, owner, words: List[str], start_date: Optional[str], end_date: Optional[str], limit: int) -> List[str]:
+    """Receipt line items whose name contains every word, within the same ownership/date scope
+    as _search_expenses_for_agent. One line per purchase with store and unit price."""
+    from sqlalchemy import func
+    from varavu_selavu_service.db.models import Expense, ExpenseItem
+
+    name = func.coalesce(ExpenseItem.normalized_name, ExpenseItem.item_name)
+    q = db.query(ExpenseItem, Expense).join(Expense, ExpenseItem.expense_id == Expense.id).filter(owner)
+    for w in words:
+        q = q.filter(name.ilike(f"%{w}%"))
+    if start_date:
+        q = q.filter(Expense.purchased_at >= start_date)
+    if end_date:
+        q = q.filter(Expense.purchased_at < (date.fromisoformat(end_date) + relativedelta(days=1)).isoformat())
+    lines = []
+    for item, exp in q.order_by(Expense.purchased_at.desc()).limit(limit).all():
+        when = exp.purchased_at.date().isoformat() if exp.purchased_at else "unknown date"
+        store = exp.merchant_name or "unknown store"
+        unit = item.unit_price if item.unit_price is not None else item.line_total
+        lines.append(f"- {when}: {item.normalized_name or item.item_name} at {store} — ${float(unit):,.2f}")
+    return lines
 
 
 def _create_personal_expense_from_agent(
@@ -595,6 +655,7 @@ def _create_group_expense_from_agent(
     expense_date: Optional[str] = None,
     merchant_name: Optional[str] = None,
     paid_by: Optional[str] = None,
+    notify=None,
 ) -> str:
     """
     Creates a group expense split equally among every current member. Payer defaults to the
@@ -637,6 +698,19 @@ def _create_group_expense_from_agent(
             split_type="equal",
             split_entries=[{"member_id": m["member_id"]} for m in members],
         )
+        # Same push the HTTP create route sends (NotificationService.fan_out): an expense the AI
+        # logged used to reach the other members silently. Best-effort; never fails the tool.
+        if notify is not None:
+            try:
+                notify(
+                    group_id=match["group_id"],
+                    actor_email=actor_email,
+                    event_type="expense_added",
+                    description=description.strip(),
+                    shares={str(sp["member_id"]): float(sp["share"]) for sp in (result or {}).get("splits", [])},
+                )
+            except Exception:  # pragma: no cover - notifier is fire-and-forget
+                logger.exception("Group expense notification from chat failed")
         share = float(amount) / max(len(members), 1)
         payer_label = "you" if payer["member_id"] == my_member["member_id"] else payer["display_name"]
         return (
@@ -735,6 +809,7 @@ def call_chat_model(
     start_date: str | None = None,
     end_date: str | None = None,
     enforce_scope: bool = True,
+    notify_group_event=None,
 ) -> ChatResult:
     """
     Invoke a LangGraph ReAct agent to answer the user's question, using tools
@@ -783,6 +858,19 @@ def call_chat_model(
             )
             if res:
                 return str(res)
+            candidates = _matching_item_names(insight_service.db, user_id, item_name)
+            if len(candidates) == 1:
+                res = insight_service.calculate_item_detail(
+                    user_id=user_id, item_name=candidates[0], start_date=start_date, end_date=end_date
+                )
+                if res:
+                    return f"Showing '{candidates[0]}' (closest match for '{item_name}'): {res}"
+            elif candidates:
+                return (
+                    f"No item named exactly '{item_name}', but these receipt items match: "
+                    + ", ".join(f"'{c}'" for c in candidates)
+                    + ". Call get_item_insights again with the most relevant name (or each one)."
+                )
             # Same as get_merchant_insights: item insights only cover itemized receipts.
             return (
                 f"No item insights for '{item_name}' (this only covers itemized receipts). It does "
@@ -911,7 +999,7 @@ def call_chat_model(
                 return _create_group_expense_from_agent(
                     group_service, group_expense_service, user_groups, user_id,
                     group_name, description, amount, category, expense_date,
-                    merchant_name, paid_by,
+                    merchant_name, paid_by, notify=notify_group_event,
                 )
 
             tools.append(create_group_expense)

@@ -33,18 +33,19 @@ interface SettleUpDialogProps {
 
 type Stage = 'pick' | 'review' | 'settling' | 'done';
 
-/** 900ms cubic-ease-out count-down, matching docs/design/prototypes/SettleUp.jsx's resolution moment. */
+/** 900ms cubic-ease-out count-down, matching docs/design/prototypes/SettleUp.jsx's resolution moment.
+ * Counts from `from` to `to` (0 for a full settlement, the remaining balance for a partial one). */
 function useCountDown() {
   const [displayValue, setDisplayValue] = React.useState(0);
   const rafRef = React.useRef<number | undefined>(undefined);
 
-  const runFrom = React.useCallback((from: number, onDone: () => void) => {
+  const runFrom = React.useCallback((from: number, onDone: () => void, to = 0) => {
     const start = performance.now();
     const duration = 900;
     function step(ts: number) {
       const progress = Math.min(1, (ts - start) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayValue(from * (1 - eased));
+      setDisplayValue(from + (to - from) * eased);
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(step);
       } else {
@@ -61,7 +62,7 @@ function useCountDown() {
 
 const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members, transfers = [], myMemberId, currency = 'USD', onClose, onSuccess }) => {
   const theme = useTheme();
-  const nameFor = (id: string) => members.find((m) => m.member_id === id)?.display_name || '';
+  const nameFor = (id: string) => (myMemberId && id === myMemberId ? 'You' : members.find((m) => m.member_id === id)?.display_name || '');
   const [fromMemberId, setFromMemberId] = React.useState('');
   const [toMemberId, setToMemberId] = React.useState('');
   const [amount, setAmount] = React.useState<number>(0);
@@ -74,6 +75,9 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
   const [stage, setStage] = React.useState<Stage>(myMemberId ? 'pick' : 'review');
   const [manualMode, setManualMode] = React.useState(!myMemberId);
   const { displayValue, setDisplayValue, runFrom } = useCountDown();
+  // What `fromMemberId` still owes `toMemberId` after the recorded payment: null when the pair
+  // had no open debt to measure against (a manual entry), negative when it overpaid.
+  const [remaining, setRemaining] = React.useState<number | null>(null);
 
   const myTransfers = React.useMemo(
     () => (myMemberId ? transfers.filter((t) => t.from_member_id === myMemberId || t.to_member_id === myMemberId) : []),
@@ -156,9 +160,23 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
   if (recipient?.paypal_handle) paymentButtons.push({ label: 'Pay with PayPal', href: paypalMeLink(recipient.paypal_handle, amount || 0) });
   if (recipient?.upi_id) paymentButtons.push({ label: 'Pay with UPI', href: upiLink(recipient.upi_id, amount || 0, note) });
 
+  /** Net debt from → to before this payment, from the same transfers the picker shows. */
+  const owedBetween = (from: string, to: string): number | null => {
+    let owed = 0;
+    let found = false;
+    for (const t of transfers) {
+      if (t.from_member_id === from && t.to_member_id === to) { owed += t.amount; found = true; }
+      if (t.from_member_id === to && t.to_member_id === from) { owed -= t.amount; found = true; }
+    }
+    return found ? owed : null;
+  };
+
   const handleSubmit = async () => {
     setError(null);
     setStage('settling');
+    const owedBefore = owedBetween(fromMemberId, toMemberId);
+    const left = owedBefore === null ? null : Math.round((owedBefore - amount) * 100) / 100;
+    setRemaining(left);
     try {
       await createSettlement(groupId, {
         from_member_id: fromMemberId,
@@ -168,7 +186,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
         notes: notes || undefined,
       });
       onSuccess();
-      runFrom(amount, () => setStage('done'));
+      runFrom(owedBefore ?? amount, () => setStage('done'), left === null ? amount : Math.max(left, 0));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to record settlement');
       setStage('review');
@@ -185,6 +203,18 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
   // policy as TrueTotalHero's RECONCILED badge.
   const doneColor = theme.palette.primary.main;
   const canGoBack = !manualMode && myTransfers.length > 0 && stage === 'review';
+  const stillOwed = remaining !== null && remaining > 0.005;
+  const fromIsMe = !!myMemberId && fromMemberId === myMemberId;
+  const toIsMe = !!myMemberId && toMemberId === myMemberId;
+  const paidLine = `${nameFor(fromMemberId)} paid ${toIsMe ? 'you' : nameFor(toMemberId)} ${formatMoney(amount, currency)}.`;
+  const doneMessage =
+    remaining === null
+      ? `${paidLine} Balances updated.`
+      : stillOwed
+        ? `${paidLine} ${nameFor(fromMemberId)} still ${fromIsMe ? 'owe' : 'owes'} ${formatMoney(remaining, currency)}.`
+        : remaining < -0.005
+          ? `${paidLine} That's ${formatMoney(remaining, currency)} more than was owed, so ${toIsMe ? 'you' : nameFor(toMemberId)} now ${toIsMe ? 'owe' : 'owes'} it back.`
+          : `${paidLine} ${fromIsMe || toIsMe ? "You're" : "They're"} all square.`;
 
   return (
     <Dialog open={open} onClose={stage === 'settling' ? undefined : onClose} maxWidth="xs" fullWidth>
@@ -260,7 +290,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
             }}
           >
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-              {stage === 'done' ? 'All squared up' : 'Settling'}
+              {stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'All squared up'}
             </Typography>
             <Box
               sx={{
@@ -271,9 +301,9 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                 color: stage === 'done' ? doneColor : heroColor,
               }}
             >
-              {stage === 'done' && <TaskAltRoundedIcon sx={{ fontSize: 28 }} />}
+              {stage === 'done' && !stillOwed && <TaskAltRoundedIcon sx={{ fontSize: 28 }} />}
               <Typography sx={{ ...typeScale.display, ...tabularNums, color: 'inherit' }}>
-                {formatMoney(stage === 'done' ? 0 : displayValue, currency)}
+                {formatMoney(stage === 'done' ? (remaining === null ? amount : stillOwed ? remaining : 0) : displayValue, currency)}
               </Typography>
             </Box>
           </Box>
@@ -282,7 +312,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
         {stage === 'done' ? (
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              {nameFor(fromMemberId)} paid {nameFor(toMemberId)} — balances updated.
+              {doneMessage}
             </Typography>
             <Button variant="contained" size="large" fullWidth onClick={handleDone}>
               Done
@@ -333,7 +363,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
             {paymentButtons.length > 0 && (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
                 <Typography variant="caption" color="text.secondary">
-                  Open {nameFor(toMemberId)}'s payment app, then confirm below once you've paid.
+                  Open {recipient?.display_name ?? nameFor(toMemberId)}'s payment app, then confirm below once you've paid.
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   {paymentButtons.map((b) => (

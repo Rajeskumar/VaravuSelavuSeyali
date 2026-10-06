@@ -130,3 +130,33 @@ def test_refused_question_is_free_but_its_classifier_cost_is_recorded(mock_chat,
     row = db_session.query(AiUsageDaily).filter_by(user_email="test@user.com", feature="chat", day=utc_today()).one()
     assert row.count == 0
     assert row.input_tokens == 450 and float(row.est_cost_usd) > 0
+
+
+# Every question the apps pre-fill for the user (starter chips, "Ask AI" links, "Ask why") must
+# reach the agent without depending on the LLM classifier. Keep in sync with SUGGESTED_PROMPTS in
+# varavu_selavu_ui/src/components/ai-analyst/AIAnalystChat.tsx and
+# varavu_selavu_mobile/src/screens/AIAnalystScreen.tsx, and the askAi/initialQuery templates.
+@pytest.mark.parametrize("q", [
+    "What were my top spending categories?",
+    "How much did I spend at Amazon?",
+    "Has the price of milk gone up?",
+    "Where did I buy eggs cheapest?",
+    "Has the price of Organic Milk gone up? Where is it cheapest?",
+    "How much have I spent at Costco, and is it going up?",
+    "Tell me about my spending on Eggs (dozen) — price trends and where I buy it cheapest.",
+    "Tell me about my spending at Costco — trends and how it compares to my other merchants.",
+    "Which card should I use for a purchase?",
+    "How much would I have earned this month with a different card, by category?",
+    "Why is my Dining out spend up this period?",
+])
+def test_app_prefilled_prompts_pass_the_fast_path(q):
+    assert _scope_fast_path(q)
+
+
+@pytest.mark.parametrize("q", [
+    "what stock should I buy this week",
+    "what's the price of bitcoin",
+    "write a birthday card for my mom",
+])
+def test_widened_fast_path_still_leaves_lookalikes_to_the_classifier(q):
+    assert not _scope_fast_path(q)

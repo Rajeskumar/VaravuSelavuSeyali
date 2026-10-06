@@ -23,8 +23,10 @@ import { AppTheme, inkOnPastel } from '../theme';
 import { MemberDTO, MemberBalance, BalanceTransfer, recordSettlement } from '../api/groups';
 import CustomButton from './CustomButton';
 import { showToast } from './Toast';
+import { useAuth } from '../context/AuthContext';
 import { memberColor, initialsFromName } from './BalanceRow';
 import { venmoLink, paypalMeLink, upiLink } from '../utils/paymentDeepLinks';
+import { formatCurrency } from '../utils/currencyMath';
 
 type Stage = 'review' | 'settling' | 'done';
 
@@ -33,13 +35,13 @@ function useCountDown() {
   const [displayValue, setDisplayValue] = useState(0);
   const rafRef = useRef<number | undefined>(undefined);
 
-  const runFrom = useCallback((from: number, onDone: () => void) => {
+  const runFrom = useCallback((from: number, onDone: () => void, to = 0) => {
     const start = Date.now();
     const duration = 900;
     function step() {
       const progress = Math.min(1, (Date.now() - start) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayValue(from * (1 - eased));
+      setDisplayValue(from + (to - from) * eased);
       if (progress < 1) {
         rafRef.current = requestAnimationFrame(step);
       } else {
@@ -87,6 +89,7 @@ export default function SettleUpSheet({
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
+  const { userEmail } = useAuth();
 
   const [amount, setAmount] = useState(
     suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '',
@@ -94,6 +97,9 @@ export default function SettleUpSheet({
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<Stage>('review');
   const { displayValue, setDisplayValue, runFrom } = useCountDown();
+  // What the payer still owes after a single payment, measured against `suggestedAmount` (the
+  // open debt the caller pre-filled). Null when there was none to measure against.
+  const [remaining, setRemaining] = useState<number | null>(null);
   const listMode = !!transfers && transfers.length > 0;
   // Payment method recorded with each transfer in list mode; null = not specified.
   const [method, setMethod] = useState<string | null>(null);
@@ -101,6 +107,20 @@ export default function SettleUpSheet({
   const nameOf = (id: string) => members.find((m) => m.member_id === id)?.display_name ?? 'Someone';
 
   const fromMember = members.find((m) => m.member_id === fromMemberId);
+  const stillOwed = remaining !== null && remaining > 0.005;
+  const fromIsMe = !!fromMember && fromMember.user_email === userEmail;
+  const toIsMe = !!toMemberId && members.find((m) => m.member_id === toMemberId)?.user_email === userEmail;
+  const fromName = fromIsMe ? 'You' : fromMember?.display_name ?? 'Someone';
+  const toName = toIsMe ? 'you' : members.find((m) => m.member_id === toMemberId)?.display_name ?? 'someone';
+  const paidLine = `${fromName} paid ${toName} ${formatCurrency((parseFloat(amount) || 0))}.`;
+  const doneMessage =
+    remaining === null
+      ? `${paidLine} Balances updated.`
+      : stillOwed
+        ? `${paidLine} ${fromName} still ${fromIsMe ? 'owe' : 'owes'} ${formatCurrency(remaining)}.`
+        : remaining < -0.005
+          ? `${paidLine} That's ${formatCurrency(Math.abs(remaining))} more than was owed.`
+          : `${paidLine} ${fromIsMe || toIsMe ? "You're" : "They're"} all square.`;
   const toMember = members.find((m) => m.member_id === toMemberId);
   const toBalance = balances.find((b) => b.member_id === toMemberId);
 
@@ -120,6 +140,7 @@ export default function SettleUpSheet({
       const initial = suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '';
       setAmount(initial);
       setStage('review');
+      setRemaining(null);
       setMethod(null);
       setDisplayValue(suggestedAmount > 0 ? suggestedAmount : 0);
     }
@@ -147,8 +168,11 @@ export default function SettleUpSheet({
         to_member_id: toMemberId,
         amount: parsedAmount,
       });
+      const owedBefore = suggestedAmount > 0 ? suggestedAmount : null;
+      const left = owedBefore === null ? null : Math.round((owedBefore - parsedAmount) * 100) / 100;
+      setRemaining(left);
       onSettled();
-      runFrom(parsedAmount, () => setStage('done'));
+      runFrom(owedBefore ?? parsedAmount, () => setStage('done'), left === null ? parsedAmount : Math.max(left, 0));
     } catch (e: any) {
       showToast({ message: e.message ?? 'Failed to record settlement', type: 'error' });
       setStage('review');
@@ -173,7 +197,7 @@ export default function SettleUpSheet({
         });
         recorded += 1;
       }
-      showToast({ message: `Recorded $${listTotal.toFixed(2)} paid`, type: 'success' });
+      showToast({ message: `Recorded ${formatCurrency(listTotal)} paid`, type: 'success' });
       onSettled();
       onClose();
     } catch (e: any) {
@@ -233,7 +257,7 @@ export default function SettleUpSheet({
                     <Text style={styles.transferText} numberOfLines={1}>
                       {nameOf(t.from_member_id)} pays {nameOf(t.to_member_id)}
                     </Text>
-                    <Text style={styles.transferAmount}>${t.amount.toFixed(2)}</Text>
+                    <Text style={styles.transferAmount}>{formatCurrency(t.amount)}</Text>
                   </View>
                 ))}
               </View>
@@ -254,7 +278,7 @@ export default function SettleUpSheet({
                 })}
               </View>
               <CustomButton
-                title={loading ? 'Recording…' : `Record $${listTotal.toFixed(2)} paid`}
+                title={loading ? 'Recording…' : `Record ${formatCurrency(listTotal)} paid`}
                 onPress={handleRecordAll}
                 disabled={loading}
               />
@@ -269,13 +293,13 @@ export default function SettleUpSheet({
 
           {!listMode && ((fromMember && toMember) || stage === 'done') ? (
             <View style={styles.heroBlock}>
-              <Text style={styles.heroLabel}>{stage === 'done' ? 'All squared up' : 'Settling'}</Text>
+              <Text style={styles.heroLabel}>{stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'All squared up'}</Text>
               <View style={styles.heroAmountRow}>
-                {stage === 'done' && (
+                {stage === 'done' && !stillOwed && (
                   <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />
                 )}
                 <Text style={[styles.heroAmount, { color: stage === 'done' ? theme.colors.gold : theme.colors.success }]}>
-                  ${(stage === 'done' ? 0 : displayValue).toFixed(2)}
+                  {formatCurrency((stage === 'done' ? (remaining === null ? parseFloat(amount) || 0 : stillOwed ? remaining : 0) : displayValue))}
                 </Text>
               </View>
             </View>
@@ -284,7 +308,7 @@ export default function SettleUpSheet({
           {listMode ? null : stage === 'done' ? (
             <>
               <Text style={styles.doneSubtext}>
-                {fromMember?.display_name} paid {toMember?.display_name} — balances updated.
+                {doneMessage}
               </Text>
               <CustomButton title="Done" onPress={handleDone} />
             </>
@@ -337,7 +361,7 @@ export default function SettleUpSheet({
               )}
 
               <CustomButton
-                title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record $${parsedAmountForLinks.toFixed(2)} paid` : 'Record payment'}
+                title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record ${formatCurrency(parsedAmountForLinks)} paid` : 'Record payment'}
                 onPress={handleSubmit}
                 disabled={loading}
               />

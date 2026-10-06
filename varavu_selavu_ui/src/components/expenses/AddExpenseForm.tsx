@@ -54,6 +54,7 @@ import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
 import EntityAutocomplete from './EntityAutocomplete';
 import { currencySymbol } from '../../utils/money';
+import { formatMoney } from '../../utils/money';
 
 // Exported for reuse by the ExpenseFeed/ExpenseDetailSheet (TS-DES-102) — the
 // feed's category tint-dot mapping and the detail sheet's inline category
@@ -982,7 +983,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   <Typography color={reconcileOk() ? 'green' : 'red'}>
                     {reconcileOk()
                       ? 'Totals match'
-                      : `Totals mismatch by $${reconcileDelta().toFixed(2)}`}
+                      : `Totals mismatch by ${formatMoney(reconcileDelta())}`}
                   </Typography>
                 </Grid>
               </>

@@ -5,6 +5,8 @@ import { typeScale, tabularNums } from '../../theme';
 import { BudgetDTO } from '../../api/budgets';
 import BudgetProgressBar, { STATUS_LABEL, statusColor } from '../budgets/BudgetProgressBar';
 import { useTheme } from '@mui/material/styles';
+import { formatMoney } from '../../utils/money';
+import { spectrumColor } from '../expenses/categoryColors';
 
 interface CategoryTotal {
   category: string;
@@ -25,15 +27,9 @@ interface Props {
  * per literal category name. CerebroOS-era ramp: violet/cyan brand anchors extended around the
  * color wheel, kept clear of `positive`/`negative`/`caution` (theme.ts) so a category swatch is
  * never mistaken for a directional-amount or status color. */
-const SPECTRUM_PALETTE = ['#9C93FF', '#00D2D3', '#7DA6FF', '#5FD9B8', '#E88CD8', '#F0975E', '#6E7FE0', '#B98BC9'];
+// Same rank-based palette as Analysis' category breakdown.
+const colorFor = spectrumColor;
 
-function colorFor(index: number): string {
-  return SPECTRUM_PALETTE[index % SPECTRUM_PALETTE.length];
-}
-
-function formatMoney(n: number): string {
-  return `$${n.toFixed(2)}`;
-}
 
 /** Ranked category spectrum (Design Spec §4.3): a proportional stacked bar plus
  * ranked rows with amount + percentage, replacing CategoryBreakdownSunburst as

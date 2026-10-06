@@ -89,7 +89,7 @@ def test_scripted_scenario_net_balances_and_zero_sum(test_client, db_session):
     res = test_client.get(f"/api/v1/groups/{group_id}/balances")
     assert res.status_code == 200
     body = res.json()
-    assert body["simplified"] is False
+    assert body["simplified"] is True  # new groups start with simplified debts
 
     nets = {row["member_id"]: row["net"] for row in body["members"]}
     assert nets[m["test@user.com"]] == 40.00
@@ -241,6 +241,13 @@ def test_multi_payer_transfers_attribution(test_client, db_session):
         },
     )
 
+    # This test checks the pairwise attribution, so opt out of the simplified default.
+    import uuid
+    from varavu_selavu_service.db.models import Group
+    group = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
+    group.simplify_debts = False
+    db_session.commit()
+
     res = test_client.get(f"/api/v1/groups/{group_id}/balances")
     assert res.status_code == 200
     body = res.json()
@@ -285,15 +292,17 @@ def test_simplified_debts_greedy_netting(test_client, db_session):
         "split": {"type": "exact", "entries": [{"member_id": m["d@test.com"], "value": 100.0}]}
     })
 
-    # Default: simplify_debts = False
+    # New groups start simplified; switch to the pairwise ledger to compare both modes.
+    import uuid
+    group = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
+    group.simplify_debts = False
+    db_session.commit()
     res = test_client.get(f"/api/v1/groups/{group_id}/balances")
     assert res.json()["simplified"] == False
     transfers = res.json()["transfers"]
     assert len(transfers) == 3
     
     # Enable simplify_debts
-    import uuid
-    group = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
     group.simplify_debts = True
     db_session.commit()
     

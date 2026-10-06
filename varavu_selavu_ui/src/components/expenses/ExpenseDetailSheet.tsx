@@ -146,6 +146,9 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
 
   if (!expense || !form) return null;
 
+  const parsedAmount = parseFloat(form.amount);
+  const amountValid = Number.isFinite(parsedAmount) && parsedAmount > 0;
+
   const handleSave = async () => {
     if (itemsLoaded && items.length > 0) {
       const itemsPayload = {
@@ -265,7 +268,9 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
             fullWidth
             value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })}
-            inputProps={{ min: 0, step: 0.01, style: tabularNums }}
+            inputProps={{ min: 0.01, step: 0.01, style: tabularNums }}
+            error={!amountValid}
+            helperText={amountValid ? undefined : 'Enter an amount greater than 0'}
           />
         </Box>
         <TextField
@@ -291,7 +296,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
       </Box>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 3 }}>
-        <Button variant="contained" size="large" onClick={handleSave} disabled={saving || deleting}>
+        <Button variant="contained" size="large" onClick={handleSave} disabled={saving || deleting || !amountValid}>
           {saving ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : 'Save changes'}
         </Button>
         {expense.kind === 'personal' && onMoveToGroup && (

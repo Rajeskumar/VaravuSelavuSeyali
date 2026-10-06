@@ -39,7 +39,8 @@ test('submitting records a settlement with the defaulted debtor/creditor and ref
   // taps "Done" there (docs/design/prototypes/SettleUp.jsx's stage flow).
   expect(onClose).not.toHaveBeenCalled();
   const doneButton = await screen.findByRole('button', { name: /done/i }, { timeout: 2000 });
-  expect(await screen.findByText('All squared up')).toBeInTheDocument();
+  // No transfers were passed, so there's no prior debt to measure the payment against.
+  expect(await screen.findByText('Recorded')).toBeInTheDocument();
   fireEvent.click(doneButton);
   expect(onClose).toHaveBeenCalled();
 });
@@ -92,4 +93,50 @@ test('with myMemberId, defaults to a row-per-debt picker scoped to the logged-in
       notes: undefined,
     })
   );
+});
+
+test('a partial payment says what is still owed instead of "All squared up"', async () => {
+  jest.spyOn(api, 'createSettlement').mockResolvedValue({
+    id: 's2', group_id: 'g1', from_member_id: 'b', to_member_id: 'a', amount: 15, settled_at: '2026-01-01T00:00:00Z',
+  });
+  render(
+    <SettleUpDialog
+      open
+      groupId="g1"
+      members={members}
+      transfers={[{ from_member_id: 'b', to_member_id: 'a', amount: 40 }]}
+      myMemberId="b"
+      onClose={jest.fn()}
+      onSuccess={jest.fn()}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Settle' }));
+  fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: '15' } });
+  fireEvent.click(screen.getByRole('button', { name: /record settlement/i }));
+
+  await screen.findByRole('button', { name: /done/i }, { timeout: 2000 });
+  expect(screen.getByText('Still owed')).toBeInTheDocument();
+  expect(screen.queryByText('All squared up')).not.toBeInTheDocument();
+  expect(screen.getByText('You paid Alice $15.00. You still owe $25.00.')).toBeInTheDocument();
+});
+
+test('paying the full amount still reads "All squared up"', async () => {
+  jest.spyOn(api, 'createSettlement').mockResolvedValue({
+    id: 's3', group_id: 'g1', from_member_id: 'b', to_member_id: 'a', amount: 40, settled_at: '2026-01-01T00:00:00Z',
+  });
+  render(
+    <SettleUpDialog
+      open
+      groupId="g1"
+      members={members}
+      transfers={[{ from_member_id: 'b', to_member_id: 'a', amount: 40 }]}
+      myMemberId="b"
+      onClose={jest.fn()}
+      onSuccess={jest.fn()}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Settle' }));
+  fireEvent.click(screen.getByRole('button', { name: /record settlement/i }));
+  await screen.findByRole('button', { name: /done/i }, { timeout: 2000 });
+  expect(screen.getByText('All squared up')).toBeInTheDocument();
 });

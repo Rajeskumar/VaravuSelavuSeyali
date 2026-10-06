@@ -547,6 +547,16 @@ class CoachReport:
     # Spend with no attributed card and no default card to fall back on — earns nothing in the
     # figures above, surfaced so the UI can say so instead of silently dropping it.
     unassigned_spend: float = 0.0
+    # Spend with no card recorded that was priced as if it went on the default card. Lets the UI
+    # say "assumed on your default card" instead of presenting it as rewards actually earned.
+    default_assumed_spend: float = 0.0
+    # Spend left out entirely because it's rarely payable by card (see NON_CARD_CATEGORIES).
+    excluded_spend: float = 0.0
+
+
+# Categories most people can't put on a credit card without a fee (rent, mortgage). Counting them
+# credited a just-added card with rewards on $10,800 of rent and recommended cards for paying it.
+NON_CARD_CATEGORIES = {"rent", "mortgage"}
 
 
 def compute_card_breakdown(
@@ -630,11 +640,16 @@ def compute_coach_report(
     "actual" figures are all aggregated from that. A merchant only gets its own gap row when at
     least one held or catalog card has an explicit rule for it — otherwise the row would just
     repeat the category view with nothing new to say."""
+    excluded_spend = round(sum(b["total"] for b in buckets if (b.get("category") or "").strip().lower() in NON_CARD_CATEGORIES), 2)
+    buckets = [b for b in buckets if (b.get("category") or "").strip().lower() not in NON_CARD_CATEGORIES]
     cards_by_id = {c["card_id"]: c for c in held_cards}
     for c in attributed_cards or []:
         cards_by_id.setdefault(c["card_id"], c)
     default_card = cards_by_id.get(default_card_id) if default_card_id else None
     priced = price_actual_buckets(buckets, default_card, cards_by_id)
+    default_assumed_spend = round(
+        sum(p.bucket["total"] for p in priced if not p.bucket.get("card_id") and p.card is not None), 2
+    )
 
     by_category: Dict[str, List[PricedBucket]] = {}
     for p in priced:
@@ -645,6 +660,7 @@ def compute_coach_report(
         )
         for cat, cat_priced in by_category.items()
     ]
+    category_gaps.sort(key=lambda g: g.actual_spend, reverse=True)
 
     merchants_with_rules = {
         rule["merchant_name"].strip().lower()
@@ -666,7 +682,10 @@ def compute_coach_report(
     ]
 
     by_card, unassigned = compute_card_breakdown(priced, held_cards, default_card_id)
-    return CoachReport(category_gaps, merchant_gaps, by_card, unassigned)
+    return CoachReport(
+        category_gaps, merchant_gaps, by_card, unassigned,
+        default_assumed_spend=default_assumed_spend, excluded_spend=excluded_spend,
+    )
 
 
 def compute_coach_summary(

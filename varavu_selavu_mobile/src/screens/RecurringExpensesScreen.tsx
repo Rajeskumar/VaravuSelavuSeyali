@@ -19,6 +19,7 @@ import {
     RecurringTemplateDTO,
     UpsertRecurringPayload,
 } from '../api/recurring';
+import { formatCurrency } from '../utils/currencyMath';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -199,8 +200,6 @@ export default function RecurringExpensesScreen() {
         });
         setFormVisible(true);
     };
-
-    const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
     const totalMonthly = templates.reduce((s, t) => s + t.default_cost, 0);
     const groups = groupByMonth(templates);
 

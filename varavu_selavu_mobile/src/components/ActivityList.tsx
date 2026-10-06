@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../context/ThemeContext';
 import { inkOnPastel } from '../theme';
 import { memberColor } from './BalanceRow';
+import { formatCurrency } from '../utils/currencyMath';
+import { useAuth } from '../context/AuthContext';
 
 interface ActivityListProps {
   groupId: string;
@@ -14,6 +16,7 @@ interface ActivityListProps {
 
 export default function ActivityList({ groupId, group }: ActivityListProps) {
   const { theme } = useAppTheme();
+  const { userEmail } = useAuth();
   const { data, isLoading, error } = useQuery({
     queryKey: ['group-activity', groupId],
     queryFn: () => getGroupActivity(groupId, 50, 0),
@@ -45,14 +48,20 @@ export default function ActivityList({ groupId, group }: ActivityListProps) {
     );
   }
 
+  const meEmail = (userEmail || '').toLowerCase();
+  const memberFor = (memberId: string | null | undefined) => group.members.find((m) => m.member_id === memberId);
+  const isMe = (memberId: string | null | undefined) => !!meEmail && memberFor(memberId)?.user_email?.toLowerCase() === meEmail;
   const nameFor = (memberId: string | null) => {
     if (!memberId) return 'Someone';
-    return group.members.find((m) => m.member_id === memberId)?.display_name || 'A member';
+    return memberFor(memberId)?.display_name || 'A member';
   };
+  /** "You"/"you" for the viewer, the member's name otherwise (mirrors web's ActivityFeed). */
+  const who = (memberId: string | null | undefined, subject: boolean) =>
+    isMe(memberId) ? (subject ? 'You' : 'you') : nameFor(memberId ?? null);
 
   const getActionInfo = (item: GroupActivityDTO) => {
     const p = item.payload || {};
-    const actor = nameFor(item.actor_member_id);
+    const actor = who(item.actor_member_id, true);
     
     switch (item.action) {
       case 'group_created':
@@ -61,19 +70,26 @@ export default function ActivityList({ groupId, group }: ActivityListProps) {
         return { icon: 'settings-outline' as const, color: theme.colors.textSecondary, text: `${actor} updated the group settings.` };
       case 'expense_created':
       case 'itemized_expense_created':
-        return { icon: 'receipt-outline' as const, color: theme.colors.primary, text: `${actor} added an expense: "${p.description}" for $${p.amount?.toFixed(2) || '0.00'}.` };
+        return { icon: 'receipt-outline' as const, color: theme.colors.primary, text: `${actor} added an expense: "${p.description}" for ${formatCurrency(p.amount ?? 0)}.` };
       case 'expense_updated':
         return { icon: 'receipt-outline' as const, color: theme.colors.warning, text: `${actor} updated the expense "${p.description}".` };
       case 'expense_deleted':
         return { icon: 'receipt-outline' as const, color: theme.colors.error, text: `${actor} deleted the expense "${p.description}".` };
+      // A name-only seat never "joined" — someone added it. Only an accepted invite is a join.
       case 'member_added':
+        return { icon: 'person-add-outline' as const, color: theme.colors.success, text: `${actor} added ${p.display_name}.` };
       case 'member_joined':
         return { icon: 'person-add-outline' as const, color: theme.colors.success, text: `${p.display_name} joined the group.` };
       case 'member_removed':
       case 'member_left':
         return { icon: 'person-remove-outline' as const, color: theme.colors.error, text: `${p.display_name} left the group.` };
       case 'settlement_created':
-        return { icon: 'hand-left-outline' as const, color: theme.colors.success, text: `${actor} recorded a settlement of $${p.amount?.toFixed(2) || '0.00'}.` };
+        if (p.from_member_id && p.to_member_id) {
+          const recordedBy = p.from_member_id === item.actor_member_id || p.to_member_id === item.actor_member_id
+            ? '' : ` (recorded by ${who(item.actor_member_id, false)})`;
+          return { icon: 'hand-left-outline' as const, color: theme.colors.success, text: `${who(p.from_member_id, true)} paid ${who(p.to_member_id, false)} ${formatCurrency(p.amount ?? 0)}${recordedBy}.` };
+        }
+        return { icon: 'hand-left-outline' as const, color: theme.colors.success, text: `${actor} recorded a settlement of ${formatCurrency(p.amount ?? 0)}.` };
       case 'settlement_deleted':
         return { icon: 'hand-left-outline' as const, color: theme.colors.textSecondary, text: `${actor} deleted a settlement.` };
       default:

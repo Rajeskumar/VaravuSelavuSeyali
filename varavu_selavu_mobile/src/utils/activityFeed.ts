@@ -50,8 +50,14 @@ export function describeGroupActivity(
     case 'expense_deleted':
       return { ...base, tone: 'muted', title: `${actor} deleted “${p.description ?? 'an expense'}” from ${groupName}` };
     case 'settlement_created':
+      if (p.from_member_id && p.to_member_id) {
+        const to = nameFor(p.to_member_id);
+        return { ...base, tone: 'green', title: `${nameFor(p.from_member_id)} paid ${to === 'You' ? 'you' : to} in ${groupName}`, body: money(p.amount) };
+      }
       return { ...base, tone: 'green', title: `${actor} recorded a payment in ${groupName}`, body: money(p.amount) };
+    // A name-only seat never "joined" — someone added it. Only an accepted invite is a join.
     case 'member_added':
+      return { ...base, tone: 'violet', title: `${actor} added ${p.display_name ?? 'someone'} to ${groupName}` };
     case 'member_joined':
       return { ...base, tone: 'violet', title: `${p.display_name ?? 'Someone'} joined ${groupName}` };
     default:

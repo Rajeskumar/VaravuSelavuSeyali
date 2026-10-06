@@ -16,6 +16,7 @@ import SectionLabel from './SectionLabel';
 import CustomButton from './CustomButton';
 import PayerPicker, { computePayersValid } from './PayerPicker';
 import SplitEditor, { SplitEditorValue, SplitType, computeSplitValid } from './SplitEditor';
+import { formatCurrency } from '../utils/currencyMath';
 
 interface Props {
   visible: boolean;
@@ -59,7 +60,7 @@ export default function SplitSheet({ visible, onClose, amount, members, myMember
   const payersValid = computePayersValid(localPayers, amount);
   const splitValid = computeSplitValid(localSplit, amount);
   const canDone = payersValid && splitValid;
-  const money = `$${amount.toFixed(2)}`;
+  const money = `${formatCurrency(amount)}`;
 
   return (
     <Sheet visible={visible} onClose={onClose}>

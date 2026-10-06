@@ -5,6 +5,8 @@ import Button from '@mui/material/Button';
 import Accordion from '@mui/material/Accordion';
 import AccordionSummary from '@mui/material/AccordionSummary';
 import AccordionDetails from '@mui/material/AccordionDetails';
+import Tabs from '@mui/material/Tabs';
+import Tab from '@mui/material/Tab';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
@@ -18,11 +20,13 @@ import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import LockRoundedIcon from '@mui/icons-material/LockRounded';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import SavingsRoundedIcon from '@mui/icons-material/SavingsRounded';
+import CreditCardRoundedIcon from '@mui/icons-material/CreditCardRounded';
+import QueryStatsRoundedIcon from '@mui/icons-material/QueryStatsRounded';
 import { useNavigate } from 'react-router-dom';
 import { keyframes, useTheme } from '@mui/material/styles';
 import PageContainer from '../components/layout/PageContainer';
 import Footer from '../components/layout/Footer';
-import SegmentedTabs from '../components/common/SegmentedTabs';
 import StatusBadge from '../components/common/StatusBadge';
 import AmbientBackground from '../components/common/AmbientBackground';
 import ScrollReveal from '../components/common/ScrollReveal';
@@ -38,6 +42,12 @@ import { HEADER_HEIGHT } from '../components/layout/layoutConstants';
 // section rather than being dropped), and a single closing gradient-tinted CTA band (the design
 // system caps a page at *one* such band). All copy is the existing marketing copy, carried over
 // verbatim — this is a visual system change, not a rewrite of what the product says about itself.
+//
+// 2026-10: the hero's hand-built dashboard mock became a tabbed tour of real screenshots
+// (public/screenshots/home/<screen>-<light|dark>.jpg, captured from the app with demo data and
+// matched to the visitor's theme), and a "Plan ahead" section covers Budgets, Card Coach, item
+// price tracking and the AI analyst, which the page didn't mention. Re-capture the screenshots
+// when those screens change visibly.
 
 const shimmer = keyframes`
   from { background-position: 200% center; }
@@ -130,6 +140,130 @@ const FeatureCard: React.FC<{ icon: React.ReactNode; title: string; body: string
   );
 };
 
+/** Real app screens shown in the hero tour, in tab order. Captions say what the visitor gets. */
+const TOUR = [
+  { key: 'dashboard', label: 'Dashboard', caption: 'Your true monthly total: personal spending plus your share of every group, and what people owe you.' },
+  { key: 'groups', label: 'Groups', caption: 'Split rent, trips and dinners. See what each person owes you, and settle up in one tap.' },
+  { key: 'analysis', label: 'Insights', caption: 'Where the money went and what changed, in plain words, with your group shares included.' },
+  { key: 'items', label: 'Item prices', caption: 'Receipt line items tracked over time, so you can see what milk costs at each store.' },
+  { key: 'budgets', label: 'Budgets', caption: 'Monthly limits per category that warn you while there is still time to adjust.' },
+  { key: 'cards', label: 'Card Coach', caption: 'Which of your cards earns the most for each kind of spending, and what switching would gain.' },
+  { key: 'ask', label: 'AI Analyst', caption: 'Ask in plain English. Answers come from your own expenses and receipts.' },
+] as const;
+
+const screenshotSrc = (key: string, mode: 'light' | 'dark') => `${process.env.PUBLIC_URL || ''}/screenshots/home/${key}-${mode}.jpg`;
+
+/** Hero product tour: browser-chrome frame around a real screenshot, chosen by tab and theme. */
+const ProductTour: React.FC = () => {
+  const theme = useTheme();
+  const [active, setActive] = useState(0);
+  const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
+  const shot = TOUR[active];
+
+  // Warm the cache for the other tabs once the first image is in, so switching is instant.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      TOUR.forEach(({ key }) => { const img = new Image(); img.src = screenshotSrc(key, mode); });
+    }, 1200);
+    return () => window.clearTimeout(t);
+  }, [mode]);
+
+  return (
+    <Box>
+      <Tabs
+        value={active}
+        onChange={(_e, v) => setActive(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        aria-label="Product screens"
+        sx={{
+          mb: 2,
+          minHeight: 40,
+          '& .MuiTabs-flexContainer': { justifyContent: { md: 'center' }, gap: 0.5 },
+          '& .MuiTabs-indicator': { display: 'none' },
+          '& .MuiTab-root': {
+            minHeight: 36,
+            minWidth: 0,
+            px: 1.75,
+            borderRadius: 999,
+            textTransform: 'none',
+            fontWeight: 600,
+            fontSize: '0.875rem',
+            color: 'text.secondary',
+          },
+          '& .MuiTab-root.Mui-selected': {
+            color: 'primary.main',
+            bgcolor: (t) => withAlpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.18 : 0.1),
+          },
+        }}
+      >
+        {TOUR.map(({ key, label }) => (
+          <Tab key={key} label={label} id={`tour-tab-${key}`} aria-controls="tour-panel" />
+        ))}
+      </Tabs>
+
+      <Box
+        id="tour-panel"
+        role="tabpanel"
+        aria-labelledby={`tour-tab-${shot.key}`}
+        sx={{
+          borderRadius: 3,
+          border: '1px solid',
+          borderColor: 'divider',
+          overflow: 'hidden',
+          bgcolor: 'background.paper',
+          boxShadow: (t) => (t.palette.mode === 'dark'
+            ? '0 40px 100px rgba(0,0,0,0.6), 0 0 80px oklch(0.5 0.22 285 / 0.18)'
+            : '0 24px 64px rgba(24,24,27,0.12)'),
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+          {[0, 1, 2].map((i) => (
+            <Box key={i} sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'divider' }} />
+          ))}
+          <Typography sx={{ ...typeScale.eyebrow, letterSpacing: '0.06em', color: 'text.secondary', ml: 1.5 }}>trackspense — {shot.label.toLowerCase()}</Typography>
+        </Box>
+        <Box
+          component="img"
+          key={`${shot.key}-${mode}`}
+          src={screenshotSrc(shot.key, mode)}
+          alt={`TrackSpense ${shot.label} screen. ${shot.caption}`}
+          width={1656}
+          height={1035}
+          loading={active === 0 ? 'eager' : 'lazy'}
+          // Phones get a square crop of the main content (sidebar skipped) so text stays legible;
+          // the full frame scaled to ~360px wide was unreadable.
+          sx={{
+            display: 'block',
+            width: '100%',
+            height: 'auto',
+            aspectRatio: { xs: '1 / 1', sm: '1656 / 1035' },
+            objectFit: 'cover',
+            objectPosition: { xs: '28% 0', sm: 'center' },
+          }}
+        />
+      </Box>
+      <Typography aria-live="polite" sx={{ color: 'text.secondary', fontSize: '0.95rem', textAlign: 'center', mt: 2, maxWidth: 560, mx: 'auto', lineHeight: 1.6 }}>
+        {shot.caption}
+      </Typography>
+    </Box>
+  );
+};
+
+/** Small progress row for the Budgets feature card illustration. */
+const budgetRow = (label: string, spent: string, limit: string, pct: number) => (
+  <Box key={label} sx={{ py: 1 }}>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>{label}</Typography>
+      <Typography variant="caption" sx={{ color: 'text.secondary' }}>{spent} of {limit}</Typography>
+    </Box>
+    <Box sx={{ height: 6, borderRadius: 999, bgcolor: 'action.hover', mt: 0.75, overflow: 'hidden' }}>
+      <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: 'success.main', borderRadius: 999 }} />
+    </Box>
+  </Box>
+);
+
 const STEPS = [
   { n: 1, title: 'Log it', body: 'Type a line, tap the keypad, or scan a receipt. Personal or group — one flow.' },
   { n: 2, title: 'It sorts itself', body: 'Your share joins your personal total; the rest lands on the right people in the right group.' },
@@ -170,7 +304,15 @@ const FAQS = [
   },
   {
     q: 'Can I settle up across multiple groups at once?',
-    a: 'Yes. The People view nets what each person owes you across every shared group, so one settlement clears everything — recorded per-group underneath.',
+    a: 'Yes. For friends who have joined TrackSpense, the People view nets what each person owes you across every shared group, so one settlement clears everything — recorded per-group underneath.',
+  },
+  {
+    q: 'Does Card Coach need my card numbers?',
+    a: 'No. You pick the cards you carry from a list, and Card Coach estimates rewards from your spending categories. No card numbers and no bank logins.',
+  },
+  {
+    q: 'How do budgets work?',
+    a: "Set a monthly limit for a category or for everything. TrackSpense shows how much is left, projects where you'll land at the current pace, and flags budgets at risk on your dashboard.",
   },
   {
     q: 'Is TrackSpense free?',
@@ -250,69 +392,10 @@ const HomePage: React.FC = () => {
         </ScrollReveal>
       </PageContainer>
 
-      {/* Browser-chrome screenshot frame — illustrative product mock, mirrors DashboardPage's
-          real TrueTotalHero (lens toggle, spend total, "Net with people") plus its "My Groups"
-          balance rows. Static values, no live session to fetch on a pre-login marketing page. */}
-      <PageContainer maxWidth="md" sx={{ pb: { xs: 8, md: 10 }, position: 'relative', zIndex: 1 }}>
+      {/* Product tour — real screenshots of the current app (see TOUR). */}
+      <PageContainer maxWidth="lg" sx={{ pb: { xs: 8, md: 10 }, position: 'relative', zIndex: 1 }}>
         <ScrollReveal index={1}>
-          <Box
-            aria-hidden="true"
-            sx={{
-              borderRadius: 3,
-              border: '1px solid',
-              borderColor: 'divider',
-              overflow: 'hidden',
-              boxShadow: (t) => (t.palette.mode === 'dark'
-                ? '0 40px 100px rgba(0,0,0,0.6), 0 0 80px oklch(0.5 0.22 285 / 0.18)'
-                : '0 24px 64px rgba(24,24,27,0.12)'),
-            }}
-          >
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
-              {[0, 1, 2].map((i) => (
-                <Box key={i} sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'divider' }} />
-              ))}
-              <Typography sx={{ ...typeScale.eyebrow, letterSpacing: '0.06em', color: 'text.secondary', ml: 1.5 }}>trackspense — app</Typography>
-            </Box>
-
-            <Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: 'background.default', display: 'flex', justifyContent: 'center' }}>
-              <Box sx={{ width: '100%', maxWidth: 400 }}>
-                <SegmentedTabs
-                  value="share"
-                  onChange={() => { }}
-                  size="small"
-                  ariaLabel="My expenses or I paid (illustrative)"
-                  options={[{ value: 'share', label: 'My expenses' }, { value: 'paid', label: 'I paid' }]}
-                />
-
-                <Box sx={{ mt: 2 }}>
-                  <Typography sx={{ ...typeScale.label, color: 'text.secondary' }}>Spent this month — your true total</Typography>
-                  <Typography sx={{ ...typeScale.displayHero, fontSize: '2.5rem', color: 'text.primary' }}>$1,432.60</Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>$1,180.40 personal + group shares</Typography>
-                </Box>
-
-                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 2, pt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Box>
-                    <Typography sx={{ ...typeScale.label, color: 'text.secondary' }}>Net with people</Typography>
-                    <Typography sx={{ ...typeScale.display, fontSize: '1.625rem', color: 'success.main' }}>+$56.80</Typography>
-                  </Box>
-                  <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 600 }}>
-                    owed $84.30 · owe $27.50 →
-                  </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1.75 }}>
-                  <Box sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, px: 1.75, py: 1.25, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>🏠 Roommates</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: 'success.main' }}>+$56.80</Typography>
-                  </Box>
-                  <Box sx={{ bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, px: 1.75, py: 1.25, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>✈️ Weekend Trip</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>−$27.50</Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Box>
-          </Box>
+          <ProductTour />
         </ScrollReveal>
       </PageContainer>
 
@@ -347,7 +430,7 @@ const HomePage: React.FC = () => {
             </Box>
           </FeatureCard>
 
-          <FeatureCard index={2} icon={<PeopleAltRoundedIcon fontSize="small" />} title="One balance per person" body="Stop doing mental math across groups. The People view nets everything you share with someone into one number — and one settlement clears it all.">
+          <FeatureCard index={2} icon={<PeopleAltRoundedIcon fontSize="small" />} title="One balance per person" body="Stop doing mental math across groups. The People view nets everything you share with a friend on TrackSpense into one number — and one settlement clears it all.">
             <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 1.75, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
                 <Box sx={{ width: 30, height: 30, borderRadius: '50%', ...gradientCta, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, flexShrink: 0 }}>
@@ -384,17 +467,53 @@ const HomePage: React.FC = () => {
           </FeatureCard>
         </Box>
 
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.25, mt: 2.25 }}>
-          <FeatureCard index={4} icon={<DocumentScannerRoundedIcon fontSize="small" />} title="Receipt scanning" body="Snap it — amount, merchant, and line items are parsed and ready to split." />
-          <FeatureCard index={5} icon={<EventRepeatRoundedIcon fontSize="small" />} title="Recurring, watched" body="Rent and subscriptions tracked with due dates and a running monthly total." />
-          <FeatureCard index={6} icon={<AutoAwesomeRoundedIcon fontSize="small" />} title="Just tell the AI" body={'Ask the AI Analyst to log an expense in plain English — “Sam paid $40 for groceries, split with Roommates” — and it’s saved. No form, no keypad.'} />
+      </PageContainer>
+
+      {/* ===== Plan ahead ===== */}
+      <PageContainer id="plan" maxWidth="lg" sx={{ py: { xs: 8, md: 9 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
+        <ScrollReveal>
+          <Typography sx={eyebrowSx}>02 / PLAN AHEAD</Typography>
+          <Typography sx={sectionHeadingSx}>Spend on purpose, not by surprise.</Typography>
+          <Typography sx={{ color: 'text.secondary', fontSize: '0.975rem', mt: 1.5, maxWidth: 560, lineHeight: 1.6 }}>
+            Budgets that warn you early, a coach for the cards you already carry, and prices tracked down to the item.
+          </Typography>
+        </ScrollReveal>
+
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.25, mt: 5.5 }}>
+          <FeatureCard index={0} icon={<SavingsRoundedIcon fontSize="small" />} title="Budgets that warn you early" body="Set a monthly limit for a category or your whole month. TrackSpense projects where you'll land at today's pace and flags anything at risk on your dashboard.">
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, px: 1.75, py: 0.5 }}>
+              {budgetRow('Dining out', '$25', '$200', 13)}
+              {budgetRow('Groceries', '$76', '$600', 13)}
+            </Box>
+          </FeatureCard>
+
+          <FeatureCard index={1} icon={<CreditCardRoundedIcon fontSize="small" />} title="Card Coach" body="Add the cards you carry, no card numbers needed. See what each one earned and which card to use for groceries, dining or gas.">
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, px: 1.75, py: 1.25 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>Groceries</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.25 }}>
+                Switch to Sapphire Preferred: <Box component="span" sx={{ color: 'success.main' }}>+$3.73/mo</Box>
+              </Typography>
+            </Box>
+          </FeatureCard>
+
+          <FeatureCard index={2} icon={<QueryStatsRoundedIcon fontSize="small" />} title="Prices, item by item" body="Scanned receipts become price history for everything you buy, so you know which store is cheapest and when prices creep up.">
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.75 }}>Organic milk, average price</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {logChip("Trader Joe's", '$5.35')}
+              {logChip('Safeway', '$5.54')}
+            </Box>
+          </FeatureCard>
+
+          <FeatureCard index={3} icon={<AutoAwesomeRoundedIcon fontSize="small" />} title="An AI analyst that knows your receipts" body={'Ask “Where did I buy eggs cheapest?” or “How much does Sam owe me?” and get an answer from your own data. Or just say “Sam paid $40 for groceries, split with Roommates” and it’s logged.'} />
+          <FeatureCard index={4} icon={<DocumentScannerRoundedIcon fontSize="small" />} title="Receipt scanning" body="Snap it: amount, merchant and line items are read and ready to split." />
+          <FeatureCard index={5} icon={<EventRepeatRoundedIcon fontSize="small" />} title="Recurring, watched" body="Rent and subscriptions tracked with due dates, a running monthly total, and a nudge when one is due." />
         </Box>
       </PageContainer>
 
       {/* ===== How it works ===== */}
       <PageContainer id="how" maxWidth="lg" sx={{ py: { xs: 8, md: 9 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <ScrollReveal>
-          <Typography sx={eyebrowSx}>02 / HOW IT WORKS</Typography>
+          <Typography sx={eyebrowSx}>03 / HOW IT WORKS</Typography>
           <Typography sx={sectionHeadingSx}>From "who paid?" to "all settled" in three steps.</Typography>
         </ScrollReveal>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3.5, mt: 5.5 }}>
@@ -431,7 +550,7 @@ const HomePage: React.FC = () => {
       {/* ===== Trust & Privacy ===== */}
       <PageContainer id="trust" maxWidth="lg" sx={{ py: { xs: 8, md: 9 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <ScrollReveal>
-          <Typography sx={eyebrowSx}>03 / TRUST & PRIVACY</Typography>
+          <Typography sx={eyebrowSx}>04 / TRUST & PRIVACY</Typography>
           <Typography sx={sectionHeadingSx}>Your money data, held the way it should be.</Typography>
         </ScrollReveal>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.25, mt: 5.5 }}>
@@ -449,7 +568,7 @@ const HomePage: React.FC = () => {
       <Box id="faq" sx={{ bgcolor: 'background.paper', borderTop: '1px solid', borderBottom: '1px solid', borderColor: 'divider', scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <PageContainer maxWidth={false} sx={{ maxWidth: 760, mx: 'auto', py: { xs: 8, md: 9 } }}>
           <ScrollReveal>
-            <Typography sx={eyebrowSx}>04 / FAQ</Typography>
+            <Typography sx={eyebrowSx}>05 / FAQ</Typography>
             <Typography sx={sectionHeadingSx}>Questions, answered.</Typography>
           </ScrollReveal>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mt: 4.5 }}>

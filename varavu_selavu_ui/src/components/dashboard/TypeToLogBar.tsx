@@ -11,7 +11,7 @@ import WillLogPreview from '../common/WillLogPreview';
  * an inline pill input and the "WILL LOG" chip-row preview.
  */
 const TypeToLogBar: React.FC = () => {
-  const { text, setText, parsed, memberCount, isQuestion, submitting, error, submit } = useQuickLogBar();
+  const { text, setText, parsed, memberCount, isQuestion, submitting, error, confirmation, submit } = useQuickLogBar();
 
   return (
     <Box sx={{ mt: 1.75 }}>
@@ -34,6 +34,12 @@ const TypeToLogBar: React.FC = () => {
       {isQuestion && (
         <Typography variant="caption" sx={{ display: 'block', mt: 0.5, ml: 1.5, color: 'text.secondary' }}>
           Press Enter to ask the AI
+        </Typography>
+      )}
+
+      {confirmation && (
+        <Typography variant="caption" role="status" sx={{ display: 'block', mt: 0.75, ml: 1.5, color: 'success.main', fontWeight: 600 }}>
+          ✓ {confirmation}
         </Typography>
       )}
 

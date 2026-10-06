@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { bulkApplyTags, TagBulkFilter } from '../../api/tags';
 import { listGroups, GroupSummary } from '../../api/groups';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { formatMoney } from '../../utils/money';
 
 interface TagBulkApplyDialogProps {
   open: boolean;
@@ -166,7 +167,7 @@ const TagBulkApplyDialog: React.FC<TagBulkApplyDialogProps> = ({ open, onClose, 
               ) : preview ? (
                 <Typography variant="body2" color="text.secondary">
                   Will tag {preview.matched_count - preview.already_tagged_count} expense
-                  {preview.matched_count - preview.already_tagged_count === 1 ? '' : 's'} · ${preview.my_expenses_total.toFixed(2)} my share
+                  {preview.matched_count - preview.already_tagged_count === 1 ? '' : 's'} · {formatMoney(preview.my_expenses_total)} my share
                   {preview.already_tagged_count > 0 && ` (${preview.already_tagged_count} already tagged)`}
                 </Typography>
               ) : null}

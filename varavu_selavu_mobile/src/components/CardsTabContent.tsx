@@ -19,9 +19,10 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme } from '../theme';
 import { ListSkeleton } from './SkeletonLoader';
 import CustomCardForm from './CustomCardForm';
+import { formatCurrency } from '../utils/currencyMath';
 
 function formatMoney(n: number): string {
-  return `$${n.toFixed(2)}`;
+  return `${formatCurrency(n)}`;
 }
 
 function formatDate(iso: string): string {
@@ -132,8 +133,8 @@ export default function CardsTabContent() {
         {!pickerOpen && (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyIcon}>💳</Text>
-            <Text style={styles.emptyTitle}>Add the cards you carry</Text>
-            <Text style={styles.emptySubtitle}>See how they're performing against what you spend.</Text>
+            <Text style={styles.emptyTitle}>Get more back from your cards</Text>
+            <Text style={styles.emptySubtitle}>Add your cards to see what each one earned, which to use for groceries, dining or gas, and what switching would gain you. No card numbers needed.</Text>
             <TouchableOpacity style={styles.addBtn} onPress={() => setPickerOpen(true)} activeOpacity={0.8}>
               <Text style={styles.addBtnText}>+ Add a card</Text>
             </TouchableOpacity>
@@ -249,11 +250,14 @@ function EarnedByCard({ coach, phrase, theme }: { coach: CardCoachResponse; phra
   const styles = createStyles(theme);
   const cards = coach.by_card ?? [];
   if (cards.length === 0) return null;
+  // Mostly unattributed spend is priced on the default card — an estimate, not "earned" (web parity).
+  const totalSpend = cards.reduce((sum, c) => sum + (c.spend || 0), 0);
+  const mostlyAssumed = totalSpend > 0 && (coach.default_assumed_spend ?? 0) / totalSpend > 0.5;
   return (
     <View style={{ marginTop: 14, marginBottom: 18 }}>
       <Text style={styles.summaryText}>Earned by card</Text>
       <Text style={styles.earnedHeadline}>
-        Your cards earned {formatMoney(coach.total_earned_usd ?? 0)}
+        {mostlyAssumed ? 'Your cards would have earned about ' : 'Your cards earned '}{formatMoney(coach.total_earned_usd ?? 0)}
         <Text style={styles.earnedPhrase}>  {phrase}</Text>
       </Text>
       <View style={{ gap: 8 }}>
@@ -286,6 +290,16 @@ function EarnedByCard({ coach, phrase, theme }: { coach: CardCoachResponse; phra
           {formatMoney(coach.unassigned_spend)} of spend isn't linked to a card — set a default card, or pick the card when adding an expense.
         </Text>
       )}
+      {(coach.default_assumed_spend ?? 0) > 0 && (
+        <Text style={[styles.footerText, { marginTop: 8 }]}>
+          Estimate: {formatMoney(coach.default_assumed_spend ?? 0)} of spending has no card recorded, so it's counted as if it went on your default card.
+        </Text>
+      )}
+      {(coach.excluded_spend ?? 0) > 0 && (
+        <Text style={[styles.footerText, { marginTop: 4 }]}>
+          Rent and mortgage ({formatMoney(coach.excluded_spend ?? 0)}) aren't counted — most landlords don't take cards without a fee.
+        </Text>
+      )}
     </View>
   );
 }
@@ -305,7 +319,7 @@ function GapCard({ label, row, theme }: { label: string; row: CardCoachCategoryD
       <Text style={styles.gapLine}>
         Actual: {row.held_card_used ? `${row.held_card_used} earned ${formatMoney(row.actual_earned_estimate ?? 0)}` : 'no default card set'}
       </Text>
-      {row.optimal_in_wallet_card && (
+      {row.optimal_in_wallet_card && row.optimal_in_wallet_card !== row.held_card_used && (
         <Text style={styles.gapLine}>Best you hold: {row.optimal_in_wallet_card} — {formatMoney(row.optimal_in_wallet_earned_estimate ?? 0)}</Text>
       )}
       {row.optimal_catalog_card && (

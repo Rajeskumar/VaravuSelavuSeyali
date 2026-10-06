@@ -285,3 +285,33 @@ def test_create_group_expense_from_agent_rejects_non_positive_amount(db_session)
     )
 
     assert result.startswith("Error")
+
+
+def test_group_expense_created_by_chat_notifies_the_other_members(test_client, db_session):
+    """Regression: an expense the AI logged into a group sent no push, unlike every other path."""
+    group_id = test_client.post("/api/v1/groups", json={"name": "Roommates", "group_type": "home"}).json()["group_id"]
+    test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Sam"})
+    group_service = GroupService(db_session)
+    calls = []
+
+    _create_group_expense_from_agent(
+        group_service, GroupExpenseService(db_session), group_service.list_groups_for_user(USER), USER,
+        group_name="Roommates", description="Pizza night", amount=40.0, category="Dining out",
+        notify=lambda **kw: calls.append(kw),
+    )
+
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["group_id"] == group_id and call["actor_email"] == USER
+    assert call["event_type"] == "expense_added" and call["description"] == "Pizza night"
+    assert sorted(call["shares"].values()) == [20.0, 20.0]
+
+
+def test_failed_group_expense_from_chat_sends_no_notification(db_session):
+    calls = []
+    _create_group_expense_from_agent(
+        GroupService(db_session), GroupExpenseService(db_session), [], USER,
+        group_name="Nope", description="x", amount=5.0, category="General",
+        notify=lambda **kw: calls.append(kw),
+    )
+    assert calls == []

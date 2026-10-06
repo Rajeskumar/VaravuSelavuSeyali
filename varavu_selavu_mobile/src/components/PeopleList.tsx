@@ -20,16 +20,17 @@ import { useAppTheme } from '../context/ThemeContext';
 import { AppTheme, inkOnPastel } from '../theme';
 import { getFriendBalances, FriendBalanceDTO } from '../api/groups';
 import { memberColor, initialsFromName } from './BalanceRow';
+import { formatCurrency } from '../utils/currencyMath';
 
 function formatSignedMoney(net: number): string {
   if (net === 0) return '$0.00';
-  return `${net > 0 ? '+' : '-'}$${Math.abs(net).toFixed(2)}`;
+  return `${net > 0 ? '+' : '-'}${formatCurrency(Math.abs(net))}`;
 }
 
 /** "Record [name] paid $X" when they owe us (net > 0, mirroring the old widget's sign
  * convention), otherwise the reverse-direction phrasing for a balance we owe. */
 function settleLabel(name: string, net: number): string {
-  return net > 0 ? `Record ${name} paid $${net.toFixed(2)}` : `Record you paid ${name} $${Math.abs(net).toFixed(2)}`;
+  return net > 0 ? `Record ${name} paid ${formatCurrency(net)}` : `Record you paid ${name} ${formatCurrency(Math.abs(net))}`;
 }
 
 export default function PeopleList() {
@@ -74,9 +75,9 @@ export default function PeopleList() {
   return (
     <View style={[styles.list, { paddingBottom: insets.bottom + 100 }]}>
       <Text style={styles.summaryLine}>
-        <Text style={{ color: theme.colors.success, fontFamily: 'InstrumentSans-Bold' }}>${owedTotal.toFixed(2)}</Text>
+        <Text style={{ color: theme.colors.success, fontFamily: 'InstrumentSans-Bold' }}>{formatCurrency(owedTotal)}</Text>
         <Text style={styles.summaryMuted}> owed to you  ·  </Text>
-        <Text style={{ color: theme.colors.error, fontFamily: 'InstrumentSans-Bold' }}>${oweTotal.toFixed(2)}</Text>
+        <Text style={{ color: theme.colors.error, fontFamily: 'InstrumentSans-Bold' }}>{formatCurrency(oweTotal)}</Text>
         <Text style={styles.summaryMuted}> you owe</Text>
       </Text>
 
@@ -98,7 +99,10 @@ export default function PeopleList() {
               <View style={styles.info}>
                 <Text style={styles.name} numberOfLines={1}>{person.counterparty_display_name}</Text>
                 <Text style={styles.groupCount}>
-                  {person.groups.length} group{person.groups.length === 1 ? '' : 's'}
+                  {/* Name-only members can't be matched across groups, so say which group and how to merge. */}
+                  {person.counterparty_email
+                    ? `${person.groups.length} group${person.groups.length === 1 ? '' : 's'}`
+                    : `${person.groups.map((g) => g.name).join(', ')} · invite to combine`}
                 </Text>
               </View>
               <Text style={[styles.netAmount, { color: netColor }]}>{formatSignedMoney(person.net)}</Text>

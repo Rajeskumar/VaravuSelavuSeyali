@@ -52,6 +52,8 @@ export interface MemberDTO {
   role: string;
   status: string;
   user_email?: string | null;
+  /** An email invite was sent for this name-only seat and hasn't been accepted yet. */
+  invite_pending?: boolean;
 }
 
 export async function updateGroup(

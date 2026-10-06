@@ -121,6 +121,11 @@ export default function EditGroupExpenseModal({
 
   const handleSave = async () => {
     if (!expense) return;
+    const amountValue = parseFloat(amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      showToast({ message: 'Enter an amount greater than 0', type: 'warning' });
+      return;
+    }
     setLoading(true);
     try {
       if (itemsLoaded && items.length > 0) {

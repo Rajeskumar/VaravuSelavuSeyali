@@ -29,6 +29,7 @@ import { ListSkeleton } from './SkeletonLoader';
 import { findMainCategory } from '../constants/categories';
 import { formatBudgetMoney, statusColor, STATUS_LABEL } from './BudgetProgressBar';
 import ToggleSwitch from './ToggleSwitch';
+import { formatCurrency } from '../utils/currencyMath';
 
 const THRESHOLD_OPTIONS = [50, 80, 90, 100, 110];
 const DEFAULT_THRESHOLDS = [80, 100];
@@ -75,6 +76,11 @@ export default function BudgetsTabContent({ period }: { period?: string }) {
     enabled: formVisible && form.target_type === 'category',
   });
   const suggestion = suggestions?.find((s) => s.category === form.category);
+  // Non-blocking typo guard, same rule as web: far above this category's usual spend.
+  const amountNum = parseFloat(form.amount);
+  const implausible =
+    Number.isFinite(amountNum) &&
+    ((!!suggestion && amountNum > Math.max(suggestion.suggested_amount * 10, 1000)) || amountNum >= 100000);
 
   const saveMut = useMutation({
     mutationFn: () =>
@@ -279,13 +285,18 @@ export default function BudgetsTabContent({ period }: { period?: string }) {
                 placeholder="0.00"
                 placeholderTextColor={theme.colors.textTertiary}
               />
+              {implausible && (
+                <Text style={{ color: theme.colors.warning, fontSize: 12, marginTop: 6 }}>
+                  That's {formatCurrency(amountNum)} a month{suggestion ? ` — you usually spend about ${formatCurrency(suggestion.suggested_amount)}` : ''}. Double-check the amount.
+                </Text>
+              )}
               {form.target_type === 'category' && suggestion && !form.amount && (
                 <TouchableOpacity
                   style={styles.suggestionChip}
                   onPress={() => setForm((f) => ({ ...f, amount: String(suggestion.suggested_amount) }))}
                 >
                   <Text style={styles.suggestionChipText}>
-                    Suggested: ${suggestion.suggested_amount.toFixed(0)} — tap to use
+                    Suggested: {formatCurrency(suggestion.suggested_amount)} — tap to use
                   </Text>
                 </TouchableOpacity>
               )}

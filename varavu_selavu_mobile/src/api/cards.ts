@@ -117,6 +117,10 @@ export interface CardCoachResponse {
   total_earned_usd: number;
   best_card_id: string | null;
   unassigned_spend: number;
+  /** Spend with no card recorded, priced as if it went on the default card (an estimate). */
+  default_assumed_spend?: number;
+  /** Rent/mortgage spend left out of the coach (rarely payable by card without a fee). */
+  excluded_spend?: number;
 }
 
 export interface CardCorrectionDTO {

@@ -37,14 +37,20 @@ export function barFractions(points: TrendPoint[], floor = 0.06): number[] {
 }
 
 /**
- * Whole-percent change of the current month vs the previous one, or null when there's no previous
- * month to compare against (no baseline → no delta shown, rather than a misleading +∞).
- * Only meaningful mid-month if compared like-for-like, so callers label it "vs last month".
+ * Last month's first N days, where N is how far into `now`'s month we are (clamped to last month's
+ * length) — the like-for-like baseline for a mid-month delta. Comparing 5 days of October against
+ * all of September read as "↓64%" on the 5th of every month.
  */
-export function monthOverMonthPercent(points: TrendPoint[]): number | null {
-  if (points.length < 2) return null;
-  const cur = points[points.length - 1].total;
-  const prev = points[points.length - 2].total;
-  if (prev <= 0) return null;
-  return Math.round(((cur - prev) / prev) * 100);
+export function previousMonthToDateRange(now: Date): { start_date: string; end_date: string } {
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  const end = new Date(prevStart.getFullYear(), prevStart.getMonth(), Math.min(now.getDate(), prevDays));
+  return { start_date: ymd(prevStart), end_date: ymd(end) };
+}
+
+/** Whole-percent change from `previous` to `current`, or null with no baseline (rather than +∞). */
+export function percentChange(current: number, previous: number | null | undefined): number | null {
+  if (previous == null || previous <= 0) return null;
+  return Math.round(((current - previous) / previous) * 100);
 }

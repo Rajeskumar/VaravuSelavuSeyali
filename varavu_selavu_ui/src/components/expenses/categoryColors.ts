@@ -3,7 +3,7 @@
  *
  * Deterministic category-color table, keyed to match AddExpenseForm's `CATEGORY_GROUPS` main
  * categories so the dot color for e.g. "Food & Drink" is stable across the app. CerebroOS-era
- * ramp: same violet/cyan-anchored hues as `dashboard/SpendSpectrum.tsx`'s `SPECTRUM_PALETTE`,
+ * ramp: same violet/cyan-anchored hues as `SPECTRUM_COLORS` below (the ranked category charts),
  * for visual consistency between the dashboard's category spectrum and the expense feed's dots.
  * Unknown/legacy category strings fall back to a deterministic hash so they still get a stable
  * (if arbitrary) color instead of all collapsing to one "other" gray.
@@ -33,6 +33,18 @@ export function categoryTint(mainCategory: string | undefined | null): string {
   if (!mainCategory) return CATEGORY_TINTS.Other;
   if (CATEGORY_TINTS[mainCategory]) return CATEGORY_TINTS[mainCategory];
   return FALLBACK_TINTS[hashString(mainCategory) % FALLBACK_TINTS.length];
+}
+
+/** Distinct colors for ranked charts (category breakdown bars). Assigned by rank within one
+ * chart, not by name: name-hashing subcategories into 8 colors gave Rent, Electronics and Dining
+ * out the same teal in one list. 12 entries, none red (red means "owes"/over budget). */
+export const SPECTRUM_COLORS = [
+  '#9C93FF', '#00D2D3', '#F0975E', '#5FD9B8', '#E88CD8', '#7DA6FF',
+  '#E6B44C', '#6E7FE0', '#B98BC9', '#4FB0E8', '#9ACD5A', '#C98B6B',
+];
+
+export function spectrumColor(rank: number): string {
+  return SPECTRUM_COLORS[rank % SPECTRUM_COLORS.length];
 }
 
 export default CATEGORY_TINTS;

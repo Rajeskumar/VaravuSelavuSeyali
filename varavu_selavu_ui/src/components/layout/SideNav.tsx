@@ -21,7 +21,21 @@ const NavList: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate 
         const Icon = item.icon;
         const active = location.pathname.startsWith(item.path);
         return (
-          <ListItemButton key={item.path} selected={active} onClick={() => onNavigate(item.path)} sx={{ mx: 0.5 }}>
+          // A real link (href + aria-current) so it can be opened in a new tab and screen readers
+          // announce the current page; plain clicks still route client-side.
+          <ListItemButton
+            key={item.path}
+            component="a"
+            href={item.path}
+            aria-current={active ? 'page' : undefined}
+            selected={active}
+            onClick={(e: React.MouseEvent) => {
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+              e.preventDefault();
+              onNavigate(item.path);
+            }}
+            sx={{ mx: 0.5 }}
+          >
             <ListItemIcon sx={{ minWidth: 40 }}>
               <Icon />
             </ListItemIcon>

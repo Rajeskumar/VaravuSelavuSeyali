@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Typography, Paper, CircularProgress, Alert, IconButton, Menu, MenuItem, Button, Switch, FormControlLabel, TextField } from '@mui/material';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +24,8 @@ import { CategorySpectrum } from './CategorySpectrum';
 import { AskSheet } from './AskSheet';
 import MoneyFlowSankey from './MoneyFlowSankey';
 import TagFilterSelect from '../tags/TagFilterSelect';
+import { formatMoney } from '../../utils/money';
+import { getAnalysisPeriod, setAnalysisPeriod } from '../common/InsightScopeFilter';
 
 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -53,8 +55,11 @@ const OverviewTab: React.FC = () => {
   const navigate = useNavigate();
   const now = useMemo(() => new Date(), []);
 
-  const [year, setYear] = useState<number>(now.getFullYear());
-  const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
+  const initialPeriod = useMemo(() => getAnalysisPeriod(), []);
+  const [year, setYear] = useState<number>(initialPeriod.year);
+  const [month, setMonth] = useState<number>(initialPeriod.month); // 1-12
+  // Shared with the Items and Merchants tabs (see getAnalysisPeriod).
+  useEffect(() => { setAnalysisPeriod(year, month); }, [year, month]);
   const [periodMode, setPeriodMode] = useState<PeriodMode>('month');
   const [askInsight, setAskInsight] = useState<ChangeInsight | null>(null);
   // Collapsed by default — see the "See the money flow" toggle below CategorySpectrum.
@@ -165,12 +170,12 @@ const OverviewTab: React.FC = () => {
           Tag-scoped
         </Typography>
         <Box>
-          <Typography variant="h6" fontWeight={700}>${periodData.my_expenses_total.toFixed(2)}</Typography>
+          <Typography variant="h6" fontWeight={700}>{formatMoney(periodData.my_expenses_total)}</Typography>
           <Typography variant="caption" color="text.secondary">My Expenses</Typography>
         </Box>
         {periodData.i_paid_total != null && (
           <Box>
-            <Typography variant="h6" fontWeight={700}>${periodData.i_paid_total.toFixed(2)}</Typography>
+            <Typography variant="h6" fontWeight={700}>{formatMoney(periodData.i_paid_total)}</Typography>
             <Typography variant="caption" color="text.secondary">I Paid</Typography>
           </Box>
         )}

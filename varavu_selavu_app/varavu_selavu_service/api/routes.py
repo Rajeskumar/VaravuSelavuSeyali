@@ -678,6 +678,7 @@ def analysis(
 def analysis_chat(
     request: Request,
     body: ChatRequest,
+    background_tasks: BackgroundTasks,
     response: Response = None,
     analysis_service: AnalysisService = Depends(get_analysis_service),
     analytics_service: AnalyticsService = Depends(get_analytics_service),
@@ -689,6 +690,7 @@ def analysis_chat(
     card_service: CardService = Depends(get_card_service),
     tag_service: TagService = Depends(get_tag_service),
     quota: AiQuotaService = Depends(get_ai_quota_service),
+    notification_service: NotificationService = Depends(get_notification_service),
     user_id: str = Depends(auth_required),
 ):
     """
@@ -718,6 +720,8 @@ def analysis_chat(
             tags_enabled=Settings().TAGS_ENABLED,
             model=model,
             provider=provider,
+            # Group expenses the AI creates push to the other members, like the HTTP route.
+            notify_group_event=lambda **kw: background_tasks.add_task(notification_service.fan_out, **kw),
             year=body.year,
             month=body.month,
             start_date=body.start_date,
@@ -1250,14 +1254,16 @@ def confirm_recurring(
                 if eid:
                     shares = {
                         str(s.member_id): float(s.amount_owed)
-                        for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+                        # row_id is a str; the UUID column needs a UUID (SQLite raised here and the
+                        # push was silently skipped).
+                        for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == _uuid.UUID(str(eid))).all()
                     }
                     background_tasks.add_task(
                         notification_service.fan_out,
                         event_type="expense_added",
                         group_id=group_id,
                         actor_email=user_id,
-                        expense_description=d['description'],
+                        description=d['description'],
                         expense_amount=cost,
                         shares=shares,
                     )
@@ -1394,14 +1400,16 @@ def execute_recurring_now(
                 if eid:
                     shares = {
                         str(s.member_id): float(s.amount_owed)
-                        for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
+                        # row_id is a str; the UUID column needs a UUID (SQLite raised here and the
+                        # push was silently skipped).
+                        for s in db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == _uuid.UUID(str(eid))).all()
                     }
                     background_tasks.add_task(
                         notification_service.fan_out,
                         event_type="expense_added",
                         group_id=group_id,
                         actor_email=user_id,
-                        expense_description=tpl['description'],
+                        description=tpl['description'],
                         expense_amount=use_cost,
                         shares=shares,
                     )
@@ -1865,6 +1873,8 @@ def get_card_coach(
         total_earned_usd=round(sum(c.earned_usd for c in earning), 2),
         best_card_id=earning[0].card_id if earning else None,
         unassigned_spend=report.unassigned_spend,
+        default_assumed_spend=report.default_assumed_spend,
+        excluded_spend=report.excluded_spend,
     )
 
 

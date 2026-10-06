@@ -123,7 +123,6 @@ const ExpensesPage: React.FC = () => {
       amount: e.my_share,
       groupAmount: e.cost,
       groupName: e.group_name,
-      payerSummary: e.payer_summary,
       splitType: e.split_type,
       tags: e.tags,
       card: e.card,
@@ -403,27 +402,15 @@ const ExpensesPage: React.FC = () => {
           notes,
         });
       } else if (expense.groupId) {
-        // Phase-1 group expenses are always equal-split (AddExpenseForm never
-        // offers exact/percentage yet), and the group-expense list endpoint
-        // doesn't return the original split entries — only payer_summary. So
-        // an edit here preserves the existing payer(s) (threaded through as
-        // `payerSummary` on the FeedExpense) and re-submits an equal split
-        // across them, which reproduces current behavior for every group
-        // expense that exists today. A true "edit split" flow is out of
-        // scope for this ticket (no split editor is part of this detail
-        // sheet) and should be a follow-up if group expenses ever gain
-        // non-equal splits before this component gets revisited.
-        const payers = expense.payerSummary?.length
-          ? expense.payerSummary.map((p) => ({ member_id: p.member_id, amount_paid: amount }))
-          : [];
+        // This sheet has no split editor, so payers/split are deliberately omitted: the server
+        // keeps the stored split (rescaled if the amount changed). Rebuilding it here from the
+        // payer list used to drop every non-payer member from the split.
         await updateGroupExpense(expense.groupId, String(expense.id), {
           date,
           description: patch.description.trim() || expense.description,
           category: patch.category,
           amount,
           merchant_name: patch.merchantName || undefined,
-          payers,
-          split: { type: 'equal', entries: payers.map((p) => ({ member_id: p.member_id })) },
           // TS-CARD-114 — unlike tags, the group create/update endpoint carries card_id
           // directly (no separate association model needed for a single nullable value),
           // so this is always-replace with no diff-and-sync step required.
@@ -543,7 +530,8 @@ const ExpensesPage: React.FC = () => {
               >
                 {exporting ? 'Exporting…' : 'Export CSV'}
               </Button>
-              <Button variant="contained" onClick={() => openQuickCapture()}>
+              {/* Desktop already has "+ New expense" in the header; keep this for narrower widths. */}
+              <Button variant="contained" onClick={() => openQuickCapture()} sx={{ display: { md: 'none' } }}>
                 Add Expense
               </Button>
             </Box>

@@ -26,6 +26,19 @@ interface Message {
   scope?: string;
 }
 
+/** "July 2026 · My spending" from the backend's resolved period/scope, or null when it would
+ * only restate a default period the user never asked about. */
+function scopeLabel(
+  period?: { label?: string; source?: string },
+  scope?: { kind?: string; group_name?: string | null },
+): string | null {
+  const parts: string[] = [];
+  if (period?.label && period.source !== 'default') parts.push(period.label);
+  if (scope?.kind === 'group') parts.push(scope.group_name || 'A group');
+  else if (scope && parts.length > 0) parts.push('My spending');
+  return parts.length ? parts.join(' · ') : null;
+}
+
 const SUGGESTED_PROMPTS = [
   "What were my top spending categories?",
   "How much did I spend at Amazon?",
@@ -117,9 +130,9 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
         { 
           role: 'assistant', 
           content: data.response || data.reply,
-          // TODO: Replace this hardcoded placeholder with real scope intent from the backend once implemented.
-          // TS-DES-109: The backend does not currently resolve free-text -> {period, scope}.
-          scope: 'This month · My Expenses'
+          // Built from what the backend says it resolved (same rule as mobile's scopeLine): this was
+          // a hard-coded "This month · My Expenses" on every answer, including all-time ones.
+          scope: scopeLabel(data.resolved_period, data.resolved_scope) ?? undefined
         }
       ]);
     } catch (err: any) {

@@ -104,6 +104,8 @@ export default function GroupDetailScreen() {
     queryKey: ['group-detail', groupId],
     queryFn: () => getGroupDetail(groupId),
     enabled: !!groupId,
+    // A missing group (stale link, or one you've left) won't appear on retry.
+    retry: (count: number, err: unknown) => !((err as { status?: number })?.status === 404 || (err as { status?: number })?.status === 403) && count < 2,
   });
 
   const {
@@ -152,7 +154,9 @@ export default function GroupDetailScreen() {
   // figure (✓ glyph when settled, matching `gdBalLabel`/`gdBal`), not a left-aligned banner
   // sentence.
   const balanceColor = myBalance === 0 ? theme.colors.textSecondary : directionalColor(theme, myBalance);
-  const balanceLabel = myBalance === 0 ? "You're all settled up" : myBalance > 0 ? "You're owed" : 'You owe';
+  // Alone in the group there's nothing to settle — say what to do next (web parity).
+  const solo = members.length <= 1;
+  const balanceLabel = solo ? 'Add members to start splitting' : myBalance === 0 ? "You're all settled up" : myBalance > 0 ? "You're owed" : 'You owe';
   const balanceFigure = myBalance === 0 ? '✓' : formatCurrency(Math.abs(myBalance));
 
   // Moved above the early-return loading/not-found guards below (was previously defined further
@@ -225,7 +229,10 @@ export default function GroupDetailScreen() {
   if (!detail) {
     return (
       <View style={styles.loadingCenter}>
-        <Text style={styles.errorText}>Group not found.</Text>
+        <Text style={styles.errorText}>This group doesn't exist, or you're no longer a member.</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button" style={{ marginTop: 16 }}>
+          <Text style={{ color: theme.colors.primary, fontFamily: 'InstrumentSans-SemiBold', fontSize: 15 }}>Back to groups</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -441,7 +448,7 @@ export default function GroupDetailScreen() {
                           {' owes '}
                           <Text style={{ fontWeight: '600' }}>{nameFor(t.to_member_id)}</Text>
                         </Text>
-                        <Text style={styles.transferAmount}>${t.amount.toFixed(2)}</Text>
+                        <Text style={styles.transferAmount}>{formatCurrency(t.amount)}</Text>
                       </View>
                     ))}
                   </View>
@@ -467,6 +474,9 @@ export default function GroupDetailScreen() {
         onSettled={() => {
           qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
           qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+          // Groups list, People tab and Home's "owed to you" also show these balances.
+          qc.invalidateQueries({ queryKey: ['groups'] });
+          qc.invalidateQueries({ queryKey: ['friend-balances'] });
         }}
       />
 
@@ -484,6 +494,9 @@ export default function GroupDetailScreen() {
         onSettled={() => {
           qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
           qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+          // Groups list, People tab and Home's "owed to you" also show these balances.
+          qc.invalidateQueries({ queryKey: ['groups'] });
+          qc.invalidateQueries({ queryKey: ['friend-balances'] });
           setSelectedExpense(null);
         }}
         onDeleted={() => {

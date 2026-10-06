@@ -6,7 +6,7 @@ from sqlalchemy import func, extract, Integer
 import time
 from threading import RLock
 
-from varavu_selavu_service.db.models import Expense, ExpenseItem, GroupMember, RecurringTemplate
+from varavu_selavu_service.db.models import Expense, ExpenseItem, ExpenseSplit, GroupMember, RecurringTemplate
 from varavu_selavu_service.models.api_models import InsightMetrics, MerchantInsightSummary, ItemInsightSummary, ChangeInsight
 
 
@@ -149,6 +149,17 @@ class InsightAnalyticsService:
         if not curr_start or not prev_start:
             return None
 
+        # A period still in progress (this month, this year) is compared with the same number of
+        # days of the previous one. Otherwise 5 days of October vs all of September reported every
+        # merchant as "down 87%". Explicit custom ranges are left exactly as asked.
+        if not (start_date and end_date and year is None):
+            today = date.today()
+            if curr_start <= today and (curr_end is None or today < curr_end):
+                elapsed = today - curr_start
+                curr_end = today
+                capped = prev_start + elapsed
+                prev_end = min(prev_end, capped) if prev_end else capped
+
         return (
             curr_start.strftime("%Y-%m-%d"),
             curr_end.strftime("%Y-%m-%d") if curr_end else None,
@@ -156,21 +167,43 @@ class InsightAnalyticsService:
             prev_end.strftime("%Y-%m-%d") if prev_end else None,
         )
 
+    def _my_spend_rows(self, user_id: str, date_filters: list):
+        """Subquery of the user's own spend rows: personal expenses at their amount, plus the
+        user's *share* of each group expense (never the group's full amount, the double count
+        TS-GRP-106 guards against). Columns: expense_id, merchant_name, amount, purchased_at,
+        description. Merchant views read from this so "Item and merchant breakdowns include
+        your group shares" holds for month-scoped views too, not only the all-time aggregates."""
+        personal = self.db.query(
+            Expense.id.label("expense_id"),
+            Expense.merchant_name.label("merchant_name"),
+            Expense.amount.label("amount"),
+            Expense.purchased_at.label("purchased_at"),
+            Expense.description.label("description"),
+        ).filter(Expense.user_email == user_id, Expense.group_id.is_(None), *date_filters)
+        shares = (
+            self.db.query(
+                Expense.id, Expense.merchant_name, ExpenseSplit.amount_owed, Expense.purchased_at, Expense.description
+            )
+            .join(ExpenseSplit, ExpenseSplit.expense_id == Expense.id)
+            .join(GroupMember, GroupMember.id == ExpenseSplit.member_id)
+            .filter(GroupMember.user_email == user_id, Expense.group_id.isnot(None), ExpenseSplit.amount_owed > 0)
+            .filter(*date_filters)
+        )
+        return personal.union_all(shares).subquery()
+
     def _merchant_totals_for_period(
         self, user_id: str, start_date: str | None, end_date: str | None
     ) -> Dict[str, float]:
         """Canonicalized merchant -> total_spent lookup for a raw date range (no year/month precedence)."""
-        # group_id.is_(None): personal-only, same guard AnalysisService established
-        # (TS-GRP-106) — without it a user's own group expenses would be counted
-        # here at their *full* amount on top of actual personal spend.
-        canon_key = func.lower(func.trim(Expense.merchant_name))
-        query = self.db.query(canon_key, func.sum(Expense.amount)).filter(
-            Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name != None
-        )
+        # Personal spend plus group *shares* (see _my_spend_rows), matching calculate_merchant_metrics.
+        filters = []
         if start_date:
-            query = query.filter(Expense.purchased_at >= start_date)
+            filters.append(Expense.purchased_at >= start_date)
         if end_date:
-            query = query.filter(Expense.purchased_at < _exclusive_end(end_date))
+            filters.append(Expense.purchased_at < _exclusive_end(end_date))
+        rows = self._my_spend_rows(user_id, filters)
+        canon_key = func.lower(func.trim(rows.c.merchant_name))
+        query = self.db.query(canon_key, func.sum(rows.c.amount)).filter(rows.c.merchant_name != None)
         return {r[0]: float(r[1] or 0) for r in query.group_by(canon_key).all()}
 
     def _item_totals_for_period(
@@ -205,22 +238,20 @@ class InsightAnalyticsService:
         # Group by a canonicalized (trimmed/lowercased) key so "Walmart" and
         # "WALMART " don't split into separate rows (TS-ANL-009 canonicalization),
         # but still display a real, human-readable merchant name.
-        canon_key = func.lower(func.trim(Expense.merchant_name))
+        rows = self._my_spend_rows(user_id, date_filters)
+        canon_key = func.lower(func.trim(rows.c.merchant_name))
         query = (
             self.db.query(
                 canon_key.label("canon_name"),
-                func.min(Expense.merchant_name).label("merchant_name"),
-                func.sum(Expense.amount).label("total_spent"),
-                func.count(Expense.id).label("transaction_count"),
-                func.min(Expense.purchased_at).label("first_seen"),
-                func.max(Expense.purchased_at).label("last_seen"),
+                func.min(rows.c.merchant_name).label("merchant_name"),
+                func.sum(rows.c.amount).label("total_spent"),
+                func.count(rows.c.expense_id).label("transaction_count"),
+                func.min(rows.c.purchased_at).label("first_seen"),
+                func.max(rows.c.purchased_at).label("last_seen"),
             )
-            .filter(Expense.user_email == user_id)
-            .filter(Expense.group_id.is_(None))
-            .filter(Expense.merchant_name != None)
-            .filter(*date_filters)
+            .filter(rows.c.merchant_name != None)
             .group_by(canon_key)
-            .order_by(func.sum(Expense.amount).desc())
+            .order_by(func.sum(rows.c.amount).desc())
             .limit(limit)
         )
 
@@ -284,17 +315,21 @@ class InsightAnalyticsService:
             yr_col = extract('year', Expense.purchased_at)
             mo_col = extract('month', Expense.purchased_at)
             
+        rows = self._my_spend_rows(user_id, date_filters)
+        if is_sqlite:
+            yr_col = func.cast(func.strftime('%Y', rows.c.purchased_at), Integer)
+            mo_col = func.cast(func.strftime('%m', rows.c.purchased_at), Integer)
+        else:
+            yr_col = extract('year', rows.c.purchased_at)
+            mo_col = extract('month', rows.c.purchased_at)
         agg_query = (
             self.db.query(
                 yr_col,
                 mo_col,
-                func.sum(Expense.amount),
-                func.count(Expense.id)
+                func.sum(rows.c.amount),
+                func.count(rows.c.expense_id)
             )
-            .filter(Expense.user_email == user_id)
-            .filter(Expense.group_id.is_(None))
-            .filter(Expense.merchant_name == merchant_name)
-            .filter(*date_filters)
+            .filter(rows.c.merchant_name == merchant_name)
             .group_by(yr_col, mo_col)
             .order_by(yr_col.asc(), mo_col.asc())
         )
@@ -358,34 +393,23 @@ class InsightAnalyticsService:
         items_bought.sort(key=lambda x: x["purchase_count"], reverse=True)
 
         # Recent transactions + biggest single transaction, within the same scope
-        recent_expenses = (
-            self.db.query(Expense)
-            .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name == merchant_name)
-            .filter(*date_filters)
-            .order_by(Expense.purchased_at.desc())
-            .limit(10)
-            .all()
+        def _iso(v):
+            return v.isoformat() if v is not None and not isinstance(v, str) else v
+
+        merchant_rows = self.db.query(rows.c.purchased_at, rows.c.description, rows.c.amount).filter(
+            rows.c.merchant_name == merchant_name
         )
+        recent_expenses = merchant_rows.order_by(rows.c.purchased_at.desc()).limit(10).all()
         recent_transactions = [
-            {
-                "date": e.purchased_at.isoformat() if e.purchased_at else None,
-                "description": e.description,
-                "amount": float(e.amount or 0),
-            }
+            {"date": _iso(e[0]), "description": e[1], "amount": float(e[2] or 0)}
             for e in recent_expenses
         ]
 
-        highest_expense = (
-            self.db.query(Expense)
-            .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name == merchant_name)
-            .filter(*date_filters)
-            .order_by(Expense.amount.desc())
-            .first()
-        )
+        highest_expense = merchant_rows.order_by(rows.c.amount.desc()).first()
         highest_transaction = (
             {
-                "date": highest_expense.purchased_at.isoformat() if highest_expense.purchased_at else None,
-                "amount": float(highest_expense.amount or 0),
+                "date": _iso(highest_expense[0]),
+                "amount": float(highest_expense[2] or 0),
             }
             if highest_expense
             else None
@@ -393,9 +417,8 @@ class InsightAnalyticsService:
 
         # Spend share vs. all merchants in the same scope
         total_all_merchants = float(
-            self.db.query(func.sum(Expense.amount))
-            .filter(Expense.user_email == user_id, Expense.group_id.is_(None), Expense.merchant_name != None)
-            .filter(*date_filters)
+            self.db.query(func.sum(rows.c.amount))
+            .filter(rows.c.merchant_name != None)
             .scalar()
             or 0
         )

@@ -12,7 +12,7 @@ import {
   getTopItems, getItemDetail,
   ItemInsightSummary,
 } from '../../api/analytics';
-import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters } from '../common/InsightScopeFilter';
+import InsightScopeFilter, { defaultInsightScopeState, resolveScopeFilters, setAnalysisPeriod } from '../common/InsightScopeFilter';
 import { motion } from 'framer-motion';
 
 import { StatBlock } from './StatBlock';
@@ -21,6 +21,7 @@ import { PurchaseTape } from './PurchaseTape';
 import { PriceHistoryChart } from './PriceHistoryChart';
 
 import { typeScale } from '../../theme';
+import { formatMoney } from '../../utils/money';
 
 
 
@@ -132,10 +133,10 @@ const ItemsTab: React.FC = () => {
 
           {/* KPI Row */}
           <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap' }}>
-            <StatBlock label="Avg" value={`$${(detail.average_unit_price ?? detail.avg_unit_price ?? 0).toFixed(2)}`} />
-            <StatBlock label="Lowest" value={`$${(detail.min_unit_price ?? detail.min_price ?? 0).toFixed(2)}`} color={theme.palette.success.main} />
-            <StatBlock label="Highest" value={`$${(detail.max_unit_price ?? detail.max_price ?? 0).toFixed(2)}`} color={theme.palette.error.main} />
-            <StatBlock label="Total Spent" value={`$${(detail.total_spent ?? 0).toFixed(2)}`} />
+            <StatBlock label="Avg" value={formatMoney(detail.average_unit_price ?? detail.avg_unit_price ?? 0)} />
+            <StatBlock label="Lowest" value={formatMoney(detail.min_unit_price ?? detail.min_price ?? 0)} color={theme.palette.success.main} />
+            <StatBlock label="Highest" value={formatMoney(detail.max_unit_price ?? detail.max_price ?? 0)} color={theme.palette.error.main} />
+            <StatBlock label="Total Spent" value={formatMoney(detail.total_spent ?? 0)} />
           </Box>
 
           {/* Price History Chart */}
@@ -183,7 +184,16 @@ const ItemsTab: React.FC = () => {
     <Box>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-          <InsightScopeFilter value={scope} onChange={setScope} />
+          <InsightScopeFilter
+            value={scope}
+            onChange={(next) => {
+              setScope(next);
+              // Keep the Analysis tabs on the same month (see getAnalysisPeriod).
+              if (next.mode === 'period' && typeof next.year === 'number' && typeof next.month === 'number') {
+                setAnalysisPeriod(next.year, next.month);
+              }
+            }}
+          />
         </Box>
         <Typography sx={{ fontSize: 14, color: 'text.secondary', mb: 3 }}>
           What you buy, and what it costs over time
@@ -239,11 +249,11 @@ const ItemsTab: React.FC = () => {
                       {row.item_name || row.normalized_name}
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: 'text.secondary' }}>
-                      {row.transaction_count ?? 0} purchase{(row.transaction_count ?? 0) === 1 ? '' : 's'} · avg ${(row.average_unit_price ?? row.avg_unit_price ?? 0).toFixed(2)}
+                      {row.transaction_count ?? 0} purchase{(row.transaction_count ?? 0) === 1 ? '' : 's'} · avg {formatMoney(row.average_unit_price ?? row.avg_unit_price ?? 0)}
                     </Typography>
                   </Box>
                   <Typography sx={{ ...typeScale.amount, color: 'text.primary' }}>
-                    ${(row.total_spent ?? 0).toFixed(2)}
+                    {formatMoney(row.total_spent ?? 0)}
                   </Typography>
                   <ChevronRightIcon sx={{ color: 'text.disabled', fontSize: 20 }} />
                 </Box>

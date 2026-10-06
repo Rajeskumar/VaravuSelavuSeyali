@@ -18,6 +18,8 @@ interface StripGroup {
   /** Settled = no outstanding balance either way, matching TrueTotalHero's rule. */
   settled: boolean;
   pendingAmount: number;
+  /** True when the group owes the viewer (positive balance). */
+  owedToMe: boolean;
 }
 
 function mergeGroups(groups: GroupSummary[], summaries: AnalysisGroupSummary[]): StripGroup[] {
@@ -33,6 +35,7 @@ function mergeGroups(groups: GroupSummary[], summaries: AnalysisGroupSummary[]):
       currency: g.currency,
       settled: isSettled(balance),
       pendingAmount,
+      owedToMe: balance > 0,
     };
   });
 }
@@ -90,8 +93,10 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
                 </Typography>
               </Box>
             ) : (
-              <Typography variant="caption" sx={{ fontWeight: 600, color: negativeColor, ...tabularNums }}>
-                {formatMoney(g.pendingAmount, g.currency)} pending
+              // Direction in words and color: this used to be a red "$X pending" even when the
+              // money was owed to the viewer, which the Groups page shows in green.
+              <Typography variant="caption" sx={{ fontWeight: 600, color: g.owedToMe ? positiveColor : negativeColor, ...tabularNums }}>
+                {g.owedToMe ? `you're owed ${formatMoney(g.pendingAmount, g.currency)}` : `you owe ${formatMoney(g.pendingAmount, g.currency)}`}
               </Typography>
             )}
           </Box>

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { AppTheme } from '../theme';
 import { BudgetStatus } from '../api/budgets';
+import { formatCurrency } from '../utils/currencyMath';
 
 export const STATUS_LABEL: Record<BudgetStatus, string> = {
   on_track: 'On track',
@@ -26,7 +27,7 @@ export function statusColor(theme: AppTheme, status: BudgetStatus): string {
 
 export function formatBudgetMoney(n: number): string {
   const sign = n < 0 ? '−' : '';
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return `${sign}${formatCurrency(Math.abs(n))}`;
 }
 
 interface BudgetProgressBarProps {

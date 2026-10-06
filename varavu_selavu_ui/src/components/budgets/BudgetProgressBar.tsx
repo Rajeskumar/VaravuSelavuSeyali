@@ -4,6 +4,7 @@ import Typography from '@mui/material/Typography';
 import { useTheme, Theme } from '@mui/material/styles';
 import { tabularNums } from '../../theme';
 import { BudgetStatus } from '../../api/budgets';
+import { formatMoney } from '../../utils/money';
 
 export const STATUS_LABEL: Record<BudgetStatus, string> = {
   on_track: 'On track',
@@ -27,8 +28,7 @@ export function statusColor(theme: Theme, status: BudgetStatus): string {
 }
 
 export function formatBudgetMoney(n: number): string {
-  const sign = n < 0 ? '−' : '';
-  return `${sign}$${Math.abs(n).toFixed(2)}`;
+  return `${n < 0 ? '−' : ''}${formatMoney(n)}`;
 }
 
 interface BudgetProgressBarProps {
