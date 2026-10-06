@@ -123,10 +123,16 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
   const [inviteFor, setInviteFor] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState('');
 
+  // Archive/unarchive/restore used to refresh only the open group, so the rail and dashboard
+  // kept listing (or omitting) it until a reload.
   const refreshGroup = () => {
     queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
     queryClient.invalidateQueries({ queryKey: ['group-balances', group.group_id] });
+    queryClient.invalidateQueries({ queryKey: ['group-expenses', group.group_id] });
     queryClient.invalidateQueries({ queryKey: ['groups'] });
+    queryClient.invalidateQueries({ queryKey: ['friend-balances'] });
+    queryClient.invalidateQueries({ queryKey: ['all-group-expenses'] });
+    queryClient.invalidateQueries({ queryKey: ['analysis'] });
   };
 
   const doRemove = async (member: MemberDTO, force: boolean) => {
@@ -424,7 +430,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                   setSaving(true);
                   try {
                     await unarchiveGroup(group.group_id);
-                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    refreshGroup();
                     setToast({ open: true, message: 'Group unarchived', severity: 'success' });
                     onClose();
                   } catch(e) {
@@ -447,7 +453,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                   setSaving(true);
                   try {
                     await restoreGroup(group.group_id);
-                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    refreshGroup();
                     setToast({ open: true, message: 'Group restored', severity: 'success' });
                     onClose();
                   } catch(e) {
@@ -487,7 +493,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
           setSaving(true);
           try {
             await archiveGroup(group.group_id);
-            queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+            refreshGroup();
             setToast({
               open: true,
               message: 'Group archived',
@@ -497,7 +503,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                 onClick: async () => {
                   try {
                     await unarchiveGroup(group.group_id);
-                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    refreshGroup();
                     setToast({ open: true, message: 'Group unarchived', severity: 'success' });
                   } catch (e) {
                     setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to unarchive', severity: 'error' });
@@ -528,7 +534,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
           setSaving(true);
           try {
             await deleteGroup(group.group_id);
-            queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+            refreshGroup();
             setToast({
               open: true,
               message: 'Group deleted',
@@ -538,7 +544,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                 onClick: async () => {
                   try {
                     await restoreGroup(group.group_id);
-                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    refreshGroup();
                     setToast({ open: true, message: 'Group restored', severity: 'success' });
                   } catch (e) {
                     setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to restore', severity: 'error' });
@@ -582,7 +588,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
           setSaving(true);
           try {
             await deleteGroup(group.group_id, true);
-            queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+            refreshGroup();
             setToast({
               open: true,
               message: 'Group deleted',
@@ -592,7 +598,7 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                 onClick: async () => {
                   try {
                     await restoreGroup(group.group_id);
-                    queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+                    refreshGroup();
                     setToast({ open: true, message: 'Group restored', severity: 'success' });
                   } catch (e2) {
                     setToast({ open: true, message: e2 instanceof ApiError ? e2.message : 'Failed to restore', severity: 'error' });

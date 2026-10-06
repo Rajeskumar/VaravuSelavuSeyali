@@ -42,7 +42,7 @@ import TagPickerModal from '../components/tags/TagPickerModal';
 import { showToast } from '../components/Toast';
 import { ListSkeleton } from '../components/SkeletonLoader';
 import { formatCurrency } from '../utils/currencyMath';
-import { onExpenseChanged } from '../utils/expenseEvents';
+import { onExpenseChanged, refreshExpenseViews } from '../utils/expenseEvents';
 import { ordinal, nextRecurringOccurrence } from '../utils/expenseInsights';
 import { groupRowsByDay } from '../utils/dayGroups';
 import { matchesSpendFilters, SpendScope } from '../utils/spendFilters';
@@ -460,7 +460,7 @@ export default function ExpensesScreen() {
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['recurringTemplates'] });
             fetchExpenses(true);
-            qc.invalidateQueries({ queryKey: ['groupExpenses'] });
+            refreshExpenseViews(qc);
             showToast({ message: 'Logged today', type: 'success' });
         },
         onError: () => showToast({ message: 'Failed to run template', type: 'error' }),

@@ -20,6 +20,8 @@ import {
     UpsertRecurringPayload,
 } from '../api/recurring';
 import { formatCurrency } from '../utils/currencyMath';
+import { useQueryClient } from '@tanstack/react-query';
+import { refreshExpenseViews } from '../utils/expenseEvents';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -83,6 +85,7 @@ const EMPTY_FORM: UpsertRecurringPayload = {
 
 export default function RecurringExpensesScreen() {
     const isFocused = useIsFocused();
+    const queryClient = useQueryClient();
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const [templates, setTemplates] = useState<RecurringTemplateDTO[]>([]);
@@ -182,6 +185,7 @@ export default function RecurringExpensesScreen() {
             );
             setExecTemplate(null);
             fetchTemplates();
+            if (resp.created) refreshExpenseViews(queryClient);
         } catch (error) {
             Alert.alert('Error', 'Failed to execute template.');
         } finally {

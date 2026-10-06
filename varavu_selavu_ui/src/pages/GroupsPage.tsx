@@ -143,7 +143,9 @@ const GroupsPage: React.FC = () => {
     setCreating(true);
     try {
       const created = await createGroup({ name: newName, group_type: newType });
-      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      // Wait for the rail to have the new group before showing it — navigating first showed the
+      // new group's detail next to "No active groups yet".
+      await queryClient.invalidateQueries({ queryKey: ['groups'] });
       setCreateOpen(false);
       navigate(`/groups/${created.group_id}`);
     } catch (e) {
@@ -216,7 +218,9 @@ const GroupsPage: React.FC = () => {
       } else {
         await addMember(groupId, { display_name: memberName.trim() });
       }
-      queryClient.invalidateQueries({ queryKey: ['group', groupId] });
+      await queryClient.invalidateQueries({ queryKey: ['group', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
       setMemberDialogOpen(false);
       setMemberEmail('');
       setMemberName('');

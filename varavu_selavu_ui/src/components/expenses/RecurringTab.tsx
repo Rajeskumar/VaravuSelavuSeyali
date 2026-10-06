@@ -11,6 +11,7 @@ import { RecurringCard } from '../recurring/RecurringCard';
 import { findMainCategory } from './AddExpenseForm';
 import CategoryPickerField from './CategoryPickerField';
 import { formatMoney } from '../../utils/money';
+import { refreshExpenseViews } from '../../utils/expenseEvents';
 
 /**
  * TS-DES-204 — Recurring, migrated from the standalone `RecurringPage.tsx` (now deleted) into a
@@ -154,8 +155,7 @@ const RecurringTab: React.FC = () => {
   const handleRunNow = async (item: RecurringTemplateDTO) => {
     try {
       await executeRecurringNow(item.id, item.default_cost);
-      qc.invalidateQueries({ queryKey: ['expenses'] });
-      qc.invalidateQueries({ queryKey: ['all-group-expenses'] });
+      refreshExpenseViews(qc);
       setToast({ open: true, message: 'Recurring expense logged', severity: 'success' });
     } catch {
       setToast({ open: true, message: 'Failed to run expense', severity: 'error' });

@@ -19,3 +19,15 @@ export function onExpenseChanged(callback: Listener): () => void {
   listeners.add(callback);
   return () => listeners.delete(callback);
 }
+
+/** Query roots that show expense-derived numbers. Recurring "Run now"/confirm only refreshed the
+ * templates list, leaving Home, Insights and Budgets on the old totals (web had the same gap). */
+const EXPENSE_VIEW_KEYS = [
+  'analysis', 'budgets', 'card-coach', 'insights', 'groupExpenses', 'groups', 'group-expenses',
+  'group-balances', 'friend-balances', 'activity-feed', 'topMerchants', 'topItems', 'merchantDetail', 'itemDetail',
+];
+
+export function refreshExpenseViews(queryClient: { invalidateQueries: (filters: { queryKey: unknown[] }) => unknown }): void {
+  for (const key of EXPENSE_VIEW_KEYS) queryClient.invalidateQueries({ queryKey: [key] });
+  notifyExpenseChanged();
+}

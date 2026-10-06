@@ -8,6 +8,8 @@ import { AppTheme } from '../theme';
 import { getRecurringDue, confirmRecurring, DueOccurrenceDTO } from '../api/recurring';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from './Toast';
+import { useQueryClient } from '@tanstack/react-query';
+import { refreshExpenseViews } from '../utils/expenseEvents';
 
 interface ItemState {
     selected: boolean;
@@ -18,6 +20,7 @@ const promptedSessions = new Set<string>();
 
 export default function RecurringPrompt() {
     const { userEmail } = useAuth();
+    const queryClient = useQueryClient();
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const [open, setOpen] = useState(false);
@@ -67,6 +70,7 @@ export default function RecurringPrompt() {
             }
             if (toSend.length > 0) {
                 await confirmRecurring(toSend);
+                refreshExpenseViews(queryClient);
                 showToast({ message: 'Recurring expenses added successfully!', type: 'success' });
             }
             setOpen(false);

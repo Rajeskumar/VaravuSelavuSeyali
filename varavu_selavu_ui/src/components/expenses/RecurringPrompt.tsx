@@ -5,7 +5,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircleRounded';
 import { useQueryClient } from '@tanstack/react-query';
 import { getRecurringDue, confirmRecurring, DueOccurrenceDTO } from '../../api/recurring';
 import { typeScale } from '../../theme';
-import { notifyExpenseChanged } from '../../utils/expenseEvents';
+import { refreshExpenseViews } from '../../utils/expenseEvents';
 import { formatMoney } from '../../utils/money';
 
 interface ItemState {
@@ -77,9 +77,7 @@ const RecurringPrompt: React.FC = () => {
         // for up to a minute, and a currently-mounted Dashboard (which listens for this event
         // since TS-DES-111) never learned about it at all. Same invalidation RecurringPage's
         // "Run Now" already does, plus the event bus for non-React-Query pages.
-        queryClient.invalidateQueries({ queryKey: ['expenses'] });
-        queryClient.invalidateQueries({ queryKey: ['all-group-expenses'] });
-        notifyExpenseChanged();
+        refreshExpenseViews(queryClient);
       }
       setOpen(false);
     } catch (e) {
