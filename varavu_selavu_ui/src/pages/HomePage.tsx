@@ -276,19 +276,19 @@ const TRUST_POINTS = [
   {
     icon: <LockRoundedIcon fontSize="small" />,
     title: 'Your login stays yours',
-    body: "Nothing running in your browser — a page script, an extension, a bad link — can read your sign-in and act as you.",
+    body: "Your sign-in is stored where page scripts can't read it, and other sites can't make requests as you.",
     how: 'How: sign-in tokens are kept in HttpOnly cookies with CSRF protection and are rotated on every refresh.',
   },
   {
     icon: <ShieldRoundedIcon fontSize="small" />,
-    title: 'Sign out everywhere, in one tap',
-    body: "Logging out signs you out of every device at once. If a sign-in is ever copied and reused, it's cut off immediately.",
-    how: 'How: refresh tokens are tracked per login and the whole family is revoked on logout or on reuse.',
+    title: 'Stolen sign-ins get cut off',
+    body: "Logging out ends that session for good. If a copied sign-in is ever reused, that login is shut down.",
+    how: 'How: refresh tokens are tracked per login, and the whole chain is revoked on logout or when reuse is detected.',
   },
   {
     icon: <DownloadRoundedIcon fontSize="small" />,
     title: 'Your data, on your terms',
-    body: 'Export your full ledger to CSV whenever you want, or delete your account outright — no support ticket, no waiting.',
+    body: 'Export your expenses and your group shares to CSV whenever you want, or delete your account outright — no support ticket, no waiting.',
     how: 'How: export and deletion are self-serve from Profile and take effect immediately.',
   },
 ];
