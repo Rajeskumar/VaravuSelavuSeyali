@@ -43,10 +43,13 @@ class GroupService:
         return str(member.id) if member else None
 
     def require_membership(self, group_id: str, email: str) -> GroupMember:
-        """Returns the caller's GroupMember row, or raises 403 if they aren't an active member."""
+        """Returns the caller's GroupMember row, or raises 404 if they aren't an active member.
+
+        404, not 403, and the same body as a group that doesn't exist: a different answer for
+        "exists but not yours" lets anyone probe which group ids are real."""
         member = self._get_active_membership(group_id, email)
         if member is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this group")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
         return member
 
     def _get_active_membership(self, group_id, email: str) -> Optional[GroupMember]:
@@ -392,11 +395,10 @@ class GroupService:
             # group_members.user_email is a FK to users.email — must correspond to a
             # real registered user, otherwise this is a placeholder (name-only, §3.1/E3).
             registered_user = self.db.query(User).filter(User.email == member_email).first()
+            # One answer for "no such account" and "account exists but isn't verified": telling
+            # them apart let any signed-in user test which addresses are registered.
             if registered_user is not None and not registered_user.email_verified:
-                raise HTTPException(
-                    status_code=400,
-                    detail="That user has not verified their email address yet",
-                )
+                registered_user = None
             if registered_user is None:
                 raise HTTPException(
                     status_code=400,

@@ -20,7 +20,7 @@ def test_delete_account_hard_deletes_personal_expenses_only(test_client, db_sess
     db_session.commit()
     personal_id = personal.id
 
-    res = test_client.delete("/api/v1/auth/profile")
+    res = test_client.request("DELETE", "/api/v1/auth/profile", json={"confirm_email": "test@user.com"})
     assert res.status_code == 200
     assert res.json() == {"success": True}
 
@@ -77,7 +77,7 @@ def test_delete_account_anonymizes_group_history(test_client, db_session):
     db_session.commit()
     personal_id = personal.id
 
-    res = test_client.delete("/api/v1/auth/profile")
+    res = test_client.request("DELETE", "/api/v1/auth/profile", json={"confirm_email": "test@user.com"})
     assert res.status_code == 200
 
     # Personal expense: gone

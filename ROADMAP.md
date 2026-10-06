@@ -49,3 +49,12 @@ M-01–M-09 were fixed in code on 2026-10-06 (accessible amount input and keypad
 - [ ] Bottom-nav items are `role="link"` divs with no tab stop — make them real links so keyboard/switch users can reach them — context: spotted while verifying M-01; not in the review.
 - [ ] Require the `Unit tests` workflow (`.github/workflows/unit.yml`) in branch protection once it has been green for a few runs — context: Jest had no gate before 2026-10-06.
 - [ ] Run `make qa-all` (fresh QA personas) once on the next release candidate to confirm the new Playwright specs pass under the normal setup; they were verified with a borrowed session — context: 2026-10-06.
+
+## Security and privacy review follow-up (2026-10-06)
+All findings were fixed in code. Remaining, and not code-only:
+- [ ] Store AI consent per account on the server (`users.ai_consent_at`) and enforce it on `/analysis/chat` too; today it is per device, enforced server-side only for categorize and receipt parsing — context: 2026-10-06 review, AI disclosure.
+- [ ] Confirm before publishing: the AI provider's retention and no-training terms for the Gemini API plan in use, and backup retention; both are marked `[CONFIRM …]` in `privacy_policy.html`.
+- [ ] Add-member by email still reveals whether a verified account exists (success vs failure). A neutral flow means inviting everyone by email and letting them accept; rate limits (30/hour) bound it for now.
+- [ ] Put the rate limiter on Redis (`RATE_LIMIT_STORAGE_URI`) and lock Cloud Run ingress to Cloudflare — already listed under Infra; still the real brute-force control.
+- [ ] Verify in production, not locally: headers after Cloudflare, `ENVIRONMENT`/`AUTH_COOKIE_SECURE`, CORS origins, that `*.run.app` is not reachable, and that `/docs` returns 404.
+- [ ] Production `INLINE_RUNTIME_CHUNK=false` build + new CSP: smoke-test login, Google sign-in and analytics consent on a deployed build (verified locally by inspecting `build/index.html` only).

@@ -13,8 +13,8 @@ import FieldBox from '../components/FieldBox';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
 import { listBudgets } from '../api/budgets';
-import { getProfile, updateProfile, deleteProfile } from '../api/profile';
-import { forgotPassword } from '../api/auth';
+import { getProfile, updateProfile } from '../api/profile';
+import { fetchMyDataJson } from '../api/account';
 import { useAuth } from '../context/AuthContext';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '../api/apiFetch';
@@ -115,32 +115,11 @@ export default function ProfileScreen({ navigation }: any) {
     }
   };
 
+  // The confirmation (password, or the email for Google accounts) lives on its own screen: the
+  // iOS-only Alert.prompt this used did nothing on Android and asked for no proof of ownership.
   const handleDeleteAccount = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.prompt(
-      'Delete Account',
-      'This action is irreversible and will delete all your tracked expenses. Type "DELETE" to confirm.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async (text?: string) => {
-            if (text !== 'DELETE') {
-              Alert.alert('Error', 'Confirmation text did not match.');
-              return;
-            }
-            try {
-              await deleteProfile();
-              signOut();
-            } catch (e) {
-              Alert.alert('Error', 'Failed to delete account.');
-            }
-          }
-        }
-      ],
-      'plain-text'
-    );
+    navigation.navigate('DeleteAccount');
   };
 
   if (loading) {
@@ -175,7 +154,7 @@ export default function ProfileScreen({ navigation }: any) {
         <View style={styles.dangerZone}>
           <Text style={styles.dangerTitle}>Danger zone</Text>
           <Text style={styles.dangerDesc}>
-            Permanently delete your account and all associated expense data. This action cannot be undone.
+            Permanently delete your account and personal data. Expenses you added to shared groups stay for the other members, with your name removed. This cannot be undone.
           </Text>
           <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount} activeOpacity={0.8}>
             <Text style={styles.deleteButtonText}>Delete account</Text>
@@ -185,13 +164,17 @@ export default function ProfileScreen({ navigation }: any) {
     );
   }
 
-  // Reuses the reset-by-email flow (no new endpoint; proves control of the inbox).
-  const sendPasswordReset = async () => {
+  const [downloading, setDownloading] = useState(false);
+  const downloadAll = async () => {
+    if (downloading) return;
+    setDownloading(true);
     try {
-      await forgotPassword({ email });
-      Alert.alert('Check your email', `We sent a link to ${email} to set a new password.`);
-    } catch {
-      Alert.alert("Couldn't send the email", 'Try again in a minute.');
+      const json = await fetchMyDataJson();
+      await Share.share({ title: 'trackspense_my_data.json', message: json });
+    } catch (e: any) {
+      Alert.alert('Download failed', e?.message ?? 'Could not export your data. Try again in a moment.');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -212,7 +195,8 @@ export default function ProfileScreen({ navigation }: any) {
     { name: 'Notifications', hint: notifsOn === null ? undefined : notifsOn ? 'On' : 'Off', onPress: () => Linking.openSettings() },
     { name: 'Appearance', hint: isSystemDefault ? 'System' : isDark ? 'Dark' : 'Light', onPress: chooseAppearance },
     { name: 'Export data', hint: exporting ? 'Exporting…' : 'CSV · yours + group shares', onPress: exportData },
-    { name: 'Change password', onPress: sendPasswordReset },
+    { name: 'Download all my data', hint: downloading ? 'Preparing…' : 'JSON', onPress: downloadAll },
+    { name: 'Password & security', hint: 'Sign-ins', onPress: () => navigation.navigate('Security') },
     { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
     { name: 'About', onPress: () => navigation.navigate('About') },
   ];

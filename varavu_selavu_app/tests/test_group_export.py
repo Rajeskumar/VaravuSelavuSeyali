@@ -87,7 +87,7 @@ def test_non_member_cannot_export(test_client, db_session):
     old = _as_user("stranger@test.com")
     try:
         res = test_client.get(f"/api/v1/groups/{group_id}/export.csv")
-        assert res.status_code == 403
+        assert res.status_code == 404
     finally:
         _restore(old)
 

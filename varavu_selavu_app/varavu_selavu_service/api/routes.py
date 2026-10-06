@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
@@ -263,7 +263,7 @@ def categorize_expense(
     # Categorization is a convenience on the add-expense form, so running out of AI quota
     # must never break that form: fall back to the same default classify() uses on failure.
     fallback = {"main_category": "Other", "subcategory": "General", "merchant_name": None, "source": "default"}
-    if not Settings().CATEGORIZE_LLM_FALLBACK:
+    if not data.allow_ai or not Settings().CATEGORIZE_LLM_FALLBACK:
         return fallback
     try:
         reservation = quota.reserve(user_id, FEATURE_CATEGORIZE)
@@ -350,6 +350,25 @@ def create_expense(
         "notes": saved.get("notes"),
     }
     return {"success": True, "expense": expense_payload}
+
+
+@router.get(
+    "/account/export",
+    tags=["Account"],
+    summary="Download everything TrackSpense holds about me as JSON",
+)
+@limiter.limit("5/hour")
+def export_account_data(
+    request: Request,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(auth_required),
+):
+    from varavu_selavu_service.services.account_export_service import AccountExportService
+
+    return JSONResponse(
+        content=AccountExportService(db).build(user_id),
+        headers={"Content-Disposition": 'attachment; filename="trackspense_my_data.json"'},
+    )
 
 
 @router.get(
@@ -777,6 +796,9 @@ def parse_receipt(
     request: Request,
     file: UploadFile = File(...),
     save_ocr_text: bool = False,
+    # False until the person has agreed to AI processing: the image is then read only by our own
+    # OCR and never forwarded to an AI provider, however unsure that read is.
+    allow_ai: bool = True,
     receipt_service: ReceiptService = Depends(get_receipt_service),
     quota: AiQuotaService = Depends(get_ai_quota_service),
     user_id: str = Depends(auth_required),
@@ -803,7 +825,10 @@ def parse_receipt(
         )
 
     if receipt_service.uses_local_ocr:
-        return _parse_receipt_locally(receipt_service, quota, user_id, data, content_type, save_ocr_text)
+        return _parse_receipt_locally(receipt_service, quota, user_id, data, content_type, save_ocr_text, allow_ai)
+
+    if not allow_ai and receipt_service.engine != "mock":
+        raise HTTPException(status_code=403, detail="Scanning this receipt needs AI features, which you haven't allowed. Enter it manually, or allow AI features.")
 
     # Reserved only after validation, so rejected uploads never cost the user a scan. The mock
     # engine (tests/local) makes no provider call and is not metered.
@@ -836,6 +861,7 @@ def _parse_receipt_locally(
     data: bytes,
     content_type: str,
     save_ocr_text: bool,
+    allow_ai: bool = True,
 ) -> dict:
     """OCR on our own server, then rules. With the "hybrid" engine, a low-confidence read is
     re-done by the LLM — the only path here that costs AI quota, and never a failure if the
@@ -850,6 +876,12 @@ def _parse_receipt_locally(
             raise HTTPException(status_code=422, detail="Couldn't read this receipt. Try a clearer photo.")
 
     if local is not None and (not hybrid or local["confidence"] >= Settings().OCR_LLM_FALLBACK_MIN_CONF):
+        return local
+    if not allow_ai:
+        # No consent to send the image to an AI provider: our own reading is all there is.
+        if local is None:
+            raise HTTPException(status_code=422, detail="Couldn't read this receipt without AI features. Try a clearer photo, enter it manually, or allow AI features.")
+        local["warnings"].append("Read without AI assist (AI features are off) — please review the details.")
         return local
 
     try:

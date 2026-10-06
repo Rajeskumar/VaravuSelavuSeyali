@@ -128,7 +128,7 @@ def test_converting_into_group_actor_is_not_a_member_of_fails(test_client, db_se
         f"/api/v1/expenses/{expense.id}/move_to_group",
         json={"group_id": other_group_id, "split": {"type": "equal", "entries": [{"member_id": admin_id}]}},
     )
-    assert res.status_code == 403
+    assert res.status_code == 404
 
 
 def test_already_group_expense_returns_400(test_client, db_session):

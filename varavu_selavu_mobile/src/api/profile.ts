@@ -33,9 +33,3 @@ export async function updateProfile(payload: {
   if (!res.ok) throw new Error('Failed to update profile');
   return res.json();
 }
-
-export async function deleteProfile(): Promise<{ success: boolean }> {
-  const res = await apiFetch('/api/v1/auth/profile', { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete profile');
-  return res.json();
-}

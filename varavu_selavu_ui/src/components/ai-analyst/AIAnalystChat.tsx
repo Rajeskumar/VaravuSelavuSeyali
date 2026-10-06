@@ -1,3 +1,4 @@
+import { ensureAiConsent } from '../../utils/aiConsent';
 import React, { useState, useRef, useEffect } from "react";
 import { Box, Typography, TextField, IconButton } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -91,6 +92,11 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
     if (e) e.preventDefault();
     const finalQuery = overrideQuery || query;
     if (!finalQuery.trim() || aiBlocked) return;
+    // Questions are answered by a third-party AI service; get the person's agreement first.
+    if (!(await ensureAiConsent())) {
+      setError('Ask needs AI features. Allow them when prompted to continue.');
+      return;
+    }
 
     const newMessages: Message[] = [...messages, { role: 'user', content: finalQuery }];
     setMessages(newMessages);

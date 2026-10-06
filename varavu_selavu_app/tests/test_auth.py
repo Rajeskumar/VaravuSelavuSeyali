@@ -83,7 +83,7 @@ def test_google_login(test_client, db_session):
 
     try:
         with patch("google.oauth2.id_token.verify_oauth2_token") as verify:
-            verify.return_value = {"email": "g@x.com", "name": "Google User"}
+            verify.return_value = {"email": "g@x.com", "name": "Google User", "email_verified": True}
             resp = test_client.post("/api/v1/auth/google", json={"id_token": "dummy_token"})
         
         assert resp.status_code == 200

@@ -2,11 +2,12 @@ import html as _html
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from varavu_selavu_service.auth.security import auth_required
+from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.core.config import Settings
 from varavu_selavu_service.db.models import Expense, ExpenseSplit, GroupMember, ExpenseItem, ExpenseItemSplit
 from varavu_selavu_service.db.session import get_db
@@ -294,7 +295,9 @@ def restore_group(
     status_code=status.HTTP_201_CREATED,
     summary="Add a registered or placeholder member",
 )
+@limiter.limit("30/hour")  # also bounds how fast addresses can be tried against "is this registered?"
 def add_member(
+    request: Request,
     group_id: str,
     data: AddMemberRequest,
     background_tasks: BackgroundTasks,
@@ -348,7 +351,9 @@ def remove_member(
 
 
 @router.post("/{group_id}/invites", response_model=CreateInviteResponse, status_code=status.HTTP_201_CREATED, summary="Create an invite link for a member seat")
+@limiter.limit("30/hour")
 def create_invite(
+    request: Request,
     group_id: str,
     data: CreateInviteRequest,
     background_tasks: BackgroundTasks,

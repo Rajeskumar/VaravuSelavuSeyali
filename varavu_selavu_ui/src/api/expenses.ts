@@ -1,3 +1,4 @@
+import { hasAiConsent } from '../utils/aiConsent';
 import { fetchWithAuth } from './api';
 import { aiErrorFromResponse } from './aiUsage';
 import { TagRefDTO } from './tags';
@@ -95,7 +96,7 @@ export interface ReceiptParseDraft {
 export async function parseReceipt(file: File): Promise<ReceiptParseDraft> {
   const form = new FormData();
   form.append('file', file);
-  const res = await fetchWithAuth(`/api/v1/ingest/receipt/parse`, {
+  const res = await fetchWithAuth(`/api/v1/ingest/receipt/parse?allow_ai=${hasAiConsent()}`, {
     method: 'POST',
     body: form,
   });
@@ -172,7 +173,8 @@ export interface CategorySuggestion {
 export async function suggestCategory(description: string): Promise<CategorySuggestion> {
   const res = await fetchWithAuth(`/api/v1/expenses/categorize`, {
     method: 'POST',
-    body: JSON.stringify({ description }),
+    // Without the person's AI consent only the local rules may answer; the text isn't sent on.
+    body: JSON.stringify({ description, allow_ai: hasAiConsent() }),
   });
   if (!res.ok) throw new Error('Failed to classify expense');
   return res.json();

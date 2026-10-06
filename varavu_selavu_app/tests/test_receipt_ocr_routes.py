@@ -199,3 +199,40 @@ def test_parse_ocr_low_recognition_scores_request_image(test_client, engine):
     assert res.status_code == 200
     assert res.json()['needs_image'] is True
     llm.assert_not_called()
+
+
+# ---- AI consent (security/privacy review 2026-10-06) -------------------------------------
+def test_without_ai_consent_an_unsure_read_never_reaches_the_llm(test_client, db_session, engine):
+    engine("hybrid")
+    with patch(READ_RECEIPT, return_value=_rows(MESSY_RECEIPT)), patch.object(
+        ReceiptService, "_call_gemini", return_value=GEMINI_RESULT
+    ) as llm:
+        res = test_client.post(
+            PARSE_URL + "?allow_ai=false", files={"file": ("r.png", PNG_MAGIC + b"x" * 64, "image/png")}
+        )
+    assert res.status_code == 200
+    llm.assert_not_called()
+    assert any("without AI" in w for w in res.json()["warnings"])
+    assert _receipt_usage(db_session) == 0
+
+
+def test_without_ai_consent_an_unreadable_receipt_is_a_clear_422_not_an_llm_call(test_client, db_session, engine):
+    engine("hybrid")
+    with patch(READ_RECEIPT, side_effect=RuntimeError("ocr crashed")), patch.object(
+        ReceiptService, "_call_gemini", return_value=GEMINI_RESULT
+    ) as llm:
+        res = test_client.post(
+            PARSE_URL + "?allow_ai=false", files={"file": ("r.png", PNG_MAGIC + b"x" * 64, "image/png")}
+        )
+    assert res.status_code == 422
+    llm.assert_not_called()
+
+
+def test_a_confident_local_read_is_unchanged_whether_or_not_ai_is_allowed(test_client, db_session, engine):
+    engine("hybrid")
+    with patch(READ_RECEIPT, return_value=_rows(CLEAR_RECEIPT)):
+        res = test_client.post(
+            PARSE_URL + "?allow_ai=false", files={"file": ("r.png", PNG_MAGIC + b"x" * 64, "image/png")}
+        )
+    assert res.status_code == 200
+    assert res.json()["source"] == "ocr"

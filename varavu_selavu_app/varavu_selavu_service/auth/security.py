@@ -1,5 +1,6 @@
+import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
@@ -7,8 +8,10 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from jwt import PyJWTError
+from sqlalchemy.orm import Session
 
 from varavu_selavu_service.core.config import Settings
+from varavu_selavu_service.db.session import get_db
 
 settings = Settings()
 
@@ -60,7 +63,17 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_token(data: dict, expires_delta: timedelta, token_type: str) -> str:
     to_encode = data.copy()
-    to_encode.update({"exp": datetime.utcnow() + expires_delta, "type": token_type})
+    now = datetime.utcnow()
+    # `iat` is what lets a revocation ("everything issued before T is dead") apply to tokens that
+    # are otherwise stateless — see auth_required.
+    # `iat_ms` is the same instant at millisecond resolution: `iat` is whole seconds, too coarse to
+    # tell "issued just before the logout" from "issued just after it" within one second.
+    to_encode.update({
+        "exp": now + expires_delta,
+        "iat": now,
+        "iat_ms": int(time.time() * 1000),
+        "type": token_type,
+    })
     secret = settings.JWT_SECRET
     return jwt.encode(to_encode, secret, algorithm=ALGORITHM)
 
@@ -97,7 +110,11 @@ def decode_token(token: str, token_type: str) -> dict:
     return payload
 
 
-def auth_required(request: Request, token: Optional[str] = Depends(oauth2_scheme)) -> str:
+def auth_required(
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> str:
     """Resolves the caller's identity from the Authorization header when one is sent (native
     clients), otherwise from the access cookie (web). The header wins when both are present:
     it's the credential the client chose to send, a stale cookie left in a native cookie jar
@@ -113,5 +130,57 @@ def auth_required(request: Request, token: Optional[str] = Depends(oauth2_scheme
             headers={"WWW-Authenticate": "Bearer"},
         )
     payload = decode_token(access_token, "access")
-    return payload.get("sub")
+    email = payload.get("sub")
+    _enforce_session_still_valid(db, email, payload)
+    return email
+
+
+def _enforce_session_still_valid(db: Session, email: Optional[str], payload: dict) -> None:
+    """Refuses an access token whose account is gone, or that was issued before the account's
+    `token_valid_after` (set on logout, password reset/change, "sign out everywhere" and account
+    deletion). Without this a signed-out or stolen token kept working until it expired.
+
+    Compared in milliseconds, so a login in the same second as a logout is not rejected by the
+    logout's own cut-off while a token issued just before it still is."""
+    from varavu_selavu_service.db.models import User
+
+    row = db.query(User.token_valid_after).filter(User.email == email).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    cutoff = row[0]
+    if cutoff is not None:
+        if cutoff.tzinfo is None:  # SQLite (tests) returns naive UTC
+            cutoff = cutoff.replace(tzinfo=timezone.utc)
+        issued_ms = payload.get("iat_ms")
+        if issued_ms is None:  # token minted before iat_ms existed
+            issued_ms = int(payload.get("iat") or 0) * 1000
+        if int(issued_ms) < int(cutoff.timestamp() * 1000):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session ended")
+
+
+# A short built-in list rather than a call to a breach-lookup service: sending even a hash prefix
+# of a user's password to a third party is a privacy cost this product doesn't need to take.
+_COMMON_PASSWORDS = frozenset("""
+password password1 password12 password123 password1234 passw0rd p@ssw0rd p@ssword 12345678 123456789
+1234567890 123123123 11111111 00000000 87654321 qwertyui qwerty123 qwertyuiop qwerty12345 1q2w3e4r
+1q2w3e4r5t 1qaz2wsx abc12345 abcd1234 abcdefgh iloveyou iloveyou1 letmein1 welcome1 welcome123
+admin123 administrator monkey123 dragon123 football1 baseball1 superman1 trustno1 sunshine1 princess1
+master123 shadow123 michael123 changeme changeme123 trackspense trackspense1 trackspense123
+asdfghjk asdf1234 zxcvbnm1 zaq12wsx
+""".split())
+
+
+def validate_password_strength(password: str, email: Optional[str] = None) -> Optional[str]:
+    """Returns a user-facing reason a password is refused, or None when it is acceptable. Length
+    (8 to 72 bytes) is enforced by the request models; this adds what length alone misses."""
+    lowered = password.lower()
+    if lowered in _COMMON_PASSWORDS:
+        return "That password is too common. Choose something harder to guess."
+    if len(set(lowered)) < 4:
+        return "That password repeats too few characters. Choose something harder to guess."
+    if email:
+        local = email.split("@")[0].lower()
+        if len(local) >= 4 and (lowered == local or lowered == email.lower() or local in lowered and len(lowered) <= len(local) + 3):
+            return "Your password shouldn't be your email address."
+    return None
 

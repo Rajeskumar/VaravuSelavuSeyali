@@ -225,7 +225,7 @@ def test_non_member_access_returns_403(test_client, db_session):
         res = test_client.get(f"/api/v1/groups/{group_id}")
     finally:
         _restore(old)
-    assert res.status_code == 403
+    assert res.status_code == 404
 
 
 def test_non_admin_put_and_delete_return_403(test_client, db_session):

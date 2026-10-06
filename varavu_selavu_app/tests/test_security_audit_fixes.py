@@ -78,7 +78,11 @@ class TestVS07EmailVerificationGate:
         gid = test_client.post("/api/v1/groups", json={"name": "Flat"}).json()["group_id"]
         res = test_client.post(f"/api/v1/groups/{gid}/members", json={"email": "notyet@x.com"})
         assert res.status_code == 400
-        assert "verified" in res.json()["detail"].lower()
+        # Same answer as for an address with no account at all — telling them apart was an
+        # enumeration oracle (audit 2026-10-06).
+        unknown = test_client.post(f"/api/v1/groups/{gid}/members", json={"email": "nobody@x.com"})
+        assert unknown.status_code == 400
+        assert res.json()["detail"] == unknown.json()["detail"]
 
     def test_personal_expenses_still_work_while_unverified(self, test_client, db_session):
         """The gate is scoped to groups on purpose — a solo user must not be locked out."""

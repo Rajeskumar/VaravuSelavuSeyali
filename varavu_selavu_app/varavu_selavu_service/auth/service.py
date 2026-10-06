@@ -6,7 +6,7 @@ import uuid
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from varavu_selavu_service.db.models import User, Expense, GroupMember, RefreshToken, EmailToken
+from varavu_selavu_service.db.models import User, Expense, GroupMember, GroupInvitation, RefreshToken, EmailToken
 from .security import hash_password, verify_password, UNUSABLE_PASSWORD_HASH
 
 # Verification links are low-stakes (a stale one just means "request a new one"), so a
@@ -107,6 +107,70 @@ class AuthService:
         hashed = hash_password(password)
         user.password_hash = hashed
         self.db.commit()
+        return True
+
+    # ---- Session revocation ------------------------------------------------------------
+    def end_access_tokens(self, email: str) -> None:
+        """Refuses every access token issued before now (see security.auth_required)."""
+        user = self.db.query(User).filter(User.email == email).first()
+        if user:
+            user.token_valid_after = datetime.now(timezone.utc)
+            self.db.commit()
+
+    def end_all_sessions(self, email: str, reason: str) -> None:
+        """Refresh families and access tokens both."""
+        self.revoke_all_sessions_for_user(email, reason=reason)
+        self.end_access_tokens(email)
+
+    def has_usable_password(self, email: str) -> bool:
+        user = self.db.query(User).filter(User.email == email).first()
+        return bool(user and (user.password_hash or "").startswith("$2"))
+
+    def neutralize_unverified_account(self, email: str) -> None:
+        """Google sign-in met a password account whose email was never verified. Whoever created
+        it (possibly not the mailbox owner — account pre-hijacking) may know its password, so the
+        password is wiped and every session ended before the real owner is signed in."""
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            return
+        user.password_hash = UNUSABLE_PASSWORD_HASH
+        self.db.commit()
+        self.end_all_sessions(email, reason="takeover_guard")
+
+    # ---- Session list ---------------------------------------------------------------------
+    def list_sessions(self, email: str) -> list:
+        """Active sign-ins: one per refresh-token family that still has an unexpired,
+        unrevoked token."""
+        now = datetime.now(timezone.utc)
+        rows = (
+            self.db.query(RefreshToken)
+            .filter(RefreshToken.user_email == email, RefreshToken.revoked_at.is_(None))
+            .all()
+        )
+        families: dict = {}
+        for r in rows:
+            if _aware(r.expires_at) < now:
+                continue
+            f = families.setdefault(r.family_id, {"family_id": str(r.family_id), "signed_in_at": r.issued_at, "last_active_at": r.issued_at, "expires_at": r.expires_at})
+            if r.issued_at and (f["signed_in_at"] is None or r.issued_at < f["signed_in_at"]):
+                f["signed_in_at"] = r.issued_at
+            if r.issued_at and (f["last_active_at"] is None or r.issued_at > f["last_active_at"]):
+                f["last_active_at"] = r.issued_at
+            if r.expires_at and r.expires_at > f["expires_at"]:
+                f["expires_at"] = r.expires_at
+        return sorted(families.values(), key=lambda f: f["last_active_at"] or now, reverse=True)
+
+    def family_of_refresh_token(self, jti: uuid.UUID) -> Optional[uuid.UUID]:
+        row = self.db.query(RefreshToken).filter(RefreshToken.jti == jti).first()
+        return row.family_id if row else None
+
+    def revoke_family_for_user(self, email: str, family_id: uuid.UUID) -> bool:
+        owned = self.db.query(RefreshToken).filter(
+            RefreshToken.family_id == family_id, RefreshToken.user_email == email
+        ).first()
+        if not owned:
+            return False
+        self.revoke_family(family_id, reason="logout")
         return True
 
     def is_email_verified(self, email: str) -> bool:
@@ -213,6 +277,15 @@ class AuthService:
                 Expense.user_email == email, Expense.group_id.is_(None)
             ).delete(synchronize_session=False)
 
+            # Invitation rows keep the invited address in plain text (`invited_email`), and the
+            # seats being anonymized below are exactly the ones those invitations point at —
+            # delete both the invitations addressed to this email and those for the user's seats.
+            seat_ids = [m.id for m in self.db.query(GroupMember.id).filter(GroupMember.user_email == email).all()]
+            invite_q = self.db.query(GroupInvitation).filter(GroupInvitation.invited_email == email)
+            invite_q.delete(synchronize_session=False)
+            if seat_ids:
+                self.db.query(GroupInvitation).filter(GroupInvitation.member_id.in_(seat_ids)).delete(synchronize_session=False)
+
             # Anonymize the user's seat in every group they belonged to. user_email
             # on these rows is nulled automatically by ON DELETE SET NULL when the
             # users row is deleted below.
@@ -244,7 +317,7 @@ class AuthService:
     # leniency anymore, even a different row whose own revoked_reason is still "rotated" —
     # logout (or an already-caught reuse) kills the whole session tree, not just whichever
     # token happened to be presented at that moment.
-    _HARD_KILL_REASONS = {"logout", "reuse_detected", "password_reset"}
+    _HARD_KILL_REASONS = {"logout", "reuse_detected", "password_reset", "password_changed", "takeover_guard"}
 
     def _family_hard_killed(self, family_id: uuid.UUID) -> bool:
         return self.db.query(RefreshToken).filter(

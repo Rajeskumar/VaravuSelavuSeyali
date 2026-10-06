@@ -26,6 +26,10 @@ class User(Base):
     # backfills pre-existing rows to True via a server_default so this doesn't suddenly nag
     # the entire existing user base the day it ships.
     email_verified = Column(Boolean, nullable=False, default=False)
+    # Access tokens are stateless JWTs, so logout/reset/password-change/delete could not end
+    # one before its 30-minute expiry. Any access token issued before this instant is refused
+    # (auth/security.py::auth_required). NULL = never revoked.
+    token_valid_after = Column(DateTime(timezone=True), nullable=True)
     # AI cost gating (see services/ai_quota_service.py). 'default' users get the configured
     # daily limits, 'unlimited' skips them (usage is still counted), 'blocked' gets no AI.
     # ai_limits_override is a per-feature limit map, e.g. {"chat": 50}, set via scripts/ai_access.py.

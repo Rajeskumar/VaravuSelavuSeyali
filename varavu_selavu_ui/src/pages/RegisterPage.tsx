@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -13,6 +13,7 @@ import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import { loginWithGoogle, register, ApiError } from '../api/auth';
 import PasswordField from '../components/common/PasswordField';
+import GoogleSignInButton, { isGoogleSignInConfigured } from '../components/auth/GoogleSignInButton';
 import { motion } from 'framer-motion';
 import PageContainer from '../components/layout/PageContainer';
 
@@ -27,56 +28,22 @@ const RegisterPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
-  const googleDiv = useRef<HTMLDivElement>(null);
-  // The Google button (and its "or" divider) only show once GSI actually loaded and rendered —
-  // a missing client ID, blocked script or failed load leaves just the email form, not an empty gap.
-  const [googleReady, setGoogleReady] = useState(false);
 
-  useEffect(() => {
-    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
-    if (!clientId) {
-      // Not blocking manual registration if GSI isn't configured
-      // eslint-disable-next-line no-console
-      console.warn('Google signup not configured (missing REACT_APP_GOOGLE_CLIENT_ID)');
-      return;
+
+  const handleGoogleCredential = async (credential: string) => {
+    try {
+      setGoogleLoading(true);
+      const data = await loginWithGoogle(credential);
+      // Tokens are set as HttpOnly cookies by the server.
+      if (data.email) localStorage.setItem('vs_user', data.email);
+      window.dispatchEvent(new Event('vs_auth_changed'));
+      navigate('/dashboard');
+    } catch {
+      setError('Google signup failed');
+    } finally {
+      setGoogleLoading(false);
     }
-
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => setGoogleReady(false);
-    script.onload = () => {
-      const w = window as any;
-      if (!w.google || !googleDiv.current) return;
-      w.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: async (resp: any) => {
-          try {
-            setGoogleLoading(true);
-            const data = await loginWithGoogle(resp.credential);
-            // Tokens are set as HttpOnly cookies by the server.
-            if (data.email) localStorage.setItem('vs_user', data.email);
-            window.dispatchEvent(new Event('vs_auth_changed'));
-            navigate('/dashboard');
-          } catch {
-            setError('Google signup failed');
-          } finally {
-            setGoogleLoading(false);
-          }
-        },
-      });
-      w.google.accounts.id.renderButton(googleDiv.current, {
-        theme: 'outline',
-        size: 'large',
-        // GSI wants a pixel width (max 400); '100%' was ignored with a console warning.
-        width: String(Math.min(400, googleDiv.current.offsetWidth || 400)),
-        text: 'signup_with',
-      });
-      setGoogleReady(true);
-    };
-    document.head.appendChild(script);
-  }, [navigate]);
+  };
 
   /** Same rules the server enforces, checked first so a typo costs nothing (sign-up is limited
    * to a few attempts an hour) and the message sits under the field it's about. */
@@ -143,8 +110,14 @@ const RegisterPage: React.FC = () => {
             <Typography variant="h6" component="h1" gutterBottom align="center">
               Create Account
             </Typography>
-            <div ref={googleDiv} style={{ width: '100%', display: 'flex', justifyContent: 'center', ...(googleReady ? { marginBottom: 16 } : { height: 0, overflow: 'hidden', visibility: 'hidden' }) }} />
-            {googleReady && <Divider sx={{ mb: 2 }}>or</Divider>}
+            {isGoogleSignInConfigured() && (
+              <>
+                <Box sx={{ mb: 2 }}>
+                  <GoogleSignInButton onCredential={handleGoogleCredential} text="signup_with" disabled={loading || googleLoading} />
+                </Box>
+                <Divider sx={{ mb: 2 }}>or</Divider>
+              </>
+            )}
             <Box component="form" onSubmit={handleRegister} noValidate>
               <Grid container spacing={2}>
                 {error && (

@@ -1,11 +1,15 @@
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Link } from '@mui/material';
-import { logout as apiLogout, forgotPassword } from '../api/auth';
-import { getProfile, updateProfile, deleteProfile } from '../api/profile';
+import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Link } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { logout as apiLogout, forgotPassword, fetchMe } from '../api/auth';
+import { deleteAccount, downloadMyData } from '../api/account';
+import { getProfile, updateProfile } from '../api/profile';
 import { exportMyExpensesCsv } from '../api/expenses';
 import { motion } from 'framer-motion';
 import TagManagementSection from '../components/tags/TagManagementSection';
+import SecuritySection from '../components/profile/SecuritySection';
+import DeleteAccountDialog from '../components/profile/DeleteAccountDialog';
 
 const ProfilePage: React.FC = () => {
   const [email, setEmail] = React.useState('');
@@ -19,8 +23,10 @@ const ProfilePage: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<string | null>(null);
   const [openDeleteDialog, setOpenDeleteDialog] = React.useState(false);
-  const [deleteConfirmation, setDeleteConfirmation] = React.useState('');
+  const [deleteError, setDeleteError] = React.useState<string | null>(null);
   const [deleting, setDeleting] = React.useState(false);
+  const me = useQuery({ queryKey: ['auth-me'], queryFn: fetchMe, staleTime: 60_000, retry: false });
+  const [downloading, setDownloading] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const [resetState, setResetState] = React.useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
@@ -101,17 +107,29 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmation !== 'DELETE') return;
+  const handleDeleteAccount = async (proof: { password?: string; confirm_email?: string }) => {
     setDeleting(true);
-    setError(null);
+    setDeleteError(null);
     try {
-      await deleteProfile();
-      handleLogout();
+      await deleteAccount(proof);
+      // The server already ended every session; only the local display identity is left.
+      localStorage.removeItem('vs_user');
+      window.dispatchEvent(new Event('vs_auth_changed'));
     } catch (e) {
-      setError('Failed to delete profile');
+      setDeleteError(e instanceof Error ? e.message : 'Could not delete your account');
       setDeleting(false);
-      setOpenDeleteDialog(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    setDownloading(true);
+    setExportError(null);
+    try {
+      await downloadMyData();
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "Couldn't download your data. Try again in a moment.");
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -175,21 +193,21 @@ const ProfilePage: React.FC = () => {
 
       <TagManagementSection />
 
-      <Card sx={{ mt: 3 }}>
-        <CardContent>
-          <Typography variant="h6" component="h2" gutterBottom>
-            Password
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            We'll email {email || 'you'} a link to set a new password. If you sign in with Google, this adds a password too.
-          </Typography>
-          {resetState === 'sent' && <Alert severity="success" sx={{ mb: 2 }}>Check your inbox for the reset link.</Alert>}
-          {resetState === 'error' && <Alert severity="error" sx={{ mb: 2 }}>Couldn't send the email. Try again in a minute.</Alert>}
-          <Button variant="outlined" fullWidth onClick={handleSendReset} disabled={!email || resetState === 'sending' || resetState === 'sent'}>
-            {resetState === 'sending' ? 'Sending…' : resetState === 'sent' ? 'Email sent' : 'Change password'}
-          </Button>
-        </CardContent>
-      </Card>
+      <SecuritySection
+        onSignedOut={() => {
+          localStorage.removeItem('vs_user');
+          window.dispatchEvent(new Event('vs_auth_changed'));
+        }}
+      >
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+          Forgot your current password? We can email {email || 'you'} a reset link instead.
+        </Typography>
+        {resetState === 'sent' && <Alert severity="success" sx={{ mt: 1 }}>Check your inbox for the reset link.</Alert>}
+        {resetState === 'error' && <Alert severity="error" sx={{ mt: 1 }}>Couldn't send the email. Try again in a minute.</Alert>}
+        <Button sx={{ mt: 1 }} size="small" onClick={handleSendReset} disabled={!email || resetState === 'sending' || resetState === 'sent'}>
+          {resetState === 'sending' ? 'Sending…' : resetState === 'sent' ? 'Email sent' : 'Email me a reset link'}
+        </Button>
+      </SecuritySection>
 
       <Card sx={{ mt: 3 }}>
         <CardContent>
@@ -202,6 +220,13 @@ const ProfilePage: React.FC = () => {
           {exportError && <Alert severity="error" sx={{ mb: 2 }}>{exportError}</Alert>}
           <Button variant="outlined" fullWidth onClick={handleExport} disabled={exporting}>
             {exporting ? 'Exporting…' : 'Export all expenses (CSV)'}
+          </Button>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 1 }}>
+            Or download everything we hold about you as one JSON file: profile, expenses with receipt items, your share of group
+            expenses, budgets, recurring templates and cards.
+          </Typography>
+          <Button variant="outlined" fullWidth onClick={handleDownloadAll} disabled={downloading}>
+            {downloading ? 'Preparing…' : 'Download all my data (JSON)'}
           </Button>
         </CardContent>
       </Card>
@@ -232,7 +257,7 @@ const ProfilePage: React.FC = () => {
             Danger Zone
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Permanently delete your account and all associated expense data. This action cannot be undone.
+            Permanently delete your account and personal data. Expenses you added to shared groups stay for the other members, with your name removed. This cannot be undone.
           </Typography>
           <Button variant="contained" color="error" fullWidth onClick={() => setOpenDeleteDialog(true)}>
             Delete Account
@@ -241,35 +266,15 @@ const ProfilePage: React.FC = () => {
       </Card>
       </motion.div>
 
-      <Dialog open={openDeleteDialog} onClose={() => !deleting && setOpenDeleteDialog(false)}>
-        <DialogTitle>Delete Account</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Are you absolutely sure? All your expenses, receipts, recurring templates, and profile data will be permanently deleted and cannot be recovered.
-            Type <strong>DELETE</strong> below to confirm.
-          </DialogContentText>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Type DELETE"
-            fullWidth
-            variant="outlined"
-            value={deleteConfirmation}
-            onChange={(e) => setDeleteConfirmation(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDeleteDialog(false)} disabled={deleting}>Cancel</Button>
-          <Button 
-            onClick={handleDeleteAccount} 
-            color="error" 
-            variant="contained"
-            disabled={deleteConfirmation !== 'DELETE' || deleting}
-          >
-            {deleting ? 'Deleting...' : 'Delete Permanently'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <DeleteAccountDialog
+        open={openDeleteDialog}
+        email={email}
+        hasPassword={me.data?.has_password !== false}
+        deleting={deleting}
+        error={deleteError}
+        onCancel={() => { setOpenDeleteDialog(false); setDeleteError(null); }}
+        onConfirm={handleDeleteAccount}
+      />
     </Box>
   );
 };

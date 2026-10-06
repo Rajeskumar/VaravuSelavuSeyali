@@ -1,3 +1,4 @@
+import { ensureAiConsent, hasAiConsent } from '../utils/aiConsent';
 import { apiFetch } from './apiFetch';
 import { aiErrorFromResponse } from './aiUsage';
 import API_BASE_URL from './apiconfig';
@@ -112,7 +113,10 @@ export async function uploadReceipt(uri: string, token: string): Promise<any> {
   formData.append('file', file);
 
   // Do NOT set Content-Type manually — React Native sets it with the boundary
-  const response = await apiFetch(`/api/v1/ingest/receipt/parse`, {
+  // Our own reader goes first; only a low-confidence read may be forwarded to an AI service, and
+  // never without the person's agreement (the server enforces `allow_ai=false`).
+  const allowAi = await ensureAiConsent();
+  const response = await apiFetch(`/api/v1/ingest/receipt/parse?allow_ai=${allowAi}`, {
     method: 'POST',
     body: formData,
   });
@@ -148,7 +152,8 @@ export async function categorizeExpense(description: string): Promise<Categorize
   const response = await apiFetch(`/api/v1/expenses/categorize`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ description }),
+    // Without consent only built-in rules may answer; the text isn't sent to an AI provider.
+    body: JSON.stringify({ description, allow_ai: await hasAiConsent() }),
   });
 
   if (!response.ok) {

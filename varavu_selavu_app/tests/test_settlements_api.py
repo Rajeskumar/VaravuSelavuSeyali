@@ -127,8 +127,8 @@ def test_non_member_caller_returns_403(test_client, db_session):
     finally:
         _restore(old)
 
-    assert create_res.status_code == 403
-    assert list_res.status_code == 403
+    assert create_res.status_code == 404
+    assert list_res.status_code == 404
 
 
 def test_partial_payment_amount_accepted(test_client, db_session):

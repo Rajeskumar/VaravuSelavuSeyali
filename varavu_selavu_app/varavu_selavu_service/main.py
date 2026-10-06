@@ -1,4 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
 from pathlib import Path
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,7 +27,40 @@ logging.basicConfig(
 # Fail fast rather than serve traffic with a forgeable signing key.
 assert_signing_secret_is_safe(settings.ENVIRONMENT, settings.JWT_SECRET)
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
+# The interactive docs and the schema list every endpoint and field to anyone, signed in or not.
+# Useful locally; nothing a customer needs in production.
+_expose_docs = settings.ENVIRONMENT == "local"
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    docs_url="/docs" if _expose_docs else None,
+    redoc_url="/redoc" if _expose_docs else None,
+    openapi_url="/openapi.json" if _expose_docs else None,
+)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_handler(request: Request, exc: RequestValidationError):
+    """FastAPI's default 422 echoes each rejected value back as `input` — for a sign-up or reset
+    form that includes the password the user just typed, which then sits in proxy and browser
+    logs. Keep where and why it failed; drop the value."""
+    errors = [{k: v for k, v in e.items() if k not in ("input", "url")} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    h = response.headers
+    h.setdefault("X-Content-Type-Options", "nosniff")
+    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("X-Frame-Options", "DENY")
+    h.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+    # Authenticated JSON (and the auth endpoints that set cookies) must never be stored by a
+    # shared cache or the browser's back/forward cache.
+    if request.url.path.startswith("/api/"):
+        h.setdefault("Cache-Control", "no-store")
+    return response
 app.state.limiter = limiter
 
 

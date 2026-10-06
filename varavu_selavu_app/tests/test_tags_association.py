@@ -182,7 +182,7 @@ def test_non_member_cannot_tag_a_group_expense(test_client, db_session):
     group_service = GroupService(db_session)
     with pytest.raises(HTTPException) as exc_info:
         group_service.require_membership(group_id, "outsider@user.com")
-    assert exc_info.value.status_code == 403
+    assert exc_info.value.status_code == 404
 
 
 def test_group_member_never_sees_another_members_tags_on_shared_expense(test_client, db_session):

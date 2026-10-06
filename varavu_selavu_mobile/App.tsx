@@ -44,6 +44,8 @@ import AIAnalystScreen from './src/screens/AIAnalystScreen';
 import RecurringExpensesScreen from './src/screens/RecurringExpensesScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import FeedbackScreen from './src/screens/FeedbackScreen';
+import SecurityScreen from './src/screens/SecurityScreen';
+import DeleteAccountScreen from './src/screens/DeleteAccountScreen';
 import ItemDetailScreen from './src/screens/ItemDetailScreen';
 import MerchantDetailScreen from './src/screens/MerchantDetailScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
@@ -231,6 +233,8 @@ function AppShell() {
         <Stack.Screen name="Tags"             component={TagsScreen} />
         <Stack.Screen name="About"            component={AboutScreen} />
         <Stack.Screen name="Feedback"         component={FeedbackScreen} />
+        <Stack.Screen name="Security"         component={SecurityScreen} />
+        <Stack.Screen name="DeleteAccount"    component={DeleteAccountScreen} />
         {/* ── Groups (TS-GRP-109) ── */}
         <Stack.Screen name="Groups"           component={GroupsScreen} />
         <Stack.Screen name="GroupDetail"      component={GroupDetailScreen} />

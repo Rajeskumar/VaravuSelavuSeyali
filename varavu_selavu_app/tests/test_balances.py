@@ -165,7 +165,7 @@ def test_balances_non_member_returns_403(test_client, db_session):
         res = test_client.get(f"/api/v1/groups/{group_id}/balances")
     finally:
         _restore(old)
-    assert res.status_code == 403
+    assert res.status_code == 404
 
 
 def test_leave_allowed_when_net_balance_is_zero_despite_activity(test_client, db_session):

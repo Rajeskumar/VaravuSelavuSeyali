@@ -122,14 +122,16 @@ test.describe('groups API @api @critical', () => {
     expect(res.status()).toBeLessThan(500);
   });
 
-  test('a non-member is rejected from a group\'s routes with 403', async ({ primaryApi, secondaryApi }) => {
-    // GroupService.require_membership deliberately raises 403 "Not a member of this
-    // group" rather than 404 — unlike require_groups_enabled's 404-for-disabled-feature
-    // pattern elsewhere, a group's existence isn't hidden from a logged-in non-member,
-    // just access to it. Confirmed by reading services/group_service.py.
+  test('a non-member is told the group does not exist (404, identical to a missing group)', async ({ primaryApi, secondaryApi }) => {
+    // GroupService.require_membership answers 404 "Group not found" for a group the caller isn't in,
+    // exactly as for an id that doesn't exist, so a different answer can't be used to probe which
+    // group ids are real (2026-10-06 security review).
     const group = await primaryApi.createGroup({ name: qaLabel(`group_private_${uniqueSuffix()}`) });
     // secondaryApi was never added as a member of this group.
-    const res = await secondaryApi.get(`/api/v1/groups/${group.group_id}`);
-    expect(res.status()).toBe(403);
+    const theirs = await secondaryApi.get(`/api/v1/groups/${group.group_id}`);
+    const missing = await secondaryApi.get('/api/v1/groups/00000000-0000-0000-0000-000000000000');
+    expect(theirs.status()).toBe(404);
+    expect(missing.status()).toBe(404);
+    expect(await theirs.json()).toEqual(await missing.json());
   });
 });

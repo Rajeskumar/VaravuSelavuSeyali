@@ -338,3 +338,11 @@ def test_concurrent_reserves_never_overshoot_on_postgres(monkeypatch):
         with Session() as db:
             db.query(User).filter_by(email=email).delete()
             db.commit()
+
+
+def test_categorize_without_ai_consent_never_sends_the_description_to_the_llm(test_client, db_session, limits):
+    with patch.object(CategorizationService, "llm_classify", return_value=("Food & Drink", "Dining out", "Subway")) as mock_llm:
+        res = test_client.post("/api/v1/expenses/categorize", json={"description": "zqx vendor 42", "allow_ai": False})
+    assert res.status_code == 200
+    assert res.json()["main_category"] == "Other"
+    mock_llm.assert_not_called()

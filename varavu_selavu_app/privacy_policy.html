@@ -159,7 +159,8 @@
             </tr>
             <tr>
                 <td>Receipts &amp; uploads</td>
-                <td>Receipt images you upload and the text extracted from them ("Parse Receipt" OCR)</td>
+                <td>Receipt images you upload and the text extracted from them ("Parse Receipt" OCR). Receipt images may be
+                    read by a third-party AI service (see Section 4).</td>
                 <td>To let you capture expenses from receipts</td>
             </tr>
             <tr>
@@ -187,19 +188,32 @@
             abuse; and comply with legal obligations. We do <strong>not</strong> sell your personal information.</p>
 
         <h2>4. Artificial intelligence features</h2>
-        <p>The AI Analyst answers questions about your finances. To do this, your query and the relevant financial
-            context are sent to a third-party AI model provider (currently <strong>OpenAI</strong>) for processing. We
-            send only the data needed to answer your request, and we ask that any such provider protect your data to a
-            standard at least equivalent to this Policy. If you do not want your data processed by a third-party AI
-            provider, do not use the AI Analyst feature. We will obtain your consent before sharing your data with AI
-            services where required by applicable law or app-store rules.</p>
+        <p>Three features send data to a third-party AI service, currently <strong>Google's Gemini</strong>:</p>
+        <ul>
+            <li><strong>Ask (the AI Analyst).</strong> Your question and the figures needed to answer it: expense
+                descriptions, merchant names, amounts and dates, budgets, and for groups you belong to, the group name,
+                member display names and balances.</li>
+            <li><strong>Receipt scanning.</strong> Receipts are read by our own text recognition first. Only when that read
+                isn't confident is the receipt image or PDF sent to the AI service, and never if you haven't allowed AI
+                features.</li>
+            <li><strong>Category suggestions.</strong> The description text of an expense, only when our built-in rules
+                can't categorize it.</li>
+        </ul>
+        <p>We do not send your password, payment card numbers, or access tokens. The first time you use one of these
+            features the app asks whether you allow it; if you decline, nothing is sent and the rest of the app keeps
+            working (receipts are read by our own reader only, and category suggestions use only built-in rules). You can withdraw the choice at any time by
+            clearing the app's stored data, and we may ask again after material changes. We send only what is needed to
+            answer the request. The provider handles that data under its own terms for the Gemini API
+            [CONFIRM BEFORE PUBLISHING: the provider's retention period and whether data is used to train models for the
+            API plan in use]. Prompts and answers are not stored by TrackSpense beyond the conversation on your screen.</p>
 
         <h2>5. How we share information</h2>
         <p>We share personal information only as follows:</p>
         <ul>
             <li><strong>Service providers.</strong> Vendors who process data on our behalf to run the Service, including
-                hosting (Google Cloud), content delivery/security (Cloudflare), analytics (Google Analytics), and the AI
-                model provider (OpenAI). They are permitted to use the data only to provide services to us and must
+                hosting (Google Cloud), content delivery/security (Cloudflare), analytics (Google Analytics, only if you
+                accept analytics cookies), the AI service (Google Gemini, only if you allow AI features), and Google
+                sign-in (loaded only when you choose "Continue with Google"). They are permitted to use the data only to provide services to us and must
                 protect it to a standard equivalent to this Policy.</li>
             <li><strong>Legal &amp; safety.</strong> When required by law, legal process, or to protect the rights,
                 safety, and security of our users, the public, or CerebroOS.</li>
@@ -211,9 +225,14 @@
 
         <h2>6. Data retention</h2>
         <p>We retain your personal and financial information for as long as your account is active or as needed to
-            provide the Service. When you delete your account (see Section 8), we delete or de-identify your personal
-            and financial data within 30 days, except where we must retain certain records to
-            comply with legal obligations or resolve disputes.</p>
+            provide the Service. When you delete your account (see Section 8), your profile, personal expenses and
+            receipt items, budgets, recurring templates, tags, cards, sign-ins and invitation records are deleted
+            immediately.</p>
+        <p><strong>Shared group records stay.</strong> Expenses you added to a group, with their descriptions, merchants,
+            notes and amounts, remain so the other members' balances and history stay correct. Your name on those
+            records becomes "Anonymous User" and your email address is removed from them. Copies in system backups age
+            out on the backup schedule of our hosting provider [CONFIRM BEFORE PUBLISHING: backup retention period].
+            We may also keep certain records where we must to comply with legal obligations or resolve disputes.</p>
 
         <h2>7. Security</h2>
         <p>We take reasonable technical and organizational measures to protect your information, including encryption in
@@ -225,11 +244,16 @@
         <p>You can:</p>
         <ul>
             <li><strong>Access and update</strong> your profile and expense data within the Service.</li>
-            <li><strong>Export</strong> your data by [EXPORT METHOD — e.g. "using the export option in Settings" or
-                "emailing us"].</li>
-            <li><strong>Delete your account and data</strong> from the profile screen ("Delete Account"). This
-                permanently deletes your account and associated expense data and cannot be undone.</li>
-            <li><strong>Revoke consent</strong> (for example, stop using the AI Analyst or opt out of analytics) at any
+            <li><strong>Export</strong> your data from the Profile screen: "Export all expenses (CSV)" or "Download all my
+                data (JSON)", which includes your profile, expenses with receipt items, your share of group expenses,
+                budgets, recurring templates and cards.</li>
+            <li><strong>Secure your account</strong> from the Profile screen: change your password, see where you are
+                signed in, and sign out of other devices or all devices.</li>
+            <li><strong>Delete your account and data</strong> from the Profile screen ("Delete Account"; you confirm
+                with your password). This permanently deletes your account and personal data as described in
+                Section 6, and cannot be undone. Expenses you added to shared groups remain for the other members with
+                your name removed.</li>
+            <li><strong>Revoke consent</strong> (for example, stop using AI features or opt out of analytics) at any
                 time.</li>
         </ul>
         <p>Depending on where you live, you may have additional rights under laws such as the GDPR or the CCPA/CPRA —

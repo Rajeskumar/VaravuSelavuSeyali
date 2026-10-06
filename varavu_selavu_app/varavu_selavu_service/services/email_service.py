@@ -103,7 +103,13 @@ def send_email(
 
     if not _settings.MAIL_USERNAME or not _settings.MAIL_PASSWORD:
         logger.warning("MAIL_USERNAME or MAIL_PASSWORD not configured. Skipping actual email send.")
-        logger.info("Mock Email Output:\n%s", msg.as_string())
+        if _settings.ENVIRONMENT == "local":
+            # Local development only: with no SMTP configured this is how a developer gets the
+            # verification/reset link. Anywhere else the message carries a live token and must
+            # not land in the logs.
+            logger.info("Mock Email Output:\n%s", msg.as_string())
+        else:
+            logger.info("Email not sent (SMTP not configured): subject=%r", msg["Subject"])
         return True
 
     try:
@@ -160,7 +166,13 @@ def send_transactional_email(*, to_email: str, subject: str, heading: str, body_
 
     if not _settings.MAIL_USERNAME or not _settings.MAIL_PASSWORD:
         logger.warning("MAIL_USERNAME or MAIL_PASSWORD not configured. Skipping actual email send.")
-        logger.info("Mock Email Output:\n%s", msg.as_string())
+        if _settings.ENVIRONMENT == "local":
+            # Local development only: with no SMTP configured this is how a developer gets the
+            # verification/reset link. Anywhere else the message carries a live token and must
+            # not land in the logs.
+            logger.info("Mock Email Output:\n%s", msg.as_string())
+        else:
+            logger.info("Email not sent (SMTP not configured): subject=%r", msg["Subject"])
         return True
 
     try:

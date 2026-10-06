@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import heic2any from 'heic2any';
 import { parseReceipt, ReceiptParseDraft } from '../api/expenses';
+import { ensureAiConsent } from '../utils/aiConsent';
 import { AiLimitError } from '../api/aiUsage';
 
 // OpenAI only accepts PNG or JPEG. Any other image format (e.g. HEIC) must be
@@ -33,8 +34,12 @@ export function useReceiptScan(options: UseReceiptScanOptions = {}) {
     const f = target || file;
     if (!f) return null;
     try {
-      setParsing(true);
       setError(null);
+      // Our own OCR reads the receipt first; only when it isn't confident may the image go to a
+      // third-party AI service. Ask once up front. Declining isn't an error: the scan simply
+      // runs without AI assist (the server never forwards the image).
+      await ensureAiConsent();
+      setParsing(true);
       return await parseReceipt(f);
     } catch (err) {
       // Daily scan limit / AI paused get their own copy (e.g. "enter this one manually");

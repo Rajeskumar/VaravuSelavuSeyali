@@ -268,8 +268,8 @@ def test_non_member_access_returns_403(test_client, db_session):
     finally:
         _restore(old)
 
-    assert create_res.status_code == 403
-    assert list_res.status_code == 403
+    assert create_res.status_code == 404
+    assert list_res.status_code == 404
 
 
 def test_edit_by_non_author_member_resplits_correctly(test_client, db_session):

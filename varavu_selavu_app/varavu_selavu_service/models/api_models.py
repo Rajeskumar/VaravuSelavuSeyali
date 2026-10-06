@@ -163,6 +163,10 @@ class ItemsResponse(BaseModel):
 class CategorizeRequest(BaseModel):
     """Request payload for expense categorization."""
     description: DescriptionStr
+    # False when the person hasn't agreed to AI processing: only the local tiers (their own past
+    # picks, the merchant dictionary, keyword rules) may answer; the description is never sent
+    # to an AI provider.
+    allow_ai: bool = True
 
 
 class CategorizeResponse(BaseModel):

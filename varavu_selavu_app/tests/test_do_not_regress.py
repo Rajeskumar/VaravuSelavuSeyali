@@ -116,7 +116,8 @@ class TestTokenRejection:
 
 
 # ----------------------------------------------------------------------
-# "Non-members get 403 'Not a member of this group'."
+# Non-members get the same 404 "Group not found" as a group that doesn't exist (audit 2026-10-06:
+# a distinct 403 let anyone probe which group ids are real).
 # ----------------------------------------------------------------------
 
 
@@ -132,21 +133,21 @@ class TestGroupAuthorization:
         "path",
         ["", "/balances", "/expenses", "/activity", "/export.csv"],
     )
-    def test_non_member_is_forbidden_on_group_subresources(self, test_client, db_session, path):
+    def test_non_member_gets_not_found_on_group_subresources(self, test_client, db_session, path):
         group_id = self._group_owned_by_someone_else(test_client, db_session)
         old = _as_user("stranger@test.com")
         try:
             res = test_client.get(f"/api/v1/groups/{group_id}{path}")
-            assert res.status_code == 403, f"{path} -> {res.status_code}"
+            assert res.status_code == 404, f"{path} -> {res.status_code}"
         finally:
             _restore(old)
 
-    def test_forbidden_message_is_unchanged(self, test_client, db_session):
+    def test_non_member_message_matches_a_missing_group(self, test_client, db_session):
         group_id = self._group_owned_by_someone_else(test_client, db_session)
         old = _as_user("stranger@test.com")
         try:
             res = test_client.get(f"/api/v1/groups/{group_id}/balances")
-            assert res.json()["detail"] == "Not a member of this group"
+            assert res.json()["detail"] == "Group not found"
         finally:
             _restore(old)
 
@@ -166,7 +167,7 @@ class TestGroupAuthorization:
                     "split": {"type": "equal", "entries": [{"member_id": str(member.id)}]},
                 },
             )
-            assert res.status_code == 403
+            assert res.status_code == 404
         finally:
             _restore(old)
 

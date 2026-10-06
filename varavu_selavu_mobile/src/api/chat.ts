@@ -1,3 +1,4 @@
+import { AiConsentDeclined, ensureAiConsent } from '../utils/aiConsent';
 import { apiFetch } from './apiFetch';
 import { aiErrorFromResponse } from './aiUsage';
 
@@ -49,6 +50,8 @@ export async function sendChatMessage(token: string, payload: ChatPayload): Prom
 
 /** Same call as `sendChatMessage`, keeping the resolved period/scope the backend returns. */
 export async function sendChatMessageFull(_token: string, payload: ChatPayload): Promise<ChatResult> {
+  // Questions are answered by a third-party AI service; ask the person first.
+  if (!(await ensureAiConsent())) throw new AiConsentDeclined();
   const response = await apiFetch(`/api/v1/analysis/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

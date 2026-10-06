@@ -1,3 +1,4 @@
+import { clearAiConsent } from '../utils/aiConsent';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { login as apiLogin, LoginPayload, register as apiRegister, RegisterPayload, logout as apiLogout } from '../api/auth';
@@ -42,6 +43,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await SecureStore.deleteItemAsync('access_token');
     await SecureStore.deleteItemAsync('refresh_token');
     await SecureStore.deleteItemAsync('user_email');
+    await clearAiConsent();
 
     setState({
       accessToken: null,

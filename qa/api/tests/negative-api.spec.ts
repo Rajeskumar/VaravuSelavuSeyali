@@ -54,12 +54,11 @@ test.describe('missing / invalid resources @api @negative', () => {
     expect(res.status()).toBe(404);
   });
 
-  test('a group balances lookup for a nonexistent group is 403, not a 500', async ({ primaryApi }) => {
-    // Not 404: GroupService.require_membership checks "is the caller an active member?"
-    // before anything else, so a nonexistent group and a real group the caller isn't in
-    // both come back as the same 403 "Not a member of this group" — see groups-api.spec.ts.
+  test('a group balances lookup for a nonexistent group is 404, not a 500', async ({ primaryApi }) => {
+    // require_membership answers 404 "Group not found" for a missing group and for a real one
+    // the caller isn't in, so group ids can't be probed — see groups-api.spec.ts.
     const res = await primaryApi.get('/api/v1/groups/00000000-0000-0000-0000-000000000000/balances');
-    expect(res.status()).toBe(403);
+    expect(res.status()).toBe(404);
   });
 });
 

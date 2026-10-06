@@ -8,8 +8,8 @@ export interface LoginPayload {
 }
 
 export interface LoginResponse {
-  access_token: string;
-  refresh_token: string;
+  access_token?: string | null;
+  refresh_token?: string | null;
   token_type: string;
   email?: string;
   /** Echoed back in the X-CSRF-Token header on state-changing requests. */
@@ -44,6 +44,10 @@ export interface RefreshRequest {
  * cookies. Nothing here reads or writes a token in localStorage. */
 const withCookies: RequestInit = { credentials: 'include' };
 
+/** Tells the API this is a browser: it authenticates with the HttpOnly cookies, so the server
+ * leaves the tokens out of the JSON body (where any script reading the response could take them). */
+const WEB_CLIENT = { 'X-TrackSpense-Client': 'web' };
+
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
   const params = new URLSearchParams();
   params.append('username', payload.username);
@@ -53,6 +57,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
+      ...WEB_CLIENT,
     },
     body: params.toString(),
   });
@@ -95,6 +100,7 @@ export async function loginWithGoogle(id_token: string): Promise<LoginResponse> 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...WEB_CLIENT,
     },
     // Include email/name to avoid backend mis-mapping (e.g., into phone column)
     body: JSON.stringify({ id_token, email: decoded.email, name: decoded.name }),
@@ -156,7 +162,7 @@ export async function refresh(): Promise<LoginResponse> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
     ...withCookies,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...WEB_CLIENT },
   });
   if (!response.ok) {
     throw new Error('Refresh failed');
@@ -183,12 +189,12 @@ export async function exchangeLegacySession(refresh_token: string): Promise<Logi
   return data;
 }
 
-export async function fetchMe(): Promise<{ email: string; csrf_token?: string; email_verified?: boolean }> {
+export async function fetchMe(): Promise<{ email: string; csrf_token?: string; email_verified?: boolean; has_password?: boolean }> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, withCookies);
   if (!response.ok) {
     throw new Error('Not authenticated');
   }
-  const data: { email: string; csrf_token?: string; email_verified?: boolean } = await response.json();
+  const data: { email: string; csrf_token?: string; email_verified?: boolean; has_password?: boolean } = await response.json();
   setCsrfToken(data.csrf_token);
   return data;
 }

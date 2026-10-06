@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
 import TextField from '@mui/material/TextField';
@@ -12,6 +12,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import { login, loginWithGoogle, ApiError } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
 import PasswordField from '../components/common/PasswordField';
+import GoogleSignInButton, { isGoogleSignInConfigured } from '../components/auth/GoogleSignInButton';
 import { motion } from 'framer-motion';
 import PageContainer from '../components/layout/PageContainer';
 import { PENDING_INVITE_KEY } from './JoinGroupPage';
@@ -38,58 +39,24 @@ const LoginPage: React.FC = () => {
   const passwordRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const googleDiv = useRef<HTMLDivElement>(null);
-  // The Google button (and its "or" divider) only show once GSI actually loaded and rendered —
-  // a missing client ID, blocked script or failed load leaves just the email form, not an empty gap.
-  const [googleReady, setGoogleReady] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  useEffect(() => {
-    const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
 
-    if (!clientId) {
-      // Developer hint only — customers just don't see the Google button.
-      // eslint-disable-next-line no-console
-      console.warn('Set REACT_APP_GOOGLE_CLIENT_ID in .env.development/.env.production');
-      return;
+  const handleGoogleCredential = async (credential: string) => {
+    try {
+      setGoogleLoading(true);
+      const data = await loginWithGoogle(credential);
+      // Tokens are set as HttpOnly cookies by the server. Only the
+      // display identity is kept client-side.
+      if (data.email) localStorage.setItem('vs_user', data.email);
+      window.dispatchEvent(new Event('vs_auth_changed'));
+      navigate(postLoginDestination());
+    } catch {
+      setError('Google login failed');
+    } finally {
+      setGoogleLoading(false);
     }
-
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onerror = () => setGoogleReady(false);
-    script.onload = () => {
-      const w = window as any;
-      if (!w.google || !googleDiv.current) return;
-      w.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: async (resp: any) => {
-          try {
-            setGoogleLoading(true);
-            const data = await loginWithGoogle(resp.credential);
-            // Tokens are set as HttpOnly cookies by the server. Only the
-            // display identity is kept client-side.
-            if (data.email) localStorage.setItem('vs_user', data.email);
-            window.dispatchEvent(new Event('vs_auth_changed'));
-            navigate(postLoginDestination());
-          } catch {
-            setError('Google login failed');
-          } finally {
-            setGoogleLoading(false);
-          }
-        },
-      });
-      w.google.accounts.id.renderButton(googleDiv.current, {
-        theme: 'outline',
-        size: 'large',
-        // GSI wants a pixel width (max 400); '100%' was ignored with a console warning.
-        width: String(Math.min(400, googleDiv.current.offsetWidth || 400)),
-      });
-      setGoogleReady(true);
-    };
-    document.head.appendChild(script);
-  }, [navigate]);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,8 +115,14 @@ const LoginPage: React.FC = () => {
             <Typography variant="h6" component="h1" gutterBottom align="center">
               Login
             </Typography>
-            <div ref={googleDiv} style={{ width: '100%', display: 'flex', justifyContent: 'center', ...(googleReady ? { marginBottom: 16 } : { height: 0, overflow: 'hidden', visibility: 'hidden' }) }} />
-            {googleReady && <Divider sx={{ mb: 2 }}>or</Divider>}
+            {isGoogleSignInConfigured() && (
+              <>
+                <Box sx={{ mb: 2 }}>
+                  <GoogleSignInButton onCredential={handleGoogleCredential} text="signin_with" disabled={loading || googleLoading} />
+                </Box>
+                <Divider sx={{ mb: 2 }}>or</Divider>
+              </>
+            )}
             <Box component="form" onSubmit={handleLogin} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {error && (
                 <Typography id="login-error" role="alert" color="error" align="center" variant="body2">{error}</Typography>

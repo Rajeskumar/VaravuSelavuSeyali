@@ -78,7 +78,7 @@ def test_non_member_cannot_comment(test_client, db_session):
         db_session.add(User(id=uuid.uuid4(), email="stranger@test.com", password_hash="hash"))
         db_session.commit()
         res = test_client.post(f"/api/v1/groups/{group_id}/expenses/{expense_id}/comments", json={"body": "hi"})
-        assert res.status_code == 403
+        assert res.status_code == 404
     finally:
         _restore(old)
 

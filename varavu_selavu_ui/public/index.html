@@ -35,12 +35,6 @@
     <!-- CerebroOS design system (theme.ts): Instrument Sans for body/UI, Bricolage Grotesque for
          the display-hero/display roles (True Total, big balances), IBM Plex Mono for eyebrow
          labels and status badges. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
     <!--
       manifest.json provides metadata used when your web app is installed on a
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
@@ -49,10 +43,7 @@
     <!-- Google tag (gtag.js) — queue stub only; nothing is sent over the network from here.
          The actual gtag.js script + 'config' call only happen after the visitor consents,
          via utils/analyticsConsent.ts (src/components/common/ConsentBanner.tsx). -->
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-    </script>
+    <script src="%PUBLIC_URL%/analytics-stub.js"></script>
     <!--
       Notice the use of %PUBLIC_URL% in the tags above.
       It will be replaced with the URL of the `public` folder during the build.

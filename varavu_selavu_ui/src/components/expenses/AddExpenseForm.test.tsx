@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import AddExpenseForm from './AddExpenseForm';
 import * as api from '../../api/expenses';
 import React from 'react';
+import { recordAiConsent } from '../../utils/aiConsent';
 
 jest.mock('heic2any', () => ({
   default: jest.fn(async () => new Blob(['converted'], { type: 'image/png' })),
@@ -19,6 +20,10 @@ function renderForm(props: React.ComponentProps<typeof AddExpenseForm> = {}) {
     </QueryClientProvider>
   );
 }
+
+// Receipt scanning asks for AI consent first; these tests are about the form, so it's already given.
+beforeEach(() => recordAiConsent(true));
+afterEach(() => localStorage.clear());
 
 // Ensure parseReceipt mock returns main_category_name and category_name
 const mockDraft = {
