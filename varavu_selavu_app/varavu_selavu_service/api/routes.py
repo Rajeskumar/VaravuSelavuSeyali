@@ -355,7 +355,7 @@ def create_expense(
 @router.get(
     "/expenses/export.csv",
     tags=["Expenses"],
-    summary="Export all my personal expenses as CSV",
+    summary="Export my ledger (personal expenses + my share of group expenses) as CSV",
 )
 def export_personal_expenses_csv(
     start_date: Optional[str] = Query(None, description="Inclusive MM/DD/YYYY lower bound"),

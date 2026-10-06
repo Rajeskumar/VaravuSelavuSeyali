@@ -211,7 +211,7 @@ export default function ProfileScreen({ navigation }: any) {
     }] : []),
     { name: 'Notifications', hint: notifsOn === null ? undefined : notifsOn ? 'On' : 'Off', onPress: () => Linking.openSettings() },
     { name: 'Appearance', hint: isSystemDefault ? 'System' : isDark ? 'Dark' : 'Light', onPress: chooseAppearance },
-    { name: 'Export data', hint: exporting ? 'Exporting…' : undefined, onPress: exportData },
+    { name: 'Export data', hint: exporting ? 'Exporting…' : 'CSV · yours + group shares', onPress: exportData },
     { name: 'Change password', onPress: sendPasswordReset },
     { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
     { name: 'About', onPress: () => navigation.navigate('About') },

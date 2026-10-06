@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import Tooltip from '@mui/material/Tooltip';
 import Dialog from '@mui/material/Dialog';
 import Snackbar from '@mui/material/Snackbar';
 import Alert from '@mui/material/Alert';
@@ -262,10 +263,22 @@ const ExpensesPage: React.FC = () => {
     setSelectedKeys(new Set());
   };
 
+  // The CSV is always "my ledger" (personal + my share of each group), whatever the scope toggle
+  // says; it honours the month filter but not search or tags. The button's tooltip spells that
+  // out — it used to export everything silently while a filtered view was on screen.
+  const exportMonthRange = React.useMemo(() => {
+    if (!monthFilter) return null;
+    const [y, m] = monthFilter.split('-').map(Number);
+    const last = new Date(y, m, 0).getDate();
+    const mm = String(m).padStart(2, '0');
+    return { start: `${mm}/01/${y}`, end: `${mm}/${last}/${y}`, label: new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
+  }, [monthFilter]);
+  const exportHint = `Downloads your personal expenses and your share of group expenses${exportMonthRange ? ` for ${exportMonthRange.label}` : ' (all time)'}. Search and tag filters aren't applied.`;
+
   const handleExport = async () => {
     setExporting(true);
     try {
-      await exportMyExpensesCsv();
+      await exportMyExpensesCsv(exportMonthRange?.start, exportMonthRange?.end);
     } catch {
       setToast({ open: true, message: 'Could not export your expenses.', severity: 'error' });
     } finally {
@@ -522,14 +535,18 @@ const ExpensesPage: React.FC = () => {
                   {selectMode ? 'Cancel' : 'Select'}
                 </Button>
               )}
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadOutlinedIcon />}
-                disabled={exporting}
-                onClick={handleExport}
-              >
-                {exporting ? 'Exporting…' : 'Export CSV'}
-              </Button>
+              <Tooltip title={exportHint}>
+                <span>
+                  <Button
+                    variant="outlined"
+                    startIcon={<FileDownloadOutlinedIcon />}
+                    disabled={exporting}
+                    onClick={handleExport}
+                  >
+                    {exporting ? 'Exporting…' : exportMonthRange ? 'Export month (CSV)' : 'Export CSV'}
+                  </Button>
+                </span>
+              </Tooltip>
               {/* Desktop already has "+ New expense" in the header; keep this for narrower widths. */}
               <Button variant="contained" onClick={() => openQuickCapture()} sx={{ display: { md: 'none' } }}>
                 Add Expense
