@@ -106,7 +106,9 @@ interface GapRowShape {
 
 /** Shared row shell for both category and merchant gap rows (CardCoachCategoryDTO/
  * CardCoachMerchantDTO) — same fields, just a different label (category name vs. merchant name). */
-const GapCard: React.FC<{ label: string; row: GapRowShape }> = ({ label, row }) => {
+// `estimated`: some spend has no card recorded and is priced on the default card, so the
+// "what you got" figure is an estimate, not a record of rewards actually earned.
+const GapCard: React.FC<{ label: string; row: GapRowShape; estimated?: boolean }> = ({ label, row, estimated }) => {
   const gap = row.optimal_in_wallet_earned_estimate != null && row.actual_earned_estimate != null
     ? Math.max(row.optimal_in_wallet_earned_estimate - row.actual_earned_estimate, 0)
     : null;
@@ -120,7 +122,7 @@ const GapCard: React.FC<{ label: string; row: GapRowShape }> = ({ label, row }) 
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
-          Actual: {row.held_card_used ? `${row.held_card_used} earned ${formatMoney(row.actual_earned_estimate ?? 0)}` : 'no default card set'}
+          {estimated ? 'Estimated' : 'Actual'}: {row.held_card_used ? `${row.held_card_used} earned ${formatMoney(row.actual_earned_estimate ?? 0)}` : 'no default card set'}
         </Typography>
         {/* Only when it's a different card: repeating the same card here showed two figures a
             cent apart (per-purchase vs per-category rounding) for one card. */}
@@ -432,7 +434,7 @@ const CardsTab: React.FC = () => {
             </Typography>
           )}
           {coach.by_category.map((row) => (
-            <GapCard key={row.category} label={row.category} row={row} />
+            <GapCard key={row.category} label={row.category} row={row} estimated={(coach.default_assumed_spend ?? 0) > 0} />
           ))}
 
           {coach.by_merchant.length > 0 && (
@@ -444,7 +446,7 @@ const CardsTab: React.FC = () => {
                 A merchant-specific rate always beats a card's general category rate — shown here separately since it's already included in the category totals above.
               </Typography>
               {coach.by_merchant.map((row) => (
-                <GapCard key={row.merchant} label={row.merchant} row={row} />
+                <GapCard key={row.merchant} label={row.merchant} row={row} estimated={(coach.default_assumed_spend ?? 0) > 0} />
               ))}
             </>
           )}

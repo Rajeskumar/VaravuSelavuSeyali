@@ -216,7 +216,7 @@ export default function CardsTabContent() {
 
           <View style={{ gap: 12, marginTop: 4 }}>
             {coach.by_category.map((row) => (
-              <GapCard key={row.category} label={row.category} row={row} theme={theme} />
+              <GapCard key={row.category} label={row.category} row={row} theme={theme} estimated={(coach.default_assumed_spend ?? 0) > 0} />
             ))}
           </View>
 
@@ -228,7 +228,7 @@ export default function CardsTabContent() {
               </Text>
               <View style={{ gap: 12, marginTop: 4 }}>
                 {coach.by_merchant.map((row) => (
-                  <GapCard key={row.merchant} label={row.merchant} row={row} theme={theme} />
+                  <GapCard key={row.merchant} label={row.merchant} row={row} theme={theme} estimated={(coach.default_assumed_spend ?? 0) > 0} />
                 ))}
               </View>
             </>
@@ -304,7 +304,8 @@ function EarnedByCard({ coach, phrase, theme }: { coach: CardCoachResponse; phra
   );
 }
 
-function GapCard({ label, row, theme }: { label: string; row: CardCoachCategoryDTO | CardCoachMerchantDTO; theme: AppTheme }) {
+// `estimated`: unattributed spend is priced on the default card, so this isn't a record of earned rewards (web parity).
+function GapCard({ label, row, theme, estimated }: { label: string; row: CardCoachCategoryDTO | CardCoachMerchantDTO; theme: AppTheme; estimated?: boolean }) {
   const styles = createStyles(theme);
   const gap = row.optimal_in_wallet_earned_estimate != null && row.actual_earned_estimate != null
     ? Math.max(row.optimal_in_wallet_earned_estimate - row.actual_earned_estimate, 0)
@@ -317,7 +318,7 @@ function GapCard({ label, row, theme }: { label: string; row: CardCoachCategoryD
         <Text style={styles.footerText}>{formatMoney(row.actual_spend)} spent</Text>
       </View>
       <Text style={styles.gapLine}>
-        Actual: {row.held_card_used ? `${row.held_card_used} earned ${formatMoney(row.actual_earned_estimate ?? 0)}` : 'no default card set'}
+        {estimated ? 'Estimated' : 'Actual'}: {row.held_card_used ? `${row.held_card_used} earned ${formatMoney(row.actual_earned_estimate ?? 0)}` : 'no default card set'}
       </Text>
       {row.optimal_in_wallet_card && row.optimal_in_wallet_card !== row.held_card_used && (
         <Text style={styles.gapLine}>Best you hold: {row.optimal_in_wallet_card} — {formatMoney(row.optimal_in_wallet_earned_estimate ?? 0)}</Text>

@@ -40,7 +40,9 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
   const isArchived = group.status === 'archived';
   const [simplifyDebts, setSimplifyDebts] = useState(group.simplify_debts);
 
-  const defaultSplitVal: SplitEditorValue = group.default_split || { type: 'equal', entries: [] };
+  // No stored default = "equal across everyone"; show everyone ticked rather than an empty,
+  // warning-flagged editor (web parity).
+  const defaultSplitVal: SplitEditorValue = group.default_split || { type: 'equal', entries: group.members.map((m) => ({ member_id: m.member_id })) };
   const [splitValue, setSplitValue] = useState<SplitEditorValue>(defaultSplitVal);
   const [saving, setSaving] = useState(false);
 
@@ -187,7 +189,10 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
     try {
       await updateGroup(group.group_id, {
         simplify_debts: simplifyDebts,
-        default_split: splitValue.type === 'equal' && splitValue.entries.length === 0 ? null : splitValue,
+        default_split: splitValue.type === 'equal'
+          && (splitValue.entries.length === 0 || group.members.every((m) => splitValue.entries.some((e) => e.member_id === m.member_id)))
+          ? null
+          : splitValue,
       });
       queryClient.invalidateQueries({ queryKey: ['group-detail', group.group_id] });
       queryClient.invalidateQueries({ queryKey: ['group-balances', group.group_id] });

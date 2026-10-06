@@ -95,7 +95,7 @@ test('with myMemberId, defaults to a row-per-debt picker scoped to the logged-in
   );
 });
 
-test('a partial payment says what is still owed instead of "All squared up"', async () => {
+test('a partial payment says what is still owed instead of a zero remaining balance', async () => {
   jest.spyOn(api, 'createSettlement').mockResolvedValue({
     id: 's2', group_id: 'g1', from_member_id: 'b', to_member_id: 'a', amount: 15, settled_at: '2026-01-01T00:00:00Z',
   });
@@ -116,11 +116,11 @@ test('a partial payment says what is still owed instead of "All squared up"', as
 
   await screen.findByRole('button', { name: /done/i }, { timeout: 2000 });
   expect(screen.getByText('Still owed')).toBeInTheDocument();
-  expect(screen.queryByText('All squared up')).not.toBeInTheDocument();
+  expect(screen.queryByText('Remaining balance')).not.toBeInTheDocument();
   expect(screen.getByText('You paid Alice $15.00. You still owe $25.00.')).toBeInTheDocument();
 });
 
-test('paying the full amount still reads "All squared up"', async () => {
+test('paying the full amount reads "Remaining balance" $0.00', async () => {
   jest.spyOn(api, 'createSettlement').mockResolvedValue({
     id: 's3', group_id: 'g1', from_member_id: 'b', to_member_id: 'a', amount: 40, settled_at: '2026-01-01T00:00:00Z',
   });
@@ -138,5 +138,5 @@ test('paying the full amount still reads "All squared up"', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Settle' }));
   fireEvent.click(screen.getByRole('button', { name: /record settlement/i }));
   await screen.findByRole('button', { name: /done/i }, { timeout: 2000 });
-  expect(screen.getByText('All squared up')).toBeInTheDocument();
+  expect(screen.getByText('Remaining balance')).toBeInTheDocument();
 });

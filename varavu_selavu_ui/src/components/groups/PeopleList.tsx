@@ -93,8 +93,8 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
   if (!data || data.length === 0) {
     return (
       <EmptyState
-        title="No balances with people yet"
-        description="Shared balances appear here after you add a group expense. Each person's total nets across every group you share."
+        title="No open balances"
+        description="People show up here while one of you owes the other, netted across every group you share. Anyone you're settled up with drops off the list."
       />
     );
   }

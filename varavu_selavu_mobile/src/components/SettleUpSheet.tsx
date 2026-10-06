@@ -293,7 +293,7 @@ export default function SettleUpSheet({
 
           {!listMode && ((fromMember && toMember) || stage === 'done') ? (
             <View style={styles.heroBlock}>
-              <Text style={styles.heroLabel}>{stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'All squared up'}</Text>
+              <Text style={styles.heroLabel}>{stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'Remaining balance'}</Text>
               <View style={styles.heroAmountRow}>
                 {stage === 'done' && !stillOwed && (
                   <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />

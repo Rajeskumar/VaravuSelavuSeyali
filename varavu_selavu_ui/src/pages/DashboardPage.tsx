@@ -354,7 +354,9 @@ const DashboardPage: React.FC = () => {
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
         >
           <Box sx={{ mb: 3 }}>
-            <SpendSpectrum data={data.category_totals} budgetsByCategory={combinedCategoryBudgets} />
+            {/* The hero's "I paid" lens re-scopes only the hero; the breakdown is always your share —
+                say so instead of letting the two numbers silently disagree. */}
+            <SpendSpectrum data={data.category_totals} budgetsByCategory={combinedCategoryBudgets} title={lens === 'share' ? 'WHERE IT WENT' : 'WHERE IT WENT · YOUR SHARE'} />
           </Box>
         </motion.div>
 

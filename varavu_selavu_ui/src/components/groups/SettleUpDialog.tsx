@@ -290,7 +290,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
             }}
           >
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-              {stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'All squared up'}
+              {stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'Remaining balance'}
             </Typography>
             <Box
               sx={{

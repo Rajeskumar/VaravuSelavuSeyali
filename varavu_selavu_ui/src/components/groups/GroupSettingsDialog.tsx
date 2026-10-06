@@ -98,7 +98,9 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
 
   const defaultSplitVal: SplitEditorValue = group.default_split 
     ? { type: group.default_split.type, entries: group.default_split.entries }
-    : { type: 'equal', entries: [] };
+    // No stored default means "equal across everyone" — show it that way. An empty entries list
+    // made the untouched form open with a red "Select at least one participant".
+    : { type: 'equal', entries: group.members.map((m) => ({ member_id: m.member_id })) };
   const [splitValue, setSplitValue] = useState<SplitEditorValue>(defaultSplitVal);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -212,9 +214,13 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
       await updateGroup(group.group_id, {
         simplify_debts: simplifyDebts,
         currency,
-        default_split: splitValue.type === 'equal' && splitValue.entries.length === 0 ? null : { type: splitValue.type, entries: splitValue.entries },
+        // Equal across every member is stored as "no default", so people added later are included.
+        default_split: splitValue.type === 'equal'
+          && (splitValue.entries.length === 0 || group.members.every((m) => splitValue.entries.some((e) => e.member_id === m.member_id)))
+          ? null
+          : { type: splitValue.type, entries: splitValue.entries },
       });
-      queryClient.invalidateQueries({ queryKey: ['group', group.group_id] });
+      refreshGroup();
       queryClient.invalidateQueries({ queryKey: ['group-balances', group.group_id] });
       setToast({ open: true, message: 'Settings saved', severity: 'success' });
       onClose();
