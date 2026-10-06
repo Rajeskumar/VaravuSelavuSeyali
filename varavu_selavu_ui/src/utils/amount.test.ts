@@ -10,8 +10,9 @@ describe('sanitizeAmountInput', () => {
     expect(sanitizeAmountInput('10.')).toBe('10.');
   });
 
-  it('strips a leading minus so negatives cannot be typed', () => {
-    expect(sanitizeAmountInput('-50')).toBe('50');
+  it('rejects a minus sign instead of silently flipping the amount positive', () => {
+    expect(sanitizeAmountInput('-50')).toBeNull();
+    expect(sanitizeAmountInput('5-')).toBeNull();
   });
 
   it('strips letters and exponent notation', () => {

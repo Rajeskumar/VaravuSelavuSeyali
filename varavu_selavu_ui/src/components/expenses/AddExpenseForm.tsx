@@ -30,7 +30,7 @@ import TagInput from './TagInput';
 import CardPickerField from './CardPickerField';
 import { useTagsEnabled } from '../../hooks/useTagsEnabled';
 import { useCardCoachEnabled } from '../../hooks/useCardCoachEnabled';
-import { MAX_AMOUNT_LENGTH, amountError, isValidAmount, sanitizeAmountInput } from '../../utils/amount';
+import { MAX_AMOUNT_LENGTH, NEGATIVE_AMOUNT_HINT, amountError, isValidAmount, sanitizeAmountInput } from '../../utils/amount';
 import { upsertRecurringTemplate, listRecurringTemplates } from '../../api/recurring';
 import { FormControlLabel, Switch, InputAdornment } from '@mui/material';
 import {
@@ -159,6 +159,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   // The input is text-backed so partial entries like "10." are typable; `cost`
   // stays the numeric source of truth for validation and submission.
   const [costText, setCostText] = useState(existing?.cost ? String(existing.cost) : '');
+  const [costHint, setCostHint] = useState<string | null>(null);
   const [merchantName, setMerchantName] = useState(existing?.merchant_name || '');
   const [tagNames, setTagNames] = useState<string[]>(existing?.tags?.map((t) => t.name) || []);
   const { enabled: tagsEnabled } = useTagsEnabled();
@@ -742,15 +743,16 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                 value={costText}
                 onChange={e => {
                   const next = sanitizeAmountInput(e.target.value);
-                  if (next === null) return; // out of range or >2dp: ignore the edit
+                  setCostHint(e.target.value.includes('-') ? NEGATIVE_AMOUNT_HINT : null);
+                  if (next === null) return; // negative, out of range or >2dp: ignore the edit
                   setCostText(next);
                   const val = next === '' ? 0 : Number(next);
                   setCost(val);
                   if (draft) setDraft({ ...draft, header: { ...draft.header, amount: val } });
                 }}
                 required
-                error={costError !== null}
-                helperText={costError ?? ' '}
+                error={costError !== null || costHint !== null}
+                helperText={costHint ?? costError ?? ' '}
                 inputProps={{ maxLength: MAX_AMOUNT_LENGTH, 'aria-label': 'Cost' }}
                 InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol(activeCurrency)}</InputAdornment> }}
               />

@@ -7,6 +7,9 @@
 
 export const MAX_AMOUNT = 1_000_000;
 
+/** Shown when someone types or pastes a negative amount (refunds aren't a separate flow yet). */
+export const NEGATIVE_AMOUNT_HINT = "Amounts can't be negative. Enter what you spent.";
+
 /** Longest string the field can hold: 1000000.00 */
 export const MAX_AMOUNT_LENGTH = String(MAX_AMOUNT).length + 3;
 
@@ -28,6 +31,9 @@ export function isValidAmount(value: number): boolean {
  * and never exceeding MAX_AMOUNT. Returns null when the edit should be rejected. */
 export function sanitizeAmountInput(raw: string): string | null {
   if (raw === '') return '';
+  // A minus sign used to be stripped like any other character, so "-5" quietly became 5 and
+  // could be saved as a $5 expense. Reject the edit instead; callers show NEGATIVE_AMOUNT_HINT.
+  if (raw.includes('-')) return null;
 
   let cleaned = raw.replace(/[^0-9.]/g, '');
   const firstDot = cleaned.indexOf('.');

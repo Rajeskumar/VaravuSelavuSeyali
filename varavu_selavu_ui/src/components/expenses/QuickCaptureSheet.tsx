@@ -35,7 +35,7 @@ import { useCardCoachEnabled } from '../../hooks/useCardCoachEnabled';
 import PaidBySplitSummary from '../groups/PaidBySplitSummary';
 import { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
 import { computePayersValid } from '../groups/PayerPicker';
-import { isValidAmount, sanitizeAmountInput } from '../../utils/amount';
+import { NEGATIVE_AMOUNT_HINT, isValidAmount, sanitizeAmountInput } from '../../utils/amount';
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 /** CATEGORY_GROUPS.Other includes 'General' — used when suggestCategory can't classify. */
@@ -91,6 +91,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   const [stage, setStage] = React.useState<'entry' | 'saved'>('entry');
   const [amount, setAmount] = React.useState('');
+  const [amountHint, setAmountHint] = React.useState<string | null>(null);
   const [description, setDescription] = React.useState('');
   const [expenseDate, setExpenseDate] = React.useState(() => new Date().toISOString().split('T')[0]);
   const [who, setWho] = React.useState(initialGroupId || 'me');
@@ -592,6 +593,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 value={amount}
                 onChange={(e) => {
                   const next = sanitizeAmountInput(e.target.value);
+                  setAmountHint(e.target.value.includes('-') ? NEGATIVE_AMOUNT_HINT : null);
                   if (next !== null) setAmount(next);
                 }}
                 placeholder="0.00"
@@ -615,6 +617,11 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 sx={{ width: 160, '& .MuiInputBase-input': { py: 0.5 } }}
               />
             </Box>
+            {amountHint && (
+              <Typography role="alert" variant="caption" color="error" sx={{ mt: -1 }}>
+                {amountHint}
+              </Typography>
+            )}
 
             <TextField
               fullWidth
