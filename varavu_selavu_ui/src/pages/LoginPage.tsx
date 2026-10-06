@@ -11,6 +11,7 @@ import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import { login, loginWithGoogle, ApiError } from '../api/auth';
 import { useNavigate } from 'react-router-dom';
+import PasswordField from '../components/common/PasswordField';
 import { motion } from 'framer-motion';
 import PageContainer from '../components/layout/PageContainer';
 import { PENDING_INVITE_KEY } from './JoinGroupPage';
@@ -158,10 +159,9 @@ const LoginPage: React.FC = () => {
                 required
                 disabled={googleLoading || loading}
               />
-              <TextField
+              <PasswordField
                 fullWidth
                 label="Password"
-                type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required

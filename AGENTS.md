@@ -21,6 +21,7 @@ feature log or reference docs. Keep it short; put detail in the files below.
 ## Always
 - Web ↔ mobile parity: a feature or fix in one client must be checked in the other.
 - Git: leave changes uncommitted unless asked; one commit per logical item; never push without asking.
+- CI: `qa.yml` runs the Playwright suites; `unit.yml` runs web lint/tsc/Jest, mobile tsc/Jest and backend pytest. Neither is in `release-check` — `make unit-check` runs the unit set locally.
 - Git hooks (`make install-hooks`): commits to main run fast checks for the staged areas; pushes to main run `make release-check` (pytest + audits); pushing a `release-*` tag requires the GitHub Actions QA run to have passed on that commit. Don't bypass with `--no-verify` unless the user asks.
 
 ## Key Decisions

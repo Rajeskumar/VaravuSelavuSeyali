@@ -177,6 +177,14 @@ const GroupsPage: React.FC = () => {
     enabled: !!groupId,
   });
 
+  // Phones used to open Balances expanded even when everyone is settled, repeating "settled" in
+  // four places and putting a Settle up button above the expenses with nothing to settle.
+  // Settled groups start collapsed; one with open payments still starts expanded below `lg`.
+  const everyoneSettled = !!balancesQuery.data && balancesQuery.data.transfers.length === 0;
+  React.useEffect(() => {
+    if (everyoneSettled) setBalancesExpanded(false);
+  }, [everyoneSettled, groupId]);
+
   const members: MemberDTO[] = groupQuery.data?.members || [];
   const myEmail = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
   const myMember = members.find((m) => m.user_email === myEmail);
@@ -508,12 +516,15 @@ const GroupsPage: React.FC = () => {
                           <BalanceList balances={balancesQuery.data} simplifyDebts={group.simplify_debts} currency={group.currency} myMemberId={myMember?.member_id} />
                           <Button
                             fullWidth
-                            variant="contained"
-                            sx={{ mt: 2 }}
+                            // Nothing owed: the primary action belongs to adding expenses, so
+                            // recording a payment is demoted to a quiet text button.
+                            variant={everyoneSettled ? 'text' : 'contained'}
+                            color={everyoneSettled ? 'inherit' : 'primary'}
+                            sx={{ mt: 2, ...(everyoneSettled ? { color: 'text.secondary' } : {}) }}
                             onClick={() => setSettleOpen(true)}
                             disabled={isArchived}
                           >
-                            Settle up
+                            {everyoneSettled ? 'Record a payment' : 'Settle up'}
                           </Button>
                         </>
                       ) : null}

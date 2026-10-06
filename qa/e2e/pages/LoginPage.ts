@@ -12,7 +12,7 @@ export class LoginPage extends BasePage {
 
   async login(email: string, password: string): Promise<void> {
     await this.page.getByLabel(/email/i).fill(email);
-    await this.page.getByLabel(/password/i).fill(password);
+    await this.page.getByLabel(/^password\b/i).fill(password);
     // The header also carries a standalone "Login" button, so scope to the form's submit.
     await this.page.locator('form button[type="submit"]').click();
   }
@@ -32,7 +32,7 @@ export class LoginPage extends BasePage {
   }
 
   get passwordField() {
-    return this.page.getByLabel(/password/i);
+    return this.page.getByLabel(/^password\b/i);
   }
 
   get submitButton() {

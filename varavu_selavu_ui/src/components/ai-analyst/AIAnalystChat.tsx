@@ -356,10 +356,13 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
             '& .MuiOutlinedInput-root': {
               borderRadius: 999,
               fontFamily: 'Instrument Sans',
-              fontSize: 14,
+              // 16px on phones: smaller input text is hard to read, and iOS Safari zooms the page
+              // when a <16px field is focused.
+              fontSize: { xs: 16, md: 14 },
               backgroundColor: 'background.paper',
             }
           }}
+          slotProps={{ htmlInput: { 'aria-label': 'Ask about your spending', enterKeyHint: 'send' } }}
         />
         <IconButton
           onClick={handleSubmit}

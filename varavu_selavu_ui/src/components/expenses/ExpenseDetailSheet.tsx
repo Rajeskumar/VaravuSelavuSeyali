@@ -185,6 +185,9 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
           maxWidth: '100%',
           borderTopLeftRadius: isDesktop ? 0 : theme.shape.borderRadius,
           borderTopRightRadius: isDesktop ? 0 : theme.shape.borderRadius,
+          // The app bar (z-index drawer+1) is fixed over the top 56px; without a cap a tall edit
+          // form slid underneath it and hid the date heading and half of the close button.
+          ...(isDesktop ? {} : { maxHeight: 'calc(100% - 64px)' }),
           p: 3,
         },
       }}
@@ -216,7 +219,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
             </Typography>
           )}
         </Box>
-        <IconButton aria-label="close" onClick={onClose} size="small">
+        <IconButton aria-label="close" onClick={onClose} sx={{ width: 44, height: 44, mt: -1, mr: -1 }}>
           <CloseIcon />
         </IconButton>
       </Box>

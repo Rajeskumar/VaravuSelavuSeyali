@@ -232,3 +232,28 @@ def test_settlement_does_not_affect_spend_analytics(test_client, db_session):
 
     # And no expense row was created for the settlement itself.
     assert db_session.query(Expense).filter(Expense.amount == 42.17).first() is None
+
+
+def test_settlement_activity_records_who_paid_whom(test_client, db_session):
+    """The feed says "Alex paid you $10" only because the payload carries both members — the
+    old payload held just the amount, so the UI could only say "<recorder> recorded a settlement"."""
+    group_id, admin_id, member2_id = _make_group_with_two_members(test_client, db_session)
+    test_client.post(
+        f"/api/v1/groups/{group_id}/settlements",
+        json={"from_member_id": member2_id, "to_member_id": admin_id, "amount": 10},
+    )
+    items = test_client.get(f"/api/v1/groups/{group_id}/activity").json()["items"]
+    entry = next(i for i in items if i["action"] == "settlement_created")
+    assert entry["payload"] == {"amount": 10.0, "from_member_id": member2_id, "to_member_id": admin_id}
+
+
+def test_name_only_member_activity_is_member_added_not_joined(test_client, db_session):
+    """A name-only seat never joined anyone; the feed must be able to tell it apart from an
+    accepted invite (`member_joined`) so it can say "You added Alex" instead of "Alex joined"."""
+    group_id = test_client.post("/api/v1/groups", json={"name": "Flat"}).json()["group_id"]
+    test_client.post(f"/api/v1/groups/{group_id}/members", json={"display_name": "Alex"})
+    items = test_client.get(f"/api/v1/groups/{group_id}/activity").json()["items"]
+    added = [i for i in items if i["action"] == "member_added"]
+    assert [a["payload"]["display_name"] for a in added] == ["Alex"]
+    assert added[0]["payload"]["user_email"] is None
+    assert not any(i["action"] == "member_joined" for i in items)

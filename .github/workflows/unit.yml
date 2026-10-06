@@ -1,0 +1,83 @@
+name: Unit tests
+
+# Fast, server-free checks that no other gate runs: web lint + typecheck + Jest, mobile
+# typecheck + Jest, and the backend pytest suite. (qa.yml covers the browser/API suites; the
+# pre-push hook runs backend pytest + audits only.) Three independent jobs so a web failure
+# doesn't hide a mobile one. Unlike qa.yml this is not path-filtered: mobile-only changes still
+# need the mobile job, and each job is cheap.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: unit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web (lint, typecheck, Jest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: varavu_selavu_ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: varavu_selavu_ui/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npx eslint src --ext .ts,.tsx
+      - name: Typecheck
+        run: npx tsc --noEmit -p .
+      - name: Jest
+        run: npx react-scripts test --watchAll=false --ci
+        env:
+          CI: 'true'
+
+  mobile:
+    name: Mobile (typecheck, Jest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: varavu_selavu_mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: varavu_selavu_mobile/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Jest
+        run: npx jest --ci
+
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: varavu_selavu_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pipx install poetry
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ hashFiles('varavu_selavu_app/poetry.lock') }}
+      - run: poetry install --no-root
+      - name: pytest
+        run: poetry run pytest -q

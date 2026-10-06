@@ -392,11 +392,11 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
           {!editing && !readOnly && (
-            <IconButton size="small" onClick={startEdit} aria-label="Edit expense">
+            <IconButton onClick={startEdit} aria-label="Edit expense" sx={{ width: 44, height: 44 }}>
               <EditRoundedIcon fontSize="small" />
             </IconButton>
           )}
-          <IconButton aria-label="close" onClick={onClose} size="small">
+          <IconButton aria-label="close" onClick={onClose} sx={{ width: 44, height: 44 }}>
             <CloseIcon />
           </IconButton>
         </Box>

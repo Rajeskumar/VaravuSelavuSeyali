@@ -5,6 +5,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
+import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/CloseRounded';
@@ -683,7 +685,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         sx: {
           width: '100%',
           maxWidth: '100%',
-          maxHeight: '92%',
+          maxHeight: 'calc(100% - 64px)', // stay below the fixed app bar
           borderTopLeftRadius: (theme.shape.borderRadius as number) * 2,
           borderTopRightRadius: (theme.shape.borderRadius as number) * 2,
           p: 2.25,
@@ -709,7 +711,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               >
                 Scan
               </Button>
-              <IconButton aria-label="close" onClick={onClose} size="small">
+              <IconButton aria-label="close" onClick={onClose} sx={{ width: 44, height: 44, mr: -1 }}>
                 <CloseIcon />
               </IconButton>
             </Box>
@@ -717,9 +719,44 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
           {scanErrorLine}
 
           <Box sx={{ textAlign: 'center', pt: 1.25, pb: 0.5 }}>
-            <Typography component="div" sx={{ ...typeScale.displayHero, fontSize: 42, minHeight: 52 }}>
-              {amount ? `${currencySymbol(activeCurrency)}${amount}` : `${currencySymbol(activeCurrency)}0.00`}
-            </Typography>
+            {/* A real, labelled input (it was a plain div): keyboard, screen-reader and paste users
+                can enter the amount, and the on-screen keys below remain as a shortcut. */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Typography component="span" aria-hidden sx={{ ...typeScale.displayHero, fontSize: 42, color: amount ? 'text.primary' : 'text.disabled' }}>
+                {currencySymbol(activeCurrency)}
+              </Typography>
+              <InputBase
+                value={amount}
+                onChange={(e) => {
+                  const next = sanitizeAmountInput(e.target.value);
+                  setAmountHint(e.target.value.includes('-') ? NEGATIVE_AMOUNT_HINT : null);
+                  if (next !== null) setAmount(next);
+                }}
+                placeholder="0.00"
+                inputProps={{
+                  'aria-label': 'Amount',
+                  'data-testid': 'quick-capture-amount-display',
+                  inputMode: 'decimal',
+                  autoComplete: 'off',
+                  style: { textAlign: 'left', width: `${Math.max(4, amount.length + 1)}ch` },
+                }}
+                sx={{
+                  ...typeScale.displayHero,
+                  fontSize: 42,
+                  minHeight: 52,
+                  borderBottom: '2px solid transparent',
+                  '&:focus-within': { borderBottomColor: 'primary.main' },
+                  '& input': { p: 0, font: 'inherit', fontSize: 42, minWidth: '4ch', maxWidth: '12ch' },
+                  // The focus cue is the underline above; the global focus ring boxed the number.
+                  '& input:focus-visible': { outline: 'none !important' },
+                }}
+              />
+            </Box>
+            {amountHint && (
+              <Typography role="alert" variant="caption" color="error">
+                {amountHint}
+              </Typography>
+            )}
           </Box>
 
           <TextField
@@ -762,27 +799,25 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0.75, mt: 1.5 }}>
             {KEYS.map((k) => (
-              <Box
+              <ButtonBase
                 key={k}
                 data-testid={`keypad-${k === '⌫' ? 'backspace' : k === '.' ? 'decimal' : k}`}
+                aria-label={k === '⌫' ? 'Backspace' : k === '.' ? 'Decimal point' : k}
                 onClick={() => setAmount((a) => pressKey(a, k))}
                 sx={{
                   height: 46,
                   borderRadius: 1.25,
                   bgcolor: 'action.hover',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   fontFamily: "'Bricolage Grotesque', sans-serif",
                   fontSize: 20,
                   fontWeight: 600,
-                  cursor: 'pointer',
                   userSelect: 'none',
                   '&:active': { bgcolor: 'action.selected' },
+                  '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 1 },
                 }}
               >
-                {k}
-              </Box>
+                <span aria-hidden>{k}</span>
+              </ButtonBase>
             ))}
           </Box>
 

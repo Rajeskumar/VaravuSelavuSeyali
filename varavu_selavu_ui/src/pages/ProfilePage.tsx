@@ -144,7 +144,7 @@ const ProfilePage: React.FC = () => {
                 <TextField label="Name" disabled={loading} fullWidth value={name} onChange={e => setName(e.target.value)} />
               </Grid>
               <Grid size={12}>
-                <TextField label="Phone (optional)" disabled={loading} fullWidth value={phone} onChange={e => setPhone(e.target.value)} />
+                <TextField label="Phone (optional)" type="tel" disabled={loading} fullWidth value={phone} onChange={e => setPhone(e.target.value)} slotProps={{ htmlInput: { inputMode: 'tel', autoComplete: 'tel' } }} />
               </Grid>
               <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mt: 1 }}>

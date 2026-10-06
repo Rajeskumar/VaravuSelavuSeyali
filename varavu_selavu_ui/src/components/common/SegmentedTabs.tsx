@@ -41,7 +41,13 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
       aria-label={ariaLabel}
       sx={{
         p: '3px',
-        height: compact ? 30 : 36,
+        // Wraps instead of overflowing: five split methods ran ~30px past a 375px phone and
+        // "Adjustment" was cut off. `minHeight` (not `height`) lets a second row grow the group.
+        maxWidth: '100%',
+        flexWrap: 'wrap',
+        minHeight: compact ? 30 : 36,
+        // Touch screens get the full 44px pill, so adjacent segments aren't 30px slivers.
+        '@media (pointer: coarse), (max-width: 599.95px)': { minHeight: 'auto' },
         borderRadius: `${theme.shape.borderRadius}px`,
         backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
         border: 'none',
@@ -56,6 +62,7 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
           lineHeight: 1,
           px: compact ? 1.25 : 1.5,
           py: 0,
+          '@media (pointer: coarse), (max-width: 599.95px)': { minHeight: 44 },
           color: 'text.secondary',
           // Touch target: the pill stays visually 30-36px tall (still under 44px), so the
           // tappable area is expanded to the 44×44 WCAG minimum via an invisible centered hit

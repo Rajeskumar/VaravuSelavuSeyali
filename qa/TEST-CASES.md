@@ -142,6 +142,11 @@ scannable — see the test file for the exact list.
 | REG-001 | Responsive | No horizontal overflow on 4 primary routes (×4) | High | Regression | Yes | `e2e/tests/regression/responsive-mobile.spec.ts` |
 | REG-002 | Responsive | No touch target under 44px on 4 primary routes (×4) | High | Regression | Yes | `e2e/tests/regression/responsive-mobile.spec.ts` |
 | REG-003 | Responsive | No layout-widening truncated text on 4 primary routes (×4) | Medium | Regression | Yes | `e2e/tests/regression/responsive-mobile.spec.ts` |
+| REG-020 | Mobile | Amount is a labelled input; keypad keys are buttons operable by keyboard; negative amount rejected | High | Regression | Yes | `e2e/tests/regression/mobile-usability.spec.ts` |
+| REG-021 | Mobile | Detail and capture sheets sit below the app bar; close targets ≥44px | High | Regression | Yes | `e2e/tests/regression/mobile-usability.spec.ts` |
+| REG-022 | Mobile | Group member actions and split-method tabs stay inside the viewport at 375px | High | Regression | Yes | `e2e/tests/regression/mobile-usability.spec.ts` |
+| REG-023 | Mobile | Settled group starts collapsed; floating Add hides on scroll-down; touch targets, tel/16px inputs, colour-scheme | Medium | Regression | Yes | `e2e/tests/regression/mobile-usability.spec.ts` |
+| REG-024 | Auth | Sign-up validation is per field and sends no request; Show/Hide password on login and register | High | Regression | Yes | `e2e/tests/auth/auth-forms.spec.ts` |
 | REG-004 | Responsive | Sidebar collapses to a reachable bottom nav on mobile | High | Regression | Yes | `e2e/tests/regression/responsive-mobile.spec.ts` |
 | REG-005 | Responsive | Quick Capture sheet fits the viewport, no bleed | Medium | Regression | Yes | `e2e/tests/regression/responsive-mobile.spec.ts` |
 | REG-006 | Amount bounds | Keypad cannot exceed the server's maximum amount | High | Regression | Yes | `e2e/tests/regression/responsive-mobile.spec.ts` |

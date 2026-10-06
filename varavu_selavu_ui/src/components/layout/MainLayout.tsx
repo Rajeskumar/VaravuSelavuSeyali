@@ -1,6 +1,7 @@
 import React from 'react';
 import Box from '@mui/material/Box';
 import Fab from '@mui/material/Fab';
+import Zoom from '@mui/material/Zoom';
 import AddIcon from '@mui/icons-material/Add';
 import { useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -27,6 +28,25 @@ const MainLayout: React.FC<Props> = ({ children }) => {
   // Matches SideNav/App.tsx's own mobile-chrome breakpoint, so the FAB and the nav chrome
   // around it switch at the same width.
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // The floating Add button sits over the right edge of the page, where category amounts and
+  // percentages are; bottom padding can't stop it covering them at intermediate scroll
+  // positions. Hide it while the user scrolls down to read and bring it back on scroll-up (or at
+  // the top), the usual pattern for this control.
+  const [fabVisible, setFabVisible] = React.useState(true);
+  React.useEffect(() => {
+    if (!isMobile) return;
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      const delta = y - lastY;
+      if (y < 80 || delta < -6) setFabVisible(true);
+      else if (delta > 6) setFabVisible(false);
+      lastY = y;
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [isMobile]);
   const { openQuickCapture } = useQuickCapture();
   const location = useLocation();
   // The FAB means "Add expense" — on screens whose own task is a different kind of creation
@@ -67,19 +87,21 @@ const MainLayout: React.FC<Props> = ({ children }) => {
       <BottomNav />
 
       {isMobile && !onNonLedgerScreen && (
-        <Fab
-          color="primary"
-          aria-label="Add Expense"
-          onClick={() => openQuickCapture()}
-          sx={{
-            position: 'fixed',
-            bottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 16px)`,
-            right: 24,
-            zIndex: (t) => t.zIndex.speedDial,
-          }}
-        >
-          <AddIcon />
-        </Fab>
+        <Zoom in={fabVisible}>
+          <Fab
+            color="primary"
+            aria-label="Add Expense"
+            onClick={() => openQuickCapture()}
+            sx={{
+              position: 'fixed',
+              bottom: `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 16px)`,
+              right: 24,
+              zIndex: (t) => t.zIndex.speedDial,
+            }}
+          >
+            <AddIcon />
+          </Fab>
+        </Zoom>
       )}
     </Box>
   );

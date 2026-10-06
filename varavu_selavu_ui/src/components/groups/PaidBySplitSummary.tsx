@@ -134,6 +134,10 @@ const PaidBySplitSummary: React.FC<Props> = ({
     cursor: 'pointer',
     padding: 0,
     mx: 0.5,
+    // These inline links were ~24px tall; the invisible pseudo-element grows the tap area to
+    // ~44px without changing the sentence's look.
+    position: 'relative',
+    '&::after': { content: '""', position: 'absolute', inset: '-10px -6px' },
   } as const;
 
   const perPerson =
@@ -186,7 +190,7 @@ const PaidBySplitSummary: React.FC<Props> = ({
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
           {pickerType === 'payer' ? 'Choose payer' : 'Choose how to split'}
-          <IconButton size="small" onClick={handleCancel} aria-label="Close">
+          <IconButton onClick={handleCancel} aria-label="Close" sx={{ width: 44, height: 44 }}>
             <CloseRoundedIcon fontSize="small" />
           </IconButton>
         </DialogTitle>

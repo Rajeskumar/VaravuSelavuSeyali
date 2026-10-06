@@ -138,3 +138,47 @@ test('scope filter switches the queried data and shows the group badge column', 
   // Personal-only table (with its Merchant column) is not shown in this scope.
   expect(screen.queryByText('Coffee')).not.toBeInTheDocument();
 });
+
+// ---------------------------------------------------------------------------
+// LR-05: the CSV button used to ignore what was on screen
+// ---------------------------------------------------------------------------
+describe('Export CSV', () => {
+  const cfg = { groups_enabled: false, entity_resolution_enabled: false, budgets_enabled: true, card_coach_enabled: false, tags_enabled: false };
+  const twoMonths = {
+    items: [
+      { row_id: 1, user_id: 'user', date: '03/10/2026', description: 'March thing', category: 'Food & Drink', cost: 3 },
+      { row_id: 2, user_id: 'user', date: '02/10/2026', description: 'Feb thing', category: 'Food & Drink', cost: 4 },
+    ],
+    next_offset: undefined,
+  };
+
+  test('with no month selected it exports the whole ledger and the tooltip says so', async () => {
+    jest.spyOn(api, 'listExpenses').mockResolvedValue(twoMonths);
+    jest.spyOn(configApi, 'getConfig').mockResolvedValue(cfg);
+    const exp = jest.spyOn(api, 'exportMyExpensesCsv').mockResolvedValue();
+    renderPage();
+    await screen.findByText('March thing');
+    const btn = screen.getByRole('button', { name: 'Export CSV' });
+    fireEvent.click(btn);
+    await waitFor(() => expect(exp).toHaveBeenCalledWith(undefined, undefined));
+    fireEvent.mouseOver(btn);
+    expect(await screen.findByText(/your share of group expenses \(all time\)\. Search and tag filters aren't applied/i)).toBeInTheDocument();
+  });
+
+  test('with a month selected it exports exactly that month and relabels the button', async () => {
+    jest.spyOn(api, 'listExpenses').mockResolvedValue(twoMonths);
+    jest.spyOn(configApi, 'getConfig').mockResolvedValue(cfg);
+    const exp = jest.spyOn(api, 'exportMyExpensesCsv').mockResolvedValue();
+    renderPage();
+    await screen.findByText('March thing');
+    fireEvent.mouseDown(screen.getByLabelText('Month'));
+    const options = await screen.findAllByRole('option');
+    const feb = options.find((o) => /february 2026/i.test(o.textContent || ''));
+    expect(feb).toBeDefined();
+    fireEvent.click(feb as HTMLElement);
+    const btn = await screen.findByRole('button', { name: 'Export month (CSV)' });
+    fireEvent.click(btn);
+    // 2026 is not a leap year: the last day must be the 28th, not a hard-coded 30/31.
+    await waitFor(() => expect(exp).toHaveBeenCalledWith('02/01/2026', '02/28/2026'));
+  });
+});

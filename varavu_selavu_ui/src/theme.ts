@@ -259,6 +259,9 @@ export function getTheme(mode: PaletteMode = 'dark'): Theme {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
+          // Native controls (date/time pickers, scrollbars, select popups) follow this: without
+          // it the calendar icon was dark-on-dark in dark mode.
+          ':root': { colorScheme: mode },
           body: {
             backgroundColor: t.ink,
           },

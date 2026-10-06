@@ -130,3 +130,15 @@ def test_export_includes_my_share_of_group_expenses(test_client, db_session, mon
     assert rent[4] == "1500.00"
     assert rent[6] == "Roommates"
     assert rent[7] == "3000.00"
+
+
+def test_export_month_bounds_include_first_and_last_day(test_client, db_session):
+    """The Expenses page exports the selected month as 01/MM/YYYY..<last day>/MM/YYYY; the
+    boundary days must be inside it and the neighbouring days outside."""
+    _add_expense(db_session, description="Day before", when=datetime(2026, 1, 31, 23, 0))
+    _add_expense(db_session, description="First", when=datetime(2026, 2, 1, 0, 0))
+    _add_expense(db_session, description="Last", when=datetime(2026, 2, 28, 23, 30))
+    _add_expense(db_session, description="Day after", when=datetime(2026, 3, 1, 0, 0))
+
+    rows = _rows(test_client, {"start_date": "02/01/2026", "end_date": "02/28/2026"})
+    assert sorted(r[1] for r in rows[1:]) == ["First", "Last"]

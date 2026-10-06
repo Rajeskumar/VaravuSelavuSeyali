@@ -12,6 +12,7 @@ import Link from '@mui/material/Link';
 import Backdrop from '@mui/material/Backdrop';
 import CircularProgress from '@mui/material/CircularProgress';
 import { loginWithGoogle, register, ApiError } from '../api/auth';
+import PasswordField from '../components/common/PasswordField';
 import { motion } from 'framer-motion';
 import PageContainer from '../components/layout/PageContainer';
 
@@ -189,11 +190,10 @@ const RegisterPage: React.FC = () => {
                   />
                 </Grid>
                 <Grid size={12}>
-                  <TextField
+                  <PasswordField
                     fullWidth
                     label="Password"
-                    type="password"
-                    value={password}
+                        value={password}
                     onChange={e => { setPassword(e.target.value); clearField('password'); }}
                     required
                     disabled={googleLoading || loading}

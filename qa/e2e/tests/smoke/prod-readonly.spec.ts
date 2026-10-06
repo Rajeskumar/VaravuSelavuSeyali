@@ -20,7 +20,7 @@ test.describe('production read-only smoke @smoke @prod-safe', () => {
   test('login page renders the real login form', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByLabel(/email/i)).toBeVisible();
-    await expect(page.getByLabel(/password/i)).toBeVisible();
+    await expect(page.getByLabel(/^password\b/i)).toBeVisible();
     await expect(page.locator('form button[type="submit"]')).toBeVisible();
     // Never filled in or submitted — this suite must never authenticate against prod.
   });

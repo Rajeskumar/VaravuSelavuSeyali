@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import TextField from '@mui/material/TextField';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import Grid from '@mui/material/Grid';
 import Box from '@mui/material/Box';
 import Link from '@mui/material/Link';
+import PasswordField from '../components/common/PasswordField';
 import { motion } from 'framer-motion';
 import PageContainer from '../components/layout/PageContainer';
 import { resetPassword } from '../api/auth';
@@ -75,11 +75,10 @@ const ResetPasswordPage: React.FC = () => {
                     </Grid>
                   )}
                   <Grid size={12}>
-                    <TextField
+                    <PasswordField
                       fullWidth
                       label="New Password"
-                      type="password"
-                      value={password}
+                            value={password}
                       onChange={e => setPassword(e.target.value)}
                       required
                       disabled={loading}
@@ -88,11 +87,10 @@ const ResetPasswordPage: React.FC = () => {
                     />
                   </Grid>
                   <Grid size={12}>
-                    <TextField
+                    <PasswordField
                       fullWidth
                       label="Confirm New Password"
-                      type="password"
-                      value={confirmPassword}
+                            value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       required
                       disabled={loading}

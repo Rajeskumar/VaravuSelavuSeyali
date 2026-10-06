@@ -1,4 +1,4 @@
-.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check release-check-full typecheck-web typecheck-mobile precommit-check install-hooks
+.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check release-check-full typecheck-web typecheck-mobile test-web test-mobile lint-web unit-check precommit-check install-hooks
 
 # Backend
 install-backend:
@@ -123,6 +123,19 @@ typecheck-web:
 
 typecheck-mobile:
 	cd varavu_selavu_mobile && npx tsc --noEmit -p .
+
+# Jest + lint, mirroring .github/workflows/unit.yml. Not part of release-check/pre-push (they stay
+# fast); CI runs these on every push, and `make unit-check` runs the lot locally.
+test-web:
+	cd varavu_selavu_ui && CI=true npx react-scripts test --watchAll=false
+
+test-mobile:
+	cd varavu_selavu_mobile && npx jest
+
+lint-web:
+	cd varavu_selavu_ui && npx eslint src --ext .ts,.tsx
+
+unit-check: test-backend lint-web typecheck-web test-web typecheck-mobile test-mobile
 
 precommit-check: test-backend typecheck-web typecheck-mobile
 

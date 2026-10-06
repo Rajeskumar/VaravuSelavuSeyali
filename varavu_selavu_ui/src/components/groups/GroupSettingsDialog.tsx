@@ -277,7 +277,9 @@ export const GroupSettingsDialog: React.FC<GroupSettingsDialogProps> = ({
                           : <Chip label="Name only" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />)}
                       </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                    {/* Wraps onto its own full-width row on phones: three labelled actions are ~300px
+                        and the dialog's content area is ~260px at 375px wide. */}
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', flex: { xs: '1 1 100%', sm: '0 0 auto' }, minWidth: 0 }}>
                       {pending && !isArchived && (
                         <>
                           <Button size="small" variant="text" startIcon={<MailOutlineRoundedIcon fontSize="small" />} disabled={busy} onClick={() => { setInviteFor(inviteFor === m.member_id ? null : m.member_id); setInviteEmail(''); }}>

@@ -110,7 +110,8 @@ test.describe('amount entry bounds @regression', () => {
       await page.getByTestId('keypad-9').click();
     }
 
-    const shown = (await page.locator('text=/^\\$[0-9]/').first().textContent()) ?? '';
+    // The mobile amount is a real <input> (labelled "Amount"), no longer a text node.
+    const shown = await page.getByTestId('quick-capture-amount-display').inputValue();
     const value = Number(shown.replace(/[^0-9.]/g, ''));
     expect(value, 'keypad composed an amount above the server ceiling').toBeLessThanOrEqual(1_000_000);
   });
@@ -123,13 +124,11 @@ test.describe('amount entry bounds @regression', () => {
     const fits = await page.evaluate(() => {
       const sheet = document.querySelector('[data-testid="quick-capture-description"]')?.closest('.MuiPaper-root');
       if (!sheet) return { error: 'sheet not found' };
-      const amt = [...sheet.querySelectorAll('*')].find(
-        (e) => e.children.length === 0 && /^\$[0-9]/.test((e.textContent || '').trim()),
-      );
+      const amt = sheet.querySelector('[data-testid="quick-capture-amount-display"]') as HTMLInputElement | null;
       if (!amt) return { error: 'amount display not found in sheet' };
       const a = amt.getBoundingClientRect();
       const s = sheet.getBoundingClientRect();
-      return { text: amt.textContent!.trim(), fits: a.left >= s.left - 1 && a.right <= s.right + 1 };
+      return { text: amt.value, fits: a.left >= s.left - 1 && a.right <= s.right + 1 };
     });
 
     expect(fits, 'amount text escaped the sheet').toMatchObject({ fits: true });

@@ -91,7 +91,7 @@ const TagInput: React.FC<TagInputProps> = ({ value, onChange, maxTags = DEFAULT_
         component="button"
         type="button"
         onClick={() => setExpanded(true)}
-        sx={{ background: 'none', border: 'none', p: 0, cursor: 'pointer', font: 'inherit', color: 'text.secondary' }}
+        sx={{ background: 'none', border: 'none', p: 0, cursor: 'pointer', font: 'inherit', color: 'text.secondary', position: 'relative', minHeight: 24, '&::after': { content: '""', position: 'absolute', inset: '-12px -8px' } }}
       >
         <Typography sx={{ fontSize: 13 }}>+ Add tag</Typography>
       </Box>
