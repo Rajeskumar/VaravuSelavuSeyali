@@ -35,6 +35,7 @@ const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const googleDiv = useRef<HTMLDivElement>(null);
@@ -122,6 +123,9 @@ const LoginPage: React.FC = () => {
       }
     } finally {
       setLoading(false);
+      // Submitting disables the fields, which drops focus to <body>; put it back on the field to
+      // retype so keyboard and screen-reader users land next to the (role=alert) message.
+      requestAnimationFrame(() => passwordRef.current?.focus());
     }
   };
 
@@ -141,14 +145,14 @@ const LoginPage: React.FC = () => {
       >
         <Card sx={{ width: '100%' }} elevation={0}>
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h6" gutterBottom align="center">
+            <Typography variant="h6" component="h1" gutterBottom align="center">
               Login
             </Typography>
             <div ref={googleDiv} style={{ width: '100%', display: 'flex', justifyContent: 'center', ...(googleReady ? { marginBottom: 16 } : { height: 0, overflow: 'hidden', visibility: 'hidden' }) }} />
             {googleReady && <Divider sx={{ mb: 2 }}>or</Divider>}
             <Box component="form" onSubmit={handleLogin} noValidate sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {error && (
-                <Typography color="error" align="center" variant="body2">{error}</Typography>
+                <Typography id="login-error" role="alert" color="error" align="center" variant="body2">{error}</Typography>
               )}
               <TextField
                 fullWidth
@@ -157,6 +161,8 @@ const LoginPage: React.FC = () => {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
+                error={!!error}
+                slotProps={{ htmlInput: { autoComplete: 'username', 'aria-describedby': error ? 'login-error' : undefined } }}
                 disabled={googleLoading || loading}
               />
               <PasswordField
@@ -165,6 +171,9 @@ const LoginPage: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
+                error={!!error}
+                inputRef={passwordRef}
+                slotProps={{ htmlInput: { autoComplete: 'current-password', 'aria-describedby': error ? 'login-error' : undefined } }}
                 disabled={googleLoading || loading}
               />
               <Button type="submit" variant="contained" fullWidth disabled={loading}>

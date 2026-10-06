@@ -39,7 +39,7 @@ const FormSheet: React.FC<FormSheetProps> = ({ open, onClose, title, children })
 
   if (isDesktop) {
     return (
-      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { borderRadius: 2 } }}>
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ 'aria-label': title, sx: { borderRadius: 2 } }}>
         <Box sx={{ px: 3, pt: 2.5, pb: 3 }}>
           {header}
           {children}
@@ -54,6 +54,7 @@ const FormSheet: React.FC<FormSheetProps> = ({ open, onClose, title, children })
       open={open}
       onClose={onClose}
       PaperProps={{
+        role: 'dialog', 'aria-modal': true, 'aria-label': title,
         sx: {
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,

@@ -41,6 +41,7 @@ import JoinGroupPage from './pages/JoinGroupPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import ConsentBanner from './components/common/ConsentBanner';
+import RouteA11y from './components/common/RouteA11y';
 import { initAnalyticsFromStoredConsent } from './utils/analyticsConsent';
 import Box from '@mui/material/Box';
 import { HEADER_HEIGHT } from './components/layout/layoutConstants';
@@ -182,8 +183,13 @@ const AppContent: React.FC = () => {
 
   return (
     <>
+      <RouteA11y />
+      {/* Early in the DOM (it's position:fixed, so visually unchanged) so keyboard users reach
+          the consent choice right after the skip link instead of after the whole page. */}
+      <ConsentBanner />
       {/* Keyboard-only until focused — lets a screen-reader/keyboard user jump straight past
           the fixed header/nav instead of tabbing through every nav item on every page. */}
+      <Box component="nav" aria-label="Skip links">
       <Box
         component="a"
         href="#main-content"
@@ -203,6 +209,7 @@ const AppContent: React.FC = () => {
         }}
       >
         Skip to main content
+      </Box>
       </Box>
       <AppBar
         position="fixed"
@@ -400,7 +407,6 @@ const AppContent: React.FC = () => {
       {/* Recurring expenses prompt appears after login */}
       {user && <RecurringPrompt />}
       {user && <FeedbackDialog open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />}
-      <ConsentBanner />
     </>
   );
 };

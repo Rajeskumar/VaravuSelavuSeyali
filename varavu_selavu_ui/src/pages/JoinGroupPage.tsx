@@ -70,7 +70,7 @@ const JoinGroupPage: React.FC = () => {
           )}
           {state === 'need-login' && (
             <>
-              <Typography variant="h6" gutterBottom>
+              <Typography variant="h6" component="h1" gutterBottom>
                 Log in to accept this invite
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -83,7 +83,7 @@ const JoinGroupPage: React.FC = () => {
           )}
           {state === 'error' && (
             <>
-              <Typography variant="h6" color={needsVerify ? 'text.primary' : 'error'} gutterBottom>
+              <Typography component="h1" variant="h6" color={needsVerify ? 'text.primary' : 'error'} gutterBottom>
                 {needsVerify ? 'Verify your email to join' : "Couldn't join group"}
               </Typography>
               {needsVerify ? (

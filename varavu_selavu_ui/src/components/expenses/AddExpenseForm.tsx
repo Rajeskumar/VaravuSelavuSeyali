@@ -567,7 +567,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             {existing ? 'Edit Expense' : 'Add Expense'}
           </Typography>
           {onCancel && (
-            <IconButton aria-label="close" onClick={onCancel} size="small">
+            <IconButton aria-label="Close" onClick={onCancel} size="small">
               <CloseIcon />
             </IconButton>
           )}

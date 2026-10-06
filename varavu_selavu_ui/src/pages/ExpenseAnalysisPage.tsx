@@ -13,6 +13,7 @@ import BudgetsTab from '../components/analysis/BudgetsTab';
 import CardsTab from '../components/analysis/CardsTab';
 import { useBudgetsEnabled } from '../hooks/useBudgetsEnabled';
 import { useCardCoachEnabled } from '../hooks/useCardCoachEnabled';
+import PageHeading from '../components/common/PageHeading';
 
 type AnalysisTab = 'overview' | 'items' | 'merchants' | 'budgets' | 'cards';
 
@@ -59,6 +60,7 @@ const ExpenseAnalysisPage: React.FC = () => {
     // width at every viewport (the same class of bug fixed on Dashboard) — `md`+ now uses
     // the full width the sidebar-aware shell provides, matching DesktopAnalysis.jsx.
     <Box sx={{ maxWidth: { xs: 600, md: '100%' }, mx: { xs: 'auto', md: 0 }, pb: 10, pt: 3, px: 2 }}>
+      <PageHeading>Analysis</PageHeading>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1.5 }}>
         <Typography sx={{ ...typeScale.display, fontSize: 28, color: 'text.primary' }}>
           Analysis

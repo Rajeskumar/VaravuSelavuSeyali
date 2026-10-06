@@ -157,14 +157,9 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
 
   return (
     <Box
-      role="button"
-      tabIndex={0}
       data-testid="expense-row"
       data-expense-id={expense.id}
       onClick={handleRowClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') handleRowClick();
-      }}
       sx={{
         position: 'relative',
         display: 'flex',
@@ -177,7 +172,11 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
         transition: 'background-color 0.15s ease',
         '&:hover': { backgroundColor: theme.palette.action.hover },
         '&:hover .expense-row-actions': { opacity: 1, pointerEvents: 'auto' },
-        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
+        // The real <button> below is stretched over the row (see its ::after), so keyboard focus
+        // shows on the whole row. Edit/delete and the checkbox sit above that overlay, which is
+        // what lets them be real sibling buttons instead of nested inside a role="button" div.
+        '& .expense-row-main:focus-visible': { outline: 'none !important' },
+        '& .expense-row-main:focus-visible::after': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
       }}
     >
       {selectable && (
@@ -186,7 +185,8 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
           onClick={(e) => e.stopPropagation()}
           onChange={() => onToggleSelect?.(expense)}
           size="small"
-          sx={{ p: 0.5, flexShrink: 0 }}
+          sx={{ p: 0.5, flexShrink: 0, position: 'relative', zIndex: 1 }}
+          inputProps={{ 'aria-label': `Select ${expense.merchantName || expense.description}` }}
         />
       )}
       <Box
@@ -198,10 +198,34 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
           backgroundColor: dot,
         }}
       />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box
+        component="button"
+        type="button"
+        className="expense-row-main"
+        aria-label={`${expense.merchantName || expense.description}, ${formatMoney(expense.amount, expense.currency)}`}
+        onClick={(e: React.MouseEvent) => {
+          e.stopPropagation();
+          handleRowClick();
+        }}
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          p: 0,
+          m: 0,
+          border: 0,
+          background: 'none',
+          font: 'inherit',
+          color: 'inherit',
+          textAlign: 'left',
+          cursor: 'pointer',
+          display: 'block',
+          '&::after': { content: '""', position: 'absolute', inset: 0 },
+        }}
+      >
         {/* Up to two lines, then ellipsis: one line cut "Rent - October" to "Rent - Octo…" in the
             narrow middle column of the group page. */}
         <Typography
+          component="span"
           title={expense.merchantName || expense.description}
           sx={{
             fontWeight: 600,
@@ -215,7 +239,7 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
         >
           {expense.merchantName || expense.description}
         </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap component="div" sx={{ fontSize: '0.6875rem' }}>
+        <Typography variant="caption" color="text.secondary" noWrap component="span" sx={{ fontSize: '0.6875rem', display: 'block' }}>
           {/* Design review (2026-09): the title line only ever showed merchant OR description
               (never both), losing the description whenever a merchant was also set. Now the
               caption carries the description alongside category/group — but only when it says
@@ -261,6 +285,8 @@ const ExpenseRow: React.FC<ExpenseRowProps> = ({ expense, onSelect, onEdit, onDe
             alignItems: 'center',
             gap: 0.5,
             ml: 0.5,
+            position: 'relative',
+            zIndex: 1,
             opacity: 0,
             pointerEvents: 'none',
             transition: 'opacity 0.15s ease',

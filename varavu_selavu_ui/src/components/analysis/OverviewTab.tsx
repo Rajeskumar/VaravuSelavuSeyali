@@ -219,7 +219,7 @@ const OverviewTab: React.FC = () => {
     periodData.total_expenses === 0 && periodData.category_totals.length === 0 ? (
       <Paper sx={{ ...glassCardSx(theme), p: 6, mb: 2, borderRadius: 1, textAlign: 'center' }}>
         <QueryStatsIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 2 }} />
-        <Typography variant="h6" fontWeight={600} gutterBottom>
+        <Typography variant="h6" component="h2" fontWeight={600} gutterBottom>
           No expenses yet
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -270,7 +270,7 @@ const OverviewTab: React.FC = () => {
           <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 13, color: 'text.secondary' }}>
             {isYearMode ? year : `${monthNames[month - 1]} ${year}`}
           </Typography>
-          <IconButton size="small" onClick={handleYearMonthClick} aria-label="Choose month or year" sx={{ p: 0.25, color: 'text.secondary' }}>
+          <IconButton size="small" onClick={handleYearMonthClick} aria-label="Choose month or year" sx={{ p: 0.25, minWidth: 24, minHeight: 24, color: 'text.secondary' }}>
             <CalendarMonthIcon sx={{ fontSize: 16 }} />
           </IconButton>
 

@@ -91,6 +91,7 @@ const RecurringPrompt: React.FC = () => {
       open={open}
       onClose={() => setOpen(false)}
       PaperProps={{
+        role: 'dialog', 'aria-modal': true, 'aria-label': 'Recurring expenses due',
         sx: {
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,

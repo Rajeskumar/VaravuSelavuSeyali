@@ -478,7 +478,7 @@ const ExpensesPage: React.FC = () => {
     <Box sx={{ mt: 4, px: { xs: 1, sm: 2 } }}>
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>
             Expenses
           </Typography>
           {tab === 'transactions' && groupsEnabled && <GroupScopeFilter value={scope} onChange={setScope} />}
@@ -694,7 +694,7 @@ const ExpensesPage: React.FC = () => {
         }}
       />
 
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ 'aria-label': editing ? 'Edit expense' : 'Add expense' }}>
         <Box sx={{ p: 2 }}>
           <AddExpenseForm
             existing={editing}
@@ -729,7 +729,7 @@ const ExpensesPage: React.FC = () => {
           />
         </Box>
       </Dialog>
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} PaperProps={{ 'aria-label': 'Delete expense?' }}>
         <Box sx={{ p: 3, minWidth: 320 }}>
           <Typography variant="h6" sx={{ mb: 1 }}>Delete expense?</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

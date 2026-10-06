@@ -49,7 +49,7 @@ const ContactPage: React.FC = () => {
       <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <MailOutlineIcon sx={{ fontSize: 60, color: 'primary.main', mb: 2 }} />
-          <Typography variant="h3" sx={{ fontWeight: 800, mb: 1, letterSpacing: '-0.5px' }}>
+          <Typography variant="h3" component="h1" sx={{ fontWeight: 800, mb: 1, letterSpacing: '-0.5px' }}>
             Contact Us
           </Typography>
           <Typography variant="body1" color="text.secondary">

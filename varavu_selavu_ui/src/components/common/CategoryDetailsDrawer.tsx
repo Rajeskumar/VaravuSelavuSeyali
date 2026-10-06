@@ -27,7 +27,7 @@ interface Props {
 
 const CategoryDetailsDrawer: React.FC<Props> = ({ open, title, items, onClose }) => {
   return (
-    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ sx: { width: { xs: '100%', sm: 420 } } }}>
+    <Drawer anchor="right" open={open} onClose={onClose} PaperProps={{ role: 'dialog', 'aria-modal': true, 'aria-label': title, sx: { width: { xs: '100%', sm: 420 } } }}>
       <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="h6">{title}</Typography>
         <IconButton size="small" onClick={onClose} aria-label="Close">

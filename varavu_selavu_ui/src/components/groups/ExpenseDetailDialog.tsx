@@ -347,6 +347,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
       onClose={onClose}
       ModalProps={{ keepMounted: false }}
       PaperProps={{
+        role: 'dialog', 'aria-modal': true, 'aria-label': 'Group expense details',
         sx: {
           width: isDesktop ? 400 : '100%',
           maxWidth: '100%',
@@ -396,7 +397,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               <EditRoundedIcon fontSize="small" />
             </IconButton>
           )}
-          <IconButton aria-label="close" onClick={onClose} sx={{ width: 44, height: 44 }}>
+          <IconButton aria-label="Close" onClick={onClose} sx={{ width: 44, height: 44 }}>
             <CloseIcon />
           </IconButton>
         </Box>

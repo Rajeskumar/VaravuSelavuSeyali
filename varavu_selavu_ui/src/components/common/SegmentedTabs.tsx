@@ -54,6 +54,9 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
         gap: 0.25,
         '& .MuiToggleButton-root': {
           position: 'relative',
+          // MUI's fullWidth gives every button width:100%, which — now that the group wraps —
+          // stacked all segments one per row. Share the row instead; wrap only when they can't fit.
+          ...(fullWidth ? { flex: '1 1 auto', width: 'auto' } : {}),
           border: 'none',
           borderRadius: `${Math.max(Number(theme.shape.borderRadius) - 2, 4)}px`,
           textTransform: 'none',
@@ -62,6 +65,9 @@ function SegmentedTabs<T extends string>({ value, onChange, options, fullWidth, 
           lineHeight: 1,
           px: compact ? 1.25 : 1.5,
           py: 0,
+          // A real 30/24px button on desktop (the ::after below is only extra slop): axe's
+          // target-size check measured the old ~14px-tall button.
+          minHeight: compact ? 24 : 30,
           '@media (pointer: coarse), (max-width: 599.95px)': { minHeight: 44 },
           color: 'text.secondary',
           // Touch target: the pill stays visually 30-36px tall (still under 44px), so the

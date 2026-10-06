@@ -33,6 +33,7 @@ const AskOverlay: React.FC<AskOverlayProps> = ({ open, onClose, initialQuery }) 
       anchor={isMobile ? 'bottom' : 'right'}
       open={open}
       onClose={onClose}
+      PaperProps={{ role: 'dialog', 'aria-modal': true, 'aria-label': 'Ask' }}
       sx={{
         // The app's fixed AppBar sits at a higher z-index than MUI's default Drawer z-index
         // (App.tsx deliberately sets `theme.zIndex.drawer + 1`), so without a top offset the

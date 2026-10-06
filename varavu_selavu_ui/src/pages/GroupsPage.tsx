@@ -36,6 +36,7 @@ import BalanceList from '../components/groups/BalanceList';
 import SettleUpDialog from '../components/groups/SettleUpDialog';
 import ExpenseDetailDialog from '../components/groups/ExpenseDetailDialog';
 import { useQuickCapture } from '../context/QuickCaptureContext';
+import PageHeading from '../components/common/PageHeading';
 import {
   getGroup,
   listGroups,
@@ -331,7 +332,7 @@ const GroupsPage: React.FC = () => {
       <Box sx={{ mt: 4 }}>
         <Paper sx={{ p: 6, textAlign: 'center', borderRadius: 1 }}>
           <GroupsRoundedIcon sx={{ fontSize: 64, color: 'primary.light', mb: 2 }} />
-          <Typography variant="h6" fontWeight={700} gutterBottom>
+          <Typography variant="h6" component="h1" fontWeight={700} gutterBottom>
             Groups isn't available yet
           </Typography>
           <Typography variant="body1" color="text.secondary">
@@ -353,6 +354,7 @@ const GroupsPage: React.FC = () => {
     // Below `md` the page scrolls as a whole: a fixed-height box with its own inner scroll put
     // the end of the content under the mobile bottom bar and the floating + button.
     <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', height: { xs: 'auto', md: 'calc(100vh - 176px)' }, minHeight: 480, border: `1px solid ${theme.palette.divider}`, borderRadius: 1, overflow: { xs: 'visible', md: 'hidden' } }}>
+      <PageHeading>Groups</PageHeading>
       {/* Groups/People root tabs — a shared header above the rail+detail row (not nested inside
           the detail pane) specifically so it's reachable on mobile regardless of which of the
           two panes below is currently visible there; see the rail/center `display.xs` logic
@@ -392,7 +394,7 @@ const GroupsPage: React.FC = () => {
             ) : (
               <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', p: 4, gap: 1.5 }}>
                 <GroupsRoundedIcon sx={{ fontSize: 48, color: 'text.disabled' }} />
-                <Typography variant="subtitle1" fontWeight={700}>
+                <Typography variant="subtitle1" component="h2" fontWeight={700}>
                   {railGroups.length > 0 ? 'Select a group' : emailVerified === false ? 'Verify your email to start a group' : 'No groups yet'}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320 }}>
@@ -542,7 +544,7 @@ const GroupsPage: React.FC = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                     {/* Below md the back-header above already names the group — showing it twice
                         pushed the expenses below the fold on phones. */}
-                    <Typography variant="h6" sx={{ display: { xs: 'none', md: 'block' }, fontWeight: 700, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
+                    <Typography variant="h6" component="h2" sx={{ display: { xs: "none", md: "block" }, fontWeight: 700, lineHeight: 1.2, overflowWrap: 'anywhere' }}>
                       {group.name}
                     </Typography>
                     {isArchived && <Chip label="Archived" size="small" color="warning" variant="outlined" />}
@@ -646,7 +648,7 @@ const GroupsPage: React.FC = () => {
       </Box>
 
       {/* Create Group dialog */}
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'Create group' }}>
         <Box sx={{ p: 2.5 }}>
           <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
             Create Group
@@ -677,7 +679,7 @@ const GroupsPage: React.FC = () => {
       </Dialog>
 
       {/* Add Member dialog */}
-      <Dialog open={memberDialogOpen} onClose={() => setMemberDialogOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog open={memberDialogOpen} onClose={() => setMemberDialogOpen(false)} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'Add member' }}>
         <Box sx={{ p: 2.5 }}>
           <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
             Add Member

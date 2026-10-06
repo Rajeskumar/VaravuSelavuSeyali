@@ -12,10 +12,10 @@ const NotFoundPage: React.FC = () => {
   return (
     <PageContainer center maxWidth="sm" sx={{ p: 4 }}>
       <Box sx={{ textAlign: 'center' }}>
-        <Typography variant="h2" sx={{ fontWeight: 800, mb: 1 }}>
+        <Typography variant="h2" component="h1" sx={{ fontWeight: 800, mb: 1 }}>
           404
         </Typography>
-        <Typography variant="h6" sx={{ mb: 1 }}>
+        <Typography variant="h6" component="h2" sx={{ mb: 1 }}>
           Page not found
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>

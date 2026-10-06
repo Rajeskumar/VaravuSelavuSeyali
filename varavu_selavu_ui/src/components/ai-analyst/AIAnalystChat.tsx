@@ -202,7 +202,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Header */}
       <Box sx={{ px: 3, pt: 3, pb: 2, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-        <Typography sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
+        <Typography component="h2" sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
           Ask
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -235,7 +235,16 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
       </Box>
 
       {/* Messages */}
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* role="log" + polite: each new message is announced as it's appended, without moving focus
+          away from the input. tabIndex makes the scrollable transcript keyboard-reachable. */}
+      <Box
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Conversation"
+        tabIndex={0}
+        sx={{ flex: 1, overflowY: 'auto', px: 3, py: 3, display: 'flex', flexDirection: 'column', gap: 3 }}
+      >
         {messages.length === 0 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 14, color: 'text.secondary', lineHeight: 1.5 }}>
@@ -307,7 +316,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
         ))}
 
         {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <Box role="status" sx={{ display: 'flex', justifyContent: 'flex-start' }}>
             <Box
               sx={{
                 backgroundColor: 'background.paper',
@@ -328,7 +337,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
 
         {error && (
           <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Typography color="error" sx={{ fontFamily: 'Instrument Sans', fontSize: 13 }}>
+            <Typography role="alert" color="error" sx={{ fontFamily: 'Instrument Sans', fontSize: 13 }}>
               {error}
             </Typography>
           </Box>

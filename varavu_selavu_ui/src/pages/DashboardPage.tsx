@@ -33,6 +33,7 @@ import EmptyState from '../components/common/EmptyState';
 import { cerebro, tabularNums } from '../theme';
 import { describeChangeInsight } from '../utils/changeInsight';
 import { formatMoney as formatAbsMoney } from '../utils/money';
+import PageHeading from '../components/common/PageHeading';
 
 const COMBINED_TOAST_KEY = 'vs_combined_toast_shown_v1';
 const RECENT_FEED_LIMIT = 6;
@@ -304,6 +305,7 @@ const DashboardPage: React.FC = () => {
     // width MainLayout's sidebar-aware content column provides, matching DesktopDashboard.jsx;
     // `xs`/`sm` keep the original bounded, centered mobile layout unchanged.
     <Box sx={{ maxWidth: { xs: 480, md: '100%' }, mx: { xs: 'auto', md: 0 } }}>
+      <PageHeading>Dashboard</PageHeading>
       {/* Mobile-only (TrackSpense v3 Mobile design) — desktop's Dashboard is unchanged. */}
       {isMobile && <TypeToLogBar />}
 

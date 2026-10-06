@@ -217,7 +217,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
           : `${paidLine} ${fromIsMe || toIsMe ? "You're" : "They're"} all square.`;
 
   return (
-    <Dialog open={open} onClose={stage === 'settling' ? undefined : onClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={stage === 'settling' ? undefined : onClose} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'Settle up' }}>
       <Box sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           {canGoBack && (

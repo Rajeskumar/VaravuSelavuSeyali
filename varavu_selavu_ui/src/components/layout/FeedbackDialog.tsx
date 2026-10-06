@@ -109,7 +109,7 @@ const FeedbackDialog: React.FC<FeedbackDialogProps> = ({ open, onClose }) => {
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         Feedback
-        <IconButton aria-label="close" onClick={handleClose} size="small">
+        <IconButton aria-label="Close" onClick={handleClose} size="small">
           <CloseIcon />
         </IconButton>
       </DialogTitle>

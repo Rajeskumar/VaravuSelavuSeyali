@@ -44,7 +44,7 @@ const ForgotPasswordPage: React.FC = () => {
       >
       <Card sx={{ width: '100%' }} elevation={3}>
         <CardContent sx={{ p: 4 }}>
-          <Typography variant="h6" gutterBottom align="center">
+          <Typography variant="h6" component="h1" gutterBottom align="center">
             Forgot Password
           </Typography>
           <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
@@ -54,18 +54,19 @@ const ForgotPasswordPage: React.FC = () => {
             <Grid container spacing={2}>
               {error && (
                 <Grid size={12}>
-                  <Typography color="error" align="center">{error}</Typography>
+                  <Typography role="alert" color="error" align="center">{error}</Typography>
                 </Grid>
               )}
               {success && (
                 <Grid size={12}>
-                  <Typography color="success.main" align="center">{success}</Typography>
+                  <Typography role="status" color="success.main" align="center">{success}</Typography>
                 </Grid>
               )}
               <Grid size={12}>
                 <TextField
                   fullWidth
                   label="Email"
+                  autoComplete="email"
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}

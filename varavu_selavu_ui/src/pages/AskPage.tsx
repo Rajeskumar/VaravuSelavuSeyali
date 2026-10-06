@@ -4,6 +4,7 @@ import { Box, Paper } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import AIAnalystChat from '../components/ai-analyst/AIAnalystChat';
 import { glassCardSx } from '../theme';
+import PageHeading from '../components/common/PageHeading';
 
 /**
  * TS-DES-207 — full-page fallback for direct navigation to `/ask` (deep links, bookmarks, the
@@ -21,6 +22,7 @@ const AskPage: React.FC = () => {
 
   return (
     <Box sx={{ mt: 4 }}>
+      <PageHeading>Ask</PageHeading>
       <Paper elevation={2} sx={{
         ...glassCardSx(theme),
         p: 0,

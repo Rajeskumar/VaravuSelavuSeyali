@@ -83,7 +83,7 @@ const MoveToGroupDialog: React.FC<MoveToGroupDialogProps> = ({ open, expenseId, 
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth PaperProps={{ 'aria-label': 'Move to group' }}>
       <Box sx={{ p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Typography variant="h6">Move to group</Typography>
         {error && <Alert severity="error">{error}</Alert>}

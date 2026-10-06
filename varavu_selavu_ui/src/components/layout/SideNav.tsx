@@ -16,7 +16,7 @@ export const desktopSidebarWidth = 232;
 const NavList: React.FC<{ onNavigate: (path: string) => void }> = ({ onNavigate }) => {
   const location = useLocation();
   return (
-    <List sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, px: 1 }}>
+    <List component="div" sx={{ display: 'flex', flexDirection: 'column', gap: 0.25, px: 1 }}>
       {navItems.map((item) => {
         const Icon = item.icon;
         const active = location.pathname.startsWith(item.path);

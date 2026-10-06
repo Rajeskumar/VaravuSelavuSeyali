@@ -180,6 +180,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
       onClose={onClose}
       ModalProps={{ keepMounted: false }}
       PaperProps={{
+        role: 'dialog', 'aria-modal': true, 'aria-label': 'Expense details',
         sx: {
           width: isDesktop ? 400 : '100%',
           maxWidth: '100%',
@@ -219,7 +220,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
             </Typography>
           )}
         </Box>
-        <IconButton aria-label="close" onClick={onClose} sx={{ width: 44, height: 44, mt: -1, mr: -1 }}>
+        <IconButton aria-label="Close" onClick={onClose} sx={{ width: 44, height: 44, mt: -1, mr: -1 }}>
           <CloseIcon />
         </IconButton>
       </Box>

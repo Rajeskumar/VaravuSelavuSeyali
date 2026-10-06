@@ -91,6 +91,7 @@ export const AskSheet: React.FC<AskSheetProps> = ({ insight, onClose, year, mont
       open={!!insight}
       onClose={onClose}
       PaperProps={{
+        role: 'dialog', 'aria-modal': true, 'aria-label': 'Ask about this insight',
         sx: {
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,

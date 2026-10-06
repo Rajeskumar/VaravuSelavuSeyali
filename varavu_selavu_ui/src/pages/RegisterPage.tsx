@@ -140,7 +140,7 @@ const RegisterPage: React.FC = () => {
       >
         <Card sx={{ width: '100%' }} elevation={3}>
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h6" gutterBottom align="center">
+            <Typography variant="h6" component="h1" gutterBottom align="center">
               Create Account
             </Typography>
             <div ref={googleDiv} style={{ width: '100%', display: 'flex', justifyContent: 'center', ...(googleReady ? { marginBottom: 16 } : { height: 0, overflow: 'hidden', visibility: 'hidden' }) }} />
@@ -149,7 +149,7 @@ const RegisterPage: React.FC = () => {
               <Grid container spacing={2}>
                 {error && (
                   <Grid size={12}>
-                    <Typography color="error" align="center">{error}</Typography>
+                    <Typography role="alert" color="error" align="center">{error}</Typography>
                   </Grid>
                 )}
                 <Grid size={12}>

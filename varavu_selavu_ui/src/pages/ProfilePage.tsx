@@ -128,7 +128,7 @@ const ProfilePage: React.FC = () => {
           Tags used to sit *after* the red Delete Account button. */}
       <Card>
         <CardContent>
-          <Typography variant="h5" gutterBottom>
+          <Typography variant="h5" component="h1" gutterBottom>
             Account
           </Typography>
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -147,7 +147,7 @@ const ProfilePage: React.FC = () => {
                 <TextField label="Phone (optional)" type="tel" disabled={loading} fullWidth value={phone} onChange={e => setPhone(e.target.value)} slotProps={{ htmlInput: { inputMode: 'tel', autoComplete: 'tel' } }} />
               </Grid>
               <Grid size={12}>
-                <Typography variant="subtitle2" sx={{ mt: 1 }}>
+                <Typography variant="subtitle2" component="h2" sx={{ mt: 1 }}>
                   How people can pay you
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -177,7 +177,7 @@ const ProfilePage: React.FC = () => {
 
       <Card sx={{ mt: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" component="h2" gutterBottom>
             Password
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -193,7 +193,7 @@ const ProfilePage: React.FC = () => {
 
       <Card sx={{ mt: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" component="h2" gutterBottom>
             Your data
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -208,7 +208,7 @@ const ProfilePage: React.FC = () => {
 
       <Card sx={{ mt: 3 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
+          <Typography variant="h6" component="h2" gutterBottom>
             Help &amp; legal
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
@@ -228,7 +228,7 @@ const ProfilePage: React.FC = () => {
 
       <Card sx={{ mt: 3, borderColor: 'error.main' }}>
         <CardContent>
-          <Typography variant="h6" color="error" gutterBottom>
+          <Typography variant="h6" component="h2" color="error" gutterBottom>
             Danger Zone
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

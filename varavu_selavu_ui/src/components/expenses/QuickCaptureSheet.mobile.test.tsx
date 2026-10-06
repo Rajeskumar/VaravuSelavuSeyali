@@ -70,7 +70,7 @@ test('a negative amount is rejected with a message instead of becoming positive'
 
 test('the close button is a 44px target', async () => {
   await openSheet();
-  const close = screen.getAllByRole('button', { name: 'close' })[0];
+  const close = screen.getAllByRole('button', { name: 'Close' })[0];
   const style = getComputedStyle(close);
   expect(style.width).toBe('44px');
   expect(style.height).toBe('44px');

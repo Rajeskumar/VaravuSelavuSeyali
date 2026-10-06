@@ -55,15 +55,15 @@ const ResetPasswordPage: React.FC = () => {
       >
         <Card sx={{ width: '100%' }} elevation={3}>
           <CardContent sx={{ p: 4 }}>
-            <Typography variant="h6" gutterBottom align="center">
+            <Typography variant="h6" component="h1" gutterBottom align="center">
               Reset Password
             </Typography>
             {!token ? (
-              <Typography color="error" align="center">
+              <Typography role="alert" color="error" align="center">
                 This link is missing its reset token. Request a new one from the login page.
               </Typography>
             ) : success ? (
-              <Typography color="success.main" align="center">
+              <Typography role="status" color="success.main" align="center">
                 Password reset — redirecting to login...
               </Typography>
             ) : (
@@ -71,13 +71,14 @@ const ResetPasswordPage: React.FC = () => {
                 <Grid container spacing={2}>
                   {error && (
                     <Grid size={12}>
-                      <Typography color="error" align="center">{error}</Typography>
+                      <Typography role="alert" color="error" align="center">{error}</Typography>
                     </Grid>
                   )}
                   <Grid size={12}>
                     <PasswordField
                       fullWidth
                       label="New Password"
+                      autoComplete="new-password"
                             value={password}
                       onChange={e => setPassword(e.target.value)}
                       required
@@ -90,6 +91,7 @@ const ResetPasswordPage: React.FC = () => {
                     <PasswordField
                       fullWidth
                       label="Confirm New Password"
+                      autoComplete="new-password"
                             value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       required

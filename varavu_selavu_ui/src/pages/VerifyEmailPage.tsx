@@ -48,12 +48,12 @@ const VerifyEmailPage: React.FC = () => {
             {status === 'verifying' && (
               <>
                 <CircularProgress sx={{ mb: 2 }} />
-                <Typography variant="h6">Verifying your email…</Typography>
+                <Typography variant="h6" component="h1">Verifying your email…</Typography>
               </>
             )}
             {status === 'success' && (
               <>
-                <Typography variant="h6" color="success.main" gutterBottom>
+                <Typography variant="h6" component="h1" color="success.main" gutterBottom>
                   Email verified
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -66,7 +66,7 @@ const VerifyEmailPage: React.FC = () => {
             )}
             {status === 'error' && (
               <>
-                <Typography variant="h6" color="error" gutterBottom>
+                <Typography variant="h6" component="h1" color="error" gutterBottom>
                   Link invalid or expired
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>

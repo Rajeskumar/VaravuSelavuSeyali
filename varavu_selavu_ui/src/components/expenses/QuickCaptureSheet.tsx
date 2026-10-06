@@ -559,7 +559,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   if (isDesktop) {
     return (
-      <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 2, p: 2.5 } }}>
+      <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'New expense', sx: { borderRadius: 2, p: 2.5 } }}>
         {stage === 'entry' && (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -576,7 +576,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 >
                   Scan receipt
                 </Button>
-                <IconButton aria-label="close" onClick={onClose} size="small">
+                <IconButton aria-label="Close" onClick={onClose} size="small">
                   <CloseIcon />
                 </IconButton>
               </Box>
@@ -682,6 +682,9 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       onClose={onClose}
       ModalProps={{ keepMounted: false }}
       PaperProps={{
+        role: 'dialog',
+        'aria-modal': true,
+        'aria-label': 'New expense',
         sx: {
           width: '100%',
           maxWidth: '100%',
@@ -711,7 +714,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               >
                 Scan
               </Button>
-              <IconButton aria-label="close" onClick={onClose} sx={{ width: 44, height: 44, mr: -1 }}>
+              <IconButton aria-label="Close" onClick={onClose} sx={{ width: 44, height: 44, mr: -1 }}>
                 <CloseIcon />
               </IconButton>
             </Box>
