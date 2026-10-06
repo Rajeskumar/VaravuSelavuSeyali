@@ -38,4 +38,6 @@ Format: `- [ ] [enhancement] — context: [why/when this came up]`
 - [ ] Consolidate the Cloudflare DNS mechanisms for sibling subdomains — context: INFRASTRUCTURE §10. Low priority.
 
 ## Local customer review follow-up (2026-10-05)
-- [ ] Resolve and retest LR-01–LR-07 from `docs/product_review&testing_report/TrackSpense_Local_Customer_Review_2026-10-05.md`: draft legal pages, trust copy, stale group/recurring views, export scope, negative input, and broken legal link; complete the report’s untested release flows on a frozen candidate.
+- [ ] LR-01 (legal pages still draft templates) is the product owner's — see the legal-pages item above. LR-02–LR-07 fixed 2026-10-05 (trust copy, stale group/recurring views, export labelling + month filter, negative input, Terms link); retest them and complete the report's untested release flows (real mail, second-user invites, splits/receipts/CSV contents, native apps) on a frozen release candidate — `docs/product_review&testing_report/TrackSpense_Local_Customer_Review_2026-10-05.md`.
+- [ ] "Sign out of all devices": revoke every refresh-token family for the user (and shorten/deny outstanding access tokens) — context: logout only revokes the presented session's family, so the homepage claim was reworded instead (LR-02, 2026-10-05).
+- [ ] CSV export: optionally honour search, tags and the personal/groups scope toggle (it now honours the month and says it's "yours + group shares") — context: LR-05.
