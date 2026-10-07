@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -53,31 +53,44 @@ const ExpensesPage: React.FC = () => {
   const { enabled: groupsEnabled } = useGroupsEnabled();
   const { enabled: tagsEnabled } = useTagsEnabled();
   const { openQuickCapture } = useQuickCapture();
-  const [scope, setScope] = React.useState<AnalysisScope>('combined');
   const [searchParams, setSearchParams] = useSearchParams();
+  const updateFilters = (values: Record<string, string>) => setSearchParams((current) => {
+    const next = new URLSearchParams(current);
+    Object.entries(values).forEach(([key, value]) => { if (value) next.set(key, value); else next.delete(key); });
+    return next;
+  }, { replace: true });
+  const scopeParam = searchParams.get('scope');
+  const scope: AnalysisScope = scopeParam === 'personal' || scopeParam === 'groups' ? scopeParam : 'combined';
+  const setScope = (value: AnalysisScope) => updateFilters({ scope: value === 'combined' ? '' : value });
   const tabParam = searchParams.get('tab');
   const tab: ExpensesTab = tabParam === 'recurring' ? 'recurring' : 'transactions';
   const handleTabChange = (next: ExpensesTab) => {
-    setSearchParams(next === 'transactions' ? {} : { tab: next }, { replace: true });
+    updateFilters({ tab: next === 'transactions' ? '' : next });
   };
 
   // TS-TAG-111 — declared here (not down by feedExpenses) since the personal queries below need
   // it server-side: GET /expenses supports tag_ids natively (PRD §10.4), and filtering there
   // (rather than only client-side after the fact) keeps results correct across pagination —
   // client-side-only filtering would silently miss tagged expenses on pages not yet fetched.
-  const [tagFilterIds, setTagFilterIds] = React.useState<string[]>([]);
+  const tagFilterIds = React.useMemo(() => searchParams.get('tags')?.split(',').filter(Boolean) || [], [searchParams]);
+  const setTagFilterIds = (value: string[]) => updateFilters({ tags: value.join(',') });
   // Design review (2026-09): neither control existed on this page before — search/date
   // navigation weren't just mis-ordered behind the tag filter, they were entirely absent.
   // Both filter client-side over the already-merged `feedExpenses` below (same scope as the
   // existing tag filter's group-row pass), not a new backend query.
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [monthFilter, setMonthFilter] = React.useState(''); // 'YYYY-MM', '' = all time
+  const searchQuery = searchParams.get('q') || '';
+  const setSearchQuery = (value: string) => updateFilters({ q: value });
+  const monthFilter = searchParams.get('month') || '';
+  const setMonthFilter = (value: string) => updateFilters({ month: value }); // 'YYYY-MM', '' = all time
 
   const {
     data,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isPending: personalPending,
+    error: personalError,
+    refetch: refetchPersonal,
   } = useInfiniteQuery({
     queryKey: ['expenses', user, tagFilterIds],
     queryFn: ({ pageParam = 0 }) => listExpenses(pageParam, 30, tagFilterIds),
@@ -106,9 +119,24 @@ const ExpensesPage: React.FC = () => {
   });
 
   const feedLoading =
-    (scope === 'personal' && !data) ||
+    (scope === 'personal' && personalPending) ||
     (scope === 'groups' && groupExpensesQuery.isLoading) ||
     (scope === 'combined' && (groupExpensesQuery.isLoading || combinedPersonalQuery.isLoading));
+
+  const errors = [scope === 'personal' ? personalError : null,
+    scope !== 'personal' && groupsEnabled ? groupExpensesQuery.error : null,
+    scope === 'combined' ? combinedPersonalQuery.error : null].filter(Boolean);
+  const location = useLocation();
+  const positionKey = `${user}:${location.key}`;
+  React.useEffect(() => {
+    if (feedLoading) return;
+    let position = 0;
+    try { position = Number(sessionStorage.getItem(`vs_expense_scroll:${positionKey}`)) || 0; } catch { /* storage blocked */ }
+    const frame = requestAnimationFrame(() => window.scrollTo(0, position));
+    const remember = () => { try { sessionStorage.setItem(`vs_expense_scroll:${positionKey}`, String(window.scrollY)); } catch { /* storage blocked */ } };
+    window.addEventListener('scroll', remember, { passive: true });
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', remember); };
+  }, [positionKey, feedLoading]);
 
   const scopedRows: FeedExpense[] = React.useMemo(() => {
     const groupRows: FeedExpense[] = (groupExpensesQuery.data || []).map((e: UnifiedGroupExpenseRow) => ({
@@ -608,22 +636,25 @@ const ExpensesPage: React.FC = () => {
           />
         </Box>
 
+        {tab === 'transactions' && errors.length > 0 && <Alert severity="error" sx={{ mb: 2 }} action={<Button color="inherit" onClick={() => {
+          if (scope === 'personal') refetchPersonal();
+          if (scope !== 'personal' && groupsEnabled) groupExpensesQuery.refetch();
+          if (scope === 'combined') combinedPersonalQuery.refetch();
+        }}>Retry</Button>}>Some expenses could not be loaded. The list may be incomplete. {errors[0] instanceof Error ? errors[0].message : 'Please try again.'}</Alert>}
         {tab === 'transactions' ? (
           <ExpenseFeed
             expenses={feedExpenses}
             loading={feedLoading}
             // UI-08: a filter that matched nothing and a genuinely empty ledger are different
             // situations and get different copy + actions.
-            emptyState={
+            emptyState={errors.length > 0 ? <EmptyState title="Expenses unavailable" description="Retry loading your expenses when your connection is available." /> :
               searchQuery.trim() || monthFilter || tagFilterIds.length > 0 ? (
                 <EmptyState
                   title="No expenses match this view"
                   description="Try a different search, month, or tag — or clear the filters to see everything."
                   actionLabel="Clear filters"
                   onAction={() => {
-                    setSearchQuery('');
-                    setMonthFilter('');
-                    setTagFilterIds([]);
+                    updateFilters({ q: '', month: '', tags: '' });
                   }}
                 />
               ) : (

@@ -1,3 +1,4 @@
+import { boundedFetch, RequestError } from './request';
 // src/api/auth.ts
 //
 // Every call below passes `credentials: 'omit'` — see apiFetch.ts's own comment for why:
@@ -151,16 +152,16 @@ export async function resetPassword(payload: ResetPasswordPayload): Promise<void
 }
 
 export async function refresh(refresh_token: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+  const response = await boundedFetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ refresh_token }),
     credentials: 'omit',
-  });
+  }, 15_000);
   if (!response.ok) {
-    throw new Error('Refresh failed');
+    throw new RequestError('Could not refresh your session. Please try again.', false, response.status);
   }
   return response.json();
 }

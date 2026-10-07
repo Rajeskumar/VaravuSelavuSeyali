@@ -1,3 +1,4 @@
+import { boundedFetch, requestTimeout, RequestError } from './request';
 /**
  * apiFetch — centralized fetch wrapper with 401 interceptor.
  *
@@ -36,14 +37,16 @@ async function attemptRefresh(): Promise<string | null> {
                 return null;
             }
             const result = await refreshToken(storedRefreshToken);
+            if (await SecureStore.getItemAsync('refresh_token') !== storedRefreshToken) throw new RequestError('Your account changed. Please try again.');
             // Persist the new tokens
             await SecureStore.setItemAsync('access_token', result.access_token);
             if (result.refresh_token) {
                 await SecureStore.setItemAsync('refresh_token', result.refresh_token);
             }
             return result.access_token;
-        } catch {
-            return null;
+        } catch (error) {
+            if (error instanceof RequestError && [401, 403].includes(error.status || 0)) return null;
+            throw error;
         } finally {
             _isRefreshing = false;
             _refreshPromise = null;
@@ -79,8 +82,10 @@ function forceLogout() {
 export async function apiFetch(
     path: string,
     options: RequestInit = {},
+    timeoutMs = requestTimeout(path),
 ): Promise<Response> {
     const token = await SecureStore.getItemAsync('access_token');
+    const owner = await SecureStore.getItemAsync('user_email');
 
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string> || {}),
@@ -93,23 +98,28 @@ export async function apiFetch(
     
     // Offline Check
     const networkState = await NetInfo.fetch();
-    if (!networkState.isConnected) {
-        throw new Error('OFFLINE: No internet connection');
+    if (networkState.isConnected === false) {
+        throw new RequestError('You are offline. Reconnect and try again.');
     }
 
-    let response = await fetch(url, { ...options, headers, credentials: 'omit' });
+    let response = await boundedFetch(url, { ...options, headers, credentials: 'omit' }, timeoutMs);
 
     // On 401, attempt refresh and retry once
     if (response.status === 401) {
+        if (await SecureStore.getItemAsync('user_email') !== owner) throw new RequestError('Your account changed. Please try again.');
         const newToken = await attemptRefresh();
+        if (await SecureStore.getItemAsync('user_email') !== owner) throw new RequestError('Your account changed. Please try again.');
         if (newToken) {
+            if (await SecureStore.getItemAsync('access_token') !== newToken) throw new RequestError('Your account changed. Sign in again before continuing.');
             headers['Authorization'] = `Bearer ${newToken}`;
-            response = await fetch(url, { ...options, headers, credentials: 'omit' });
+            response = await boundedFetch(url, { ...options, headers, credentials: 'omit' }, timeoutMs);
         }
 
         // If still 401 after refresh (or refresh failed), force logout
         if (response.status === 401 || !newToken) {
+            if (await SecureStore.getItemAsync('user_email') !== owner) throw new RequestError('Your account changed. Please try again.');
             forceLogout();
+            throw new RequestError('Your session ended. Sign in again to continue.', false, 401);
         }
     }
 

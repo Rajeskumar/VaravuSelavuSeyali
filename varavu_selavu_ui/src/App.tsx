@@ -29,6 +29,7 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import EmailVerificationBanner from './components/common/EmailVerificationBanner';
 import AskPage from './pages/AskPage';
 import { ThemeModeProvider, useThemeMode } from './context/ThemeModeContext';
+import { clearExpenseDraft } from './utils/expenseDraft';
 import { QuickCaptureProvider, useQuickCapture } from './context/QuickCaptureContext';
 import { AskProvider, useAsk } from './context/AskContext';
 import { useQuickLogBar } from './hooks/useQuickLogBar';
@@ -174,6 +175,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
+    clearExpenseDraft();
     // Revokes the refresh token and expires the auth cookies server-side.
     apiLogout();
     localStorage.removeItem('vs_user');

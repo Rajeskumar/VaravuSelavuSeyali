@@ -1,3 +1,5 @@
+import { clearExpenseDraft } from '../utils/expenseDraft';
+import { boundedFetch, SESSION_ENDED_KEY } from './request';
 // src/api/auth.ts
 import API_BASE_URL from './apiconfig';
 import { csrfHeader, setCsrfToken } from './csrf';
@@ -147,6 +149,8 @@ export async function register(payload: RegisterPayload): Promise<void> {
 }
 
 export async function logout(): Promise<void> {
+  clearExpenseDraft();
+  try { sessionStorage.removeItem(SESSION_ENDED_KEY); } catch { /* storage blocked */ }
   await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
     ...withCookies,
     method: 'POST',
@@ -159,13 +163,13 @@ export async function logout(): Promise<void> {
 
 /** The refresh token travels as an HttpOnly cookie; there is nothing to pass. */
 export async function refresh(): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+  const response = await boundedFetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
     ...withCookies,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...WEB_CLIENT },
-  });
+  }, 15_000);
   if (!response.ok) {
-    throw new Error('Refresh failed');
+    throw new ApiError('Could not refresh your session. Please try again.', response.status);
   }
   const data: LoginResponse = await response.json();
   setCsrfToken(data.csrf_token);

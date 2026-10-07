@@ -1,3 +1,4 @@
+import { useChatConversation } from '../../hooks/useChatConversation';
 import React from 'react';
 import Drawer from '@mui/material/Drawer';
 import Box from '@mui/material/Box';
@@ -9,6 +10,7 @@ interface AskOverlayProps {
   open: boolean;
   onClose: () => void;
   initialQuery?: string;
+  initialQueryId?: number;
 }
 
 /**
@@ -18,20 +20,21 @@ interface AskOverlayProps {
  * not a room" — summoned from anywhere, not a dedicated screen. Both variants wrap the same
  * `AIAnalystChat` component TS-DES-109 already built; only the surrounding chrome differs here.
  *
- * Deliberately NOT `keepMounted` — `AIAnalystChat` fires a `getModels()` API call on mount, so
- * eagerly mounting it before the user ever opens Ask would fire that call (and, unauthenticated,
- * error) on every single page load. MUI's default lazy-mount means the conversation resets each
- * time the panel closes; an acceptable trade-off for an ambient "layer," not a persistent room.
+ * Mount lazily on first open, then keep the conversation alive while this account is signed in.
  */
-const AskOverlay: React.FC<AskOverlayProps> = ({ open, onClose, initialQuery }) => {
+const AskOverlay: React.FC<AskOverlayProps> = ({ open, onClose, initialQuery, initialQueryId }) => {
+  const conversation = useChatConversation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [activated, setActivated] = React.useState(open);
+  React.useEffect(() => { if (open) setActivated(true); }, [open]);
   const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
 
   return (
     <Drawer
       anchor={isMobile ? 'bottom' : 'right'}
       open={open}
+      ModalProps={{ keepMounted: activated }}
       onClose={onClose}
       PaperProps={{ role: 'dialog', 'aria-modal': true, 'aria-label': 'Ask' }}
       sx={{
@@ -44,7 +47,7 @@ const AskOverlay: React.FC<AskOverlayProps> = ({ open, onClose, initialQuery }) 
       }}
     >
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <AIAnalystChat userId={user} initialQuery={initialQuery} onClose={onClose} />
+        {(open || activated) && user && <AIAnalystChat key={user} conversation={conversation} userId={user} initialQueryId={initialQueryId} initialQuery={initialQuery} onClose={onClose} />}
       </Box>
     </Drawer>
   );

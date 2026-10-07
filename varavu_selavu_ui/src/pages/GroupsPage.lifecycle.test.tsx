@@ -8,7 +8,7 @@ import { QuickCaptureProvider } from '../context/QuickCaptureContext';
 import * as api from '../api/groups';
 import * as authApi from '../api/auth';
 
-jest.mock('heic2any', () => ({ default: jest.fn() }), { virtual: true });
+jest.mock('heic2any', () => ({ __esModule: true, default: jest.fn() }));
 jest.mock('framer-motion', () => {
   const R = require('react');
   return { motion: { div: (p: any) => R.createElement('div', p) }, // eslint-disable-next-line testing-library/no-node-access

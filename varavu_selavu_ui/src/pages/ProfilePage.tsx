@@ -1,3 +1,4 @@
+import { clearExpenseDraft } from '../utils/expenseDraft';
 import React from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Card, CardContent, Typography, Button, Grid, TextField, Alert, Link } from '@mui/material';
@@ -112,6 +113,7 @@ const ProfilePage: React.FC = () => {
     setDeleteError(null);
     try {
       await deleteAccount(proof);
+      clearExpenseDraft();
       // The server already ended every session; only the local display identity is left.
       localStorage.removeItem('vs_user');
       window.dispatchEvent(new Event('vs_auth_changed'));
@@ -195,6 +197,7 @@ const ProfilePage: React.FC = () => {
 
       <SecuritySection
         onSignedOut={() => {
+          clearExpenseDraft();
           localStorage.removeItem('vs_user');
           window.dispatchEvent(new Event('vs_auth_changed'));
         }}

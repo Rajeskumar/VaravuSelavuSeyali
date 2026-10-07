@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react';
-import heic2any from 'heic2any';
 import { parseReceipt, ReceiptParseDraft } from '../api/expenses';
 import { ensureAiConsent } from '../utils/aiConsent';
 import { AiLimitError } from '../api/aiUsage';
@@ -66,6 +65,7 @@ export function useReceiptScan(options: UseReceiptScanOptions = {}) {
         // HEIC is handled explicitly via heic2any: many browsers don't support
         // createImageBitmap for HEIC images captured on iOS devices.
         if (f.type === 'image/heic' || f.name.toLowerCase().endsWith('.heic')) {
+          const { default: heic2any } = await import('heic2any');
           const heicBlob = await heic2any({ blob: f, toType: 'image/png' });
           processed = new File([heicBlob as BlobPart], f.name.replace(/\.[^.]+$/, '.png'), { type: 'image/png' });
         } else {

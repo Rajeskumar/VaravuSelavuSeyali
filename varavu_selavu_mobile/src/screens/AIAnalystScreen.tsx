@@ -51,6 +51,8 @@ export default function AIAnalystScreen() {
     const route = useRoute<any>();
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
+    const submitLock = useRef(false);
+    const [slow, setSlow] = useState(false);
     const [loading, setLoading] = useState(false);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
     const flatListRef = useRef<FlatList>(null);
@@ -117,9 +119,15 @@ export default function AIAnalystScreen() {
         }
     }, [loading]);
 
+    useEffect(() => {
+        if (!loading) { setSlow(false); return; }
+        const timer = setTimeout(() => setSlow(true), 10_000);
+        return () => clearTimeout(timer);
+    }, [loading]);
     const handleSend = async (textOverride?: string) => {
         const text = textOverride || inputText.trim();
-        if (!text || loading || aiBlocked) return;
+        if (!text || loading || aiBlocked || submitLock.current) return;
+        submitLock.current = true;
 
         const userMsg: DisplayMessage = { id: Date.now().toString(), role: 'user', content: text };
         
@@ -182,6 +190,7 @@ export default function AIAnalystScreen() {
             };
             setMessages((prev) => [...prev, errorMsg]);
         } finally {
+            submitLock.current = false;
             setLoading(false);
             refreshUsage();
         }
@@ -346,6 +355,7 @@ export default function AIAnalystScreen() {
                             </LinearGradient>
                         </TouchableOpacity>
                     </View>
+                    {loading && slow && <Text accessibilityLiveRegion="polite" style={{ color: theme.colors.textSecondary }}>Still working. You can leave this tab and return to the result.</Text>}
                     <AiQuotaNote usage={usage} feature={chatUsage} />
                 </View>
             </KeyboardAvoidingView>

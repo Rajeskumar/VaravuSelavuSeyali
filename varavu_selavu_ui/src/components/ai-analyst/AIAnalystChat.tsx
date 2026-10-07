@@ -1,6 +1,7 @@
+import { useChatConversation, ChatConversation, Message } from '../../hooks/useChatConversation';
 import { ensureAiConsent } from '../../utils/aiConsent';
 import React, { useState, useRef, useEffect } from "react";
-import { Box, Typography, TextField, IconButton } from '@mui/material';
+import { Box, Typography, TextField, IconButton, Button } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import SendIcon from '@mui/icons-material/SendRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
@@ -15,17 +16,15 @@ import AiQuotaNote from '../common/AiQuotaNote';
 
 interface AIAnalystChatProps {
   userId: string | null;
+  conversation?: ChatConversation;
   initialQuery?: string;
+  initialQueryId?: number;
   /** TS-DES-207 — rendered as a close (X) button in the header when this component is hosted
    * inside an ambient overlay/sheet rather than a full page. Omit for the full-page route. */
   onClose?: () => void;
 }
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  scope?: string;
-}
+
 
 /** "July 2026 · My spending" from the backend's resolved period/scope, or null when it would
  * only restate a default period the user never asked about. */
@@ -47,15 +46,14 @@ const SUGGESTED_PROMPTS = [
   "Where did I buy eggs cheapest?"
 ];
 
-export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }: AIAnalystChatProps) {
+export default function AIAnalystChat({ userId: _userId, initialQuery, initialQueryId = 0, onClose, conversation }: AIAnalystChatProps) {
   const theme = useTheme();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
+  const localConversation = useChatConversation();
+  const { messages, setMessages, query, setQuery, loading, setLoading, error, setError,
+    selectedSpeed, setSelectedSpeed, submitLock, requestController, autoSubmittedRef } = conversation || localConversation;
+  const [slow, setSlow] = useState(false);
+
   const [models, setModels] = useState<ModelOption[]>([]);
-  const [selectedSpeed, setSelectedSpeed] = useState<'fast' | 'deep'>('fast');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { usage, feature: chatUsage, exhausted, unavailable, refresh: refreshUsage } = useAiUsage('chat');
   const aiBlocked = exhausted || unavailable;
@@ -79,21 +77,30 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading, error]);
 
-  const autoSubmittedRef = useRef(false);
   useEffect(() => {
-    if (initialQuery && !autoSubmittedRef.current) {
-      autoSubmittedRef.current = true;
-      handleSubmit(undefined, initialQuery);
+    if (!loading) { setSlow(false); return; }
+    const timer = setTimeout(() => setSlow(true), 10_000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+  useEffect(() => {
+    if (initialQuery && autoSubmittedRef.current !== initialQueryId) {
+      autoSubmittedRef.current = initialQueryId;
+      if (submitLock.current) {
+        setQuery(initialQuery);
+        setError('Your current question is still being answered. Send this question when it finishes.');
+      } else handleSubmit(undefined, initialQuery);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialQuery]);
+  }, [initialQuery, initialQueryId]);
 
   const handleSubmit = async (e?: React.FormEvent, overrideQuery?: string) => {
     if (e) e.preventDefault();
     const finalQuery = overrideQuery || query;
-    if (!finalQuery.trim() || aiBlocked) return;
+    if (!finalQuery.trim() || aiBlocked || submitLock.current) return;
+    submitLock.current = true;
     // Questions are answered by a third-party AI service; get the person's agreement first.
     if (!(await ensureAiConsent())) {
+      submitLock.current = false;
       setError('Ask needs AI features. Allow them when prompted to continue.');
       return;
     }
@@ -103,6 +110,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
     setQuery("");
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    requestController.current = controller;
 
     // Resolve Fast/Deep
     let targetModel: ModelOption | null = null;
@@ -117,6 +126,7 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
     try {
       const res = await fetchWithAuth(`/api/v1/analysis/chat`, {
         method: "POST",
+        signal: controller.signal,
         body: JSON.stringify({
           // The API expects {role, content}
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
@@ -146,6 +156,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
       const isTechnical = /quota|429|500|502|503|api.key|insufficient/i.test(msg);
       setError(err instanceof AiLimitError || !isTechnical ? msg : "The AI analyst is temporarily unavailable. Please try again later.");
     } finally {
+      submitLock.current = false;
+      requestController.current = null;
       setLoading(false);
       refreshUsage();
     }
@@ -336,7 +348,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, onClose }
                 color: 'text.secondary'
               }}
             >
-              Thinking…
+              {slow ? 'Still working. You can close Ask and return to the result.' : 'Thinking…'}
+              <Button sx={{ minHeight: 44 }} onClick={() => requestController.current?.abort()}>Stop waiting</Button>
             </Box>
           </Box>
         )}

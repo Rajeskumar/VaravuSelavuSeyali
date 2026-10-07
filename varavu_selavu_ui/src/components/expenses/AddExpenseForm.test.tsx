@@ -5,9 +5,7 @@ import * as api from '../../api/expenses';
 import React from 'react';
 import { recordAiConsent } from '../../utils/aiConsent';
 
-jest.mock('heic2any', () => ({
-  default: jest.fn(async () => new Blob(['converted'], { type: 'image/png' })),
-}), { virtual: true });
+jest.mock('heic2any', () => ({ __esModule: true, default: jest.fn() }));
 
 // AddExpenseForm now uses useGroupsEnabled() (react-query) for its Personal/Group
 // toggle (TS-GRP-108) — every render needs a QueryClientProvider ancestor even

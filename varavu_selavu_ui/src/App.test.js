@@ -1,8 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
-jest.mock('heic2any', () => ({
-  default: jest.fn(),
-}), { virtual: true });
+jest.mock('heic2any', () => ({ __esModule: true, default: jest.fn() }));
 
 test('renders app title', () => {
   render(<App />);

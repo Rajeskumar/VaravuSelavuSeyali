@@ -175,6 +175,15 @@
             </tr>
         </table>
 
+        <p><strong>Unsaved expense drafts.</strong> To recover interrupted entries, the web app keeps a draft in
+            this browser tab's session storage, and the mobile app uses the device's secure storage. This can include
+            amounts, descriptions, receipt line items and split choices, but not receipt photos or sign-in credentials.
+            Drafts are available for recovery for one hour after the last draft update; expired drafts are removed on
+            the next access. Saving, choosing "Discard draft", or explicitly signing out on that client removes its
+            draft. Signing in as a different account also removes the previous draft. Unsaved drafts are local to the
+            device and are not included in the server data export. Closing Ask keeps its conversation in app memory
+            while you are signed in; signing out clears it.</p>
+
         <h3>b. Information collected automatically</h3>
         <p>When you use the Service we automatically collect certain technical and usage data, including device and
             browser type, IP address, pages viewed, and interactions. We use <strong>Google Analytics</strong> for this.

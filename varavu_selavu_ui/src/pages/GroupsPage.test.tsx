@@ -7,9 +7,7 @@ import GroupsPage from './GroupsPage';
 import { QuickCaptureProvider } from '../context/QuickCaptureContext';
 import * as api from '../api/groups';
 
-jest.mock('heic2any', () => ({
-  default: jest.fn(),
-}), { virtual: true });
+jest.mock('heic2any', () => ({ __esModule: true, default: jest.fn() }));
 
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

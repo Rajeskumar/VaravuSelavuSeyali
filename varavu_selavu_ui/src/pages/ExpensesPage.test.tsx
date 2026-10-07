@@ -9,24 +9,24 @@ import * as groupsApi from '../api/groups';
 import * as configApi from '../api/config';
 import React from 'react';
 
-jest.mock('heic2any', () => ({
-  default: jest.fn(),
-}), { virtual: true });
+jest.mock('heic2any', () => ({ __esModule: true, default: jest.fn() }));
 
 beforeEach(() => {
   localStorage.setItem('vs_user', 'user');
+  jest.spyOn(window, 'scrollTo').mockImplementation(() => {});
 });
 
 afterEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   jest.restoreAllMocks();
 });
 
-function renderPage() {
+function renderPage(entry = "/expenses") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <QuickCaptureProvider>
           <ExpensesPage />
         </QuickCaptureProvider>
@@ -181,4 +181,26 @@ describe('Export CSV', () => {
     // 2026 is not a leap year: the last day must be the 28th, not a hard-coded 30/31.
     await waitFor(() => expect(exp).toHaveBeenCalledWith('02/01/2026', '02/28/2026'));
   });
+});
+
+
+test('restores expense search from the navigation URL', async () => {
+  jest.spyOn(api, 'listExpenses').mockResolvedValue({ items: [
+    { row_id: 1, user_id: 'user', date: '01/01/2024', description: 'Coffee', category: 'Food & Drink', cost: 3 },
+    { row_id: 2, user_id: 'user', date: '01/01/2024', description: 'Lunch', category: 'Food & Drink', cost: 8 },
+  ] });
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false, budgets_enabled: false, card_coach_enabled: false, tags_enabled: false });
+  renderPage('/expenses?q=Coffee');
+  await screen.findByText('Coffee');
+  expect(screen.queryByText('Lunch')).not.toBeInTheDocument();
+});
+
+
+test('failed reads show actionable recovery instead of an empty ledger', async () => {
+  jest.spyOn(api, 'listExpenses').mockRejectedValue(new Error('Connection lost'));
+  jest.spyOn(configApi, 'getConfig').mockResolvedValue({ groups_enabled: false, entity_resolution_enabled: false, budgets_enabled: false, card_coach_enabled: false, tags_enabled: false });
+  renderPage();
+  await screen.findByRole('button', { name: 'Retry' });
+  expect(screen.getByRole('alert')).toHaveTextContent('list may be incomplete');
+  expect(screen.queryByText('No expenses yet')).not.toBeInTheDocument();
 });

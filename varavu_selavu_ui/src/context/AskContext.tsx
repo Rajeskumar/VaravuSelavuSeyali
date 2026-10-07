@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSessionIdentity } from '../hooks/useSessionIdentity';
 import AskOverlay from '../components/ask/AskOverlay';
 
 interface AskContextValue {
@@ -20,20 +21,23 @@ const AskContext = React.createContext<AskContextValue | null>(null);
  */
 export const AskProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [open, setOpen] = React.useState(false);
+  const [initialQueryId, setInitialQueryId] = React.useState(0);
   const [initialQuery, setInitialQuery] = React.useState<string | undefined>(undefined);
   // Gated on `user` like the original App.tsx local state was — AIAnalystChat isn't meant to
   // mount at all for a logged-out visitor (it fires a getModels() API call on mount).
-  const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
+  const user = useSessionIdentity();
+  React.useEffect(() => { setOpen(false); setInitialQuery(undefined); }, [user]);
 
   const openAsk = React.useCallback((query?: string) => {
     setInitialQuery(query);
+    setInitialQueryId((value) => value + 1);
     setOpen(true);
   }, []);
 
   return (
     <AskContext.Provider value={{ openAsk }}>
       {children}
-      {user && <AskOverlay open={open} onClose={() => setOpen(false)} initialQuery={initialQuery} />}
+      {user && <AskOverlay key={user} initialQueryId={initialQueryId} open={open} onClose={() => setOpen(false)} initialQuery={initialQuery} />}
     </AskContext.Provider>
   );
 };

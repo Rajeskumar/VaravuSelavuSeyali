@@ -39,6 +39,10 @@ import { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
 import { computePayersValid } from '../groups/PayerPicker';
 import { NEGATIVE_AMOUNT_HINT, isValidAmount, sanitizeAmountInput } from '../../utils/amount';
 
+import { clearExpenseDraft, readExpenseDraft, writeExpenseDraft } from '../../utils/expenseDraft';
+import ConfirmDialog from '../common/ConfirmDialog';
+import { RequestError } from '../../api/request';
+
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
 /** CATEGORY_GROUPS.Other includes 'General' — used when suggestCategory can't classify. */
 const FALLBACK_CATEGORY = 'General';
@@ -92,6 +96,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   );
 
   const [stage, setStage] = React.useState<'entry' | 'saved'>('entry');
+  const owner = localStorage.getItem('vs_user') || '';
+  const saveLock = React.useRef(false);
+  const [unknownOutcome, setUnknownOutcome] = React.useState(false);
+  const [restored, setRestored] = React.useState(false);
+  const [discardOpen, setDiscardOpen] = React.useState(false);
+  const [storageFailed, setStorageFailed] = React.useState(false);
+  const restoringSplit = React.useRef<string | null>(null);
   const [amount, setAmount] = React.useState('');
   const [amountHint, setAmountHint] = React.useState<string | null>(null);
   const [description, setDescription] = React.useState('');
@@ -169,6 +180,10 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   });
 
   const reset = React.useCallback(() => {
+    clearExpenseDraft();
+    restoringSplit.current = null;
+    setRestored(false);
+    setUnknownOutcome(false);
     setStage('entry');
     setAmount('');
     setDescription('');
@@ -194,17 +209,58 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialGroupId]);
 
+  const draft = { amount, description, expenseDate, who, scannedCategory, scannedMerchant,
+    userPickedCategory, userPickedMerchant, scannedItems, scannedTax, scannedDiscount,
+    scannedFingerprint, payers, splitValue, tagNames, cardId, customized,
+    unknownOutcome: unknownOutcome || saving };
+  const serializedDraft = JSON.stringify(draft);
+  const dirty = stage === 'entry' && !!(amount || description || scannedItems.length);
+  const draftReady = React.useRef(false);
   React.useEffect(() => {
-    if (open) reset();
+    if (!open) { draftReady.current = false; return; }
+    const saved = readExpenseDraft<typeof draft>(owner);
+    if (saved && typeof saved.amount === 'string' && typeof saved.description === 'string' && Array.isArray(saved.scannedItems) && Array.isArray(saved.payers) && Array.isArray(saved.tagNames) && typeof saved.who === 'string' && typeof saved.expenseDate === 'string' && Array.isArray(saved.splitValue?.entries)) {
+      setStage('entry'); setRestored(true);
+      setAmount(saved.amount); setDescription(saved.description); setExpenseDate(saved.expenseDate);
+      setWho(saved.who); setScannedCategory(saved.scannedCategory); setScannedMerchant(saved.scannedMerchant);
+      setUserPickedCategory(saved.userPickedCategory); setUserPickedMerchant(saved.userPickedMerchant);
+      setScannedItems(saved.scannedItems); setScannedTax(saved.scannedTax); setScannedDiscount(saved.scannedDiscount);
+      setScannedFingerprint(saved.scannedFingerprint); setPayers(saved.payers); setSplitValue(saved.splitValue);
+      setTagNames(saved.tagNames); setCardId(saved.cardId); setCustomized(saved.customized);
+      setUnknownOutcome(saved.unknownOutcome); restoringSplit.current = saved.customized ? saved.who : null;
+    } else reset();
+    // Restore before the next render persists values; never overwrite the draft with empty fields.
+    draftReady.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, owner]);
+  React.useEffect(() => {
+    if (!open || stage !== 'entry') return;
+    if (!draftReady.current) { draftReady.current = true; return; }
+    if (dirty) setStorageFailed(!writeExpenseDraft(owner, JSON.parse(serializedDraft)));
+    else clearExpenseDraft();
+  }, [open, stage, dirty, owner, serializedDraft]);
+  React.useEffect(() => {
+    if (!open || !dirty) return;
+    const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [open, dirty]);
+  const requestClose = () => { if (saving) return; onClose(); };
+  const recoveryNotice = <>
+    {restored && <Typography role="status" variant="body2">Your unsaved expense was restored. Review it before saving.</Typography>}
+    {storageFailed && <Typography role="alert" color="error">This browser cannot keep a draft. Keep this tab open until you save.</Typography>}
+    {unknownOutcome && <Typography role="alert" color="error">The save outcome is unknown. Check Expenses before saving again to avoid a duplicate.</Typography>}
+    {unknownOutcome && <Button sx={{ minHeight: 44 }} onClick={() => setUnknownOutcome(false)}>I checked Expenses — allow another save</Button>}
+    <Button sx={{ minHeight: 44 }} color="error" onClick={() => setDiscardOpen(true)} disabled={!dirty || saving}>Discard draft</Button>
+    <ConfirmDialog open={discardOpen} title="Discard this expense?" message="This removes your unsaved entry." confirmLabel="Discard" destructive onCancel={() => setDiscardOpen(false)} onConfirm={() => { setDiscardOpen(false); reset(); onClose(); }} />
+  </>;
 
   // Debounced AI category/merchant suggestion as the user types — mirrors AddExpenseScreen's
   // mobile equivalent. Never overwrites a value that came from a receipt scan or the user's own
   // edit (userPickedCategory/userPickedMerchant), and never fires while a receipt scan is being
   // parsed (its onAutoParse result should win outright).
   React.useEffect(() => {
-    if (!open || scan.parsing || scan.converting) return;
+    if (!open || !owner || scan.parsing || scan.converting) return;
     if (userPickedCategory && userPickedMerchant) return;
     const desc = description.trim();
     if (desc.length < 3) return;
@@ -223,7 +279,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         });
     }, 800);
     return () => clearTimeout(timer);
-  }, [open, description, userPickedCategory, userPickedMerchant, scan.parsing, scan.converting]);
+  }, [open, owner, description, userPickedCategory, userPickedMerchant, scan.parsing, scan.converting]);
 
   React.useEffect(() => {
     if (!open || !groupsEnabled) return;
@@ -248,17 +304,17 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   // resolves, so the amount display doesn't flash `$` and then switch.
   const activeCurrency = groupDetail?.currency ?? selectedGroup?.currency ?? 'USD';
 
-  // Fetches the full member list (GroupSummary only has member_count) and resets payers/split
-  // to "just me, split equally among everyone" whenever the selected group changes, or the
-  // sheet is reopened against the same group — a fresh default every time, since a prior
-  // session's customization may reference members no longer in the group (or just shouldn't
-  // silently carry over).
+  // Fetch fresh membership before saving. Preserve recovered/customized splits on reopen;
+  // the readiness guard rejects stale members rather than silently changing their shares.
   React.useEffect(() => {
-    if (!open || !selectedGroup) {
+    if (!open) return;
+    if (!selectedGroup) {
       setGroupDetail(null);
-      setPayers([]);
-      setSplitValue({ type: 'equal', entries: [] });
-      setCustomized(false);
+      if (who === 'me' && !restoringSplit.current) {
+        setPayers([]);
+        setSplitValue({ type: 'equal', entries: [] });
+        setCustomized(false);
+      }
       return;
     }
     let mounted = true;
@@ -267,6 +323,10 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         const detail = await getGroup(selectedGroup.group_id);
         if (!mounted) return;
         setGroupDetail(detail);
+        if (restoringSplit.current === selectedGroup.group_id) {
+          restoringSplit.current = null;
+          return;
+        }
         const mine = detail.members.find((m) => m.user_email === myEmail);
         setPayers(mine ? [{ member_id: mine.member_id, amount_paid: amountNum }] : []);
         setSplitValue({ type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) });
@@ -290,7 +350,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, amountNum));
   const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, amountNum));
-  const ready = isValidAmount(amountNum) && description.trim() !== '' && !saving && payersValid && splitValid;
+  const knownMembers = !selectedGroup || (!!groupDetail && [...payers, ...splitValue.entries].every((entry) => groupDetail.members.some((member) => member.member_id === entry.member_id)));
+  const ready = !!owner && !unknownOutcome && (who === 'me' || !!selectedGroup) && knownMembers && isValidAmount(amountNum) && description.trim() !== '' && !saving && payersValid && splitValid;
 
   const resolveCategory = async (): Promise<string> => {
     if (scannedCategory) return scannedCategory;
@@ -308,11 +369,14 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const itemsToSave = scannedItems.filter((it) => it.item_name.trim() !== '');
 
   const handleSave = async () => {
-    if (!ready) return;
+    if (!ready || saveLock.current || localStorage.getItem('vs_user') !== owner) return;
+    saveLock.current = true;
     setSaving(true);
+    writeExpenseDraft(owner, { ...draft, unknownOutcome: true });
     setError(null);
     try {
       const category = await resolveCategory();
+      if (localStorage.getItem('vs_user') !== owner) throw new Error('Your session ended. Sign in again to resume your draft.');
       if (selectedGroup) {
         const { myShare } = itemsToSave.length > 0
           ? await logToGroupWithItems(selectedGroup.group_id, {
@@ -371,10 +435,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
       }
       setSavedAmount(amountNum);
       setSavedCurrency(activeCurrency);
+      clearExpenseDraft(owner, { ...draft, unknownOutcome: true });
       setStage('saved');
-    } catch {
-      setError('Failed to save expense. Please try again.');
+    } catch (error) {
+      if (error instanceof RequestError ? error.outcomeUnknown : !/session ended|Session expired/.test(error instanceof Error ? error.message : '')) setUnknownOutcome(true);
+      setError(error instanceof Error ? error.message : 'Failed to save expense. Your draft is kept.');
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };
@@ -504,7 +571,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   );
 
   const errorLine = error && (
-    <Typography color="error" variant="caption" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
+    <Typography role="alert" color="error" variant="caption" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
       {error}
     </Typography>
   );
@@ -525,7 +592,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   );
 
   const savedPanel = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.25, py: 2.25 }}>
+    <Box role="status" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.25, py: 2.25 }}>
       <Box
         sx={{
           width: 56,
@@ -550,7 +617,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         <Button variant="outlined" sx={{ borderRadius: 999 }} onClick={reset}>
           Log another
         </Button>
-        <Button variant="contained" sx={{ borderRadius: 999 }} onClick={onClose}>
+        <Button variant="contained" sx={{ borderRadius: 999 }} onClick={requestClose}>
           Done
         </Button>
       </Box>
@@ -559,7 +626,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   if (isDesktop) {
     return (
-      <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'New expense', sx: { borderRadius: 2, p: 2.5 } }}>
+      <Dialog open={open} onClose={requestClose} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'New expense', sx: { borderRadius: 2, p: 2.5 } }}>
         {stage === 'entry' && (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -576,12 +643,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
                 >
                   Scan receipt
                 </Button>
-                <IconButton aria-label="Close" onClick={onClose} size="small">
+                <IconButton aria-label="Close" onClick={requestClose} size="small">
                   <CloseIcon />
                 </IconButton>
               </Box>
             </Box>
             {scanErrorLine}
+            {recoveryNotice}
 
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, pt: 1.5, pb: 0.5 }}>
               <Typography
@@ -679,7 +747,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     <Drawer
       anchor="bottom"
       open={open}
-      onClose={onClose}
+      onClose={requestClose}
       ModalProps={{ keepMounted: false }}
       PaperProps={{
         role: 'dialog',
@@ -714,12 +782,13 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               >
                 Scan
               </Button>
-              <IconButton aria-label="Close" onClick={onClose} sx={{ width: 44, height: 44, mr: -1 }}>
+              <IconButton aria-label="Close" onClick={requestClose} sx={{ width: 44, height: 44, mr: -1 }}>
                 <CloseIcon />
               </IconButton>
             </Box>
           </Box>
           {scanErrorLine}
+            {recoveryNotice}
 
           <Box sx={{ textAlign: 'center', pt: 1.25, pb: 0.5 }}>
             {/* A real, labelled input (it was a plain div): keyboard, screen-reader and paste users

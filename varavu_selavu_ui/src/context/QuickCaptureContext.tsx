@@ -1,4 +1,6 @@
 import React from 'react';
+import { useSessionIdentity } from '../hooks/useSessionIdentity';
+import { readExpenseDraft } from '../utils/expenseDraft';
 import QuickCaptureSheet from '../components/expenses/QuickCaptureSheet';
 
 interface QuickCaptureContextValue {
@@ -18,6 +20,10 @@ const QuickCaptureContext = React.createContext<QuickCaptureContextValue | null>
  * the same way AskOverlay already has a single instance in App.tsx.
  */
 export const QuickCaptureProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const user = useSessionIdentity();
+  React.useEffect(() => {
+    setOpen(!!user && !!readExpenseDraft(user));
+  }, [user]);
   const [open, setOpen] = React.useState(false);
   const [initialGroupId, setInitialGroupId] = React.useState<string | undefined>(undefined);
 
@@ -29,7 +35,7 @@ export const QuickCaptureProvider: React.FC<{ children: React.ReactNode }> = ({ 
   return (
     <QuickCaptureContext.Provider value={{ openQuickCapture }}>
       {children}
-      <QuickCaptureSheet open={open} onClose={() => setOpen(false)} initialGroupId={initialGroupId} />
+      {user && <QuickCaptureSheet key={user} open={open} onClose={() => setOpen(false)} initialGroupId={initialGroupId} />}
     </QuickCaptureContext.Provider>
   );
 };

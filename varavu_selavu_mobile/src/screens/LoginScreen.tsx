@@ -21,7 +21,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, sessionNotice } = useAuth();
   const navigation = useNavigation<any>();
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -52,6 +52,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {sessionNotice && <Text accessibilityRole="alert" style={{ color: theme.colors.text, marginBottom: 16 }}>{sessionNotice}</Text>}
         <SectionLabel color={theme.colors.primary} style={{ letterSpacing: 2 }}>TrackSpense</SectionLabel>
         <Text style={styles.headline}>
           Every transaction,{'\n'}every expense,{'\n'}

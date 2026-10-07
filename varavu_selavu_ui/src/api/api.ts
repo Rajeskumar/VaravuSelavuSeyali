@@ -1,6 +1,7 @@
 // src/api/api.ts
 import API_BASE_URL from './apiconfig';
-import { refresh as refreshTokens } from './auth';
+import { boundedFetch, requestTimeout, RequestError, SESSION_ENDED_KEY } from './request';
+import { refresh as refreshTokens, ApiError } from './auth';
 import { csrfHeader, needsCsrf } from './csrf';
 
 // TS-GRP-145: single-flight guard so concurrent 401s trigger exactly one refresh call,
@@ -17,8 +18,9 @@ async function attemptRefresh(): Promise<boolean> {
     try {
       await refreshTokens();
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (error instanceof ApiError && [401, 403].includes(error.status)) return false;
+      throw error;
     } finally {
       refreshPromise = null;
     }
@@ -30,14 +32,15 @@ async function attemptRefresh(): Promise<boolean> {
 function forceLogout() {
   // Tokens live in HttpOnly cookies and are cleared server-side; only the
   // non-sensitive display identity is ours to remove.
+  try { sessionStorage.setItem(SESSION_ENDED_KEY, '1'); } catch { /* storage disabled */ }
   localStorage.removeItem('vs_user');
-  window.location.href = '/login';
+  window.dispatchEvent(new Event('vs_auth_changed'));
 }
 
 export const fetchWithAuth = async (
   url: string,
   options: RequestInit = {},
-  timeoutMs = 180000,
+  timeoutMs = requestTimeout(url),
 ) => {
   const buildHeaders = (): Record<string, string> => {
     const headers: Record<string, string> = {
@@ -52,20 +55,10 @@ export const fetchWithAuth = async (
     return headers;
   };
 
-  const doFetch = async (headers: Record<string, string>) => {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(`${API_BASE_URL}${url}`, {
-        ...options,
-        // Sends the auth cookies; required for cross-origin API calls.
-        credentials: 'include',
-        headers,
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(id);
-    }
+  const owner = localStorage.getItem('vs_user');
+  const doFetch = (headers: Record<string, string>) => {
+    if (navigator.onLine === false) return Promise.reject(new RequestError('You are offline. Reconnect and try again.'));
+    return boundedFetch(`${API_BASE_URL}${url}`, { ...options, credentials: 'include', headers }, timeoutMs);
   };
 
   let response = await doFetch(buildHeaders());
@@ -74,12 +67,15 @@ export const fetchWithAuth = async (
   // Access tokens are short-lived (~30 min), so this is the normal path after an
   // idle gap rather than an exceptional one.
   if (response.status === 401) {
+    if (localStorage.getItem('vs_user') !== owner) throw new RequestError('Your account changed. Please try again.');
     const refreshed = await attemptRefresh();
     if (refreshed) {
+      if (localStorage.getItem('vs_user') !== owner) throw new RequestError('Your account changed. Sign in again before continuing.');
       // Rebuilt so the retry picks up the rotated CSRF token.
       response = await doFetch(buildHeaders());
     }
     if (response.status === 401) {
+      if (localStorage.getItem('vs_user') !== owner) throw new RequestError('Your account changed. Please try again.');
       forceLogout();
       throw new Error('Session expired');
     }

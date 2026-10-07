@@ -1,10 +1,13 @@
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import React from 'react';
 import { QuickCaptureProvider, useQuickCapture } from '../../context/QuickCaptureContext';
 import * as groupsApi from '../../api/groups';
+import { RequestError } from '../../api/request';
+import * as logHook from '../../hooks/useLogExpense';
+import * as expensesApi from '../../api/expenses';
 import * as configApi from '../../api/config';
 
 jest.mock('heic2any', () => ({ __esModule: true, default: jest.fn() }));
@@ -30,7 +33,7 @@ async function openSheet() {
   return screen.findByRole('textbox', { name: 'Amount' });
 }
 
-afterEach(() => { jest.restoreAllMocks(); localStorage.clear(); });
+afterEach(() => { jest.restoreAllMocks(); localStorage.clear(); sessionStorage.clear(); });
 
 test('the amount is a labelled, editable input with a decimal keyboard (it was a plain div)', async () => {
   const amount = await openSheet();
@@ -74,4 +77,80 @@ test('the close button is a 44px target', async () => {
   const style = getComputedStyle(close);
   expect(style.width).toBe('44px');
   expect(style.height).toBe('44px');
+});
+
+
+test('restores an unsaved expense after the application remounts', async () => {
+  const amount = await openSheet();
+  fireEvent.change(amount, { target: { value: '12.34' } });
+  fireEvent.change(screen.getByPlaceholderText('Description'), { target: { value: 'Draft coffee' } });
+  cleanup();
+  await openSheet();
+  expect(screen.getByRole('textbox', { name: 'Amount' })).toHaveValue('12.34');
+  expect(screen.getByPlaceholderText('Description')).toHaveValue('Draft coffee');
+});
+
+test('auth loss hides the form and preserves its draft for the same account', async () => {
+  const amount = await openSheet();
+  fireEvent.change(amount, { target: { value: '12.34' } });
+  fireEvent.change(screen.getByPlaceholderText('Description'), { target: { value: 'Draft coffee' } });
+  act(() => { localStorage.removeItem('vs_user'); window.dispatchEvent(new Event('storage')); });
+  expect(screen.queryByRole('button', { name: 'Save expense' })).not.toBeInTheDocument();
+  act(() => { localStorage.setItem('vs_user', 'user'); window.dispatchEvent(new Event('vs_auth_changed')); });
+  fireEvent.click(screen.getByText('open-sheet'));
+  expect(await screen.findByRole('textbox', { name: 'Amount' })).toHaveValue('12.34');
+});
+
+test('a different account never receives the previous account draft', async () => {
+  const amount = await openSheet();
+  fireEvent.change(amount, { target: { value: '12.34' } });
+  cleanup();
+  localStorage.setItem('vs_user', 'different-user');
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={qc}><MemoryRouter><QuickCaptureProvider><Opener /></QuickCaptureProvider></MemoryRouter></QueryClientProvider>);
+  fireEvent.click(screen.getByText('open-sheet'));
+  expect(await screen.findByRole('textbox', { name: 'Amount' })).toHaveValue('');
+});
+
+
+test('closing retains the draft and explicit discard removes it after confirmation', async () => {
+  const amount = await openSheet();
+  fireEvent.change(amount, { target: { value: '9' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByText('open-sheet'));
+  expect(await screen.findByRole('textbox', { name: 'Amount' })).toHaveValue('9');
+  fireEvent.click(screen.getByRole('button', { name: 'Discard draft' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+  fireEvent.click(screen.getByText('open-sheet'));
+  expect(await screen.findByRole('textbox', { name: 'Amount' })).toHaveValue('');
+});
+
+test('an unknown save outcome retains input and blocks another save until records are checked', async () => {
+  const save = jest.fn().mockRejectedValue(new RequestError('Connection lost', true));
+  jest.spyOn(logHook, 'useLogExpense').mockReturnValue({ logPersonal: save, logToGroup: jest.fn(), logPersonalWithItems: jest.fn(), logToGroupWithItems: jest.fn() });
+  jest.spyOn(expensesApi, 'suggestCategory').mockResolvedValue({ main_category: 'Other', subcategory: 'General' });
+  const amount = await openSheet();
+  fireEvent.change(amount, { target: { value: '1.23' } });
+  fireEvent.change(screen.getByPlaceholderText('Description'), { target: { value: 'Coffee' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save expense' }));
+  await screen.findByText(/The save outcome is unknown/);
+  expect(screen.getByRole('textbox', { name: 'Amount' })).toHaveValue('1.23');
+  expect(screen.getByRole('button', { name: 'Save expense' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: /I checked Expenses/ }));
+  expect(screen.getByRole('button', { name: 'Save expense' })).toBeEnabled();
+  expect(save).toHaveBeenCalledTimes(1);
+});
+
+test('a successful double click saves once and clears the recoverable draft', async () => {
+  const save = jest.fn().mockResolvedValue({});
+  jest.spyOn(logHook, 'useLogExpense').mockReturnValue({ logPersonal: save, logToGroup: jest.fn(), logPersonalWithItems: jest.fn(), logToGroupWithItems: jest.fn() });
+  jest.spyOn(expensesApi, 'suggestCategory').mockResolvedValue({ main_category: 'Other', subcategory: 'General' });
+  const amount = await openSheet();
+  fireEvent.change(amount, { target: { value: '1.23' } });
+  fireEvent.change(screen.getByPlaceholderText('Description'), { target: { value: 'Coffee' } });
+  const button = screen.getByRole('button', { name: 'Save expense' });
+  fireEvent.click(button); fireEvent.click(button);
+  await screen.findByText('Logged to your personal ledger.');
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(sessionStorage.getItem('vs_expense_draft_v1')).toBeNull();
 });

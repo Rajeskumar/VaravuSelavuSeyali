@@ -58,3 +58,12 @@ All findings were fixed in code. Remaining, and not code-only:
 - [ ] Put the rate limiter on Redis (`RATE_LIMIT_STORAGE_URI`) and lock Cloud Run ingress to Cloudflare — already listed under Infra; still the real brute-force control.
 - [ ] Verify in production, not locally: headers after Cloudflare, `ENVIRONMENT`/`AUTH_COOKIE_SECURE`, CORS origins, that `*.run.app` is not reachable, and that `/docs` returns 404.
 - [ ] Production `INLINE_RUNTIME_CHUNK=false` build + new CSP: smoke-test login, Google sign-in and analytics consent on a deployed build (verified locally by inspecting `build/index.html` only).
+
+## Performance and reliability review follow-up (2026-10-06)
+- [x] PR-01/02: account-scoped draft recovery after auth loss/reload; clear feedback, successful-save/discard cleanup and unknown-save guard (web + native).
+- [x] PR-03: keep web Ask conversations and pending results across close/reopen and responsive transitions; native Ask tab already retains navigation state.
+- [x] PR-04: retain web expense search/month/tags/scope in the URL and scroll position through history navigation.
+- [x] PR-05 client handling: bounded header/body waits, caller cancellation, no automatic network/write retries, transient-refresh failures retain auth; expense read failures show Retry and partial-data messaging. Deterministic fault tests cover offline, timeout, 5xx, failed refresh and ambiguous writes.
+- [x] Receipt performance: load the HEIC converter only for HEIC files; optimized local initial gzip JavaScript reduced from 701 kB to 363 kB.
+- [ ] Validate on deployed staging with representative data and real iOS Safari/Android Chrome; test native draft recovery across process restart and software keyboard behavior. Measure deployed optimized assets/Core Web Vitals; local build and unit tests do not establish production latency.
+- [ ] Establish redacted RUM/API/save-outcome/error-budget monitoring and alerts in the production project. See `docs/features/performance-recovery.md` and the performance review for acceptance and operational checks.

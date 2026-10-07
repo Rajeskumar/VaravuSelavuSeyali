@@ -1,3 +1,4 @@
+import { clearExpenseDraft } from '../utils/expenseDraft';
 import { clearAiConsent } from '../utils/aiConsent';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
@@ -9,6 +10,7 @@ interface AuthState {
   accessToken: string | null;
   isLoading: boolean;
   userEmail: string | null;
+  sessionNotice?: string;
 }
 
 interface AuthContextType extends AuthState {
@@ -27,6 +29,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   });
 
   const signOut = async () => {
+    await clearExpenseDraft().catch(() => {});
     // Unregister the push token while the access token is still valid — apiFetch
     // needs it to authenticate the DELETE call.
     await unregisterPushNotifications();
@@ -63,6 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         accessToken: null,
         isLoading: false,
         userEmail: null,
+        sessionNotice: 'Your session ended. Sign in again to recover your expense draft. Check Expenses if a save was in progress.',
       });
     });
 

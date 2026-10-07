@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import PasswordField from '../components/common/PasswordField';
 import GoogleSignInButton, { isGoogleSignInConfigured } from '../components/auth/GoogleSignInButton';
 import { motion } from 'framer-motion';
+import { SESSION_ENDED_KEY } from '../api/request';
 import PageContainer from '../components/layout/PageContainer';
 import { PENDING_INVITE_KEY } from './JoinGroupPage';
 
@@ -50,6 +51,7 @@ const LoginPage: React.FC = () => {
       // display identity is kept client-side.
       if (data.email) localStorage.setItem('vs_user', data.email);
       window.dispatchEvent(new Event('vs_auth_changed'));
+      sessionStorage.removeItem(SESSION_ENDED_KEY);
       navigate(postLoginDestination());
     } catch {
       setError('Google login failed');
@@ -75,6 +77,7 @@ const LoginPage: React.FC = () => {
       // would put them back within reach of any script on the page.
       localStorage.setItem('vs_user', response.email || email);
       window.dispatchEvent(new Event('vs_auth_changed'));
+      sessionStorage.removeItem(SESSION_ENDED_KEY);
       navigate(postLoginDestination());
     } catch (err) {
       if (err instanceof ApiError) {
@@ -115,6 +118,7 @@ const LoginPage: React.FC = () => {
             <Typography variant="h6" component="h1" gutterBottom align="center">
               Login
             </Typography>
+            {sessionStorage.getItem(SESSION_ENDED_KEY) && <Typography role="status" variant="body2" sx={{ mb: 2 }}>Your session ended. Sign in again to continue. Any recoverable expense draft will reopen. If a save was in progress, check Expenses to confirm its outcome.</Typography>}
             {isGoogleSignInConfigured() && (
               <>
                 <Box sx={{ mb: 2 }}>

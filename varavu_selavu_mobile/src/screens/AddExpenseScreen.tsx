@@ -21,8 +21,11 @@
  * being persisted. `userPickedCategory`/`userPickedMerchant` stop the debounce from clobbering a
  * receipt scan's values or the user's own manual pick once either has happened.
  */
+import { readExpenseDraft, writeExpenseDraft, clearExpenseDraft } from '../utils/expenseDraft';
+import { RequestError } from '../api/request';
 import React, { useState, useRef, useCallback, createContext, useMemo } from 'react';
 import {
+  Alert,
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput as RNTextInput, ActivityIndicator, Modal, Animated,
   Dimensions, Pressable, Platform,
@@ -117,6 +120,11 @@ export const AddExpenseContext = createContext<AddExpenseContextType>({
 export default function AddExpenseProvider({ children }: { children: React.ReactNode }) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const saveLock = useRef(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [unknownOutcome, setUnknownOutcome] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const restoringSplit = useRef<string | null>(null);
   const [visible, setVisible] = useState(false);
   const translateY = useRef(new Animated.Value(SCREEN_H)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -181,6 +189,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
   );
 
   const resetForm = (initialWho: string) => {
+    clearExpenseDraft().catch(() => {});
+    restoringSplit.current = null;
+    setRestored(false); setUnknownOutcome(false);
     setDetailsOpen(false);
     setStage('entry');
     setAmt('');
@@ -212,8 +223,58 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setCustomized(false);
   };
 
+  const draft = { amt, desc, merchantName, mainCategory, subcategory, userPickedCategory, userPickedMerchant, recurring, cardId, who, scannedItems, scannedTax, scannedDiscount, scannedPurchasedAt, scannedFingerprint, assignments, tagNames, payers, splitValue, customized, expenseDate: expenseDate.getTime(), unknownOutcome: unknownOutcome || loading };
+  const dirty = stage === 'entry' && !!(amt || desc || scannedItems.length);
+  React.useEffect(() => {
+    let mounted = true;
+    if (!userEmail) return;
+    readExpenseDraft<typeof draft>(userEmail).then((saved) => {
+      if (!mounted) return;
+      if (saved && typeof saved.amt === 'string' && typeof saved.desc === 'string' && Number.isFinite(saved.expenseDate) && Array.isArray(saved.scannedItems) && Array.isArray(saved.payers) && Array.isArray(saved.tagNames) && typeof saved.who === 'string' && Array.isArray(saved.splitValue?.entries)) {
+      setAmt(saved.amt);
+      setDesc(saved.desc);
+      setMerchantName(saved.merchantName);
+      setMainCategory(saved.mainCategory);
+      setSubcategory(saved.subcategory);
+      setUserPickedCategory(saved.userPickedCategory);
+      setUserPickedMerchant(saved.userPickedMerchant);
+      setRecurring(saved.recurring);
+      setCardId(saved.cardId);
+      setWho(saved.who);
+      setScannedItems(saved.scannedItems);
+      setScannedTax(saved.scannedTax);
+      setScannedDiscount(saved.scannedDiscount);
+      setScannedPurchasedAt(saved.scannedPurchasedAt);
+      setScannedFingerprint(saved.scannedFingerprint);
+      setAssignments(saved.assignments);
+      setTagNames(saved.tagNames);
+      setPayers(saved.payers);
+      setSplitValue(saved.splitValue);
+      setCustomized(saved.customized);
+        setExpenseDate(new Date(saved.expenseDate)); setUnknownOutcome(saved.unknownOutcome);
+        restoringSplit.current = saved.customized ? saved.who : null;
+        setRestored(true); setVisible(true); translateY.setValue(0); backdropOpacity.setValue(1);
+      }
+      setHydrated(true);
+    }).catch(() => {
+      if (mounted) { setHydrated(true); showToast({ message: 'Draft recovery is unavailable on this device.', type: 'warning' }); }
+    });
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userEmail]);
+  React.useEffect(() => {
+    if (!hydrated || !userEmail || stage !== 'entry' || !dirty) return;
+    writeExpenseDraft(userEmail, draft).catch(() => showToast({ message: 'Could not keep a draft. Keep the app open until you save.', type: 'warning' }));
+    // The serialized value limits writes to actual form changes, including the save outcome.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, userEmail, stage, JSON.stringify(draft)]);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
   const openAddExpense = useCallback((initialGroupId?: string) => {
-    resetForm(initialGroupId ?? 'me');
+    if (!dirtyRef.current) resetForm(initialGroupId ?? 'me');
     setVisible(true);
     Animated.parallel([
       Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 65, friction: 11 }),
@@ -223,6 +284,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
   }, []);
 
   const closeAddExpense = useCallback(() => {
+    if (saveLock.current) return;
     Animated.parallel([
       Animated.timing(translateY, { toValue: SCREEN_H, duration: 300, useNativeDriver: true }),
       Animated.timing(backdropOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
@@ -372,17 +434,21 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const selectedGroup = myGroups.find((g) => g.group_id === who);
   const myMemberId = groupDetail?.members.find((m) => m.user_email === userEmail)?.member_id;
 
-  // Fetches the full member list (GroupSummary only has member_count) and resets payers/split
-  // to "just me, split equally among everyone" whenever the selected group changes, or the
-  // sheet is reopened against the same group — a fresh default every time, since a prior
-  // session's customization may reference members no longer in the group (or just shouldn't
-  // silently carry over).
+  // Fetch fresh membership before saving. Preserve recovered/customized splits on reopen;
+  // the readiness guard rejects stale members rather than silently changing their shares.
   React.useEffect(() => {
-    if (!visible || !selectedGroup) {
+    if (!visible) {
+      // Keep the editable split while the sheet is closed; revalidate membership on reopen.
+      if (customized && who !== 'me') restoringSplit.current = who;
+      return;
+    }
+    if (!selectedGroup) {
       setGroupDetail(null);
-      setPayers([]);
-      setSplitValue({ type: 'equal', entries: [] });
-      setCustomized(false);
+      if (who === 'me' && !restoringSplit.current) {
+        setPayers([]);
+        setSplitValue({ type: 'equal', entries: [] });
+        setCustomized(false);
+      }
       return;
     }
     let mounted = true;
@@ -391,6 +457,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
         const detail = await getGroupDetail(selectedGroup.group_id);
         if (!mounted) return;
         setGroupDetail(detail);
+        if (restoringSplit.current === selectedGroup.group_id) { restoringSplit.current = null; return; }
         const mine = detail.members.find((m) => m.user_email === userEmail);
         setPayers(mine ? [{ member_id: mine.member_id, amount_paid: numAmount }] : []);
         setSplitValue({ type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) });
@@ -414,7 +481,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
 
   const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, numAmount));
   const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, numAmount));
-  const capReady = numAmount > 0 && desc.trim().length > 0 && payersValid && splitValid;
+  const knownMembers = !isGroup || (!!groupDetail && [...payers, ...splitValue.entries].every((entry) => groupDetail.members.some((member) => member.member_id === entry.member_id)));
+  const capReady = hydrated && !unknownOutcome && (!isGroup || !!selectedGroup) && knownMembers && numAmount > 0 && desc.trim().length > 0 && payersValid && splitValid;
   const amtDisplay = amt ? '$' + amt : '$0.00';
 
   // Items with a blank name (a row the user cleared rather than deleted) are dropped rather
@@ -433,8 +501,11 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const itemsYourShare = isGroup && myMemberId ? (receiptShares.perMember[myMemberId] ?? 0) : numAmount;
 
   const handleSave = async () => {
-    if (!capReady || !accessToken || !userEmail || loading) return;
+    if (!capReady || !accessToken || !userEmail || loading || saveLock.current) return;
+    saveLock.current = true;
     setLoading(true);
+    const pendingDraft = { ...draftRef.current, unknownOutcome: true };
+    writeExpenseDraft(userEmail, pendingDraft).catch(() => {});
     const today = new Date();
     const recurringLine = recurring ? ` Repeats monthly on the ${ordinal(today.getDate())}.` : '';
     try {
@@ -589,11 +660,14 @@ export default function AddExpenseProvider({ children }: { children: React.React
           `Logged to ${detail.name} — your share ${fmt(myShare)} joins your personal total automatically.${recurringLine}`
         );
       }
+      await clearExpenseDraft(userEmail, pendingDraft).catch(() => {});
       setStage('saved');
     } catch (error: any) {
+      if (error instanceof RequestError ? error.outcomeUnknown : !/session ended|Session expired/.test(error instanceof Error ? error.message : '')) setUnknownOutcome(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast({ message: error.message || 'Failed to save', type: 'error' });
     } finally {
+      saveLock.current = false;
       setLoading(false);
     }
   };
@@ -606,7 +680,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
     <AddExpenseContext.Provider value={{ openAddExpense, closeAddExpense }}>
       {children}
 
-      <Modal transparent visible={visible} animationType="none" onRequestClose={closeAddExpense} statusBarTranslucent>
+      <Modal transparent visible={visible && hydrated && !!accessToken} animationType="none" onRequestClose={closeAddExpense} statusBarTranslucent>
         <View style={styles.modalRoot}>
           <Pressable style={StyleSheet.absoluteFill} onPress={closeAddExpense}>
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: theme.colors.overlay }]} />
@@ -630,6 +704,16 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   showsVerticalScrollIndicator={false}
                   keyboardDismissMode="on-drag"
                 >
+                  {restored && <Text accessibilityRole="text" style={styles.savedLine}>Your unsaved expense was restored. Review it before saving.</Text>}
+                  {unknownOutcome && <>
+                    <Text accessibilityRole="alert" style={styles.savedLine}>The save outcome is unknown. Check Expenses before saving again to avoid a duplicate.</Text>
+                    <TouchableOpacity accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setUnknownOutcome(false)}><Text style={styles.savedLine}>I checked Expenses — allow another save</Text></TouchableOpacity>
+                  </>}
+                  <TouchableOpacity accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} disabled={!dirty || loading} onPress={() => Alert.alert('Discard this expense?', 'This removes your unsaved entry.', [
+                    { text: 'Keep draft', style: 'cancel' },
+                    { text: 'Discard', style: 'destructive', onPress: () => { resetForm('me'); closeAddExpense(); } },
+                  ])}><Text style={styles.savedLine}>Discard draft</Text></TouchableOpacity>
+
                   <View style={styles.entryHeader}>
                     <View style={styles.modeToggle}>
                       <View style={[styles.modeBtn, styles.modeBtnActive]}>
