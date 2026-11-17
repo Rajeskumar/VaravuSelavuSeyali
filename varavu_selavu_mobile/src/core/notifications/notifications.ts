@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { registerDevice, unregisterDevice } from './devicesApi';
 import { logger } from '../logger';
+import { getAppConfig } from '../config/appConfig';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -33,7 +34,7 @@ export async function registerForPushNotifications(): Promise<void> {
     // appears once one exists — so create it before asking.
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'Group activity',
+        name: getAppConfig().notifications.androidChannelName,
         importance: Notifications.AndroidImportance.DEFAULT,
       });
     }
@@ -82,21 +83,4 @@ export async function unregisterPushNotifications(): Promise<void> {
   } finally {
     _lastRegisteredToken = null;
   }
-}
-
-/**
- * Extracts the group_id from a notification's data payload (deep_link:
- * "trackspense://groups/{id}", set server-side by NotificationService.fan_out)
- * so the notification-tap handler can navigate directly, without relying on
- * OS-level URL routing (see App.tsx's addNotificationResponseReceivedListener).
- */
-export function extractGroupIdFromNotificationData(data: Record<string, unknown> | undefined): string | null {
-  if (!data) return null;
-  if (typeof data.group_id === 'string' && data.group_id) return data.group_id;
-  const deepLink = data.deep_link;
-  if (typeof deepLink === 'string') {
-    const match = deepLink.match(/groups\/([^?#/]+)/);
-    if (match) return match[1];
-  }
-  return null;
 }

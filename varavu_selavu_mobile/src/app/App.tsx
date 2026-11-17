@@ -57,7 +57,7 @@ import CardsScreen from '../features/cards/screens/CardsScreen';
 import TagsScreen from '../features/tags/screens/TagsScreen';
 
 import AddExpenseProvider, { AddExpenseContext } from '../features/expenses/screens/AddExpenseScreen';
-import { extractGroupIdFromNotificationData } from '../core/notifications/notifications';
+import { extractGroupIdFromNotificationData } from '../features/groups/utils/notificationLink';
 
 import { setAppConfig } from '../core/config/appConfig';
 import { trackSpenseConfig } from './appConfig';
