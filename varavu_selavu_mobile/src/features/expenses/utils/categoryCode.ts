@@ -49,3 +49,8 @@ export function categoryTone(category?: string | null): string {
   for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
   return CATEGORY_TONES[hash % CATEGORY_TONES.length];
 }
+
+/** Props for core's `ListRow` tile: the code and tint for a category (or merchant) name. */
+export function categoryTile(category?: string | null): { tileCode: string; tileTone: string } {
+  return { tileCode: categoryCode(category), tileTone: categoryTone(category) };
+}

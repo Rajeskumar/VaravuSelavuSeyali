@@ -2,11 +2,12 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AppTheme, withAlpha } from '../theme/theme';
-import { categoryCode, categoryTone } from '../../features/expenses/utils/categoryCode';
 
 interface ListRowProps {
-  /** Category name — drives the mono three-letter code and its tint. Omit when passing `leading`. */
-  category?: string | null;
+  /** Text of the tinted left tile (e.g. a three-letter code). Omit when passing `leading`. */
+  tileCode?: string;
+  /** Tint and text colour of the tile. */
+  tileTone?: string;
   /** Custom left tile (avatar, group initial…) replacing the category code tile. */
   leading?: React.ReactNode;
   title: string;
@@ -30,20 +31,19 @@ interface ListRowProps {
  * separated by a hairline instead of sitting in a card.
  */
 export default function ListRow({
-  category, leading, title, meta, amount, amountColor, sub, subColor, trailing,
+  tileCode, tileTone, leading, title, meta, amount, amountColor, sub, subColor, trailing,
   onPress, onLongPress, hideDivider, style,
 }: ListRowProps) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const tone = categoryTone(category);
 
   const body = (
     <View style={[styles.row, hideDivider && styles.noDivider, style]}>
-      {leading ?? (
-        <View style={[styles.tile, { backgroundColor: withAlpha(tone, 0.14) }]}>
-          <Text style={[styles.code, { color: tone }]}>{categoryCode(category)}</Text>
+      {leading ?? (tileCode === undefined ? null : (
+        <View style={[styles.tile, { backgroundColor: withAlpha(tileTone ?? theme.colors.primary, 0.14) }]}>
+          <Text style={[styles.code, { color: tileTone ?? theme.colors.primary }]}>{tileCode}</Text>
         </View>
-      )}
+      ))}
       <View style={styles.body}>
         <Text style={styles.title} numberOfLines={1}>{title}</Text>
         {meta ? <Text style={styles.meta} numberOfLines={1}>{meta}</Text> : null}

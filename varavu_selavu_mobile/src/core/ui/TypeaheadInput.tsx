@@ -21,16 +21,20 @@ import {
 } from 'react-native';
 import { AppTheme } from '../theme/theme';
 import { useDebouncedValue } from './useDebouncedValue';
-import { EntitySuggestion } from '../../features/receipts/api/entityResolution';
+/** The minimum a suggestion needs; callers' richer suggestion types pass through unchanged. */
+export interface TypeaheadSuggestion {
+  id: string;
+  display_name: string;
+}
 
 const MIN_QUERY_LENGTH = 2;
 const DEBOUNCE_MS = 150;
 
-interface TypeaheadInputProps {
+interface TypeaheadInputProps<T extends TypeaheadSuggestion> {
   theme: AppTheme;
   value: string;
   onChangeValue: (v: string) => void;
-  fetchSuggestions: (query: string) => Promise<EntitySuggestion[]>;
+  fetchSuggestions: (query: string) => Promise<T[]>;
   placeholder?: string;
   inputStyle?: StyleProp<TextStyle>;
   containerStyle?: StyleProp<ViewStyle>;
@@ -38,7 +42,7 @@ interface TypeaheadInputProps {
   autoFocus?: boolean;
 }
 
-const TypeaheadInput: React.FC<TypeaheadInputProps> = ({
+const TypeaheadInput = <T extends TypeaheadSuggestion,>({
   theme,
   value,
   onChangeValue,
@@ -48,7 +52,7 @@ const TypeaheadInput: React.FC<TypeaheadInputProps> = ({
   containerStyle,
   onBlur,
   autoFocus,
-}) => {
+}: TypeaheadInputProps<T>) => {
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
   // Set on selection, cleared on the next real keystroke — without this, picking
@@ -57,7 +61,7 @@ const TypeaheadInput: React.FC<TypeaheadInputProps> = ({
   // tapped), so the dropdown immediately reopens with fresh matches for
   // whatever was just selected instead of closing.
   const [dismissed, setDismissed] = useState(false);
-  const [options, setOptions] = useState<EntitySuggestion[]>([]);
+  const [options, setOptions] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
   const [anchor, setAnchor] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const debounced = useDebouncedValue(value, DEBOUNCE_MS);
@@ -116,7 +120,7 @@ const TypeaheadInput: React.FC<TypeaheadInputProps> = ({
     onChangeValue(t);
   };
 
-  const handleSelect = (opt: EntitySuggestion) => {
+  const handleSelect = (opt: T) => {
     setDismissed(true);
     setOptions([]);
     onChangeValue(opt.display_name);

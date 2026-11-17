@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CustomButton from '../../../core/ui/CustomButton';
 import TypeToLogBar from '../../expenses/components/TypeToLogBar';
 import ListRow from '../../../core/ui/ListRow';
+import { categoryTile } from '../../expenses/utils/categoryCode';
 import SectionLabel from '../../../core/ui/SectionLabel';
 import AmbientBackground from '../../../core/ui/AmbientBackground';
 import IconButton from '../../../core/ui/IconButton';
@@ -238,7 +239,7 @@ export default function HomeScreen() {
             {recentExpenses.map((e, i) => (
               <ListRow
                 key={`${e.date}-${i}`}
-                category={e.category}
+                {...categoryTile(e.category)}
                 title={e.description}
                 meta={'groupName' in e && e.groupName ? `${shortDate(e.date)} · ${e.groupName}` : `${shortDate(e.date)} · ${e.category}`}
                 amount={formatCurrency(e.cost)}

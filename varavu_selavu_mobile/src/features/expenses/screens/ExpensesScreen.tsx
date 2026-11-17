@@ -34,6 +34,7 @@ import ScreenHeader from '../../../core/ui/ScreenHeader';
 import IconButton from '../../../core/ui/IconButton';
 import SectionLabel from '../../../core/ui/SectionLabel';
 import ListRow from '../../../core/ui/ListRow';
+import { categoryTile } from '../utils/categoryCode';
 import ExpenseQuickSheet from '../components/ExpenseQuickSheet';
 import ToggleSwitch from '../../../core/ui/ToggleSwitch';
 import SpendFilterChips from '../components/SpendFilterChips';
@@ -567,7 +568,7 @@ export default function ExpensesScreen() {
                                 {group.items.map((row) => (
                                     <ListRow
                                         key={row.key}
-                                        category={row.category}
+                                        {...categoryTile(row.category)}
                                         title={row.desc}
                                         meta={row.meta}
                                         amount={formatCurrency(row.amount)}

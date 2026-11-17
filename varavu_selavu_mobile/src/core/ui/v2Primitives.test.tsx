@@ -22,7 +22,7 @@ jest.mock('react-native-safe-area-context', () => ({
 describe('ListRow', () => {
   it('shows the category code tile, title, meta and amount', () => {
     const { getByText } = render(
-      <ListRow category="Dining out" title="India bazaar dinner" meta="Sep 19 · Dining out" amount="$28.91" />,
+      <ListRow tileCode="DIN" tileTone="#AEA5FF" title="India bazaar dinner" meta="Sep 19 · Dining out" amount="$28.91" />,
     );
     expect(getByText('DIN')).toBeTruthy();
     expect(getByText('India bazaar dinner')).toBeTruthy();
@@ -33,7 +33,7 @@ describe('ListRow', () => {
   it('renders a sub line under the amount and fires onPress', () => {
     const onPress = jest.fn();
     const { getByText } = render(
-      <ListRow category="Groceries" title="Milk" amount="$4.00" sub="you +$2.00" onPress={onPress} />,
+      <ListRow tileCode="GRO" tileTone="#4ADE80" title="Milk" amount="$4.00" sub="you +$2.00" onPress={onPress} />,
     );
     expect(getByText('you +$2.00')).toBeTruthy();
     fireEvent.press(getByText('Milk'));

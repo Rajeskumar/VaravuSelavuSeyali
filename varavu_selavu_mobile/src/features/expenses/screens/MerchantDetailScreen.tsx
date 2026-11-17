@@ -16,6 +16,7 @@ import IconButton from '../../../core/ui/IconButton';
 import SectionLabel from '../../../core/ui/SectionLabel';
 import StatCard from '../../../core/ui/StatCard';
 import ListRow from '../../../core/ui/ListRow';
+import { categoryTile } from '../utils/categoryCode';
 import { confidenceBadge } from '../../insights/utils/insightsFormat';
 import { shortDate } from '../utils/expenseInsights';
 
@@ -103,7 +104,7 @@ export default function MerchantDetailScreen() {
               {data.recent_transactions!.slice(0, 5).map((t, i) => (
                 <ListRow
                   key={`${t.date}-${i}`}
-                  category={data.merchant_name}
+                  {...categoryTile(data.merchant_name)}
                   title={t.description || data.merchant_name}
                   meta={t.date ? shortDate(t.date) : undefined}
                   amount={money(t.amount)}

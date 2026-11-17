@@ -51,6 +51,7 @@ import TintGlow from '../../../core/ui/TintGlow';
 import IconButton from '../../../core/ui/IconButton';
 import SectionLabel from '../../../core/ui/SectionLabel';
 import ListRow from '../../../core/ui/ListRow';
+import { categoryTile } from '../../expenses/utils/categoryCode';
 import BalanceRow from '../components/BalanceRow';
 import SettleUpSheet from '../components/SettleUpSheet';
 import GroupSettingsSheet from '../components/GroupSettingsSheet';
@@ -274,7 +275,7 @@ export default function GroupDetailScreen() {
     const delta = myShareDelta(item, myMember?.member_id);
     return (
       <ListRow
-        category={item.category}
+        {...categoryTile(item.category)}
         title={item.description}
         meta={`paid by ${payerNames}`}
         onPress={() => setSelectedExpense(item)}
