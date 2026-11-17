@@ -11,7 +11,7 @@ interface TopTabsProps<T extends string> {
 }
 
 /** V2 tab strip — text labels on a hairline with a 2px accent underline on the active one. Replaces
- * the pill-style SegmentedTabs on every screen that has sub-sections (Spend, Groups, Insights). */
+ * the pill-style SegmentedTabs on every screen that has sub-sections (spend, groups, insights…). */
 export default function TopTabs<T extends string>({ value, onChange, options, style }: TopTabsProps<T>) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);

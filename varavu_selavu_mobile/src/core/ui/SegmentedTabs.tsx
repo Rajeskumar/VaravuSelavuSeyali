@@ -51,7 +51,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
         // Mock's pill track is a distinct muted gray (#EFEFEA), not near-white — `background`
         // (#FAFAFA) was only one shade off `surface` (#FFFFFF), so the active white pill had no
         // contrast to show against once this sits directly on a screen background instead of a
-        // white card (Expenses/Analysis/Groups/GroupDetail all render it that way).
+        // white card (most screens render it that way).
         backgroundColor: theme.colors.secondarySurface,
         borderRadius: 20,
         padding: 4,

@@ -3,7 +3,7 @@
  *
  * Registration is best-effort: a denied permission or a non-physical-device
  * (simulator) is a silent no-op, never a crash — push notifications are a nice-to-have
- * on top of the core group features, not a requirement to use the app.
+ * on top of the core features, not a requirement to use the app.
  */
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
@@ -43,7 +43,7 @@ export async function registerForPushNotifications(): Promise<void> {
     // (created by `eas init`) getExpoPushTokenAsync throws and no device ever registers.
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
     if (!projectId) {
-      logger.warn('Push notifications are off: no EAS projectId (run `eas init` in varavu_selavu_mobile).');
+      logger.warn('Push notifications are off: no EAS projectId (run `eas init`).');
       return;
     }
 
@@ -66,7 +66,7 @@ export async function registerForPushNotifications(): Promise<void> {
   } catch (e: any) {
     // Fire-and-forget: registration failing must never block login/app start.
     if (e?.message?.includes('aps-environment')) {
-      // withDisablePush.js strips the entitlement unless TRACKSPENSE_ENABLE_PUSH=1 at build time.
+      // the withDisablePush config plugin strips the entitlement unless the build opts in.
       logger.info('Push notifications are disabled in this build (no aps-environment entitlement).');
     } else {
       logger.warn('Push notification registration failed', e);
