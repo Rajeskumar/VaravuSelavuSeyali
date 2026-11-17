@@ -61,9 +61,11 @@ import { extractGroupIdFromNotificationData } from '../core/notifications/notifi
 
 import { setAppConfig } from '../core/config/appConfig';
 import { trackSpenseConfig } from './appConfig';
+import { registerFeatures } from './registrations';
 
 // Core reads this lazily; it must be registered before the first render.
 setAppConfig(trackSpenseConfig);
+registerFeatures();
 
 const Stack = createNativeStackNavigator();
 

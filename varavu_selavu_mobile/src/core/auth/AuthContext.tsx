@@ -1,9 +1,9 @@
-import { clearExpenseDraft } from '../../features/expenses/utils/expenseDraft';
-import { clearAiConsent } from '../../features/ask/utils/aiConsent';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from './storageKeys';
 import { logger } from '../logger';
+import { getAppConfig } from '../config/appConfig';
+import { runSignOutCleanups } from './signOutRegistry';
 import { login as apiLogin, LoginPayload, register as apiRegister, RegisterPayload, logout as apiLogout } from './authApi';
 import { setLogoutCallback } from '../api/apiFetch';
 import { registerForPushNotifications, unregisterPushNotifications } from '../notifications/notifications';
@@ -31,7 +31,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   });
 
   const signOut = async () => {
-    await clearExpenseDraft().catch(() => {});
+    await runSignOutCleanups('before');
     // Unregister the push token while the access token is still valid — apiFetch
     // needs it to authenticate the DELETE call.
     await unregisterPushNotifications();
@@ -48,7 +48,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
     await SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
     await SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
-    await clearAiConsent();
+    await runSignOutCleanups('after');
 
     setState({
       accessToken: null,
@@ -68,7 +68,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         accessToken: null,
         isLoading: false,
         userEmail: null,
-        sessionNotice: 'Your session ended. Sign in again to recover your expense draft. Check Expenses if a save was in progress.',
+        sessionNotice: getAppConfig().auth.sessionEndedNotice,
       });
     });
 

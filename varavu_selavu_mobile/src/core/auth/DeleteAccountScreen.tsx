@@ -7,6 +7,7 @@ import ScreenWrapper from '../ui/ScreenWrapper';
 import ScreenHeader from '../ui/ScreenHeader';
 import FieldBox from '../ui/FieldBox';
 import { showToast } from '../ui/Toast';
+import { getAppConfig } from '../config/appConfig';
 import { useAuth } from './AuthContext';
 import { deleteAccount, getSecurityInfo } from './accountApi';
 
@@ -43,12 +44,11 @@ export default function DeleteAccountScreen() {
       <Text style={styles.warn}>This can't be undone.</Text>
       <Text style={styles.body}>
         <Text style={styles.bold}>Deleted: </Text>
-        your profile, personal expenses and receipt items, budgets, recurring templates, tags, cards and sign-ins.
+        {getAppConfig().auth.deleteAccountSummary.deleted}
       </Text>
       <Text style={styles.body}>
         <Text style={styles.bold}>Stays for the people you shared with: </Text>
-        expenses you added to shared groups, with their descriptions and amounts, so everyone else's balances stay correct. Your name on
-        them becomes "Anonymous User" and your email is removed. Download your data first (Account → Download all my data) if you want a copy.
+        {getAppConfig().auth.deleteAccountSummary.retained}
       </Text>
       <View style={{ marginTop: 16 }}>
         <FieldBox
