@@ -19,10 +19,10 @@ import { useAppTheme } from '../theme/ThemeContext';
  */
 export default function AmbientBackground() {
   const { width, height } = useWindowDimensions();
-  const { isDark } = useAppTheme();
+  const { theme, isDark } = useAppTheme();
   const gridSize = 56;
   const orbOpacityScale = isDark ? 1 : 0.4;
-  const gridLineColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  const gridLineColor = theme.colors.gridLine;
 
   return (
     <Svg
@@ -34,20 +34,20 @@ export default function AmbientBackground() {
     >
       <Defs>
         <RadialGradient id="orbViolet" cx="50%" cy="0%" r="55%">
-          <Stop offset="0%" stopColor="#7C5CFF" stopOpacity={0.35 * orbOpacityScale} />
-          <Stop offset="60%" stopColor="#7C5CFF" stopOpacity={0.12 * orbOpacityScale} />
-          <Stop offset="100%" stopColor="#7C5CFF" stopOpacity={0} />
+          <Stop offset="0%" stopColor={theme.colors.orbPrimary} stopOpacity={0.35 * orbOpacityScale} />
+          <Stop offset="60%" stopColor={theme.colors.orbPrimary} stopOpacity={0.12 * orbOpacityScale} />
+          <Stop offset="100%" stopColor={theme.colors.orbPrimary} stopOpacity={0} />
         </RadialGradient>
         <RadialGradient id="orbCyan" cx="90%" cy="5%" r="45%">
-          <Stop offset="0%" stopColor="#00D2D3" stopOpacity={0.22 * orbOpacityScale} />
-          <Stop offset="60%" stopColor="#00D2D3" stopOpacity={0.08 * orbOpacityScale} />
-          <Stop offset="100%" stopColor="#00D2D3" stopOpacity={0} />
+          <Stop offset="0%" stopColor={theme.colors.orbSecondary} stopOpacity={0.22 * orbOpacityScale} />
+          <Stop offset="60%" stopColor={theme.colors.orbSecondary} stopOpacity={0.08 * orbOpacityScale} />
+          <Stop offset="100%" stopColor={theme.colors.orbSecondary} stopOpacity={0} />
         </RadialGradient>
         <Mask id="gridFade">
           <RadialGradient id="gridFadeGrad" cx="50%" cy="0%" r="70%">
-            <Stop offset="0%" stopColor="#fff" stopOpacity={1} />
-            <Stop offset="45%" stopColor="#fff" stopOpacity={0.6} />
-            <Stop offset="100%" stopColor="#fff" stopOpacity={0} />
+            <Stop offset="0%" stopColor={theme.colors.white} stopOpacity={1} />
+            <Stop offset="45%" stopColor={theme.colors.white} stopOpacity={0.6} />
+            <Stop offset="100%" stopColor={theme.colors.white} stopOpacity={0} />
           </RadialGradient>
           <Rect x={0} y={0} width={width} height={height} fill="url(#gridFadeGrad)" />
         </Mask>

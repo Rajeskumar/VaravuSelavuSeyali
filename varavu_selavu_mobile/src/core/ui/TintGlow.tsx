@@ -8,7 +8,7 @@ interface TintGlowProps {
   opacity?: number;
 }
 
-/** A soft radial wash bleeding in from the top-right corner — the group screen's balance tint
+/** A soft radial wash bleeding in from the top-right corner — a tinted header wash
  * (red when you owe, green when you're owed). Purely decorative; sits behind content. */
 export default function TintGlow({ color, opacity = 0.16 }: TintGlowProps) {
   return (

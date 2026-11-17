@@ -26,8 +26,8 @@ interface ListRowProps {
 }
 
 /**
- * V2's single row primitive — expenses, group expenses, recurring, activity and group lists all
- * render through this: 36px tinted tile with a mono category code, title + meta, amount column,
+ * V2's single row primitive — every list in the app
+ * renders through this: 36px tinted tile with a mono code, title + meta, amount column,
  * separated by a hairline instead of sitting in a card.
  */
 export default function ListRow({

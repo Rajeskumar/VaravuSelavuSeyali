@@ -81,7 +81,7 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   },
   valueText: { flex: 1, minWidth: 0, color: theme.colors.text, fontSize: 14, fontWeight: '600' },
   chevron: { color: theme.colors.textTertiary, fontSize: 16, marginLeft: 8 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: theme.colors.scrim, justifyContent: 'flex-end' },
   sheet: {
     maxHeight: '70%',
     backgroundColor: theme.colors.surface,

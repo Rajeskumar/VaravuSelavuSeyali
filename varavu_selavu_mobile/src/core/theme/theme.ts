@@ -40,7 +40,7 @@ export interface ThemeColors {
    * flips to a light color in light mode once `primary`/etc. become darker/saturated there.
    * NOT for content on the gradient CTA, which stays pastel in both modes and always wants ink
    * — components using the gradient hardcode ink directly rather than reading this token. Also
-   * not for content on the fixed pastel `memberColor()`/avatar-palette fills (BalanceRow.tsx
+   * not for content on the fixed pastel `memberColor()`/avatar-palette fills (avatar tiles
    * etc.), which likewise stay light in both modes and hardcode ink directly. */
   textInverse: string;
 
@@ -55,9 +55,18 @@ export interface ThemeColors {
   borderLight: string;
 
   overlay: string;
+  /** Scrim behind simple pickers (lighter than `overlay`, same in both modes). */
+  scrim: string;
+  /** Hairline grid drawn by AmbientBackground. */
+  gridLine: string;
+  /** Fixed brand orbs drawn by AmbientBackground (mode-independent). */
+  orbPrimary: string;
+  orbSecondary: string;
+  /** Pure white for knobs/masks that stay white in both modes. */
+  white: string;
 
   /**
-   * Ceremony accent — settle-up "all squared up" moment / reconciled tick. Resolves to the
+   * Ceremony accent — "all done" moment / reconciled tick. Resolves to the
    * brand accent, same policy as Slate. Field name kept for zero call-site changes.
    */
   gold: string;
@@ -107,6 +116,11 @@ const lightColors: ThemeColors = {
   borderLight: 'rgba(0,0,0,0.08)',
 
   overlay: 'rgba(0,0,0,0.4)',
+  scrim: 'rgba(0,0,0,0.4)',
+  gridLine: 'rgba(0,0,0,0.05)',
+  orbPrimary: '#7C5CFF',
+  orbSecondary: '#00D2D3',
+  white: '#FFFFFF',
 
   gold: '#5E48C8',
 };
@@ -145,17 +159,25 @@ const darkColors: ThemeColors = {
   borderLight: 'rgba(255,255,255,0.1)',
 
   overlay: 'rgba(0,0,0,0.65)',
+  scrim: 'rgba(0,0,0,0.4)',
+  gridLine: 'rgba(255,255,255,0.05)',
+  orbPrimary: '#7C5CFF',
+  orbSecondary: '#00D2D3',
+  white: '#FFFFFF',
 
   gold: '#9C93FF',           // ceremony → brand accent
 };
 
 /** Fixed ink color for text/icons on the mode-independent pastel fills: the gradient CTA
- * (`gradientStart`/`gradientEnd`) and the deterministic `memberColor()`-style avatar palettes
- * (BalanceRow.tsx etc.) — both stay light pastel in either mode, so unlike `textInverse` (which
+ * (`gradientStart`/`gradientEnd`) and the deterministic avatar palettes
+ * (avatar tiles etc.) — both stay light pastel in either mode, so unlike `textInverse` (which
  * flips with `primary`), content on these always wants ink. */
 export const inkOnPastel = '#05060A';
 
-/** Spring/timing presets for react-native-reanimated — reused for the hero-count / settle-up count-to-zero moments, and the Badge pulse. */
+/** Shown before fonts load, i.e. before any theme or provider exists. */
+export const bootScreen = { background: '#F2F2F7', spinner: '#007AFF' } as const;
+
+/** Spring/timing presets for react-native-reanimated — reused for count-up/count-down moments and the Badge pulse. */
 export const motion = {
   spring: { damping: 18, stiffness: 220, mass: 0.9 },
   springBouncy: { damping: 12, stiffness: 260, mass: 0.9 },

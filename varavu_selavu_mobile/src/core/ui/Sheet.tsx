@@ -15,7 +15,7 @@ interface SheetProps {
 /**
  * V2 bottom sheet — dimmed backdrop, `surfaceElevated` panel with 26px top radius, 40×4 grabber
  * and a 22px gutter. Sheets are the only surfaces that keep a real shadow (see theme.ts elevation
- * policy). Capture, split, items, detail and settle all render inside this.
+ * policy). Every bottom-sheet flow renders inside this.
  */
 export default function Sheet({ visible, onClose, children, tall }: SheetProps) {
   const { theme } = useAppTheme();

@@ -37,6 +37,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   alignEnd: { justifyContent: 'flex-end' },
   alignStart: { justifyContent: 'flex-start' },
   knob: { width: 20, height: 20, borderRadius: 10 },
-  knobOn: { backgroundColor: '#FFFFFF' },
+  knobOn: { backgroundColor: theme.colors.white },
   knobOff: { backgroundColor: theme.colors.textTertiary },
 });

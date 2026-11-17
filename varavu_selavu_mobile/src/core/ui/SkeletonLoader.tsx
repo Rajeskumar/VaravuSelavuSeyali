@@ -62,7 +62,7 @@ export function HeroSkeleton() {
     );
 }
 
-/** Pre-built skeleton for a list of expense cards */
+/** Pre-built skeleton for a list of rows */
 export function ListSkeleton({ count = 3 }: { count?: number }) {
     const { theme } = useAppTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
