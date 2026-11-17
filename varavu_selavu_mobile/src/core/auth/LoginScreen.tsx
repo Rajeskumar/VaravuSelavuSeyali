@@ -1,48 +1,30 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Linking, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from './AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import { useAppTheme } from '../theme/ThemeContext';
-import { AppTheme, inkOnPastel } from '../theme/theme';
-import FieldBox from '../ui/FieldBox';
+import { AppTheme } from '../theme/theme';
 import SectionLabel from '../ui/SectionLabel';
 import AmbientBackground from '../ui/AmbientBackground';
-import { showToast } from '../ui/Toast';
 import { getApiBaseUrl } from '../api/baseUrl';
+import { getAppConfig } from '../config/appConfig';
+import { getEnabledAuthMethods } from './methods';
 
 /**
- * V2 "Sign in" (Flows 1.1): a brand statement instead of a stock illustration, two fields, and the
- * gradient reserved for the single primary action. The design also sketches Google/Apple buttons;
- * the backend has no OAuth yet, so they're deliberately not rendered.
+ * V2 "Sign in" (Flows 1.1): a brand statement instead of a stock illustration, and the gradient
+ * reserved for the single primary action. The form itself is whatever sign-in methods the app
+ * enabled (`AppConfig.auth.methods`, rendered from `./methods`); the brand copy comes from
+ * `AppConfig.brand`.
  */
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { signIn, sessionNotice } = useAuth();
+  const { sessionNotice } = useAuth();
   const navigation = useNavigation<any>();
   const { theme } = useAppTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(theme), [theme]);
-
-  const handleLogin = async () => {
-    if (!email || !password) {
-      showToast({ message: 'Please fill in all fields', type: 'warning' });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await signIn({ username: email, password });
-      showToast({ message: 'Welcome back!', type: 'success' });
-    } catch (error) {
-      showToast({ message: 'Login failed. Check your credentials.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { brand } = getAppConfig();
+  const methods = getEnabledAuthMethods();
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -53,43 +35,17 @@ export default function LoginScreen() {
         showsVerticalScrollIndicator={false}
       >
         {sessionNotice && <Text accessibilityRole="alert" style={{ color: theme.colors.text, marginBottom: 16 }}>{sessionNotice}</Text>}
-        <SectionLabel color={theme.colors.primary} style={{ letterSpacing: 2 }}>TrackSpense</SectionLabel>
+        <SectionLabel color={theme.colors.primary} style={{ letterSpacing: 2 }}>{brand.name}</SectionLabel>
         <Text style={styles.headline}>
-          Every transaction,{'\n'}every expense,{'\n'}
-          <Text style={{ color: theme.colors.secondary }}>accounted for.</Text>
+          {brand.loginHeadline.lines.map((line) => (
+            <React.Fragment key={line}>{line}{'\n'}</React.Fragment>
+          ))}
+          <Text style={{ color: theme.colors.secondary }}>{brand.loginHeadline.accent}</Text>
         </Text>
-        <Text style={styles.tagline}>Track what you spend, split what you share, and ask why it changed.</Text>
+        <Text style={styles.tagline}>{brand.loginTagline}</Text>
 
         <View style={styles.form}>
-          <FieldBox
-            label="Email"
-            placeholder="you@example.com"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            autoComplete="email"
-          />
-          <FieldBox
-            label="Password"
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={setPassword}
-            secureToggle
-            textContentType="password"
-            onSubmitEditing={handleLogin}
-            returnKeyType="go"
-          />
-          <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={styles.forgotLink}>
-            <Text style={styles.forgotLinkText}>Forgot password?</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity activeOpacity={0.85} onPress={handleLogin} disabled={loading} accessibilityRole="button">
-            <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.cta, loading && { opacity: 0.7 }]}>
-              {loading ? <ActivityIndicator color={inkOnPastel} /> : <Text style={styles.ctaText}>Sign in</Text>}
-            </LinearGradient>
-          </TouchableOpacity>
+          {methods.map((method) => <method.Form key={method.id} />)}
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>No account?</Text>
@@ -126,10 +82,6 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
     color: theme.colors.textSecondary, marginTop: 16, maxWidth: 290,
   },
   form: { marginTop: 'auto', paddingTop: 36, gap: 12 },
-  forgotLink: { alignSelf: 'flex-end', paddingVertical: 2 },
-  forgotLinkText: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 13.5, color: theme.colors.primary },
-  cta: { height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', ...theme.shadows.fab },
-  ctaText: { fontFamily: theme.typography.fontFamily.bold, fontSize: 17, color: inkOnPastel },
   footer: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
   footerText: { fontFamily: theme.typography.fontFamily.regular, fontSize: 14, color: theme.colors.textTertiary },
   footerLink: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 14, color: theme.colors.primary },
