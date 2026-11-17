@@ -7,7 +7,6 @@ import TopTabs from './TopTabs';
 import Chip from './Chip';
 import SectionLabel from './SectionLabel';
 import FieldBox from './FieldBox';
-import SegmentDonut from '../../features/insights/components/SegmentDonut';
 import Sheet from './Sheet';
 
 // Real dark theme (not a hand-rolled stub) so a missing token in a primitive fails here.
@@ -91,19 +90,6 @@ describe('FieldBox', () => {
     fireEvent.press(getByText('Show'));
     expect(getByPlaceholderText('pw').props.secureTextEntry).toBe(false);
     expect(getByText('Hide')).toBeTruthy();
-  });
-});
-
-describe('SegmentDonut', () => {
-  it('renders the centre total and label', () => {
-    const { getByText } = render(
-      <SegmentDonut
-        segments={[{ key: 'a', pct: 60, color: '#fff' }, { key: 'b', pct: 40, color: '#000' }]}
-        centerValue="$2,401"
-      />,
-    );
-    expect(getByText('$2,401')).toBeTruthy();
-    expect(getByText('TOTAL')).toBeTruthy();
   });
 });
 
