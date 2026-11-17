@@ -2,6 +2,8 @@ import { clearExpenseDraft } from '../../features/expenses/utils/expenseDraft';
 import { clearAiConsent } from '../../features/ask/utils/aiConsent';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS } from './storageKeys';
+import { logger } from '../logger';
 import { login as apiLogin, LoginPayload, register as apiRegister, RegisterPayload, logout as apiLogout } from './authApi';
 import { setLogoutCallback } from '../api/apiFetch';
 import { registerForPushNotifications, unregisterPushNotifications } from '../notifications/notifications';
@@ -35,17 +37,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await unregisterPushNotifications();
 
     try {
-      const refreshToken = await SecureStore.getItemAsync('refresh_token');
+      const refreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.refreshToken);
       if (refreshToken) {
         await apiLogout(refreshToken);
       }
     } catch (e) {
-      console.warn("Logout API call failed", e);
+      logger.warn('Logout API call failed', e);
     }
 
-    await SecureStore.deleteItemAsync('access_token');
-    await SecureStore.deleteItemAsync('refresh_token');
-    await SecureStore.deleteItemAsync('user_email');
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
     await clearAiConsent();
 
     setState({
@@ -59,9 +61,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Register the logout callback so apiFetch can force-logout on 401
     setLogoutCallback(() => {
       // Clear state synchronously to trigger navigation reset
-      SecureStore.deleteItemAsync('access_token');
-      SecureStore.deleteItemAsync('refresh_token');
-      SecureStore.deleteItemAsync('user_email');
+      SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
+      SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
+      SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
       setState({
         accessToken: null,
         isLoading: false,
@@ -74,10 +76,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       let accessToken;
       let userEmail;
       try {
-        accessToken = await SecureStore.getItemAsync('access_token');
-        userEmail = await SecureStore.getItemAsync('user_email');
+        accessToken = await SecureStore.getItemAsync(STORAGE_KEYS.accessToken);
+        userEmail = await SecureStore.getItemAsync(STORAGE_KEYS.userEmail);
       } catch (e) {
-        console.error('Failed to restore token', e);
+        logger.error('Failed to restore token', e);
       }
       setState({ accessToken: accessToken || null, isLoading: false, userEmail: userEmail || null });
 
@@ -94,11 +96,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (payload: LoginPayload) => {
     try {
       const response = await apiLogin(payload);
-      await SecureStore.setItemAsync('access_token', response.access_token);
-      await SecureStore.setItemAsync('refresh_token', response.refresh_token);
+      await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, response.access_token);
+      await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, response.refresh_token);
 
       const email = payload.username;
-      await SecureStore.setItemAsync('user_email', email);
+      await SecureStore.setItemAsync(STORAGE_KEYS.userEmail, email);
 
       setState({
         accessToken: response.access_token,
@@ -108,7 +110,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       registerForPushNotifications();
     } catch (error) {
-      console.error(error);
+      logger.error('Sign-in failed', error);
       throw error;
     }
   };

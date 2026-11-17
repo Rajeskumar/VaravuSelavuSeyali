@@ -6,6 +6,7 @@ import { boundedFetch, RequestError } from '../api/request';
 // React Native's fetch (unlike a browser) will otherwise keep and resend it, tripping the
 // backend's CSRF double-submit check on every subsequent mutating request.
 import API_BASE_URL from '../api/baseUrl';
+import { logger } from '../logger';
 
 export interface LoginPayload {
   username: string;
@@ -41,7 +42,6 @@ export interface ResetPasswordPayload {
 }
 
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
-  console.log(`Logging in to ${API_BASE_URL}...`);
   const params = new URLSearchParams();
   params.append('username', payload.username);
   params.append('password', payload.password);
@@ -57,14 +57,13 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
     });
 
     if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Login failed:', response.status, errorText);
+        logger.error('Login failed', response.status);
         throw new Error(`Login failed: ${response.status}`);
     }
 
     return response.json();
   } catch (error) {
-    console.error("Network error during login:", error);
+    logger.error('Network error during login', error);
     throw error;
   }
 }

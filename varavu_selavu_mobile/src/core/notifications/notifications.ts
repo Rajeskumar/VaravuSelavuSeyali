@@ -10,6 +10,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { registerDevice, unregisterDevice } from './devicesApi';
+import { logger } from '../logger';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -41,7 +42,7 @@ export async function registerForPushNotifications(): Promise<void> {
     // (created by `eas init`) getExpoPushTokenAsync throws and no device ever registers.
     const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
     if (!projectId) {
-      console.warn('Push notifications are off: no EAS projectId (run `eas init` in varavu_selavu_mobile).');
+      logger.warn('Push notifications are off: no EAS projectId (run `eas init` in varavu_selavu_mobile).');
       return;
     }
 
@@ -65,9 +66,9 @@ export async function registerForPushNotifications(): Promise<void> {
     // Fire-and-forget: registration failing must never block login/app start.
     if (e?.message?.includes('aps-environment')) {
       // withDisablePush.js strips the entitlement unless TRACKSPENSE_ENABLE_PUSH=1 at build time.
-      console.log('Push notifications are disabled in this build (no aps-environment entitlement).');
+      logger.info('Push notifications are disabled in this build (no aps-environment entitlement).');
     } else {
-      console.warn('Push notification registration failed', e);
+      logger.warn('Push notification registration failed', e);
     }
   }
 }
@@ -77,7 +78,7 @@ export async function unregisterPushNotifications(): Promise<void> {
   try {
     await unregisterDevice(_lastRegisteredToken);
   } catch (e) {
-    console.warn('Push notification unregistration failed', e);
+    logger.warn('Push notification unregistration failed', e);
   } finally {
     _lastRegisteredToken = null;
   }

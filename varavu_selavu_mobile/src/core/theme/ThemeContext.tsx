@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useColorScheme } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS } from '../auth/storageKeys';
 import { AppTheme, ThemeMode, buildTheme, darkTheme, lightTheme } from './theme';
 
-const STORAGE_KEY = 'vs_theme_preference';
+const STORAGE_KEY = STORAGE_KEYS.themePreference;
 
 interface ThemeContextType {
   theme: AppTheme;

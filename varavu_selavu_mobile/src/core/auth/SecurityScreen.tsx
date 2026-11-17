@@ -11,6 +11,7 @@ import { showToast } from '../ui/Toast';
 import { useAuth } from './AuthContext';
 import { SignInSession, changePassword, endSession, getSecurityInfo, listSessions, signOutEverywhere } from './accountApi';
 import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS } from './storageKeys';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'unknown');
 
@@ -50,8 +51,8 @@ export default function SecurityScreen() {
       const fresh = await changePassword({ current_password: hasPassword ? current : undefined, new_password: next });
       // The server ended every other session and re-issued this one; keep this device signed in.
       if (fresh.access_token && fresh.refresh_token) {
-        await SecureStore.setItemAsync('access_token', fresh.access_token);
-        await SecureStore.setItemAsync('refresh_token', fresh.refresh_token);
+        await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, fresh.access_token);
+        await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, fresh.refresh_token);
       }
       setCurrent(''); setNext(''); setConfirm('');
       setHasPassword(true);

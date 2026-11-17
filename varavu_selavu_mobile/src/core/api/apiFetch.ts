@@ -11,6 +11,7 @@ import { boundedFetch, requestTimeout, RequestError } from './request';
 import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
 import API_BASE_URL from './baseUrl';
+import { STORAGE_KEYS } from '../auth/storageKeys';
 import { refresh as refreshToken } from '../auth/authApi';
 
 // Logout callback — registered by AuthContext on mount
@@ -32,16 +33,16 @@ async function attemptRefresh(): Promise<string | null> {
     _isRefreshing = true;
     _refreshPromise = (async () => {
         try {
-            const storedRefreshToken = await SecureStore.getItemAsync('refresh_token');
+            const storedRefreshToken = await SecureStore.getItemAsync(STORAGE_KEYS.refreshToken);
             if (!storedRefreshToken) {
                 return null;
             }
             const result = await refreshToken(storedRefreshToken);
-            if (await SecureStore.getItemAsync('refresh_token') !== storedRefreshToken) throw new RequestError('Your account changed. Please try again.');
+            if (await SecureStore.getItemAsync(STORAGE_KEYS.refreshToken) !== storedRefreshToken) throw new RequestError('Your account changed. Please try again.');
             // Persist the new tokens
-            await SecureStore.setItemAsync('access_token', result.access_token);
+            await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, result.access_token);
             if (result.refresh_token) {
-                await SecureStore.setItemAsync('refresh_token', result.refresh_token);
+                await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, result.refresh_token);
             }
             return result.access_token;
         } catch (error) {
@@ -84,8 +85,8 @@ export async function apiFetch(
     options: RequestInit = {},
     timeoutMs = requestTimeout(path),
 ): Promise<Response> {
-    const token = await SecureStore.getItemAsync('access_token');
-    const owner = await SecureStore.getItemAsync('user_email');
+    const token = await SecureStore.getItemAsync(STORAGE_KEYS.accessToken);
+    const owner = await SecureStore.getItemAsync(STORAGE_KEYS.userEmail);
 
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string> || {}),
@@ -106,18 +107,18 @@ export async function apiFetch(
 
     // On 401, attempt refresh and retry once
     if (response.status === 401) {
-        if (await SecureStore.getItemAsync('user_email') !== owner) throw new RequestError('Your account changed. Please try again.');
+        if (await SecureStore.getItemAsync(STORAGE_KEYS.userEmail) !== owner) throw new RequestError('Your account changed. Please try again.');
         const newToken = await attemptRefresh();
-        if (await SecureStore.getItemAsync('user_email') !== owner) throw new RequestError('Your account changed. Please try again.');
+        if (await SecureStore.getItemAsync(STORAGE_KEYS.userEmail) !== owner) throw new RequestError('Your account changed. Please try again.');
         if (newToken) {
-            if (await SecureStore.getItemAsync('access_token') !== newToken) throw new RequestError('Your account changed. Sign in again before continuing.');
+            if (await SecureStore.getItemAsync(STORAGE_KEYS.accessToken) !== newToken) throw new RequestError('Your account changed. Sign in again before continuing.');
             headers['Authorization'] = `Bearer ${newToken}`;
             response = await boundedFetch(url, { ...options, headers, credentials: 'omit' }, timeoutMs);
         }
 
         // If still 401 after refresh (or refresh failed), force logout
         if (response.status === 401 || !newToken) {
-            if (await SecureStore.getItemAsync('user_email') !== owner) throw new RequestError('Your account changed. Please try again.');
+            if (await SecureStore.getItemAsync(STORAGE_KEYS.userEmail) !== owner) throw new RequestError('Your account changed. Please try again.');
             forceLogout();
             throw new RequestError('Your session ended. Sign in again to continue.', false, 401);
         }
