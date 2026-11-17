@@ -149,7 +149,7 @@ Full MVP per [`features/budgeting/trackspense-budgets-prd.md`](features/budgetin
 |:---|:---|:---|
 | Backend API | ✅ Built | `POST/GET/PATCH/DELETE /budgets`, `/budgets/{id}/breakdown`, `/budgets/suggestions`, `/budgets/{id}/ask-why` (`api/routes.py`), full service layer (`services/budget_service.py`), Alembic migration `a1b2c3d4e5f6_add_budgets.py`. |
 | Web | ✅ Built | `BudgetsTab.tsx` (4th sub-tab on Analysis), `BudgetCard.tsx`, `BudgetProgressBar.tsx`, dashboard `BudgetsSummaryCard.tsx`, `useBudgetsEnabled.ts` reading the live `/config` flag. |
-| Mobile | ✅ Built | `BudgetsTabContent.tsx`, `BudgetProgressBar.tsx`, `BudgetsSummaryCard.tsx`, `useBudgetsEnabled.ts` — full parity with web, not a stub. |
+| Mobile | ✅ Built | `BudgetsTabContent.tsx`, `BudgetProgressBar.tsx`, `useBudgetsEnabled.ts` — full parity with web, not a stub. |
 | Feature flag | ✅ Built | Gated behind `BUDGETS_ENABLED` (defaults `true` in code; no explicit override in the live Cloud Run env, so prod runs on the code default). |
 | Backend tests | ✅ Built | 16 tests (`tests/test_budgets_api.py`) — amount bounds, category-required, dedup-on-create, combined scope, soft delete, breakdown, exceeded status, suggestions, flag-off 404, ask-why grounding, and an explicit IDOR-style "never accepts client-supplied user_id" test. |
 
