@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getConfig } from '../../../core/api/config';
+import { getConfig } from '../../shared/featureFlags';
 import { useAuth } from '../../../core/auth/AuthContext';
 
 /** Whether the BUDGETS_ENABLED backend flag is on — mirrors useEntityResolutionEnabled.ts,

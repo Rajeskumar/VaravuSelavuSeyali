@@ -6,7 +6,7 @@
  * - Throws `ApiError` on non-2xx responses so callers can check `err.status`.
  */
 import { apiFetch } from '../../../core/api/apiFetch';
-import { getConfig } from '../../../core/api/config';
+import { getConfig } from '../../shared/featureFlags';
 import { TagRefDTO } from '../../tags/api/tags';
 import { CardRefDTO } from '../../cards/api/cards';
 

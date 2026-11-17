@@ -10,7 +10,7 @@ import { AppTheme, inkOnPastel } from '../theme/theme';
 import FieldBox from '../ui/FieldBox';
 import IconButton from '../ui/IconButton';
 import { showToast } from '../ui/Toast';
-import API_BASE_URL from '../api/baseUrl';
+import { getApiBaseUrl } from '../api/baseUrl';
 
 /**
  * V2 "Create account" (Flows 1.2): three fields, consent inline, no second confirmation screen.
@@ -117,9 +117,9 @@ export default function RegisterScreen() {
             )}
             <Text style={styles.consentText}>
               I agree to the{' '}
-              <Text style={styles.link} onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>Terms</Text>
+              <Text style={styles.link} onPress={() => Linking.openURL(`${getApiBaseUrl()}/terms-of-service`)}>Terms</Text>
               {' '}and{' '}
-              <Text style={styles.link} onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>Privacy Policy</Text>
+              <Text style={styles.link} onPress={() => Linking.openURL(`${getApiBaseUrl()}/privacy-policy`)}>Privacy Policy</Text>
             </Text>
           </TouchableOpacity>
 

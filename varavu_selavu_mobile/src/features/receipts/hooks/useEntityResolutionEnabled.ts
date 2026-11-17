@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getConfig } from '../../../core/api/config';
+import { getConfig } from '../../shared/featureFlags';
 import { useAuth } from '../../../core/auth/AuthContext';
 
 /** Whether the ENTITY_RESOLUTION_ENABLED backend flag is on — mirrors the web

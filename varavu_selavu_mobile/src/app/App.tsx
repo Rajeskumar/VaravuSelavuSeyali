@@ -59,6 +59,12 @@ import TagsScreen from '../features/tags/screens/TagsScreen';
 import AddExpenseProvider, { AddExpenseContext } from '../features/expenses/screens/AddExpenseScreen';
 import { extractGroupIdFromNotificationData } from '../core/notifications/notifications';
 
+import { setAppConfig } from '../core/config/appConfig';
+import { trackSpenseConfig } from './appConfig';
+
+// Core reads this lazily; it must be registered before the first render.
+setAppConfig(trackSpenseConfig);
+
 const Stack = createNativeStackNavigator();
 
 const queryClient = new QueryClient({

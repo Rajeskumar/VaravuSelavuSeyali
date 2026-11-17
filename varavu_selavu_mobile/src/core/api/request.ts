@@ -1,3 +1,5 @@
+import { getAppConfig } from '../config/appConfig';
+
 /** Bounded requests; network failures never automatically replay a write. */
 export class RequestError extends Error {
   constructor(message: string, public outcomeUnknown = false, public status?: number) {
@@ -6,8 +8,11 @@ export class RequestError extends Error {
   }
 }
 export const SESSION_ENDED_KEY = 'vs_session_ended';
+const DEFAULT_TIMEOUT_MS = 30_000;
+/** Budget for a request path: the first matching `AppConfig.api.timeoutOverrides` entry, else 30 s. */
 export function requestTimeout(path: string) {
-  return /\/analysis\/chat|\/ingest\/receipt/.test(path) ? 120_000 : 30_000;
+  const override = getAppConfig().api.timeoutOverrides.find((o) => o.pattern.test(path));
+  return override ? override.ms : DEFAULT_TIMEOUT_MS;
 }
 export async function boundedFetch(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();

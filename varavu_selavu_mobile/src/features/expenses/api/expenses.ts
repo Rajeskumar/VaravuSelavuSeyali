@@ -1,7 +1,6 @@
 import { ensureAiConsent, hasAiConsent } from '../../ask/utils/aiConsent';
 import { apiFetch } from '../../../core/api/apiFetch';
 import { aiErrorFromResponse } from '../../ask/api/aiUsage';
-import API_BASE_URL from '../../../core/api/baseUrl';
 import { TagRefDTO } from '../../tags/api/tags';
 import { CardRefDTO } from '../../cards/api/cards';
 import type { OcrResult } from '../../receipts/utils/onDeviceOcr';

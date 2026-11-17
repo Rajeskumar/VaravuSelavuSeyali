@@ -10,7 +10,7 @@ import FieldBox from '../ui/FieldBox';
 import SectionLabel from '../ui/SectionLabel';
 import AmbientBackground from '../ui/AmbientBackground';
 import { showToast } from '../ui/Toast';
-import API_BASE_URL from '../api/baseUrl';
+import { getApiBaseUrl } from '../api/baseUrl';
 
 /**
  * V2 "Sign in" (Flows 1.1): a brand statement instead of a stock illustration, two fields, and the
@@ -100,11 +100,11 @@ export default function LoginScreen() {
 
           <View style={styles.legalRow}>
             <Text style={styles.legalText}>By signing in you agree to our </Text>
-            <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
+            <TouchableOpacity onPress={() => Linking.openURL(`${getApiBaseUrl()}/terms-of-service`)}>
               <Text style={styles.legalLink}>Terms</Text>
             </TouchableOpacity>
             <Text style={styles.legalText}> and </Text>
-            <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
+            <TouchableOpacity onPress={() => Linking.openURL(`${getApiBaseUrl()}/privacy-policy`)}>
               <Text style={styles.legalLink}>Privacy Policy</Text>
             </TouchableOpacity>
           </View>

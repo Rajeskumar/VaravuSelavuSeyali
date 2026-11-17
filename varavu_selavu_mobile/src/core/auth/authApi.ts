@@ -5,7 +5,7 @@ import { boundedFetch, RequestError } from '../api/request';
 // the backend sets a `vs_token` cookie on login/refresh regardless of client type, and
 // React Native's fetch (unlike a browser) will otherwise keep and resend it, tripping the
 // backend's CSRF double-submit check on every subsequent mutating request.
-import API_BASE_URL from '../api/baseUrl';
+import { getApiBaseUrl } from '../api/baseUrl';
 import { logger } from '../logger';
 
 export interface LoginPayload {
@@ -47,7 +47,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
   params.append('password', payload.password);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+    const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -69,7 +69,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
 }
 
 export async function register(payload: RegisterPayload): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -100,7 +100,7 @@ export async function register(payload: RegisterPayload): Promise<void> {
 }
 
 export async function logout(refresh_token: string): Promise<void> {
-  await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+  await fetch(`${getApiBaseUrl()}/api/v1/auth/logout`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -116,7 +116,7 @@ export async function logout(refresh_token: string): Promise<void> {
  * accounts), so there is deliberately no way to distinguish the two from here either.
  */
 export async function forgotPassword(payload: ForgotPasswordPayload): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/forgot-password`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/forgot-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -136,7 +136,7 @@ export async function forgotPassword(payload: ForgotPasswordPayload): Promise<vo
  * which case applies.
  */
 export async function resetPassword(payload: ResetPasswordPayload): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/reset-password`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/reset-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -151,7 +151,7 @@ export async function resetPassword(payload: ResetPasswordPayload): Promise<void
 }
 
 export async function refresh(refresh_token: string): Promise<LoginResponse> {
-  const response = await boundedFetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+  const response = await boundedFetch(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

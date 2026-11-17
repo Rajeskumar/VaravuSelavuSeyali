@@ -10,7 +10,7 @@ import { boundedFetch, requestTimeout, RequestError } from './request';
  */
 import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
-import API_BASE_URL from './baseUrl';
+import { getApiBaseUrl } from './baseUrl';
 import { STORAGE_KEYS } from '../auth/storageKeys';
 import { refresh as refreshToken } from '../auth/authApi';
 
@@ -95,7 +95,7 @@ export async function apiFetch(
         headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+    const url = path.startsWith('http') ? path : `${getApiBaseUrl()}${path}`;
     
     // Offline Check
     const networkState = await NetInfo.fetch();

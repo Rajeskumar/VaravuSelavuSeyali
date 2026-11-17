@@ -1,4 +1,12 @@
 import { boundedFetch, requestTimeout, RequestError } from './request';
+import { setAppConfig, defaultAppConfig } from '../config/appConfig';
+
+// The long budgets are app configuration now; mirror what the app registers.
+beforeAll(() => setAppConfig({
+  ...defaultAppConfig,
+  api: { ...defaultAppConfig.api, timeoutOverrides: [{ pattern: /\/analysis\/chat|\/ingest\/receipt/, ms: 120_000 }] },
+}));
+afterAll(() => setAppConfig(defaultAppConfig));
 
 afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks(); });
 

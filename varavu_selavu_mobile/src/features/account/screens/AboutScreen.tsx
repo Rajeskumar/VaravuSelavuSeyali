@@ -5,7 +5,7 @@ import { AppTheme } from '../../../core/theme/theme';
 import ScreenWrapper from '../../../core/ui/ScreenWrapper';
 import ScreenHeader from '../../../core/ui/ScreenHeader';
 import Card from '../../../core/ui/Card';
-import API_BASE_URL from '../../../core/api/baseUrl';
+import { getApiBaseUrl } from '../../../core/api/baseUrl';
 
 export default function AboutScreen() {
     const { theme } = useAppTheme();
@@ -71,11 +71,11 @@ export default function AboutScreen() {
             </Card>
 
             <View style={styles.legalRow}>
-                <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/terms-of-service`)}>
+                <TouchableOpacity onPress={() => Linking.openURL(`${getApiBaseUrl()}/terms-of-service`)}>
                     <Text style={styles.legalLink}>Terms of Service</Text>
                 </TouchableOpacity>
                 <Text style={styles.legalDot}> • </Text>
-                <TouchableOpacity onPress={() => Linking.openURL(`${API_BASE_URL}/privacy-policy`)}>
+                <TouchableOpacity onPress={() => Linking.openURL(`${getApiBaseUrl()}/privacy-policy`)}>
                     <Text style={styles.legalLink}>Privacy Policy</Text>
                 </TouchableOpacity>
             </View>
