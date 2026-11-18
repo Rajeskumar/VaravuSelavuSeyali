@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-17: Mobile cleanup (deleted unused `shared/tokens.ts`, `ExpenseCard` and `SESSION_ENDED_KEY`; feature `console.error` calls now use `core/logger`) and store IDs set to `com.cerebroos.trackspense` for iOS and Android with slug `trackspense` (agent: claude-code)
 - 2026-11-17: Mobile app split into `core/` (reusable shell), `features/` and `app/` with an enforced app → features → core import direction; AppConfig, sign-out cleanup registry, pluggable sign-in methods, core logger and centralized SecureStore keys; 13 unreferenced components deleted; no behaviour change (agent: claude-code)
 - 2026-10-06: Fixed performance-review recovery findings on web/mobile: account-scoped expiring expense drafts, session-loss feedback, guarded unknown saves, retained Ask conversations across close/responsive transitions, URL filter/scroll recovery, bounded/cancellable requests, account-switch-safe refresh handling and preserved native group splits; lazy HEIC conversion cuts the initial gzip bundle from 701 kB to 363 kB; added regression/fault tests and draft privacy disclosure (agent: codex)
 

@@ -295,7 +295,7 @@ app only receives them once these are in place:
 
 1. **EAS project:** run `eas init` here so `app.json` gets `extra.eas.projectId`. Without it the
    app logs "Push notifications are off: no EAS projectId" and never registers a device.
-2. **iOS:** a paid Apple Developer account, a real bundle identifier (not `com.anonymous.*`) and
+2. **iOS:** a paid Apple Developer account, the bundle identifier `com.cerebroos.trackspense` (already set in `app.json`; never change it after the first submission) and
    an APNs key uploaded with `eas credentials`. Build with `TRACKSPENSE_ENABLE_PUSH=1`;
    otherwise `withDisablePush.js` strips the push entitlement (needed for free personal-team
    builds).
