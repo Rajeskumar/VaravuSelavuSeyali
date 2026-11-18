@@ -432,7 +432,6 @@ VaravuSelavuSeyali/
 │   └── backfill_insights.py       # Rebuild + validate item/merchant insight tables
 ├── Makefile                       # Dev, test, QA, audit and `release-check` shortcuts
 ├── docker-compose.yml             # Local container run (see §17 — ports are out of date)
-├── shared/tokens.ts               # Design-token stub (not imported by any client)
 ├── docs/                          # This spec, INFRASTRUCTURE, FEATURE_STATUS, design & feature tickets
 ├── qa/                            # Playwright QA framework (e2e + API), TEST-PLAN, TEST-CASES
 │

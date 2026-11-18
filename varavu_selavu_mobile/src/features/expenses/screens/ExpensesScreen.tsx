@@ -1,7 +1,7 @@
 /**
  * ExpensesScreen.tsx — TrackSpense v3 Mobile mock's "Expenses" tab (`isExpenses` block): a
  * "Transactions | Recurring" segmented toggle; Transactions is a day-grouped feed combining
- * personal and group expenses (colored dot per category, not the heavier icon-badge `ExpenseCard`
+ * personal and group expenses (colored dot per category, not the heavier icon-badge `expense card`
  * treatment); Recurring is a flat list of templates with a due/active pill + a monthly total
  * footer. Previously this screen was titled "History", had no tabs, no day-grouping, and only
  * showed personal expenses via a heavier bordered-card-per-row list — none of that matched the
@@ -47,6 +47,7 @@ import { onExpenseChanged, refreshExpenseViews } from '../utils/expenseEvents';
 import { ordinal, nextRecurringOccurrence } from '../utils/expenseInsights';
 import { groupRowsByDay } from '../utils/dayGroups';
 import { matchesSpendFilters, SpendScope } from '../utils/spendFilters';
+import { logger } from '../../../core/logger';
 
 /** Mock's `r.ran`/"Logged today" pill — derived from `last_processed_iso` (persists across
  * app restarts) rather than session-only local state. */
@@ -207,7 +208,7 @@ export default function ExpensesScreen() {
             setOffset(currentOffset + (data.items?.length || 0));
             setHasMore(!!data.next_offset);
         } catch (error) {
-            console.error('Failed to fetch expenses', error);
+            logger.error('Failed to fetch expenses', error);
         } finally {
             setLoading(false);
         }

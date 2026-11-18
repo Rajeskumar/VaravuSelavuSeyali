@@ -22,6 +22,7 @@ import {
 import { formatCurrency } from '../../expenses/utils/currencyMath';
 import { useQueryClient } from '@tanstack/react-query';
 import { refreshExpenseViews } from '../../expenses/utils/expenseEvents';
+import { logger } from '../../../core/logger';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -107,7 +108,7 @@ export default function RecurringExpensesScreen() {
             const data = await listRecurringTemplates();
             setTemplates(data);
         } catch (error) {
-            console.error('Failed to load recurring templates', error);
+            logger.error('Failed to load recurring templates', error);
         } finally {
             setLoading(false);
             setRefreshing(false);

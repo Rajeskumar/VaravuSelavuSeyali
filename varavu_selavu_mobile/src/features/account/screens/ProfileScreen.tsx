@@ -19,6 +19,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '../../../core/api/apiFetch';
 import { listMyCards } from '../../cards/api/cards';
+import { logger } from '../../../core/logger';
 
 export default function ProfileScreen({ navigation }: any) {
   const { signOut, userEmail } = useAuth();
@@ -86,7 +87,7 @@ export default function ProfileScreen({ navigation }: any) {
       setPaypalHandle(p.paypal_handle || '');
       setUpiId(p.upi_id || '');
     } catch (e) {
-      console.error('Failed to load profile', e);
+      logger.error('Failed to load profile', e);
       Alert.alert('Error', 'Could not load profile data.');
     } finally {
       setLoading(false);
@@ -108,7 +109,7 @@ export default function ProfileScreen({ navigation }: any) {
       setUpiId(p.upi_id || '');
       Alert.alert('Success', 'Profile updated successfully.');
     } catch (e) {
-      console.error('Failed to update profile', e);
+      logger.error('Failed to update profile', e);
       Alert.alert('Error', 'Could not update profile.');
     } finally {
       setSaving(false);

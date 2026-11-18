@@ -40,4 +40,3 @@ An engineering summary for developers and AI agents. Read it when a task needs t
 - **Ticket IDs:** `TS-<AREA>-<n>` (e.g. TS-CARD-114); security findings use VS-01..VS-16. Specs live in `docs/features/`, and the status board is `docs/FEATURE_STATUS.md`.
 - **Comments explain *why*** and are often long; match the surrounding density.
 - **Make targets:** `make start-backend` / `start-web` / `start-mobile-*` / `test-backend`.
-- **Unclear, worth confirming:** `shared/tokens.ts` appears unused by either client.

@@ -7,7 +7,6 @@ export class RequestError extends Error {
     this.name = 'RequestError';
   }
 }
-export const SESSION_ENDED_KEY = 'vs_session_ended';
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** Budget for a request path: the first matching `AppConfig.api.timeoutOverrides` entry, else 30 s. */
 export function requestTimeout(path: string) {
