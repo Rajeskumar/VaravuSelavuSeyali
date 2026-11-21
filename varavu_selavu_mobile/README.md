@@ -75,59 +75,33 @@ make generate-mobile-assets  # Generate icon/splash assets
 
 ```
 varavu_selavu_mobile/
-├── App.tsx                             # Root: AuthProvider, Navigation, Drawer, RecurringPrompt
 ├── app.json                            # Expo configuration
 ├── package.json
 ├── tsconfig.json
-├── index.js                            # Entry point (registers App component)
+├── index.js                            # Entry point (registers src/app/App)
 ├── generate_assets.js                  # Generates placeholder icon/splash assets
 ├── android/                            # Native Android project (auto-generated)
 ├── ios/                                # Native iOS project (auto-generated)
 ├── assets/                             # Icons, splash screens, images
+├── modules/                            # Local Expo modules (receipt OCR)
 └── src/
-    ├── theme.ts                        # Design tokens: colors, shadows, spacing
-    │
-    ├── api/                            # API client layer
-    │   ├── apiconfig.ts               # Base URL (Cloud Run prod / local dev)
-    │   ├── apiFetch.ts                # Axios wrapper: auth headers, token refresh, 401 logout
-    │   ├── auth.ts                    # Login, register, logout
-    │   ├── expenses.ts               # Expense CRUD + receipt parse + with_items
-    │   ├── analysis.ts               # Analysis data + chat
-    │   ├── recurring.ts              # Recurring templates, due, confirm, execute_now
-    │   ├── chat.ts                   # AI chat API
-    │   └── email.ts                  # Email (feature request, contact us)
-    │
-    ├── context/
-    │   └── AuthContext.tsx            # Auth state management (SecureStore-backed)
-    │
-    ├── constants/
-    │   └── categories.ts             # Shared category taxonomy (7 main, 44 subcategories)
-    │
-    ├── screens/                        # Full-screen page components
-    │   ├── LoginScreen.tsx            # Email/password login
-    │   ├── RegisterScreen.tsx         # User registration
-    │   ├── HomeScreen.tsx             # Dashboard with summary cards
-    │   ├── AddExpenseScreen.tsx       # Add expense form + receipt camera upload
-    │   ├── ExpensesScreen.tsx         # Expense history list with edit/delete
-    │   ├── AnalysisScreen.tsx         # Charts (donut + line) + statistics
-    │   ├── AIAnalystScreen.tsx        # AI conversational chat interface
-    │   ├── RecurringExpensesScreen.tsx # Manage recurring templates
-    │   ├── AboutScreen.tsx            # About the app
-    │   ├── FeatureRequestScreen.tsx   # Submit feature request form
-    │   └── ContactUsScreen.tsx        # Contact us form
-    │
-    └── components/                     # Reusable UI components
-        ├── Card.tsx                   # Card container with shadow
-        ├── CustomButton.tsx           # Themed button with variants
-        ├── CustomInput.tsx            # Themed text input with label
-        ├── ScreenWrapper.tsx          # Screen container (safe area + padding)
-        ├── CategoryDonutChart.tsx     # Category breakdown donut/pie chart
-        ├── TrendLineChart.tsx         # Monthly spending trend line chart
-        ├── RecurringPrompt.tsx        # Auto-prompt modal for due recurring expenses
-        ├── SkeletonLoader.tsx         # Loading placeholder animations
-        ├── TabIcon.tsx                # Bottom tab bar icon with label
-        └── Toast.tsx                  # Toast notification system
+    ├── core/                           # Reusable shell, knows nothing about expenses
+    │   ├── theme/                      # Design tokens, ThemeContext, fonts
+    │   ├── ui/                         # Primitives: buttons, inputs, sheets, toast, tabs…
+    │   ├── auth/                       # AuthContext, auth API, sign-in/register/security screens, methods/
+    │   ├── api/                        # apiFetch (token refresh, 401), request, baseUrl
+    │   ├── navigation/                 # CoreApp root, navigators
+    │   ├── notifications/              # Push registration
+    │   ├── config/                     # AppConfig type + accessor
+    │   └── logger.ts
+    ├── features/                       # One folder per product area
+    │   └── expenses/ receipts/ groups/ activity/ home/ insights/ ask/
+    │       budgets/ cards/ tags/ recurring/ account/ shared/
+    └── app/                            # TrackSpense composition: AppConfig, tabs, routes, linking, registrations
 ```
+
+Dependency direction is `app → features → core` (enforced by `src/core/boundary.test.ts`); see
+`docs/mobile/CORE_BOUNDARY.md`.
 
 ---
 
@@ -230,7 +204,7 @@ App Root
 
 ## API Configuration
 
-The API base URL is configured in `src/api/apiconfig.ts`:
+The API base URL is resolved by `src/core/api/baseUrl.ts` from `AppConfig.api.baseUrl` (set in `src/app/appConfig.ts`):
 
 | Environment | URL | Notes |
 |:---|:---|:---|
@@ -246,7 +220,7 @@ The API base URL is configured in `src/api/apiconfig.ts`:
 
 ## Expense Categories
 
-The category taxonomy matches the web app and backend. Defined in `src/constants/categories.ts`:
+The category taxonomy matches the web app and backend. Defined in `src/features/expenses/utils/categories.ts`:
 
 | Main Category | Subcategories |
 |:---|:---|
@@ -321,7 +295,7 @@ app only receives them once these are in place:
 
 1. **EAS project:** run `eas init` here so `app.json` gets `extra.eas.projectId`. Without it the
    app logs "Push notifications are off: no EAS projectId" and never registers a device.
-2. **iOS:** a paid Apple Developer account, a real bundle identifier (not `com.anonymous.*`) and
+2. **iOS:** a paid Apple Developer account, the bundle identifier `com.cerebroos.trackspense` (already set in `app.json`; never change it after the first submission) and
    an APNs key uploaded with `eas credentials`. Build with `TRACKSPENSE_ENABLE_PUSH=1`;
    otherwise `withDisablePush.js` strips the push entitlement (needed for free personal-team
    builds).

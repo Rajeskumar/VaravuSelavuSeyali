@@ -1,0 +1,35 @@
+// src/api/profile.ts
+import { apiFetch } from '../../../core/api/apiFetch';
+
+export interface Profile {
+  email: string;
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  venmo_handle?: string | null;
+  paypal_handle?: string | null;
+  upi_id?: string | null;
+}
+
+export async function getProfile(): Promise<Profile> {
+  const res = await apiFetch('/api/v1/auth/profile', { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to load profile');
+  return res.json();
+}
+
+export async function updateProfile(payload: {
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  venmo_handle?: string | null;
+  paypal_handle?: string | null;
+  upi_id?: string | null;
+}): Promise<Profile> {
+  const res = await apiFetch('/api/v1/auth/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to update profile');
+  return res.json();
+}

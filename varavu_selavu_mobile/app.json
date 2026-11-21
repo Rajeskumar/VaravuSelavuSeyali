@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "TrackSpense",
-    "slug": "varavu-selavu-mobile",
+    "slug": "trackspense",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.varavuselavumobile",
+      "bundleIdentifier": "com.cerebroos.trackspense",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "This app uses your local network to connect to the development server while building.",
         "NSBonjourServices": [
@@ -29,7 +29,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundImage": "./assets/adaptive-icon-background.png"
       },
-      "package": "com.anonymous.varavuselavumobile",
+      "package": "com.cerebroos.trackspense",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -75,7 +75,15 @@
       "expo-font",
       "expo-secure-store",
       "expo-status-bar",
-      "./withSceneLifecycle"
+      "./withSceneLifecycle",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          }
+        }
+      ]
     ]
   }
 }

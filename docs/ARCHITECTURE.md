@@ -27,7 +27,7 @@ An engineering summary for developers and AI agents. Read it when a task needs t
 - **Reserve → call → settle/refund** around metered LLM calls (`AiQuotaService`, an atomic conditional upsert).
 - **Tiered fallback chains**, cheapest deterministic tier first: categorization and OCR.
 - **Structured error details** — AI gating errors return `{detail: {code, ...}}`, parsed by `aiErrorFromResponse` in each client's `src/api/aiUsage.ts`.
-- **Mirrored API clients** — web and mobile each keep their own `src/api/*.ts` with matching shapes.
+- **Mirrored API clients** — web and mobile each keep their own API clients (mobile: `src/features/*/api` and `src/core/`) with matching shapes.
 
 ## Testing
 - **Backend:** `make test-backend` runs `pytest` on in-memory SQLite. `tests/conftest.py` overrides `get_db`/`auth_required`, and the test user is `test@user.com`.
@@ -40,4 +40,3 @@ An engineering summary for developers and AI agents. Read it when a task needs t
 - **Ticket IDs:** `TS-<AREA>-<n>` (e.g. TS-CARD-114); security findings use VS-01..VS-16. Specs live in `docs/features/`, and the status board is `docs/FEATURE_STATUS.md`.
 - **Comments explain *why*** and are often long; match the surrounding density.
 - **Make targets:** `make start-backend` / `start-web` / `start-mobile-*` / `test-backend`.
-- **Unclear, worth confirming:** `shared/tokens.ts` appears unused by either client.
