@@ -76,8 +76,18 @@ test('closing a recovered group draft preserves its customized payers and split'
   ] });
   mount();
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save & split' })).toBeEnabled());
-  fireEvent.press(screen.getByRole('button', { name: 'Close' }));
-  await waitFor(() => expect(screen.queryByRole('button', { name: 'Save & split' })).toBeNull());
+  // Close hides the sheet from an Animated completion callback. Run that 300ms animation on
+  // fake timers inside act(): left on real timers, the callback's setVisible(false) lands
+  // outside any act() scope, which React 19's test renderer doesn't reliably commit, so the
+  // sheet looked like it never closed (the component itself was fine).
+  jest.useFakeTimers();
+  try {
+    fireEvent.press(screen.getByRole('button', { name: 'Close' }));
+    act(() => { jest.advanceTimersByTime(1000); });
+  } finally {
+    jest.useRealTimers();
+  }
+  expect(screen.queryByRole('button', { name: 'Save & split' })).toBeNull();
   await act(async () => { await Promise.resolve(); });
   const calls = (writeExpenseDraft as jest.Mock).mock.calls;
   expect(calls[calls.length - 1][1]).toMatchObject({ customized: true, payers: groupDraft.payers, splitValue: groupDraft.splitValue });
