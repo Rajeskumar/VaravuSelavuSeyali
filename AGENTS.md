@@ -6,7 +6,13 @@ Before ending any session where you implemented, changed, or fixed something mea
 2. If this introduces a new design decision, pattern, or constraint future sessions
    need to know, add it to this file's "Key Decisions" section.
 3. If this affects planned work, update ROADMAP.md.
-4. If schemas, endpoints, or architecture changed, update the product spec (below).
+4. If a feature was added, completed, or materially changed, update **all** relevant docs:
+   - `docs/FEATURE_STATUS.md` — mark the feature built / update its status.
+   - `README.md` — if it changes what the product does or how to set up / run it.
+   - `docs/TrackSpense_Complete_Product_Specification.md` — if it adds or changes
+     business rules, schemas, endpoints, or user-facing behaviour.
+   - `docs/features/` — add or update the feature spec for non-trivial features.
+   - `docs/ARCHITECTURE.md` — if it introduces a new service, layer, or integration.
 Do NOT log routine changes here — this file holds decisions and pointers, not a
 feature log or reference docs. Keep it short; put detail in the files below.
 

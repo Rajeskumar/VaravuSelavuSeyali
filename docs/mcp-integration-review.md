@@ -1,11 +1,10 @@
 # TrackSpense — MCP Integration Review (Phase 0)
 
-> **Status:** Architecture review. No application code was changed.
-> **Date:** 2026-11-21 · **Branch:** `claude/trackspense-mcp-architecture-gwioer`
+> **Status:** Architecture review with approved design revisions (2026-11-21). No MCP application code is implemented.
+> **Date:** 2026-11-21 · Original Phase 0 investigation followed by code-backed audit and user-approved revisions.
 > **Companion docs:** [mcp-tool-specification.md](mcp-tool-specification.md) · [mcp-security-design.md](mcp-security-design.md) · [mcp-implementation-plan.md](mcp-implementation-plan.md)
 >
-> Every finding below was checked against the repository at this commit. Paths are repo-relative;
-> `routes.py` means `varavu_selavu_app/varavu_selavu_service/api/routes.py` unless stated.
+> Repository observations below describe the pre-MCP implementation. Proposed controls are requirements, not completed fixes. Infrastructure descriptions reflect repository documentation, not a live cloud audit. Paths are repo-relative; `routes.py` means `varavu_selavu_app/varavu_selavu_service/api/routes.py` unless stated.
 
 ---
 
@@ -15,11 +14,11 @@ The brief listed several assumptions. Three of them are wrong, and they change t
 
 | Brief assumed | Actually in the repo | Consequence for the MCP design |
 |---|---|---|
-| **Google Sheets** is the database | **Supabase Postgres** via SQLAlchemy 2 + Alembic, schema `trackspense` (`docs/ARCHITECTURE.md`, `db/session.py`, `db/models.py`, 27 Alembic revisions). Nothing in the backend uses Google Sheets; the only "Sheets" string is a stale comment at `routes.py:194`. | Transactions, unique constraints and atomic upserts are already available. Idempotency, approvals, audit and rate counters can live in the **same database** as expenses and commit **in the same transaction**. You don't need a second datastore, and you don't need a migration. |
+| **Google Sheets** is the database | **Supabase Postgres** via SQLAlchemy 2 + Alembic, schema `trackspense` (`docs/ARCHITECTURE.md`, `db/session.py`, `db/models.py`, 27 Alembic revisions). Nothing in the backend uses Google Sheets; the only "Sheets" string is a stale comment at `routes.py:194`. | Transactions, unique constraints and atomic upserts are available. Expense, committed operation, success audit and create counters share one save transaction; verification and approval are earlier separate transactions. No second datastore or datastore migration is needed; new tables/columns still require Alembic schema migrations. |
 | The API is at `https://expense.cerebroos.com` | `expense.cerebroos.com` is the **React SPA** (nginx, Cloudflare-proxied CNAME). The API is **`trackspense-api.cerebroos.com`**, a Cloud Run domain mapping that is **DNS-only (not proxied by Cloudflare)** (`docs/INFRASTRUCTURE.md` §4). | `/mcp` belongs on `trackspense-api.cerebroos.com`. Cloudflare WAF and rate limiting do **not** sit in front of the API today. |
 | "JWT-based authentication" is enough to build on | It's HS256 first-party JWTs with **no `iss`/`aud`**, cookie or Bearer, with server-side revocation via `users.token_valid_after` (`auth/security.py:64-170`). | That works for first-party clients but **can't** be handed to third-party agents. MCP needs its own audience-bound, scoped, per-connection tokens (see security design §3). |
 
-Other stack facts confirmed: FastAPI 0.141, Pydantic v2, Python ≥3.10, Cloud Run `us-central1` with min 1 and max 20 instances at 1 vCPU / 512 Mi each, secrets in GCP Secret Manager, no cron jobs (everything is request-triggered).
+Repository-documented stack facts (verify deployed versions/capacity before launch): FastAPI 0.141, Pydantic v2, Python ≥3.10, Cloud Run `us-central1` with min 1 and max 20 instances at 1 vCPU / 512 Mi each, secrets in GCP Secret Manager, no cron jobs (everything is request-triggered).
 
 ---
 
@@ -57,7 +56,7 @@ Mobile (Expo) ───────────────Bearer─────
 ### 1.2 Persistence
 
 - `Expense` (`db/models.py:89`) has `amount Numeric(12,2)`, `currency` (default `USD`), `tax`/`tip`/`discount`, `category_id String(100)` holding the **bare subcategory name**, `fingerprint`, and a nullable `group_id`.
-- `ExpenseItem` (`db/models.py:127`) has `expense_id` (CASCADE), `line_no`, `item_name`, `quantity`, `unit_price`, `line_total`, `tax`, `discount` and `category_id`. **Every personal expense gets a synthesized 1-item "proxy" line** (`expense_service.py:24-80`).
+- `ExpenseItem` (`db/models.py:127`) has `expense_id` (CASCADE), `line_no`, `item_name`, `quantity`, `unit_price`, `line_total`, `tax`, `discount` and `category_id`. **Simple personal expenses get a synthesized 1-item "proxy" line** (`expense_service.py:24-80`); itemized receipts have actual lines, even when there is only one.
 - **Money:** `core/money.py` has `MoneyAmount` / `NonNegativeMoney` (Decimal, 2 dp, ≤ 1,000,000). Responses still serialize amounts as `float` (`ExpenseRow.cost: float`).
 - **Text:** `core/text_sanitize.py` NFKC-normalizes text, strips control and bidi characters and tags, and enforces length limits (description 200, name 100, notes 500).
 
@@ -66,9 +65,9 @@ Mobile (Expo) ───────────────Bearer─────
 | Control | Location | Reuse for MCP? |
 |---|---|---|
 | Server-side token revocation (`token_valid_after`) | `auth/security.py:138` | Same pattern for per-connection revocation (DB check per request). |
-| Refresh-token family rotation and reuse detection | `auth/service.py:303-388` | Same algorithm for MCP refresh tokens (separate table). |
+| Refresh-token family rotation and reuse detection | `auth/service.py:303-388` | Reuse the family/revocation concepts, not the existing branching grace implementation. MCP needs atomic opaque-token rotation and bounded family lifetime (security §3.4). |
 | Atomic conditional upsert counters in Postgres | `services/ai_quota_service.py` (`AiUsageDaily`) | Template for a shared, cross-instance MCP rate limiter. |
-| Decimal money types | `core/money.py` | Directly. |
+| Decimal money types | `core/money.py` | Reuse bounds/arithmetic with explicit string parsing for strict SDK input. |
 | Text sanitization types | `core/text_sanitize.py` | Directly. |
 | 422 handler that drops echoed input | `main.py:43` | Same idea for MCP validation errors. |
 | `AI_ENABLED` style kill switch | `core/config.py` | `MCP_ENABLED`, `MCP_WRITES_ENABLED`. |
@@ -127,10 +126,11 @@ MCP is effectively "the same tool idea, exposed to *external* agents". The diffe
 
 ### 3.2 MCP design consequence
 
-- Introduce **stable, derived category IDs** in a new read-only module that is built from `CATEGORY_GROUPS`. Storage doesn't change: the ID is `"<main-slug>.<sub-slug>"`, e.g. `food_drink.groceries`, `utilities.other`.
-- `list_categories` returns the full tree with IDs. `create_expense` accepts **only** a `category_id` from that tree, resolves it to `(main, sub)`, and stores `sub` in `expenses.category_id` exactly as the web form does today. Existing data, analytics, budgets and Card Coach are unaffected.
-- The `"Other"` ambiguity is **not** made worse: MCP stores exactly what the web form would store for the same choice. Fixing it is the existing ROADMAP item.
-- The backend LLM categorizer is **not** called for MCP writes (zero AI quota, zero provider calls).
+- Create a backend catalog with pinned stable IDs initially derived from main/subcategory names, e.g. `food_drink.groceries`. Deduplicate Utilities “Other”; label renames must preserve IDs or use explicit aliases.
+- `verify_expense` validates the selected full path; `save_expense` writes the existing bare subcategory. No backend LLM categorizer is called.
+- **Do not claim full-path round-trip fidelity.** Ambiguous names (Other, Services, Electronics) return null IDs with an ambiguity flag on every expense read, including immediately after save. Preview warns that current storage cannot preserve the chosen main category.
+- v1 filters accept globally unique subcategory names, and main categories only if all their subcategories are unambiguous. Reject unsupported filters instead of silently counting other categories or excluding unknown legacy rows. Full-path persistence is a separate roadmap migration.
+- Personal-only summaries use Decimal aggregate-only methods and currency-separated totals. Existing `calculate_merchant_metrics` includes group shares, so it requires a personal path before reuse; simply minimizing its response is insufficient.
 
 ---
 
@@ -159,113 +159,122 @@ MCP is effectively "the same tool idea, exposed to *external* agents". The diffe
 
 ### 4.3 MCP design consequence
 
-- `create_itemized_expense` reuses the **same reconciliation rule, repository and post-save side effects**, but with a **typed** header model, a **server-computed** fingerprint, **one transaction**, and an idempotency record committed in that same transaction.
-- No attachments over MCP in v1. The agent parses the image itself. For agents without vision, a deterministic `parse_receipt_text` tool can wrap `ReceiptService.parse_ocr_rows` (no LLM, no upload, no SSRF surface). The image-to-LLM backend parser stays web and mobile only.
-- Inconsistent totals are **never auto-corrected**. The tool returns `totals_mismatch` with the computed figures. The agent may resubmit with `accept_unreconciled=true`, which **forces user approval** (security design §8).
+- Receipt additions use the itemized variant of `verify_expense`, the same first-party browser approval, and `save_expense(operation_id)`. No direct receipt-create MCP tool exists.
+- Verification validates structured input, reconciles totals, detects probable duplicates and stores an immutable draft. It writes no expense. Approval records a user decision but also writes no expense. Save atomically writes expense/items, operation result, audit and committed-create counters.
+- Historical purchase dates are supported without the former three-year cutoff. Duplicate checks consider existing REST/chat/recurring/import expenses and are repeated under a shared user lock at save. Newly discovered duplicates require renewed approval.
+- No attachments or backend image/LLM call in v1. Optional `parse_receipt_text` wraps deterministic `ReceiptService.parse_ocr_rows`, returning a partial draft with missing-field warnings.
+- Mismatched totals are never automatically corrected. `accept_unreconciled` permits preparing a warning-bearing draft, not saving without approval. Browser approval explicitly acknowledges the discrepancy.
+- Current `ExpenseItem.quantity` is Numeric(10,2); three-decimal receipt quantities require a reviewed Numeric(12,3) migration before enabling itemized verification. Real one-item receipts must not be hidden as proxies.
 
 ---
 
-## 5. Business logic embedded in route handlers (refactor candidates)
+## 5. Shared-service extraction and transaction audit
 
-MCP must call the same code as REST. Today several important side effects live **in the route function**, not the service, so calling `ExpenseService.add_expense` alone (as the chat tool does) silently skips them.
+MCP must reuse business rules through services, not import/call REST routes. The original plan identified route-level effects but did not account for nested helper commits.
 
-| Route | Logic in the handler that a second entry point needs | Chat tool skips it today? |
+| Concern | Existing code | Required change |
 |---|---|---|
-| `create_expense` `routes.py:288-352` | (a) held-card check, (b) `analysis_service.invalidate_cache()`, (c) insight aggregation background task, (d) tag apply, (e) `CategoryMemoryService.record`, (f) response shaping | Yes: no cache invalidation, no aggregation, no category memory |
-| `create_expense_with_items` `routes.py:946-1018` | header validation, reconciliation, fingerprint dedup, two-step write and compensation, aggregation, tags, category memory | n/a |
-| `update_expense` `routes.py:419-490` | cache invalidation, aggregation diff, tag replace semantics, category memory | n/a |
-| `list_expenses` `routes.py:393-416` | sorting, tag filter, offset paging **in Python over all rows** | n/a |
+| Simple creation | `routes.py:288`: held-card check, expense/proxy creation, cache invalidation, aggregation, tags, category memory | Transaction-owning `ExpenseWriteService`; preserve REST contract; MCP saves only approved stored payload |
+| Itemized creation | `routes.py:946`, repository header/items commit separately | One financial transaction, no compensating-delete substitute |
+| Category memory | `category_memory_service.py:111` commits; `:114` rolls back the shared session | Flush-only/savepoint or explicit post-commit independent session; no hidden financial commit/rollback |
+| Tag writes | `tag_service.py` methods contain commits | Audit every participating helper; preserve tag behavior without inner commits |
+| Personal write entry points | REST, in-house chat, recurring, imports and edit/delete paths | Inventory all writers; acquire the same short per-user lock for duplicate-relevant changes |
+| List/detail | List loads all rows; items may be unbounded | DB keyset query, scoped indexes, bounded legacy items and honest provenance |
+| Summary | `analysis_service.py:138` loads all detail rows even if the caller drops them | Aggregate-only shared SQL with Decimal and no-cache MCP reads |
+| Merchant summary | `insight_analytics_service.py:170` unions group shares | Explicit personal query path, consistent currency/scope across all summary fields |
 
-**Minimal refactor (no behaviour change for REST):**
+The outer save transaction owns expense/items, committed-operation state, success audit and create quota. A pre-existing operation row supplies the idempotency lock. There is no durable processing lease or arbitrary two-minute recovery rule. Post-commit callbacks cannot reverse success; use explicit session lifetimes and authoritative aggregate reads.
 
-1. Add `services/expense_write_service.py` with `ExpenseWriteService.create_simple(...)` and `create_itemized(...)`. They contain the logic from (a)–(e) above and take `commit: bool = True`, so a caller can include the write in a larger transaction. The two REST handlers become thin wrappers. Background aggregation stays a callback parameter so REST keeps using `BackgroundTasks`.
-2. Add `commit: bool = True` to `ExpenseService.add_expense`, `PostgresRepo.append_expense` and `append_items`. The REST itemized path then also gets the single-transaction fix (closes gap G3 for first-party clients too).
-3. Add `ExpenseService.query_expenses(user, start, end, category_sub, merchant, text, min/max, sort, limit, cursor)`, a DB-side filtered and paginated query. MCP uses it from day one. The REST `list_expenses` can migrate later (an optional performance win; gap G5).
-4. Add a `category_catalog` module (stable IDs, resolve, validate). The chat tool's `_resolve_agent_category` and the receipt validators can use it later.
-
-Everything else (analysis, budgets, recurring, change insights) is already cleanly in services and can be called directly.
+The [security design](mcp-security-design.md) defines per-user/operation locks and revocation ordering. The [plan](mcp-implementation-plan.md) requires Postgres race/fault tests, including different keys and cross-channel duplicates, not only same-key replays. Existing REST response shapes stay stable; transaction safety improves. New strict MCP inputs must not silently narrow first-party accepted inputs.
 
 ---
 
 ## 6. Existing security gaps found during the review
 
-Severity uses `.ai-sdlc` (P0–P3). "Confirmed" means the code was read and the behaviour is certain; "Suspected" means it needs a test to prove. Each row is rated **for the existing product**; the MCP impact column says why it matters more once agents arrive.
+Severity uses `.ai-sdlc` (P0–P3). "Confirmed" means the code was read and the behaviour is certain; "Suspected" means it needs a test to prove. Each G-row retains the original assessment **for the existing product**; this is not a live penetration test or an implemented MCP finding. The later A1–A16 design audit is tracked in the implementation plan §4.
 
 | ID | Gap | Evidence | Sev (today) | MCP impact |
 |---|---|---|---|---|
 | G1 | `POST /expenses` accepts any category string | `ExpenseRequest.category: CategoryStr` (`api_models.py:53`), no taxonomy check | P3 Confirmed | Must not be reused unvalidated: an agent would invent categories. |
 | G2 | `/expenses/with_items` header is an untyped dict: `description`/`notes`/`merchant_name` **bypass `text_sanitize`**, `currency` is unvalidated, `tax`/`tip`/`discount` go through `to_decimal` with **no bounds (negatives accepted)**, item `category_id` is unvalidated, and there's **no item-count cap** | `api_models.py:118`, `routes.py:960-975`, `postgres_repo.py:66` | P2 Confirmed | A negative tip can make an arbitrary item sum "reconcile". Unbounded items. Needs a typed model for MCP (and ideally REST). |
 | G3 | Itemized create is two commits plus a compensating delete, so a crash leaves an orphan header | `postgres_repo.py:107,161`, `routes.py:985-990` | P2 Confirmed | Agents retry on timeout, so partial state is more likely. |
-| G4 | Receipt dedup uses a client-supplied fingerprint, has no unique constraint, is racy, and can be bypassed with `force=true` | `routes.py:982-984`, `postgres_repo.py:16` | P3 Confirmed | MCP needs a server-computed fingerprint plus idempotency keys. |
-| G5 | `GET /expenses` loads every personal expense, then slices in Python, with no date filter | `routes.py:403-416`, `expense_service.py:119` | P3 (perf) Confirmed | A read-exfiltration amplifier. MCP must use a DB-paginated query with range caps. |
-| G6 | Rate limits are per IP and in-memory per instance. Behind DNS-only `trackspense-api`, `CF-Connecting-IP` is client-settable | `core/limiter.py`, ROADMAP "Infra" | P2 Confirmed (known) | **Agent traffic arrives from provider egress IPs shared by many users**, so per-IP limits would throttle innocent users together and protect nobody. MCP limits must key on user and connection, in shared storage. |
+| G4 | Receipt dedup uses a client-supplied fingerprint, has no unique constraint, is racy, and can be bypassed with `force=true` | `routes.py:982-984`, `postgres_repo.py:16` | P3 Confirmed | MCP needs server-side duplicate matching serialized with all personal writes, plus operation idempotency. A fingerprint lookup alone is still racy. |
+| G5 | `GET /expenses` loads every personal expense, then slices in Python, with no date filter | `routes.py:403-416`, `expense_service.py:119` | P3 (perf) Confirmed | MCP needs DB pagination/range caps and shared disclosure budgets; authorized reads can still extract allowed data. |
+| G6 | Rate limits are per IP and in-memory per instance. Behind DNS-only `trackspense-api`, `CF-Connecting-IP` is client-settable | `core/limiter.py`, ROADMAP "Infra" | P2 Confirmed (known) | **Agent traffic can share provider egress IPs**, so per-IP limits alone are unsuitable for authenticated tool quotas. MCP limits must key on user and connection, in shared storage. |
 | G7 | `AnalysisService` cache is process-local and a write clears it only on the instance that took the write; other instances may serve data up to 60 s stale | `analysis_service.py:38-48` | P3 Confirmed | Read-after-write for agents ("add X… now what's my total?") can be wrong when the instances differ. MCP reads use `use_cache=False`. |
 | G8 | No audit trail for personal expense create, update or delete (only `group_activity` for groups) | `db/models.py` table list | P2 Confirmed | Can't answer "which agent changed this?". Needs an audit table plus `expenses.created_by_connection_id`. |
 | G9 | Cloud Run `*.run.app` is reachable directly (`--allow-unauthenticated`), so the edge can be bypassed | `cloudbuild.yaml:97`, ROADMAP | P2 Confirmed (known) | MCP must not trust edge headers. Validate the token `aud` against the configured canonical URL, never the `Host` header. |
-| G10 | The backend runtime service account holds **`roles/editor`** at project level | `docs/INFRASTRUCTURE.md` §5 | P2 Confirmed (known) | Any SSRF that reaches the Cloud Run metadata server (`169.254.169.254`) yields a project-editor token. **OAuth Client ID Metadata Document fetching is an SSRF vector**, so it must be hardened (security design §3.4). |
+| G10 | The backend runtime service account holds **`roles/editor`** at project level | `docs/INFRASTRUCTURE.md` §5 | P2 Confirmed (known) | A metadata SSRF capable of supplying the required headers could expose runtime credentials. CIMD fetch hardening and verified least-privilege runtime IAM are launch gates (security design §3.2). |
 | G11 | First-party JWTs have no `iss`/`aud` | `auth/security.py:64` | P3 Confirmed | MCP tokens must be distinguishable and must never be accepted by `auth_required` (and vice versa). |
-| G12 | `ExpenseService.update_expense` is full-replace, including `card_id`, so a partial-update caller wipes card attribution. Updating `amount` on an itemized expense desynchronizes the items | `expense_service.py:157-246` | P3 Confirmed | Relevant to `update_expense` (P2): it needs merge semantics and must refuse amount changes on itemized rows. |
+| G12 | `ExpenseService.update_expense` is full-replace, including `card_id`, so a partial-update caller wipes card attribution. Updating `amount` on an itemized expense desynchronizes the items | `expense_service.py:157-246` | P3 Confirmed | No update tool is in the accepted v1 scope. Any future design needs merge/concurrency semantics and item-total integrity review. |
 | G13 | The category taxonomy is duplicated by hand in four places | §3 | P3 Confirmed | `list_categories` becomes the server source of truth. Clients could adopt it later. |
 | G14 | AI-processing consent is per device and client-side for chat (ROADMAP) | AGENTS.md "AI consent" | P3 Confirmed (known) | Connecting an external agent *is* sending data to an AI provider, so the OAuth consent screen must carry that disclosure. |
 
-No cross-tenant (IDOR) defect was found in the endpoints read: every personal query is scoped by `user_email` and `group_id IS NULL`, and group queries go through membership joins. ROADMAP already notes that **nothing proves this automatically**. The MCP test plan adds cross-user negative tests for every tool (implementation plan, Phase 1).
+No cross-tenant (IDOR) defect was found in the endpoints read: every personal query is scoped by `user_email` and `group_id IS NULL`, and group queries go through membership joins. ROADMAP already notes that **nothing proves this automatically**. The MCP plan requires cross-user negatives for every registered tool, plus current-grant and first-party approval tests; these are not yet implemented.
 
 ---
 
-## 7. Google Sheets data-integrity review → reframed for Postgres
+## 7. Data integrity: Postgres remains the datastore
 
-The brief's §9 asked whether Sheets is suitable for agent writes. Sheets is not in use. Here is the same checklist evaluated against what the system actually runs on:
+The brief's Google Sheets assumption does not apply. Postgres already supplies the required transactions, unique keys and row locks. There is no datastore replacement, but there **are schema migrations**: ten new OAuth/MCP tables, nullable expense provenance/fingerprint and session-authentication fields, followed by a separate item-quantity migration. See the security design for the authoritative schema inventory.
 
-| Concern | Postgres today | Needed for MCP |
-|---|---|---|
-| Concurrent writes | MVCC. Each request has its own session. | Fine. |
-| Duplicate creation | No idempotency, and the fingerprint check is racy (G4) | `mcp_operations` table with a **unique** `(connection_id, tool, idempotency_key)` index. The claim insert serializes concurrent duplicates. |
-| Partial receipt writes | Two commits (G3) | One transaction: operation row, expense, items, audit event. |
-| Header and line consistency | Reconciliation check exists | Same rule, plus typed and bounded tax, tip and discount. |
-| Atomicity | Full ACID available | Use it. That's the whole fix. |
-| API quotas | n/a (no Sheets API). Supabase connection limits are the constraint | Stateless MCP plus the existing SQLAlchemy pool. Rate-limit counters are one upsert per call. |
-| Recovery after failure | none | Operation state survives restarts. A retry with the same key returns the committed result, or reports `in_progress` / `failed`. |
-| Cross-user isolation | Query scoping | Same, plus the connection → user binding resolved from the token. |
-| Audit | none for personal (G8) | `mcp_audit_events`. |
+| Requirement | Accepted mechanism |
+|---|---|
+| Validate before adding | Verify stores an immutable draft and exact preview, no financial side effects |
+| Approval on every addition | First-party TrackSpense browser POST records payload/revision-bound approval; agent cannot grant it |
+| Add only approved data | Save accepts operation ID only and commits the stored draft after current-policy recheck |
+| Same-intent retries | Unique verification key plus operation-row serialization; tombstone survives full-payload pruning |
+| Different-key duplicates | Date-independent content matching + ±1-day window, legacy fallback/backfill, shared user lock and renewed approval for new matches |
+| Partial writes | Expense/items/operation/audit/create counters in one transaction; participating helpers cannot commit independently |
+| Crash/timeout | Before commit: no financial write. After commit: status/replay returns the committed identity. No stale-worker lease |
+| Revocation race | Shared execution/revocation lock order; a completed save is not undone, but revocation that wins the gate prevents save |
+| Exact quantities/totals | Decimal primitives; Numeric(12,3) quantity migration before itemized rollout |
+| Private reads | Personal-only queries, bounded items/records, currency-separated aggregates and honest category ambiguity |
 
-**Recommendation:** no database migration and no new datastore. Add five small tables to the existing `trackspense` schema (security design §12) through one Alembic revision with a random hex ID.
+## 8. User journeys
 
----
+| Intent | Tool flow / requirement |
+|---|---|
+| “Add $45 for groceries at Costco” | Catalog → verify simple → show preview/link → TrackSpense approval → save → committed result |
+| “I spent $25 on lunch yesterday” | Resolve date with user → same approval flow |
+| “Here is an old Walmart receipt” | Client extraction or deterministic text parse → verify itemized with historical date → duplicate warnings → browser approval → save with duplicate recheck |
+| “Show my biggest expenses this year” | Bounded personal list, amount sort, currency-aware totals |
+| “Compare grocery spending with last month” | Personal category breakdown, unique category filter, shared like-for-like period resolver |
+| “What happened to the expense I approved?” | Operation status distinguishes approved-but-not-saved, committed, rejected and expired |
+| “Sign out everywhere” | First-party action revokes agent grants/tokens and outstanding approvals; reconnect required |
 
-## 8. MCP integration opportunities
+The page opened by the approval link uses the existing TrackSpense login and works on phones. Opening it does not approve. Clicking Approve does not save; the agent must call save afterward. Both agent and page make that distinction explicit. Chat “yes” and host tool confirmation may aid UX but cannot replace the server's first-party approval record. URL elicitation is optional; a normal link is the fallback.
 
-| User intent (from the brief) | Tool(s) | Backed by |
-|---|---|---|
-| "Add $45 for groceries at Costco" | `list_categories` → `create_expense` | `ExpenseWriteService.create_simple` → `ExpenseService.add_expense` |
-| "I spent $25 on lunch yesterday" | same (the agent resolves "yesterday" into an ISO date) | same |
-| "How much did I spend on restaurants this month?" | `get_category_breakdown` | `AnalysisService.analyze` |
-| "Compare my grocery spending with last month" | `get_category_breakdown(compare_to_previous=true)` | `AnalysisService.analyze` ×2 with like-for-like periods (`InsightAnalyticsService._resolve_comparison_periods`) |
-| "Here is my Walmart receipt. Track all the items." | `list_categories` → `create_itemized_expense` (or `parse_receipt_text` for agents without vision) | `ExpenseWriteService.create_itemized` → `PostgresRepo` |
-| "Show my biggest expenses this year" | `list_expenses(sort="amount_desc")` | `ExpenseService.query_expenses` (new) |
-| "Am I over budget?" | `get_budget_status` | `BudgetService.list_budgets` |
-| "What subscriptions do I have?" | `get_recurring_expenses` | `RecurringService.list_templates` / `compute_due` |
+## 9. Accepted architecture and rollout
 
----
-
-## 9. Proposed architecture (summary)
-
-Full rationale is in [mcp-security-design.md](mcp-security-design.md). This is the shape:
-
-```
-ChatGPT / Claude / OpenClaw / other MCP client
-     │  OAuth 2.1 + PKCE (CIMD / pre-registered; DCR only if a target client needs it)
-     │  Bearer <MCP access token, aud=https://trackspense-api.cerebroos.com/mcp>
-     ▼
-trackspense-api.cerebroos.com   (same Cloud Run service, same image)
- ├── /.well-known/oauth-protected-resource/mcp     RFC 9728
- ├── /.well-known/oauth-authorization-server        RFC 8414
- ├── /oauth/authorize  /oauth/token  /oauth/revoke  (in-house AS, Authlib-backed)
- ├── /mcp     Streamable HTTP, stateless, JSON responses   ◄── mcp/ package
- │     └── MCP gateway: verify token → load connection → policy → rate limit
- │           → explicit tool registry → handler → shared services → audit
- ├── /api/v1/ai-connections/*  first-party only (cookie or app Bearer): list, revoke, policy, approvals, activity
- └── /api/v1/*   unchanged REST
-SPA (expense.cerebroos.com): /connect/authorize (consent), /ai/approve/:id, Settings → AI Connections
+```text
+Claude app first / ChatGPT second
+    │ OAuth + scoped MCP Bearer token
+    ▼
+trackspense-api.cerebroos.com
+    ├── OAuth discovery + authorize/token/revoke (Authlib working choice)
+    ├── /mcp: registry → current policy → budgets → shared services
+    │      ├── bounded personal read tools
+    │      ├── verify_expense → pending draft
+    │      └── save_expense(operation_id) → approved payload → atomic commit
+    └── /api/v1/... first-party consent/management/approval/activity
+                    ▲
+expense.cerebroos.com: consent + review/approve/reject + connection management
+                    │ first-party user session, never MCP credentials
+                    └── approval only; save remains a separate agent tool call
 ```
 
-**Option A (MCP inside the existing FastAPI app) is recommended** for Phases 1–4. The code lives in its own `mcp/` package with no import from `api/`, so it can later be split into a separate Cloud Run service from the same image (Option B′) without rewriting it. The comparison is in [mcp-security-design.md §2](mcp-security-design.md#2-deployment-architecture-option-a-vs-b).
+- Retain Option A (same FastAPI service) with isolated packages. Confirm actual client/SDK/auth interoperability before expanding implementation; do not assume subscription eligibility or DCR necessity.
+- Personal-only means **all** reads and writes, including summaries, independent of group flags. Groups are later work with membership/split/notification/approval analysis.
+- Every expense requires independent approval; remove the former $500/25-auto-save proposal entirely from implementation scope. Historical dates are allowed.
+- Read launch includes basic activity, disconnect/suspend, privacy disclosure and export/deletion. Write launch includes browser approval and attribution/management links on web and mobile. Native approval UI may follow later.
+- Sign out everywhere now includes agents. First-party ordinary logout remains separate. Connections are not resurrected on reconnect.
+- Global DB controls, safe schema/retention, least-privilege runtime IAM, bounded aggregate queries and explicit Postgres CI are release prerequisites. No claim of zero infrastructure cost or unchanged capacity without measurement.
+
+## 10. Follow-up audit and evidence status
+
+The follow-up audit identified **10 P1 and 6 P2 design gaps**, addressed as requirements in the revised documents: transaction helpers, duplicate races, recovery, approval authorization, OAuth/protocol completeness, summary scope/currency, categories, quantity storage, user rights, PG CI, strict parsing, quotas, query cost, lifecycle/schema, parity/visibility and inconsistent contracts. See [plan §4](mcp-implementation-plan.md#4-audit-disposition-and-traceability) for A1–A16 and phase mapping.
+
+A local Pydantic probe confirmed that strict Decimal validation differs between Python-dictionary and JSON input; explicit SDK-path parsing is required. Code inspection confirmed category-memory commits, merchant group-share union, two-decimal quantity storage, eager detail aggregation, the PG runner's fixed file list and absent PG service in unit CI. No live cloud settings, real-client flows or MCP runtime security tests were verified. No application code changed in this review/revision.
+
+The documents capture accepted direction, not a completed security audit of an implementation. Next work is the Phase 1 compatibility/security prototype; phase exit criteria require actual tests and routed reviews.

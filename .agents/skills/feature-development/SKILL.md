@@ -13,6 +13,6 @@ Follow `.ai-sdlc/workflows/feature-development.md` (bug fixes: `.ai-sdlc/workflo
 4. Write tests with the change (failing-first for bugs). Money assertions are exact `Decimal`.
 5. Run `scripts/quality/verify.sh`, fix, then self-review against `.ai-sdlc/checklists/definition-of-done.md` (only the relevant lines).
 6. Run `scripts/quality/route-review.sh`; run only the reviewers it names (see the `pr-review` skill). Fix P0/P1.
-7. Finish: `CHANGELOG.md` line; AGENTS.md Key Decision only for new patterns; spec/README if user-facing or contract changed. Do not commit or push unless asked.
+7. Finish: `CHANGELOG.md` line; AGENTS.md Key Decision only for new patterns; update `docs/FEATURE_STATUS.md`, `README.md`, product spec, `docs/features/`, and `docs/ARCHITECTURE.md` as described in AGENTS.md § Maintenance Instruction. Do not commit or push unless asked.
 
 Don't: refactor unrelated code, weaken tests, bypass hooks, or invoke reviewers for trivial changes (typos, copy, comments).
