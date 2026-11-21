@@ -89,7 +89,7 @@ That file already tracks launch-blocker checklist items with `[x]`/`[ ]`. Verifi
 - No automated IDOR test (a user can't currently be *proven* unable to read another user's data — the auth logic looks correct, but nothing tests it)
 - Savings goals: zero implementation
 - Bank sync / Plaid: zero implementation (roadmap item, not urgent)
-- Reviewer demo account for app store review: no seed script exists (a throwaway account was created ad hoc during a recent session for screenshots — `demo@trackspense.app` — but that's not a documented, reproducible seed process)
+- Reviewer demo account for app store review: the seed script now exists (`varavu_selavu_app/scripts/seed_demo.py`, seeds three months of data through the API); still to do is creating the account on production and putting its credentials in App Store Connect / Play Console
 - Apple Privacy label / Google Play Data Safety form: business/compliance tasks, not code
 
 ---
@@ -149,7 +149,7 @@ Full MVP per [`features/budgeting/trackspense-budgets-prd.md`](features/budgetin
 |:---|:---|:---|
 | Backend API | ✅ Built | `POST/GET/PATCH/DELETE /budgets`, `/budgets/{id}/breakdown`, `/budgets/suggestions`, `/budgets/{id}/ask-why` (`api/routes.py`), full service layer (`services/budget_service.py`), Alembic migration `a1b2c3d4e5f6_add_budgets.py`. |
 | Web | ✅ Built | `BudgetsTab.tsx` (4th sub-tab on Analysis), `BudgetCard.tsx`, `BudgetProgressBar.tsx`, dashboard `BudgetsSummaryCard.tsx`, `useBudgetsEnabled.ts` reading the live `/config` flag. |
-| Mobile | ✅ Built | `BudgetsTabContent.tsx`, `BudgetProgressBar.tsx`, `BudgetsSummaryCard.tsx`, `useBudgetsEnabled.ts` — full parity with web, not a stub. |
+| Mobile | ✅ Built | `BudgetsTabContent.tsx`, `BudgetProgressBar.tsx`, `useBudgetsEnabled.ts` — full parity with web, not a stub. |
 | Feature flag | ✅ Built | Gated behind `BUDGETS_ENABLED` (defaults `true` in code; no explicit override in the live Cloud Run env, so prod runs on the code default). |
 | Backend tests | ✅ Built | 16 tests (`tests/test_budgets_api.py`) — amount bounds, category-required, dedup-on-create, combined scope, soft delete, breakdown, exceeded status, suggestions, flag-off 404, ask-why grounding, and an explicit IDOR-style "never accepts client-supplied user_id" test. |
 

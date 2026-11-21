@@ -1,0 +1,49 @@
+import React, { useMemo } from 'react';
+import { View, StyleSheet, ViewStyle } from 'react-native';
+import { useAppTheme } from '../theme/ThemeContext';
+import { AppTheme } from '../theme/theme';
+
+interface CardProps {
+    children: React.ReactNode;
+    style?: ViewStyle;
+    noPadding?: boolean;
+    /** Use inset style — gray background, no shadow (for grouped list sections) */
+    inset?: boolean;
+}
+
+/**
+ * Card — flat container with a hairline border (TS-DES-209). Elevation is reserved for sheets
+ * only (see theme.ts's buildShadows comment), so the border — not a shadow — is what separates
+ * the card from the background.
+ */
+export default function Card({ children, style, noPadding = false, inset = false }: CardProps) {
+    const { theme } = useAppTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+    return (
+        <View style={[styles.card, noPadding && styles.noPadding, inset && styles.inset, style]}>
+            {children}
+        </View>
+    );
+}
+
+const createStyles = (theme: AppTheme) => StyleSheet.create({
+    card: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: theme.borderRadius.xl,
+        padding: 20,
+        marginBottom: 12,
+        // Reconcile's shadow tokens zero out this tier (elevation reserved for sheets only —
+        // see theme.ts's buildShadows comment), so the hairline border is what actually
+        // separates the card from the background, matching createGlobalStyles()'s card style.
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: theme.colors.borderLight,
+        ...theme.shadows.sm,
+    },
+    noPadding: {
+        padding: 0,
+    },
+    inset: {
+        backgroundColor: theme.colors.surfaceSecondary,
+        ...theme.shadows.xs,
+    },
+});

@@ -996,7 +996,9 @@ def create_expense_with_items(
             user_email=user_id,
             expense_id=expense_id,
             merchant_name=header.get("merchant_name"),
-            purchased_at=header.get("purchased_at") if isinstance(header.get("purchased_at"), datetime) else None,
+            # The header is JSON, so purchased_at is a string: normalize it exactly as the
+            # expense row was, or price history and merchant months fall back to today.
+            purchased_at=PostgresRepo._normalize_purchased_at(header.get("purchased_at")),
             items=items,
         )
     except Exception as exc:
