@@ -6,7 +6,7 @@ authors = [
     {name = "Rajesh Kumar Ganesan"}
 ]
 readme = "README.md"
-requires-python = "^3.10"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "fastapi (>=0.141.1,<0.142.0)",
     "uvicorn (>=0.35.0,<0.36.0)",
@@ -15,11 +15,14 @@ dependencies = [
     # Security floors for transitive deps that otherwise resolve to advisory-carrying
     # versions (urllib3/idna via requests, cryptography via google-auth, aiohttp+ujson via
     # the langchain stack). Raise, never pin, so patches keep flowing.
+    # certifi (requests/httpx CA bundle) and dnspython (email-validator) are raised for the
+    # 2026-11 pip-audit findings, as are pillow, aiohttp, filelock, pyasn1, setuptools and
+    # langgraph-sdk below.
     # starlette: fastapi sets no upper bound, so raise it explicitly to clear its own
     # advisories. limits: slowapi caps nothing, and limits<3 imports pkg_resources, which
     # setuptools>=81 no longer ships -- that coupling is why setuptools was pinned <70.
     "anyio (>=4.14.2)",
-    "pyasn1 (>=0.6.3)",
+    "pyasn1 (>=0.6.5)",
     "pygments (>=2.20.0)",
     "python-dotenv (>=1.2.2)",
     "starlette (>=1.6.0)",
@@ -27,10 +30,10 @@ dependencies = [
     "urllib3 (>=2.8.0)",
     "idna (>=3.19)",
     "cryptography (>=50.0.1)",
-    "aiohttp (>=3.14.3)",
+    "aiohttp (>=3.14.4)",
     "ujson (>=6.0.0)",
     "click (>=8.5.0)",
-    "filelock (>=3.32.6)",
+    "filelock (>=4.2.1)",
     "bcrypt (>=4.1.2,<5.0.0)",
     "pyjwt (>=2.15.0,<3.0.0)",
     "email-validator (>=2.2.0,<3.0.0)",
@@ -41,7 +44,7 @@ dependencies = [
     "sqlalchemy (>=2.0.48,<3.0.0)",
     "alembic (<1.14.0)",
     "slowapi (>=0.1.10,<0.2.0)",
-    "setuptools (>=84.0.0)",
+    "setuptools (>=84.1.0)",
     "langchain (>=1.3.11,<2.0.0)",
     "langchain-openai (>=1.3.3,<2.0.0)",
     "langchain-community (>=0.4.2,<0.5.0)",
@@ -50,12 +53,14 @@ dependencies = [
     "langchain-google-genai (>=4.2.6,<5.0.0)",
     "python-dateutil (>=2.9.0,<3.0.0)",
     "rapidfuzz (>=3.14,<4)",
-    "pillow (>=11.1)",
+    "pillow (>=13.0.0)",
     "pillow-heif (>=1.1,<2)",
     "pypdfium2 (>=4.30,<6)",
     "rapidocr-onnxruntime (>=1.4.4,<2) ; python_version < \"3.13\"",
-    "langgraph-sdk (>=0.4.4)",
-    "multidict (>=6.9.1)"
+    "langgraph-sdk (>=0.4.6)",
+    "multidict (>=6.9.1)",
+    "certifi (>=2026.10.18)",
+    "dnspython (>=2.9.2)"
 ]
 
 
@@ -76,6 +81,8 @@ pytest-env = "<1.0.0"
 testing-postgresql = "^1.3.0"
 psycopg2-binary = "^2.9.11"
 pip-audit = "^2.10.1"
+# pip-audit's own CacheControl dependency; floored so the audit doesn't flag its own tooling.
+msgpack = ">=1.2.3"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

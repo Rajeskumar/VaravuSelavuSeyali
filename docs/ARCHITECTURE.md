@@ -3,7 +3,7 @@
 An engineering summary for developers and AI agents. Read it when a task needs this context; it isn't meant to be loaded every session. Product description: [README.md](../README.md). Hosting, DNS and CI: [INFRASTRUCTURE.md](INFRASTRUCTURE.md). Full spec: [TrackSpense_Complete_Product_Specification.md](TrackSpense_Complete_Product_Specification.md).
 
 ## Components
-- **Backend** `varavu_selavu_app/` — FastAPI + SQLAlchemy 2 + Alembic on Postgres (schema `trackspense`, hosted on Supabase), Poetry, Python ≥3.10. Entry point `varavu_selavu_service/main.py`. Layers: `api/` (routers) → `services/` (business logic) → `db/models.py`; Pydantic DTOs live in `models/api_models.py`.
+- **Backend** `varavu_selavu_app/` — FastAPI + SQLAlchemy 2 + Alembic on Postgres (schema `trackspense`, hosted on Supabase), Poetry, Python ≥3.11 (3.12 in the container and CI). Entry point `varavu_selavu_service/main.py`. Layers: `api/` (routers) → `services/` (business logic) → `db/models.py`; Pydantic DTOs live in `models/api_models.py`.
 - **Web** `varavu_selavu_ui/` — React 19 (CRA), MUI 7, TanStack Query, react-router 6, Plotly.
 - **Mobile** `varavu_selavu_mobile/` — Expo SDK 57 / React Native 0.86 (New Architecture, Hermes), React Navigation 7, TanStack Query. Local native module `modules/receipt-ocr` (Apple Vision on iOS, ML Kit on Android).
 - **QA** `qa/` — Playwright end-to-end and API suites (CI: `.github/workflows/qa.yml`).

@@ -371,7 +371,7 @@ HTTP  →  Middleware (CORS, CSRF)  →  Routers  →  Services  →  SQLAlchemy
 
 | Concern | Technology |
 |:---|:---|
-| Language / runtime | Python **3.12** (container; project floor `^3.10`), Poetry (package-mode off) |
+| Language / runtime | Python **3.12** (container; project floor `>=3.11,<4.0`), Poetry (package-mode off) |
 | Framework | FastAPI ≥ 0.141, Starlette ≥ 1.6, Uvicorn 0.35 |
 | Validation | Pydantic (v2 models; settings use `pydantic.v1.BaseSettings`) |
 | ORM / DB | SQLAlchemy 2, psycopg2-binary, Alembic (<1.14), PostgreSQL |
