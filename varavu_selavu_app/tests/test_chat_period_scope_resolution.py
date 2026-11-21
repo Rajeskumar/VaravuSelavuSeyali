@@ -274,8 +274,11 @@ def test_resolve_scope_from_text_with_spend_intent():
     assert scope.kind == "group"
     assert scope.group_name == "Weekend Trip"
 
-def test_chat_model_groups_enabled_false_regression():
+def test_chat_model_groups_enabled_false_regression(monkeypatch):
     # TS-GRP-124: if groups_enabled=False, context and tools are absent
+    # call_chat_model refuses to build the model without a key; the agent itself is mocked
+    # below, so a placeholder is enough and no developer .env is needed.
+    monkeypatch.setenv("GEMINI_API_KEY", "test")
     from unittest.mock import Mock, patch
     from langchain_core.messages import AIMessage
     from varavu_selavu_service.services.chat_service import call_chat_model

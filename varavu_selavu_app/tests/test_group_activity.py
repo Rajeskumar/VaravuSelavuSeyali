@@ -2,6 +2,13 @@ import pytest
 import uuid
 from varavu_selavu_service.db.models import GroupActivity, User
 
+
+@pytest.fixture(autouse=True)
+def _groups_enabled(monkeypatch):
+    # The group routes 404 unless GROUPS_ENABLED is on (it defaults off). Set it here rather
+    # than relying on a developer .env, so the suite passes on a clean checkout and in CI.
+    monkeypatch.setenv("GROUPS_ENABLED", "true")
+
 def _create_user(db_session, email):
     user = User(id=uuid.uuid4(), email=email, password_hash="hash", name=email.split("@")[0])
     db_session.add(user)

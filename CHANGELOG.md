@@ -11,6 +11,7 @@
 
 Format: `- YYYY-MM-DD: [what changed] (agent: claude-code|codex)`
 
+- 2026-11-21: Release-check fixes: backend pip-audit cleared (83 advisories in 9 packages) by raising floors for pillow 13, aiohttp, filelock 4, pyasn1, setuptools, langgraph-sdk, certifi, dnspython and dev-only msgpack; backend floor raised to Python >=3.11 (dnspython 2.9.2 needs it; 3.10 is end-of-life and every runtime is 3.12); mobile audit unblocked by expo 57.0.26 -> 57.0.33 within SDK 57 (pulls patched @expo/cli/node-forge/zod/follow-redirects) plus the 5 aligned expo-* patch versions, and the expired braces/node-forge allowlist entries removed; two backend tests that silently depended on a developer .env (GROUPS_ENABLED, GEMINI_API_KEY) now set their own env (agent: claude-code)
 - 2026-11-21: MCP integration Phase 0 architecture/security review (docs only, no code): `docs/mcp-integration-review.md`, `mcp-tool-specification.md`, `mcp-security-design.md`, `mcp-implementation-plan.md`. Corrects the brief's assumptions (Postgres not Google Sheets; API host is `trackspense-api.cerebroos.com`), lists existing gaps G1–G14 and decisions D1–D10 awaiting approval (agent: claude-code)
 - 2026-10-06: Recorded browser-based local performance/reliability review, timing and screenshot evidence, draft/chat recovery findings and production verification gaps (agent: codex)
 
