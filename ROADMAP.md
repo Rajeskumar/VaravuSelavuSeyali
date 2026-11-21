@@ -17,6 +17,8 @@ Format: `- [ ] [enhancement] — context: [why/when this came up]`
 - [ ] Card Coach: annual-fee break-even check and a reward-gap trend — context: Phase 2 candidates that weren't picked (2026-09).
 - [ ] AI chat: update/delete tools — context: deliberately out of scope (no undo). Revisit only with a confirm step.
 
+- [ ] MCP integration for external AI assistants (ChatGPT, Claude, OpenClaw): Phases 1–5 in `docs/mcp-implementation-plan.md`, blocked on decisions D1–D10 — context: 2026-11-21 Phase 0 review; nothing implemented yet.
+
 ## Quality / launch readiness
 - [ ] Turn on group push notifications in real builds: `eas init` (projectId), real bundle id/package, APNs key + build with `TRACKSPENSE_ENABLE_PUSH=1`, Firebase/FCM V1 for Android, then a physical-device test — context: 2026-10-05 check found the code complete but no device had ever registered; steps in `varavu_selavu_mobile/README.md`.
 - [ ] Legal pages: `privacy_policy.html` / `terms_of_service.html` still show the "Draft template — review before publishing" banner. Have them reviewed, remove the banner, and consider serving them inside the web app (they're plain backend pages today) — context: 2026-10-05 readiness review.

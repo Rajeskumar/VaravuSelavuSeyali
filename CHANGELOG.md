@@ -4,6 +4,7 @@
 
 Format: `- YYYY-MM-DD: [what changed] (agent: claude-code|codex)`
 
+- 2026-11-21: MCP integration Phase 0 architecture/security review (docs only, no code): `docs/mcp-integration-review.md`, `mcp-tool-specification.md`, `mcp-security-design.md`, `mcp-implementation-plan.md`. Corrects the brief's assumptions (Postgres not Google Sheets; API host is `trackspense-api.cerebroos.com`), lists existing gaps G1–G14 and decisions D1–D10 awaiting approval (agent: claude-code)
 - 2026-10-06: Recorded browser-based local performance/reliability review, timing and screenshot evidence, draft/chat recovery findings and production verification gaps (agent: codex)
 
 - 2026-10-06: AI SDLC framework shared by Claude Code and Codex: `.ai-sdlc/` standards/workflows/checklists (project-specific, severity model P0-P3), 10 skills in `.agents/skills/` (symlinked into `.claude/skills/`), 8 read-only Claude subagents in `.claude/agents/`, AGENTS.md routing section, and `scripts/quality/` (route-review, verify, accessibility incl. axe scan, security incl. secret scan, e2e wrapper, validate-ai-sdlc) (agent: claude-code)
