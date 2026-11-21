@@ -1,5 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { addExpenseButton } from './ExpensesPage';
 
 /**
  * The "New expense" sheet (QuickCaptureSheet.tsx) — the app's one create-expense entry
@@ -13,12 +14,11 @@ export class QuickCapturePanel extends BasePage {
   }
 
   async openViaAddExpenseButton(): Promise<void> {
-    // Two "Add Expense"-named buttons can coexist at narrow viewports on some pages
-    // (header text button + FAB) — see ExpensesPage.addExpenseButton's identical note.
-    await this.page.getByRole('button', { name: 'Add Expense' }).last().click();
-    // Not getByText('New expense') — that text also matches the header's own "Add Expense"
-    // button's accessible name in some layouts (strict-mode violation, caught by
-    // verifying this framework end-to-end). The description field is unambiguous.
+    // Desktop header "New expense" or mobile "Add Expense" FAB — see
+    // ExpensesPage.addExpenseButton.
+    await addExpenseButton(this.page).click();
+    // Not getByText('New expense') — that text is both the header button's name and the
+    // sheet's title (strict-mode violation). The description field is unambiguous.
     await expect(this.descriptionField).toBeVisible({ timeout: 10_000 });
   }
 
