@@ -122,6 +122,7 @@ a video — all under `qa/reports/`.
   - login.spec's wrong-password test stubs the response, and the empty-form test sends nothing.
   - The unknown-email check lives in `api/tests/auth-api.spec.ts`, whose login calls wait out one 429 if they land in the same window.
 - **Registrations:** setup 2 + registration.spec 1 (Chromium only, also in CI's multi-browser step) + auth-api.spec 2 = **5/hour**. The counter is in-memory, so **restart the backend before re-running** within the hour.
+- **Logging out ends every session of that account.** `POST /auth/logout` sets `users.token_valid_after`, so every access token the account holds dies, on every device. Tests that log out (smoke.spec, session.spec) therefore use `QA_SESSION_USER` (`e2e/fixtures/users.fixture.ts`), never `primary`/`secondary`, whose saved storageState the rest of the run reuses. That account is created in the QA database by `global.setup.ts` (`scripts/provision_qa_session_user.py`), so it costs no registration and needs `QA_DATABASE_URL`. Any new test that logs out, changes a password or signs out everywhere must use it too.
 - **Shared run ID:** `make qa-all` exports one `QA_RUN_ID` for all three steps (CI uses `GITHUB_RUN_ID`). Running the `npm run qa:*` scripts separately mints a new run ID each time, re-provisions the personas, and blows both budgets.
 
 The real backend rate-limits `POST /auth/login` to **5/minute** and `POST /auth/register`
