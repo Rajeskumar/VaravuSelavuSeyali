@@ -65,6 +65,21 @@ export default function ProfileScreen({ navigation }: any) {
     }
   };
 
+  // Declared before the early returns below: hooks must run in the same order on every render.
+  const [downloading, setDownloading] = useState(false);
+  const downloadAll = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const json = await fetchMyDataJson();
+      await Share.share({ title: 'trackspense_my_data.json', message: json });
+    } catch (e: any) {
+      Alert.alert('Download failed', e?.message ?? 'Could not export your data. Try again in a moment.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const chooseAppearance = () =>
     Alert.alert('Appearance', undefined, [
       { text: 'Dark', onPress: () => setThemeMode('dark') },
@@ -164,20 +179,6 @@ export default function ProfileScreen({ navigation }: any) {
       </ScreenWrapper>
     );
   }
-
-  const [downloading, setDownloading] = useState(false);
-  const downloadAll = async () => {
-    if (downloading) return;
-    setDownloading(true);
-    try {
-      const json = await fetchMyDataJson();
-      await Share.share({ title: 'trackspense_my_data.json', message: json });
-    } catch (e: any) {
-      Alert.alert('Download failed', e?.message ?? 'Could not export your data. Try again in a moment.');
-    } finally {
-      setDownloading(false);
-    }
-  };
 
   // Same eight rows, same order as the design. Cards and Budgets drop out only when their backend
   // feature flag is off (no screen to open); everything else is always present.

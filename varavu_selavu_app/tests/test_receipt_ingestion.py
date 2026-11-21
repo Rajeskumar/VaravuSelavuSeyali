@@ -133,6 +133,29 @@ def test_create_expense_with_items_iso_date_round_trip(test_client, db_session):
     assert expense.purchased_at.strftime("%m/%d/%Y") == "07/15/2026"
 
 
+@pytest.mark.parametrize("sent", ["07/15/2026", "2026-07-15", "2026-07-15T23:30:00-07:00"])
+def test_create_expense_with_items_dates_price_history_on_purchase_day(test_client, db_session, sent):
+    """Item price history and merchant monthly totals must use the receipt's purchase date,
+    not the day it was saved. The header arrives as JSON, so purchased_at is always a string;
+    the route used to pass None for anything that wasn't a datetime and the aggregation
+    fell back to utcnow(), so every back-dated receipt's prices landed on today."""
+    from varavu_selavu_service.db.models import ItemPriceHistory, MerchantAggregate
+
+    payload = {
+        "user_email": "test@user.com",
+        "header": {"purchased_at": sent, "merchant_name": "History Store", "amount": 4.0,
+                   "category_id": "Groceries", "fingerprint": f"history-{sent}"},
+        "items": [{"line_no": 1, "item_name": "Oat Milk", "quantity": 1, "unit_price": 4.0, "line_total": 4.0}],
+    }
+    resp = test_client.post("/api/v1/expenses/with_items", json=payload)
+    assert resp.status_code == 201, resp.text
+
+    history = db_session.query(ItemPriceHistory).filter(ItemPriceHistory.store_name == "History Store").one()
+    assert history.date.strftime("%Y-%m-%d") == "2026-07-15"
+    month = db_session.query(MerchantAggregate).one()
+    assert (month.year, month.month) == (2026, 7)
+
+
 def test_normalize_purchased_at_uses_date_part_only():
     """Direct unit coverage for PostgresRepo._normalize_purchased_at: only the
     calendar-date portion is ever trusted, regardless of input shape — a

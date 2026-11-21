@@ -8,12 +8,17 @@ import Chip from './Chip';
 import SectionLabel from './SectionLabel';
 import FieldBox from './FieldBox';
 import Sheet from './Sheet';
+import SegmentedTabs from './SegmentedTabs';
+import CustomButton from './CustomButton';
 
 // Real dark theme (not a hand-rolled stub) so a missing token in a primitive fails here.
 jest.mock('../theme/ThemeContext', () => {
   const { buildTheme: build } = jest.requireActual('../theme/theme');
   return { useAppTheme: () => ({ theme: build('dark'), mode: 'dark', isDark: true }) };
 });
+// CustomButton presses through AnimatedPressable, whose Reanimated springs need the library's mock.
+jest.mock('react-native-worklets', () => require('react-native-worklets/src/mock'));
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -90,6 +95,47 @@ describe('FieldBox', () => {
     fireEvent.press(getByText('Show'));
     expect(getByPlaceholderText('pw').props.secureTextEntry).toBe(false);
     expect(getByText('Hide')).toBeTruthy();
+  });
+});
+
+describe('FieldBox accessibility', () => {
+  it('names the input with its label, so screen readers and getByLabelText find it', () => {
+    const { getByLabelText } = render(<FieldBox label="Email" value="a@b.co" onChangeText={() => {}} />);
+    expect(getByLabelText('Email').props.value).toBe('a@b.co');
+  });
+
+  it('lets a caller override the accessible name', () => {
+    const { getByLabelText } = render(<FieldBox label="Pw" accessibilityLabel="Password" value="" onChangeText={() => {}} />);
+    expect(getByLabelText('Password')).toBeTruthy();
+  });
+});
+
+describe('SegmentedTabs accessibility', () => {
+  it('exposes tabs whose selected one is announced', () => {
+    const onChange = jest.fn();
+    const { getByRole } = render(
+      <SegmentedTabs value="month" onChange={onChange} options={[{ value: 'month', label: 'Month' }, { value: 'year', label: 'Year' }]} />,
+    );
+    expect(getByRole('tab', { name: 'Month' })).toBeSelected();
+    expect(getByRole('tab', { name: 'Year' })).not.toBeSelected();
+    fireEvent.press(getByRole('tab', { name: 'Year' }));
+    expect(onChange).toHaveBeenCalledWith('year');
+  });
+});
+
+describe('CustomButton accessibility', () => {
+  it.each(['primary', 'outline'] as const)('is a named button (%s)', (variant) => {
+    const onPress = jest.fn();
+    const { getByRole } = render(<CustomButton title="Save" variant={variant} onPress={onPress} />);
+    fireEvent.press(getByRole('button', { name: 'Save' }));
+    expect(onPress).toHaveBeenCalled();
+  });
+
+  it('announces disabled, and keeps its name and reports busy while loading', () => {
+    const { getByRole, rerender } = render(<CustomButton title="Save" disabled onPress={() => {}} />);
+    expect(getByRole('button', { name: 'Save' })).toBeDisabled();
+    rerender(<CustomButton title="Save" loading onPress={() => {}} />);
+    expect(getByRole('button', { name: 'Save' })).toBeBusy();
   });
 });
 

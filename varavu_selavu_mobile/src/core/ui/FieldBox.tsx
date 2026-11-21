@@ -26,6 +26,7 @@ export default function FieldBox({ label, secureToggle, secureTextEntry, style, 
       <View style={{ flex: 1 }}>
         <SectionLabel style={{ letterSpacing: 1.5 }}>{label}</SectionLabel>
         <TextInput
+          accessibilityLabel={label}
           {...rest}
           secureTextEntry={isSecure}
           style={[styles.input, style]}

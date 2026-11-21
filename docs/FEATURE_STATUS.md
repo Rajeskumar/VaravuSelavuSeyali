@@ -89,7 +89,7 @@ That file already tracks launch-blocker checklist items with `[x]`/`[ ]`. Verifi
 - No automated IDOR test (a user can't currently be *proven* unable to read another user's data — the auth logic looks correct, but nothing tests it)
 - Savings goals: zero implementation
 - Bank sync / Plaid: zero implementation (roadmap item, not urgent)
-- Reviewer demo account for app store review: no seed script exists (a throwaway account was created ad hoc during a recent session for screenshots — `demo@trackspense.app` — but that's not a documented, reproducible seed process)
+- Reviewer demo account for app store review: the seed script now exists (`varavu_selavu_app/scripts/seed_demo.py`, seeds three months of data through the API); still to do is creating the account on production and putting its credentials in App Store Connect / Play Console
 - Apple Privacy label / Google Play Data Safety form: business/compliance tasks, not code
 
 ---

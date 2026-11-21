@@ -19,7 +19,7 @@ export default function SegmentedTabs<T extends string>({ value, onChange, optio
     const styles = React.useMemo(() => createStyles(theme), [theme]);
 
     return (
-        <View style={styles.container}>
+        <View style={styles.container} accessibilityRole="tablist">
             {options.map((opt) => {
                 const isActive = value === opt.value;
                 return (
@@ -28,6 +28,8 @@ export default function SegmentedTabs<T extends string>({ value, onChange, optio
                         style={[styles.tab, isActive && styles.activeTab]}
                         onPress={() => onChange(opt.value)}
                         activeOpacity={0.8}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: isActive }}
                     >
                         <Text style={[styles.tabText, isActive && styles.activeTabText]}>
                             {opt.label}

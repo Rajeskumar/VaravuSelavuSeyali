@@ -63,6 +63,13 @@ export default function CustomButton({
         textStyle,
     ].filter(Boolean) as TextStyle[];
 
+    // The title is the accessible name even while a spinner replaces it, and the state is announced.
+    const a11y = {
+        accessibilityRole: 'button' as const,
+        accessibilityLabel: title,
+        accessibilityState: { disabled: isDisabled, busy: loading },
+    };
+
     const content = loading ? (
         <ActivityIndicator
             size="small"
@@ -81,6 +88,7 @@ export default function CustomButton({
     if (variant === 'primary') {
         return (
             <AnimatedPressable
+                {...a11y}
                 onPress={onPress}
                 disabled={isDisabled}
                 style={[buttonStyles, styles.primaryShell]}
@@ -99,6 +107,7 @@ export default function CustomButton({
 
     return (
         <AnimatedPressable
+            {...a11y}
             onPress={onPress}
             disabled={isDisabled}
             style={buttonStyles}
