@@ -66,17 +66,22 @@ export class ExpensesPage extends BasePage {
     await this.row(description).click();
   }
 
-  /** Hover-revealed row actions — must hover the row first or the icon buttons are inactionable. */
+  /**
+   * Hover-revealed row actions — must hover the row first or the icon buttons are inactionable.
+   * `exact: true`: the row itself is a <button> named after its description (accessibility
+   * fix, no nested interactives), so a substring match on "delete"/"edit" also hit the row
+   * whenever the description contained that word ("…ui_cancel_delete_…").
+   */
   async editRow(description: string): Promise<void> {
     const target = this.row(description);
     await target.hover();
-    await target.getByRole('button', { name: 'edit' }).click();
+    await target.getByRole('button', { name: 'edit', exact: true }).click();
   }
 
   async deleteRow(description: string): Promise<void> {
     const target = this.row(description);
     await target.hover();
-    await target.getByRole('button', { name: 'delete' }).click();
+    await target.getByRole('button', { name: 'delete', exact: true }).click();
   }
 
   async confirmDelete(): Promise<void> {
