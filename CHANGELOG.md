@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-22: Fixed the CI accessibility scan failing on `/dashboard` (agent: Claude Code): the dashboard's group cards were click-only boxes (not keyboard-operable, and the horizontally scrolling strip had nothing focusable: axe `scrollable-region-focusable`); they are now real links. Also fixed white-on-blue/orange toast contrast (filled info 3.86:1 and warning 3.11:1 → 7.4:1 and 6.8:1) in the theme, added tests for both, and made `scripts/quality/axe-scan.mjs` wait 1.5 s for fade-in animations before measuring. It only showed up in CI because my local dashboard had no groups.
+
 - 2026-11-22: Fixed the QA regression step failing on `registration.spec.ts` in GitHub Actions (agent: Claude Code): the new account-security spec added two real logins to the regression run, taking one minute's logins to 7 against the backend's limit of 5, so the registration test's auto-login was rejected. That spec is now tagged `@account` and runs in its own CI step after a 65 s pause (`npm run qa:account`); `qa/README.md` documents the login budget.
 
 - 2026-11-22: Fixed the QA smoke step failing in GitHub Actions (agent: Claude Code): `consent-banner-phone.spec.ts` read `e2e/auth/primary.json` when the file was loaded, before the setup project had created it on a clean runner; it now builds its context inside the tests. Verified with `playwright --list` and a run with no saved auth files.

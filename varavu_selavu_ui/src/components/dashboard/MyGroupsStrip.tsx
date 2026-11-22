@@ -1,6 +1,7 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import CheckIcon from '@mui/icons-material/Check';
 import { useTheme } from '@mui/material/styles';
@@ -49,7 +50,6 @@ interface Props {
  * MyGroupsWidget's grid-card presentation. Only rendered by DashboardPage once
  * useGroupsEnabled() confirms the flag is on and there is at least one group. */
 const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
-  const navigate = useNavigate();
   const theme = useTheme();
   const positiveColor = theme.palette.success.main;
   const negativeColor = theme.palette.error.main;
@@ -65,10 +65,17 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
       </Box>
       <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 0.5 }}>
         {merged.map((g) => (
-          <Box
+          // A real link: these cards used to be click-only boxes, so a keyboard user could not open a
+          // group from the dashboard and the scrolling strip had nothing focusable in it.
+          <ButtonBase
             key={g.group_id}
-            onClick={() => navigate(`/groups/${g.group_id}`)}
+            component={RouterLink}
+            to={`/groups/${g.group_id}`}
             sx={{
+              display: 'block',
+              textAlign: 'left',
+              color: 'inherit',
+              textDecoration: 'none',
               flexShrink: 0,
               width: 160,
               backgroundColor: 'background.paper',
@@ -76,7 +83,7 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
               borderColor: 'divider',
               borderRadius: `${cerebro.radius.surface}px`,
               p: 1.5,
-              cursor: 'pointer',
+              '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
             }}
           >
             <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mb: 0.25 }} noWrap>
@@ -99,7 +106,7 @@ const MyGroupsStrip: React.FC<Props> = ({ groups, groupSummaries }) => {
                 {g.owedToMe ? `you're owed ${formatMoney(g.pendingAmount, g.currency)}` : `you owe ${formatMoney(g.pendingAmount, g.currency)}`}
               </Typography>
             )}
-          </Box>
+          </ButtonBase>
         ))}
       </Box>
     </Box>

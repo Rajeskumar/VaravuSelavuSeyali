@@ -26,6 +26,7 @@ async function scan(routes, storageState, label) {
     const page = await ctx.newPage();
     for (const r of routes) {
       await page.goto(base + r, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500); // let entrance (fade-in) animations finish: mid-fade colours read as low contrast
       await page.keyboard.press('Escape');
       await page.addScriptTag(axeSrc.startsWith('http') ? { url: axeSrc } : { path: axeSrc });
       const res = await page.evaluate(async () => {
