@@ -47,7 +47,7 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1.5 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+        <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 700 }}>
           Groups
         </Typography>
         <IconButton size="small" onClick={onCreate} aria-label="Create group">

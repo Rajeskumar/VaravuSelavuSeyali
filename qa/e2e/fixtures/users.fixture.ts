@@ -49,6 +49,17 @@ export const QA_USERS: Record<'primary' | 'secondary', QaPersona> = {
  * (global.setup.ts → scripts/provision_qa_session_user.py), so it costs no registration,
  * and it has no storageState: the two tests that use it log in fresh, as they already did.
  */
+/**
+ * A fourth, disposable account used ONLY by account-security.spec.ts, which changes its password
+ * and then deletes it. Created straight in the QA database like QA_SESSION_USER, so it costs no
+ * registration; the spec signs in once through the UI (one login, within the per-minute limit).
+ */
+export const QA_DISPOSABLE_USER = {
+  name: 'QA Disposable',
+  email: `qa.disposable.${RUN_ID}@trackspense.qa`,
+  password: env.QA_USER_PASSWORD,
+} as const;
+
 export const QA_SESSION_USER = {
   name: 'QA Session',
   email: `qa.session.${RUN_ID}@trackspense.qa`,

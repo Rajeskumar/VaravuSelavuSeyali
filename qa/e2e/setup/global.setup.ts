@@ -3,7 +3,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { healthz, ensureUserRegistered } from '../helpers/api.helper';
 import { env } from '../helpers/env';
-import { QA_USERS, QA_SESSION_USER } from '../fixtures/users.fixture';
+import { QA_USERS, QA_SESSION_USER, QA_DISPOSABLE_USER } from '../fixtures/users.fixture';
 import { RUN_ID } from '../helpers/test-data.helper';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -42,6 +42,7 @@ export default async function globalSetup(): Promise<void> {
 
   markVerified(Object.values(QA_USERS).map((p) => p.email));
   provisionSessionUser();
+  provisionSessionUser(QA_DISPOSABLE_USER);
 
   fs.mkdirSync(path.dirname(MARKER_PATH), { recursive: true });
   fs.writeFileSync(MARKER_PATH, JSON.stringify({ runId: RUN_ID, at: new Date().toISOString() }));
@@ -87,19 +88,19 @@ function markVerified(emails: string[]): void {
  * 5/hour registration budget. Same QA_DATABASE_URL requirement as markVerified; without
  * it, smoke.spec.ts and session.spec.ts fail at login ("incorrect email or password").
  */
-function provisionSessionUser(): void {
+function provisionSessionUser(user: { email: string; name: string; password: string } = QA_SESSION_USER): void {
   if (!process.env.QA_DATABASE_URL && !process.env.DATABASE_URL) {
     console.warn(
-      `[global.setup] QA_DATABASE_URL/DATABASE_URL not set — can't create ${QA_SESSION_USER.email}, so ` +
+      `[global.setup] QA_DATABASE_URL/DATABASE_URL not set — can't create ${user.email}, so ` +
         'the smoke test and session.spec.ts will fail to log in. See qa/README.md.',
     );
     return;
   }
   try {
-    execFileSync('poetry', ['run', 'python', SESSION_USER_SCRIPT, QA_SESSION_USER.email, QA_SESSION_USER.name], {
+    execFileSync('poetry', ['run', 'python', SESSION_USER_SCRIPT, user.email, user.name], {
       cwd: BACKEND_DIR,
       stdio: 'inherit',
-      env: { ...process.env, QA_SESSION_PASSWORD: QA_SESSION_USER.password },
+      env: { ...process.env, QA_SESSION_PASSWORD: user.password },
     });
   } catch (e) {
     console.warn(`[global.setup] failed to create the QA session user — the logout tests will fail to log in: ${e}`);

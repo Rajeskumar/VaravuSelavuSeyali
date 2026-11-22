@@ -165,6 +165,7 @@ const ExpensesPage: React.FC = () => {
       result = personalExpenses.map((e) => ({
         key: `personal-${e.row_id}`,
         kind: 'personal',
+        createdByAssistant: e.created_by_assistant,
         id: e.row_id,
         date: e.date,
         description: e.description,
@@ -183,6 +184,7 @@ const ExpensesPage: React.FC = () => {
       const personalRows: FeedExpense[] = (combinedPersonalQuery.data?.items || []).map((e) => ({
         key: `personal-${e.row_id}`,
         kind: 'personal',
+        createdByAssistant: e.created_by_assistant,
         id: e.row_id,
         date: e.date,
         description: e.description,
@@ -744,6 +746,7 @@ const ExpensesPage: React.FC = () => {
                     setMoveExpense({
                       key: `personal-${record.row_id}`,
                       kind: 'personal',
+                      createdByAssistant: record.created_by_assistant,
                       id: record.row_id,
                       date: record.date,
                       description: record.description,

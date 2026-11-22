@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, Field, StringConstraints, conint, model_validator
+from pydantic import AfterValidator, BaseModel, EmailStr, Field, StringConstraints, conint, model_validator
 
 from varavu_selavu_service.core.money import (
     MAX_AMOUNT,
@@ -12,6 +12,7 @@ from varavu_selavu_service.core.money import (
     NonNegativeMoney,
     OptionalNonNegativeMoney,
 )
+from varavu_selavu_service.core.expense_dates import check_future
 from varavu_selavu_service.core.text_sanitize import (
     CategoryStr,
     DescriptionStr,
@@ -22,6 +23,10 @@ from varavu_selavu_service.core.text_sanitize import (
     OptionalNameStr,
     OptionalNotesStr,
 )
+
+# MM/DD/YYYY date of an expense being entered: no future dates (the one-year-back limit is
+# applied by the routes/services, because an edit may keep an older stored date).
+ExpenseDateStr = Annotated[str, Field(pattern=r"\d{2}/\d{2}/\d{4}"), AfterValidator(check_future)]
 
 # ISO-4217 alphabetic code. `currency` was a bare `str`, which meant two things: the value
 # is interpolated into the FX provider URL (FxRateService._fetch_rate), and an unrecognized
@@ -52,7 +57,7 @@ class ExpenseRequest(BaseModel):
     cost: MoneyAmount
     category: CategoryStr
     description: DescriptionStr
-    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    date: ExpenseDateStr
     merchant_name: OptionalMerchantStr = None
     # TS-TAG-104 — full-replace on PUT (an omitted field leaves tags unchanged; an explicit
     # empty list clears them — see the route handler's use of `model_fields_set`). On POST
@@ -270,6 +275,7 @@ class CardRefDTO(BaseModel):
 
 
 class Expense(BaseModel):
+    created_by_assistant: Optional[str] = None
     user_id: str
     date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
     description: str
@@ -625,7 +631,7 @@ class GroupExpensePayerEntry(BaseModel):
 
 
 class GroupExpenseRequest(BaseModel):
-    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    date: ExpenseDateStr
     description: DescriptionStr
     category: CategoryStr
     amount: MoneyAmount
@@ -681,7 +687,7 @@ class GroupExpenseItemEntry(BaseModel):
 
 
 class GroupExpenseWithItemsRequest(BaseModel):
-    date: str = Field(pattern=r"\d{2}/\d{2}/\d{4}")
+    date: ExpenseDateStr
     description: DescriptionStr
     category: CategoryStr
     amount: MoneyAmount

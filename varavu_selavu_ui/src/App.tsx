@@ -1,3 +1,4 @@
+import AssistantAccessPage from './pages/AssistantAccessPage';
 import React, { JSX } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation, Navigate } from 'react-router-dom';
@@ -40,6 +41,7 @@ import ContactPage from './pages/ContactPage';
 import GroupsPage from './pages/GroupsPage';
 import JoinGroupPage from './pages/JoinGroupPage';
 import NotFoundPage from './pages/NotFoundPage';
+import McpGate from './components/common/McpGate';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import ConsentBanner from './components/common/ConsentBanner';
 import AiConsentHost from './components/common/AiConsentHost';
@@ -49,6 +51,7 @@ import Box from '@mui/material/Box';
 import { HEADER_HEIGHT } from './components/layout/layoutConstants';
 
 const RequireAuth: React.FC<{ children: JSX.Element }> = ({ children }) => {
+  if (/^\/ai\/(approve|connect)\/[A-Za-z0-9_-]+$/.test(window.location.pathname)) sessionStorage.setItem("vs_assistant_return", window.location.pathname);
   // The access token is an HttpOnly cookie and deliberately unreadable here, so
   // this guard keys off the non-sensitive identity marker set at login. It is a
   // routing hint, not the security boundary: the server authorizes every request,
@@ -189,7 +192,7 @@ const AppContent: React.FC = () => {
       <RouteA11y />
       {/* Early in the DOM (it's position:fixed, so visually unchanged) so keyboard users reach
           the consent choice right after the skip link instead of after the whole page. */}
-      <ConsentBanner />
+      {!window.location.pathname.startsWith('/ai/') && <ConsentBanner />}
       <AiConsentHost />
       {/* Keyboard-only until focused — lets a screen-reader/keyboard user jump straight past
           the fixed header/nav instead of tabbing through every nav item on every page. */}
@@ -400,6 +403,10 @@ const AppContent: React.FC = () => {
             Items/Merchants tabs on /analysis. */}
         <Route path="/item-insights" element={<ItemInsightsRedirect />} />
         <Route path="/merchant-insights" element={<MerchantInsightsRedirect />} />
+        <Route path="/ai/connect/:id" element={<RequireAuth><MainLayout><McpGate><AssistantAccessPage mode="connect" /></McpGate></MainLayout></RequireAuth>} />
+        <Route path="/ai/approve/:id" element={<RequireAuth><MainLayout><McpGate><AssistantAccessPage mode="approve" /></McpGate></MainLayout></RequireAuth>} />
+        <Route path="/account/assistants" element={<RequireAuth><MainLayout><McpGate><AssistantAccessPage mode="manage" /></McpGate></MainLayout></RequireAuth>} />
+        <Route path="/ai/reauth" element={<LoginPage />} />
         <Route path="/account" element={<RequireAuth><MainLayout><AccountPage /></MainLayout></RequireAuth>} />
         {/* TS-DES-202: /profile is no longer a primary nav destination — folds into /account's
             default Profile tab. Redirect shim so no existing bookmark/link 404s. */}

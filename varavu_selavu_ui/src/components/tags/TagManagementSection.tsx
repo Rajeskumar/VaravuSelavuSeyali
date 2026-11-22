@@ -94,7 +94,7 @@ const TagManagementSection: React.FC = () => {
     <Card sx={{ mt: 3 }}>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="h6">Tags</Typography>
+          <Typography variant="h6" component="h2">Tags</Typography>
           <Button size="small" variant="outlined" onClick={() => setBulkApplyOpen(true)}>
             Tag a trip…
           </Button>

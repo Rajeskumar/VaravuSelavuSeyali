@@ -21,6 +21,7 @@
  * being persisted. `userPickedCategory`/`userPickedMerchant` stop the debounce from clobbering a
  * receipt scan's values or the user's own manual pick once either has happened.
  */
+import { expenseDateMin, expenseDateProblem } from '../utils/expenseDates';
 import { readExpenseDraft, writeExpenseDraft, clearExpenseDraft } from '../utils/expenseDraft';
 import { RequestError } from '../../../core/api/request';
 import React, { useState, useRef, useCallback, createContext, useMemo } from 'react';
@@ -482,7 +483,16 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, numAmount));
   const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, numAmount));
   const knownMembers = !isGroup || (!!groupDetail && [...payers, ...splitValue.entries].every((entry) => groupDetail.members.some((member) => member.member_id === entry.member_id)));
-  const capReady = hydrated && !unknownOutcome && (!isGroup || !!selectedGroup) && knownMembers && numAmount > 0 && desc.trim().length > 0 && payersValid && splitValid;
+  // A scanned receipt or restored draft can carry a date outside the allowed window.
+  const dateProblem = expenseDateProblem(`${expenseDate.getFullYear()}-${String(expenseDate.getMonth() + 1).padStart(2, '0')}-${String(expenseDate.getDate()).padStart(2, '0')}`);
+  // Itemized expenses must add up to the total (server rule, ±2¢); ScannedItemsCard shows the figures.
+  const itemsMismatch = (() => {
+    const named = scannedItems.filter((it) => it.item_name.trim() !== '');
+    if (!named.length) return false;
+    const sum = named.reduce((t, it) => t + (Number(it.line_total) || 0), 0) + (Number(scannedTax) || 0) - (Number(scannedDiscount) || 0);
+    return Math.abs(sum - numAmount) > 0.02;
+  })();
+  const capReady = !dateProblem && !itemsMismatch && hydrated && !unknownOutcome && (!isGroup || !!selectedGroup) && knownMembers && numAmount > 0 && desc.trim().length > 0 && payersValid && splitValid;
   const amtDisplay = amt ? '$' + amt : '$0.00';
 
   // Items with a blank name (a row the user cleared rather than deleted) are dropped rather
@@ -751,6 +761,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     selectionColor={theme.colors.primary}
                   />
 
+                  {dateProblem ? (
+                    <Text accessibilityRole="alert" style={{ color: theme.colors.error, marginBottom: 8, fontSize: 13 }}>{dateProblem}</Text>
+                  ) : null}
+
                   {/* Chips: category (auto-suggested), date, and "More" for the rest. */}
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
                     <Chip
@@ -891,6 +905,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
                               mode="date"
                               display="inline"
                               maximumDate={new Date()}
+                              minimumDate={expenseDateMin()}
                               onChange={(_event: DateTimePickerEvent, selected?: Date) => {
                                 if (selected) setExpenseDate(startOfDay(selected));
                               }}
@@ -904,6 +919,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
                         mode="date"
                         display="default"
                         maximumDate={new Date()}
+                        minimumDate={expenseDateMin()}
                         onChange={(event: DateTimePickerEvent, selected?: Date) => {
                           setShowDatePicker(false);
                           if (event.type === 'set' && selected) setExpenseDate(startOfDay(selected));

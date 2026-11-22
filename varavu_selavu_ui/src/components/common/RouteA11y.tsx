@@ -4,6 +4,10 @@ import { useLocation } from 'react-router-dom';
 const SUFFIX = 'TrackSpense';
 
 const TITLES: Array<[RegExp, string]> = [
+  [/^\/ai\/connect/, 'Connect an assistant'],
+  [/^\/ai\/approve/, 'Review expense'],
+  [/^\/ai\/reauth/, 'Sign in again'],
+  [/^\/account\/assistants/, 'Connected assistants'],
   [/^\/$/, 'Track less. Understand more.'],
   [/^\/login/, 'Log in'],
   [/^\/register/, 'Create account'],

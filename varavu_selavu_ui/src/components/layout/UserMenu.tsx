@@ -5,6 +5,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
 import Divider from '@mui/material/Divider';
+import { cerebro } from '../../theme';
 
 interface Props {
   email: string;
@@ -38,7 +39,8 @@ const UserMenu: React.FC<Props> = ({ email, onProfile, onFeedback, onHelp, onLog
         {/* minWidth/minHeight 44: a standalone header target, so it keeps the
             touch-target minimum even though size="small" shrinks the ripple. */}
         <IconButton onClick={handleOpen} size="small" sx={{ ml: 2, minWidth: 44, minHeight: 44 }} aria-label="Account menu" aria-controls={open ? 'user-menu' : undefined} aria-haspopup="true" aria-expanded={open ? 'true' : undefined}>
-          <Avatar sx={{ width: 32, height: 32 }}>{initials}</Avatar>
+          {/* MUI's default grey avatar (#fafafa on #bdbdbd) is 1.79:1; the theme's solid ink/paper pair is far above 4.5:1. */}
+          <Avatar sx={(t) => ({ width: 32, height: 32, fontSize: 14, fontWeight: 600, bgcolor: t.palette.mode === 'dark' ? cerebro.textPrimaryDark : cerebro.textPrimary, color: t.palette.mode === 'dark' ? cerebro.inkDark : cerebro.ink })}>{initials}</Avatar>
         </IconButton>
       </Tooltip>
       <Menu

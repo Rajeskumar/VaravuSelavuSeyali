@@ -1,6 +1,6 @@
 # TrackSpense — MCP Security Design
 
-> **Status:** Revised approved direction, 2026-11-21. Design only; controls below are NOT implemented.
+> **Status:** Approved security requirements, 2026-11-21. Local v1 controls and tests are implemented behind default-off flags; see [implementation evidence and rollout](mcp-local-implementation.md). This is not production enablement or live-client certification.
 > **Companions:** [review](mcp-integration-review.md) · [tools](mcp-tool-specification.md) · [plan](mcp-implementation-plan.md)
 > Every external agent is an untrusted client acting for a user. Authentication, validation and human approval are separate requirements.
 
@@ -48,7 +48,7 @@ Authlib-based in-house AS is the working implementation choice, subject to the c
 
 Pre-registered clients plus host-allowlisted CIMD; DCR off by default. Compatibility must be demonstrated for the exact Claude app and ChatGPT account surfaces, not inferred from free/pro labels. If a required client needs DCR, prefer pre-registration if supported; otherwise separately review DCR validation/quotas/lifecycle before enabling it. Current baseline marks DCR deprecated, retained for compatibility.
 
-CIMD is the only planned outbound metadata fetch. Use an HTTPS URL with path, no credentials, port 443, max 512 characters and explicit hostname allowlist. Empty allowlist disables fetch. Resolve and reject all non-public addresses (including metadata/link-local, loopback, RFC1918, CGNAT, IPv6 ULA, mapped IPv4 and reserved ranges); pin the validated IP while preserving TLS hostname verification/SNI. Reject redirects. Enforce 3-second total deadline, 32 KiB streamed/decompressed limit and JSON content type. Never fetch arbitrary logo_uri, client_uri or jwks_uri. Use bundled icons/text unless a separately reviewed asset fetch path is added.
+CIMD is the only planned outbound metadata fetch. Use an HTTPS URL with path, no credentials, port 443, max 512 characters and explicit hostname allowlist. Empty allowlist disables fetch. Resolve and reject all non-public addresses (including metadata/link-local, loopback, RFC1918, CGNAT, IPv6 ULA, mapped IPv4 and reserved ranges); pin the validated IP while preserving TLS hostname verification/SNI. Reject redirects. Enforce one 3-second total deadline across DNS, TCP, TLS, headers and body, a 32 KiB streamed/decompressed limit and JSON content type. The initial implementation requests identity encoding and rejects compressed responses. Never fetch arbitrary logo_uri, client_uri or jwks_uri. Use bundled icons/text unless a separately reviewed asset fetch path is added.
 
 Validate exact document client_id, bounded required metadata, redirect URIs (HTTPS, no fragment/userinfo; narrowly supported native loopback exception), safe display names and declared auth method. Host allowlisting alone is not an automatic verified badge; verification is an admin-controlled client-identity decision. Respect HTTP cache headers with a bounded maximum age; no stale metadata used beyond policy. Restrict per-client refresh frequency, including failures. Blocked clients cannot fetch their way back into service.
 
@@ -182,7 +182,7 @@ Financial reads use only `user_email` from the connection and `group_id IS NULL`
 
 ## 7. Persistence, audit and retention
 
-All proposed tables use schema `trackspense`; user identity remains email. This is a schema migration, not a datastore migration. Ten new tables initially, plus additive expense/session columns; item quantity expansion is a separate Phase 4 migration.
+The v1 tables use schema `trackspense`; user identity remains email. This is a schema migration, not a datastore migration. Ten new tables initially, plus additive expense/session columns; item quantity expansion is a separate Phase 4 migration.
 
 | Table | Required fields/constraints |
 |---|---|
@@ -192,7 +192,7 @@ All proposed tables use schema `trackspense`; user identity remains email. This 
 | `mcp_connections` | UUID PK, user FK CASCADE, client FK, retained safe name, consent time/version/scopes, active/revoked status, writes_enabled, token cutoff/generation, absolute grant expiry, last use/revocation reason |
 | `mcp_refresh_tokens` | hash PK, connection FK CASCADE, client/family, family origin/absolute deadline, issued/last-used/expiry, revoked reason/time, replaced_by; atomic rotation indexes |
 | `mcp_user_policy` | user PK FK CASCADE, suspended_at; **no approval mode/threshold** |
-| `mcp_operations` | op ID PK, user/connection FKs CASCADE, tool/key unique, request hash/canonicalization version, immutable payload/hash, status, expiry, approval revision, reviewed warning snapshot, approved hash/revision/session/time, approved global/connection control generations, expense FK SET NULL, result, terminal/pruned timestamps |
+| `mcp_operations` | op ID PK, user/connection FKs CASCADE, tool/key unique, request hash/canonicalization version, immutable payload/hash, status, expiry, approval revision, reviewed warning snapshot, approved hash/revision/session/time, approved global/connection control generations, expense FK SET NULL plus retained non-authoritative expense ID, result, terminal/pruned timestamps |
 | `mcp_rate_counters` | typed subject kind and FK user/connection/client where applicable, bucket/window/count; unique subject/bucket/window; purge indexes; deletion covers all user-linked subjects |
 | `mcp_audit_events` | ID/time, user FK CASCADE, connection/client/tool/op references, correlation, outcome/reason, safe expense reference, redacted changes, minimized network metadata |
 | `mcp_global` | singleton with disabled/writes_disabled, generation, updated_at; present in migration and operator CLI |

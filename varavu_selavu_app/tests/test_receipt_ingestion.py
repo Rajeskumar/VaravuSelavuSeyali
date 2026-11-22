@@ -1,5 +1,6 @@
 import pytest
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from conftest import PINNED_TODAY
 from unittest.mock import patch
 from varavu_selavu_service.services.receipt_service import ReceiptService
 from varavu_selavu_service.api.routes import get_receipt_service
@@ -49,7 +50,7 @@ def test_create_expense_with_items(test_client, db_session):
     payload = {
         "user_email": "test@user.com",
         "header": {
-            "purchased_at": "2025-02-14T18:22:00Z",
+            "purchased_at": f"{PINNED_TODAY.isoformat()}T18:22:00Z",
             "merchant_name": "Test Store",
             "amount": 1.0,
             "currency": "USD",
@@ -91,13 +92,19 @@ def test_create_expense_with_items(test_client, db_session):
 # --- TS-BUG-101 regression: itemized/receipt-scan expense dates must not roll
 # back a day. See docs/engineering/tickets/TS-BUG-101-date-off-by-one.md.
 
+# Relative to the pinned test clock, so the one-year date window never turns these into a time bomb.
+RECENT = PINNED_TODAY - timedelta(days=20)
+MDY = RECENT.strftime("%m/%d/%Y")
+ISO = RECENT.isoformat()
+
+
 def test_create_expense_with_items_date_round_trip(test_client, db_session):
     """The MM/DD/YYYY string both clients now send must land on the exact
     intended calendar date — this is the literal repro for symptom #1."""
     payload = {
         "user_email": "test@user.com",
         "header": {
-            "purchased_at": "07/15/2026",
+            "purchased_at": MDY,
             "merchant_name": "Date Test Store",
             "amount": 10.0,
             "category_id": "Shopping",
@@ -109,7 +116,7 @@ def test_create_expense_with_items_date_round_trip(test_client, db_session):
     assert resp.status_code == 201, resp.text
 
     expense = db_session.query(Expense).filter(Expense.fingerprint == "date-rt-mdy").one()
-    assert expense.purchased_at.strftime("%m/%d/%Y") == "07/15/2026"
+    assert expense.purchased_at.strftime("%m/%d/%Y") == MDY
 
 
 def test_create_expense_with_items_iso_date_round_trip(test_client, db_session):
@@ -118,7 +125,7 @@ def test_create_expense_with_items_iso_date_round_trip(test_client, db_session):
     payload = {
         "user_email": "test@user.com",
         "header": {
-            "purchased_at": "2026-07-15",
+            "purchased_at": ISO,
             "merchant_name": "Date Test Store 2",
             "amount": 5.0,
             "category_id": "Shopping",
@@ -130,10 +137,10 @@ def test_create_expense_with_items_iso_date_round_trip(test_client, db_session):
     assert resp.status_code == 201, resp.text
 
     expense = db_session.query(Expense).filter(Expense.fingerprint == "date-rt-iso").one()
-    assert expense.purchased_at.strftime("%m/%d/%Y") == "07/15/2026"
+    assert expense.purchased_at.strftime("%m/%d/%Y") == MDY
 
 
-@pytest.mark.parametrize("sent", ["07/15/2026", "2026-07-15", "2026-07-15T23:30:00-07:00"])
+@pytest.mark.parametrize("sent", [MDY, ISO, f"{ISO}T23:30:00-07:00"])
 def test_create_expense_with_items_dates_price_history_on_purchase_day(test_client, db_session, sent):
     """Item price history and merchant monthly totals must use the receipt's purchase date,
     not the day it was saved. The header arrives as JSON, so purchased_at is always a string;
@@ -151,9 +158,9 @@ def test_create_expense_with_items_dates_price_history_on_purchase_day(test_clie
     assert resp.status_code == 201, resp.text
 
     history = db_session.query(ItemPriceHistory).filter(ItemPriceHistory.store_name == "History Store").one()
-    assert history.date.strftime("%Y-%m-%d") == "2026-07-15"
+    assert history.date.strftime("%Y-%m-%d") == ISO
     month = db_session.query(MerchantAggregate).one()
-    assert (month.year, month.month) == (2026, 7)
+    assert (month.year, month.month) == (RECENT.year, RECENT.month)
 
 
 def test_normalize_purchased_at_uses_date_part_only():

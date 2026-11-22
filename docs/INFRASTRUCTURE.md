@@ -6,6 +6,8 @@
 
 ---
 
+> **MCP / deployment update, 2026-11-22:** Read-only GCP verification confirms both release-tag triggers enabled and the legacy main-branch trigger disabled. Use `.cloudbuild/README.md` and `cloudbuild.backend.yaml` / `cloudbuild.frontend.yaml`; older main-trigger descriptions below are historical. MCP local/GCP configuration, signing secrets and operator-job instructions are in [the MCP setup guide](mcp-setup-and-deployment.md). No infrastructure was changed by this verification.
+
 ## 1. At a glance
 
 | Layer | Provider | What lives there |

@@ -1,0 +1,182 @@
+{
+  "entertainment.games": [
+    "Entertainment",
+    "Games"
+  ],
+  "entertainment.movies": [
+    "Entertainment",
+    "Movies"
+  ],
+  "entertainment.music": [
+    "Entertainment",
+    "Music"
+  ],
+  "entertainment.other": [
+    "Entertainment",
+    "Other"
+  ],
+  "entertainment.sports": [
+    "Entertainment",
+    "Sports"
+  ],
+  "food_drink.dining_out": [
+    "Food & Drink",
+    "Dining out"
+  ],
+  "food_drink.groceries": [
+    "Food & Drink",
+    "Groceries"
+  ],
+  "food_drink.liquor": [
+    "Food & Drink",
+    "Liquor"
+  ],
+  "food_drink.other": [
+    "Food & Drink",
+    "Other"
+  ],
+  "home.electronics": [
+    "Home",
+    "Electronics"
+  ],
+  "home.furniture": [
+    "Home",
+    "Furniture"
+  ],
+  "home.household_supplies": [
+    "Home",
+    "Household supplies"
+  ],
+  "home.maintenance": [
+    "Home",
+    "Maintenance"
+  ],
+  "home.mortgage": [
+    "Home",
+    "Mortgage"
+  ],
+  "home.other": [
+    "Home",
+    "Other"
+  ],
+  "home.pets": [
+    "Home",
+    "Pets"
+  ],
+  "home.rent": [
+    "Home",
+    "Rent"
+  ],
+  "home.services": [
+    "Home",
+    "Services"
+  ],
+  "life.childcare": [
+    "Life",
+    "Childcare"
+  ],
+  "life.clothing": [
+    "Life",
+    "Clothing"
+  ],
+  "life.education": [
+    "Life",
+    "Education"
+  ],
+  "life.gifts": [
+    "Life",
+    "Gifts"
+  ],
+  "life.insurance": [
+    "Life",
+    "Insurance"
+  ],
+  "life.medical_expenses": [
+    "Life",
+    "Medical expenses"
+  ],
+  "life.other": [
+    "Life",
+    "Other"
+  ],
+  "life.taxes": [
+    "Life",
+    "Taxes"
+  ],
+  "other.electronics": [
+    "Other",
+    "Electronics"
+  ],
+  "other.general": [
+    "Other",
+    "General"
+  ],
+  "other.services": [
+    "Other",
+    "Services"
+  ],
+  "transportation.bicycle": [
+    "Transportation",
+    "Bicycle"
+  ],
+  "transportation.bus_train": [
+    "Transportation",
+    "Bus/Train"
+  ],
+  "transportation.car": [
+    "Transportation",
+    "Car"
+  ],
+  "transportation.gas_fuel": [
+    "Transportation",
+    "Gas/fuel"
+  ],
+  "transportation.hotel": [
+    "Transportation",
+    "Hotel"
+  ],
+  "transportation.other": [
+    "Transportation",
+    "Other"
+  ],
+  "transportation.parking": [
+    "Transportation",
+    "Parking"
+  ],
+  "transportation.plane": [
+    "Transportation",
+    "Plane"
+  ],
+  "transportation.taxi": [
+    "Transportation",
+    "Taxi"
+  ],
+  "utilities.cleaning": [
+    "Utilities",
+    "Cleaning"
+  ],
+  "utilities.electricity": [
+    "Utilities",
+    "Electricity"
+  ],
+  "utilities.heat_gas": [
+    "Utilities",
+    "Heat/gas"
+  ],
+  "utilities.other": [
+    "Utilities",
+    "Other"
+  ],
+  "utilities.trash": [
+    "Utilities",
+    "Trash"
+  ],
+  "utilities.tv_phone_internet": [
+    "Utilities",
+    "TV/Phone/Internet"
+  ],
+  "utilities.water": [
+    "Utilities",
+    "Water"
+  ]
+}

@@ -1,10 +1,10 @@
 # TrackSpense — MCP Integration Review (Phase 0)
 
-> **Status:** Architecture review with approved design revisions (2026-11-21). No MCP application code is implemented.
+> **Status:** Historical Phase 0 review with approved revisions (2026-11-21). A local, default-off v1 implementation now exists; see [implementation evidence and rollout](mcp-local-implementation.md). Real-client and production acceptance remain open.
 > **Date:** 2026-11-21 · Original Phase 0 investigation followed by code-backed audit and user-approved revisions.
 > **Companion docs:** [mcp-tool-specification.md](mcp-tool-specification.md) · [mcp-security-design.md](mcp-security-design.md) · [mcp-implementation-plan.md](mcp-implementation-plan.md)
 >
-> Repository observations below describe the pre-MCP implementation. Proposed controls are requirements, not completed fixes. Infrastructure descriptions reflect repository documentation, not a live cloud audit. Paths are repo-relative; `routes.py` means `varavu_selavu_app/varavu_selavu_service/api/routes.py` unless stated.
+> Repository observations below describe the pre-MCP implementation. The implementation/evidence document distinguishes completed local controls from remaining launch gates. Infrastructure descriptions reflect repository documentation, not a live cloud audit. Paths are repo-relative; `routes.py` means `varavu_selavu_app/varavu_selavu_service/api/routes.py` unless stated.
 
 ---
 

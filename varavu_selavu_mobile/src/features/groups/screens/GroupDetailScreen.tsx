@@ -33,6 +33,7 @@ import {
   listGroupExpenses,
   getGroupBalances,
   addMember,
+  createInvite,
   GroupExpenseRow,
   MemberBalance,
   BalanceTransfer,
@@ -206,8 +207,20 @@ export default function GroupDetailScreen() {
   const handleAddMember = async () => {
     setInviteLoading(true);
     try {
-      const newMember = await addMember(groupId, inviteEmail.trim() || undefined, inviteName.trim() || undefined);
-      showToast({ message: 'Member added', type: 'success' });
+      const email = inviteEmail.trim();
+      let message = 'Member added';
+      try {
+        await addMember(groupId, email || undefined, inviteName.trim() || undefined);
+      } catch (e: any) {
+        // Same fallback as web: an address with no verified account can't be seated directly, so
+        // create a name-only placeholder seat and email them a join link pinned to the address.
+        const notRegistered = email && e instanceof ApiError && e.status === 400 && /No registered user/i.test(e.message);
+        if (!notRegistered) throw e;
+        const seat = await addMember(groupId, undefined, inviteName.trim() || email.split('@')[0]);
+        await createInvite(groupId, seat.member_id, email);
+        message = `Invite emailed to ${email}`;
+      }
+      showToast({ message, type: 'success' });
       qc.invalidateQueries({ queryKey: ['group-detail', groupId] });
       setInviteVisible(false);
       setInviteEmail('');

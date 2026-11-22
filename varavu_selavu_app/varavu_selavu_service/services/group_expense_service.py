@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from varavu_selavu_service.core.expense_dates import assert_expense_date
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, ExpenseItem, ExpenseItemSplit, Group, GroupMember
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.split_engine import SplitError, SplitResult, resolve_split, validate_payers
@@ -257,7 +258,10 @@ class GroupExpenseService:
             "merchant_name": expense.merchant_name,
         }
 
-        expense.purchased_at = self._parse_date(date)
+        new_purchased_at = self._parse_date(date)
+        # Editing an older expense is fine as long as its date is left alone.
+        assert_expense_date(date, check_past=not (expense.purchased_at and expense.purchased_at.date() == new_purchased_at.date()))
+        expense.purchased_at = new_purchased_at
         expense.description = description
         expense.category_id = category
         expense.amount = amount
@@ -346,6 +350,8 @@ class GroupExpenseService:
         expense in place — same expense.id, gains group_id/split_type plus
         new expense_payers/expense_splits rows. The converter is sole payer
         by default (E11); only the expense's own owner may convert it."""
+        from varavu_selavu_service.services.personal_write_lock import lock_personal_user
+        lock_personal_user(self.db, actor_email)
         eid = _to_uuid(expense_id)
         expense = self.db.query(Expense).filter(Expense.id == eid).first() if eid else None
         if expense is None:

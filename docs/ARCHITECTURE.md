@@ -9,6 +9,12 @@ An engineering summary for developers and AI agents. Read it when a task needs t
 - **QA** `qa/` — Playwright end-to-end and API suites (CI: `.github/workflows/qa.yml`).
 - **Infra** — GCP Cloud Run (backend and web), Cloud Build (`cloudbuild*.yaml`), Cloudflare DNS. There are no cron jobs; everything is request-triggered.
 
+## MCP integration (default-off)
+
+OAuth token/revocation request bodies are bounded before database checkout; synchronous database phases run in worker threads. Metadata uses async DNS/HTTP with a single total deadline. Operation reads report logical expiry without persisting it, so they cannot overwrite concurrent financial commits.
+
+The existing FastAPI process mounts the official MCP SDK transport at `/mcp` and the Authlib OAuth/first-party consent routes only when `MCP_ENABLED=true`. Dedicated `mcp/`, `oauth/` and `db/mcp_models.py` packages separate agent credentials from first-party sessions. Personal writes share a user-row lock and flush-only financial helpers; immutable approval operations and expenses commit atomically. Web approval is responsive; mobile uses its browser link and shares attribution. See [the implementation/runbook](mcp-local-implementation.md) for schema, controls, retention and release gates.
+
 ## Cross-cutting flows
 - **Auth** — JWT (HS256). The web app uses HttpOnly `vs_token` cookies plus a double-submit CSRF cookie (`vs_csrf`); mobile sends a Bearer token kept in SecureStore. Routes depend on `auth_required`, which returns the user's **email**.
 - **Requests** — clients → REST `/api/v1/*` → services → Postgres. Item/merchant insights are pre-aggregated at save time by FastAPI `BackgroundTasks` (`insights_aggregation_service.py`).

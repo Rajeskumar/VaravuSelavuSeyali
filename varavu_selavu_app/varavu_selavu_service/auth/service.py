@@ -110,17 +110,21 @@ class AuthService:
         return True
 
     # ---- Session revocation ------------------------------------------------------------
-    def end_access_tokens(self, email: str) -> None:
+    def end_access_tokens(self, email: str, commit: bool = True) -> None:
         """Refuses every access token issued before now (see security.auth_required)."""
         user = self.db.query(User).filter(User.email == email).first()
         if user:
             user.token_valid_after = datetime.now(timezone.utc)
-            self.db.commit()
+            if commit:
+                self.db.commit()
 
     def end_all_sessions(self, email: str, reason: str) -> None:
         """Refresh families and access tokens both."""
-        self.revoke_all_sessions_for_user(email, reason=reason)
-        self.end_access_tokens(email)
+        from varavu_selavu_service.mcp.security import revoke_connections
+        revoke_connections(self.db, email, reason)
+        self.revoke_all_sessions_for_user(email, reason=reason, commit=False)
+        self.end_access_tokens(email, commit=False)
+        self.db.commit()
 
     def has_usable_password(self, email: str) -> bool:
         user = self.db.query(User).filter(User.email == email).first()
@@ -217,7 +221,7 @@ class AuthService:
         self.db.commit()
         return row.user_email
 
-    def revoke_all_sessions_for_user(self, user_email: str, reason: str = "password_reset") -> None:
+    def revoke_all_sessions_for_user(self, user_email: str, reason: str = "password_reset", commit: bool = True) -> None:
         """Ends every active session for a user — called after a password reset so a stolen
         password (the presumed reason for the reset) can't keep a session alive under the old
         credentials. Mirrors `revoke_family`'s per-row update but fans out across every family
@@ -233,7 +237,8 @@ class AuthService:
             self.db.query(RefreshToken).filter(
                 RefreshToken.family_id == family_id, RefreshToken.revoked_at.is_(None)
             ).update({"revoked_at": now, "revoked_reason": reason}, synchronize_session=False)
-        self.db.commit()
+        if commit:
+            self.db.commit()
 
     def update_profile(
         self,
@@ -301,13 +306,13 @@ class AuthService:
             return False
 
     def register_refresh_token(
-        self, jti: uuid.UUID, family_id: uuid.UUID, user_email: str, expires_at: datetime
+        self, jti: uuid.UUID, family_id: uuid.UUID, user_email: str, expires_at: datetime, authenticated_at: datetime | None = None
     ) -> None:
         """Records a freshly-minted refresh token — either the first of a new family (login)
         or a rotation's successor (refresh), depending on whether `family_id` is newly
         generated or carried over by the caller."""
         self.db.add(RefreshToken(
-            jti=jti, family_id=family_id, user_email=user_email, expires_at=expires_at,
+            jti=jti, family_id=family_id, user_email=user_email, expires_at=expires_at, authenticated_at=authenticated_at,
         ))
         self.db.commit()
 

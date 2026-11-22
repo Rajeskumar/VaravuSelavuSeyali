@@ -1,6 +1,6 @@
 # TrackSpense — MCP Tool Specification
 
-> **Status:** Approved product direction, revised after audit on 2026-11-21; NOT implemented.
+> **Status:** Local v1 tools implemented on 2026-11-21, disabled by default. See [implementation evidence and rollout](mcp-local-implementation.md); Claude/ChatGPT app acceptance is still required.
 > **Companions:** [review](mcp-integration-review.md) · [security](mcp-security-design.md) · [plan](mcp-implementation-plan.md)
 > **Launch order:** Claude app first, ChatGPT second. Exact app/account compatibility is a Phase 1 gate.
 

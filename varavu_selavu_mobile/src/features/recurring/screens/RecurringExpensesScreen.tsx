@@ -178,12 +178,17 @@ export default function RecurringExpensesScreen() {
         setActionLoading(execTemplate.id);
         try {
             const resp = await executeRecurringNow(execTemplate.id, parseFloat(execAmount) || execTemplate.default_cost);
-            Alert.alert(
-                'Success',
-                resp.created
-                    ? 'Expense added and month marked as processed.'
-                    : 'Month marked as processed (already added).'
-            );
+            if (resp.success === false) {
+                Alert.alert('Error', resp.error || 'Failed to execute template.');
+                return;
+            }
+            if (resp.already_added) {
+                // One occurrence per month; earlier months are added by hand.
+                Alert.alert('Already added', 'This recurring expense was already added for this month. To add an earlier month, add it manually.');
+                setExecTemplate(null);
+                return;
+            }
+            Alert.alert('Success', 'Expense added and month marked as processed.');
             setExecTemplate(null);
             fetchTemplates();
             if (resp.created) refreshExpenseViews(queryClient);

@@ -81,3 +81,86 @@ jobs:
       - run: poetry install --no-root
       - name: pytest
         run: poetry run pytest -q
+
+  mcp-postgres:
+    name: MCP PostgreSQL transactions and migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mcp_test
+          POSTGRES_PASSWORD: local_test_password
+          POSTGRES_DB: mcp_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U mcp_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: varavu_selavu_app
+    env:
+      E2E_DATABASE_URL: postgresql://mcp_test:local_test_password@localhost:5432/mcp_test
+      ENVIRONMENT: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install poetry
+      - run: poetry install --no-interaction
+      - run: poetry run pytest tests/test_mcp*pg.py -q
+
+  backend-postgres:
+    # B-18: the SQL that only behaves differently on PostgreSQL (analytics aggregation, group
+    # balances, AI quota counters). Mirrors varavu_selavu_app/run_e2e_pg_tests.sh without Docker.
+    name: Backend PostgreSQL (analytics, groups, AI quota)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vs_test
+          POSTGRES_PASSWORD: vs_test_pass
+          POSTGRES_DB: tracking_db
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U vs_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: varavu_selavu_app
+    env:
+      E2E_DATABASE_URL: postgresql://vs_test:vs_test_pass@localhost:5432/tracking_db
+      PGPASSWORD: vs_test_pass
+      ENVIRONMENT: local
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install poetry
+      - run: poetry install --no-interaction
+      - name: Create schema and extension
+        run: |
+          psql -h localhost -U vs_test -d tracking_db -c "CREATE SCHEMA IF NOT EXISTS trackspense;"
+          psql -h localhost -U vs_test -d tracking_db -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+      - name: Create tables from the models
+        run: |
+          poetry run python -c "
+          from sqlalchemy import create_engine
+          from varavu_selavu_service.db.session import Base
+          from varavu_selavu_service.db import models  # registers every table on Base.metadata
+          Base.metadata.create_all(bind=create_engine('$E2E_DATABASE_URL'))
+          print('tables created')
+          "
+      # One pytest process per file: these modules install their own app-wide dependency overrides
+      # at import time, so loading them together makes one run as the other's user.
+      - name: PostgreSQL-only tests
+        run: |
+          poetry run pytest tests/test_analytics_e2e_pg.py -q
+          poetry run pytest tests/test_groups_e2e_pg.py -q
+          poetry run pytest "tests/test_ai_quota.py::test_concurrent_reserves_never_overshoot_on_postgres" -q

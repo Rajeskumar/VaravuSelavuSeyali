@@ -199,9 +199,12 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
 
           <Typography
             variant="caption"
+            role="status"
             sx={{ display: 'block', mt: 0.75, textAlign: 'right', color: reconciled ? 'success.main' : 'warning.main' }}
           >
-            {reconciled ? 'Matches total' : `Items total ${formatMoney(computedTotal, currency)} — off by ${formatMoney(Math.abs(delta), currency)}`}
+            {reconciled
+              ? 'Matches total'
+              : `Items total ${formatMoney(computedTotal, currency)}, ${formatMoney(Math.abs(delta), currency)} ${delta > 0 ? 'more' : 'less'} than the expense total. Fix an item or the total to save.`}
           </Typography>
         </Box>
       )}

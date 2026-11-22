@@ -129,6 +129,7 @@ def _issue_session(
     email: str,
     family_id: Optional[uuid.UUID] = None,
     jti: Optional[uuid.UUID] = None,
+    original_claims: Optional[dict] = None,
 ) -> dict:
     """Mints a token pair, sets the auth cookies, registers the refresh token's rotation
     state, and returns the body payload.
@@ -139,14 +140,18 @@ def _issue_session(
     `rotate_refresh_token` for `replaced_by` tracking) reuse it here instead of minting a
     second, mismatched one.
     """
-    access = create_access_token({"sub": email})
+    session_family = family_id or uuid.uuid4()
+    original = original_claims if original_claims is not None else {"auth_time": datetime.now(timezone.utc).timestamp(), "sid": str(session_family)}
+    claims = {"sub": email, "auth_time": original.get("auth_time"), "sid": original.get("sid")}
+    access = create_access_token(claims)
     new_jti = jti or uuid.uuid4()
-    refresh = create_refresh_token({"sub": email, "jti": str(new_jti)})
+    refresh = create_refresh_token({**claims, "jti": str(new_jti)})
     # Single source of truth for the DB row's expiry: whatever `create_refresh_token` actually
     # embedded, not a second independent computation that could drift from it.
     expires_at = datetime.fromtimestamp(decode_token(refresh, "refresh")["exp"], tz=timezone.utc)
 
-    auth.register_refresh_token(new_jti, family_id or uuid.uuid4(), email, expires_at)
+    auth.register_refresh_token(new_jti, session_family, email, expires_at,
+        authenticated_at=datetime.fromtimestamp(claims["auth_time"], tz=timezone.utc) if claims["auth_time"] else None)
 
     csrf_token = set_auth_cookies(response, access, refresh)
     return {
@@ -282,7 +287,7 @@ def refresh(
     except HTTPException:
         clear_auth_cookies(response)
         raise
-    return _for_client(request, _issue_session(response, auth, email, family_id=family_id, jti=new_jti))
+    return _for_client(request, _issue_session(response, auth, email, family_id=family_id, jti=new_jti, original_claims=payload))
 
 
 @router.post("/logout")

@@ -14,6 +14,11 @@
 
 ---
 
+## MCP integration — local v1, rollout pending (2026-11-21)
+
+✅ Scoped OAuth/PKCE, personal read tools, mandatory verify/browser-approval/save, historical and itemized receipts, duplicate reapproval, idempotency, logout-all revocation, management/activity, export/deletion and web/mobile attribution/link. Default-off deployment/runtime controls and additive migrations are included. 🚧 Exact Claude app/ChatGPT acceptance, production-sized migration/load evidence and deployment/privacy/operations gates remain. Native approval, groups and advanced mutations are deferred. The five review findings were fixed with regression coverage on 2026-11-22. See [implementation evidence](mcp-local-implementation.md) and [local/GCP setup](mcp-setup-and-deployment.md).
+
+
 ## 1. Core Product (Section 3 of the master spec)
 
 All shipped and working — verified via direct API/route inspection and live testing in a prior session.
@@ -23,7 +28,9 @@ All shipped and working — verified via direct API/route inspection and live te
 | Auth (register/login/Google OAuth/refresh/logout/forgot-password/profile) | ✅ Built | Includes `DELETE /auth/profile` (account deletion) with a real confirmation-dialog UX (type "DELETE" to confirm). As of TS-GRP-112, personal expenses are hard-deleted explicitly (no longer a DB-level cascade) while group expenses survive with the author anonymized — see §6 below |
 | Expense CRUD + AI auto-categorization | ✅ Built | `POST/GET/PUT/DELETE /expenses`, `/expenses/categorize`, `/expenses/with_items` |
 | Receipt OCR scanning | ✅ Built | `/ingest/receipt/parse`, fingerprint dedup, "Upload Receipt" UI on web (Add Expense dialog) |
-| Recurring expense management | ✅ Built | Full CRUD + due/confirm/execute_now |
+| Recurring expense management | ✅ Built | Full CRUD + due/confirm/execute_now. Run now is once per template per month (2026-11-22) |
+| Expense date window | ✅ Built (2026-11-22) | No future dates, nothing older than 1 year — pickers, API, AI chat, MCP (spec R15). Revisit: ROADMAP |
+| Registration email verification | 📝 Spec only | `docs/features/registration_email_verification/SPEC.md`; not implemented |
 | Email / feedback (feature request, contact us) | ✅ Built | `/email/send`; web now has a dedicated `/contact` page too |
 | Web + Android + iOS shipped | ✅ Built | — |
 

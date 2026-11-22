@@ -459,7 +459,15 @@ export default function ExpensesScreen() {
 
     const runRecurringMut = useMutation({
         mutationFn: (templateId: string) => executeRecurringNow(templateId),
-        onSuccess: () => {
+        onSuccess: (resp) => {
+            if (resp.success === false) {
+                showToast({ message: resp.error || 'Failed to run template', type: 'error' });
+                return;
+            }
+            if (resp.already_added) {
+                showToast({ message: 'Already added for this month. To add an earlier month, add it manually.', type: 'warning' });
+                return;
+            }
             qc.invalidateQueries({ queryKey: ['recurringTemplates'] });
             fetchExpenses(true);
             refreshExpenseViews(qc);

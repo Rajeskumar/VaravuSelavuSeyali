@@ -8,11 +8,13 @@ import { getStoredConsent, grantAnalyticsConsent, denyAnalyticsConsent } from '.
 /** Shown pre-decision on every page (including the pre-login landing, where GA4 previously
  * fired unconditionally) until the visitor accepts or declines analytics. Nothing is tracked
  * before a choice is made — see utils/analyticsConsent.ts. */
+/** CSS custom property set on <html> by MainLayout while its fixed bottom chrome is showing. */
+export const BOTTOM_CHROME_VAR = '--ts-bottom-chrome';
+
 const ConsentBanner: React.FC = () => {
   const [decided, setDecided] = React.useState(() => getStoredConsent() !== null);
 
   const bannerRef = React.useRef<HTMLDivElement>(null);
-
   // The banner is position:fixed, so it used to sit on top of the page's last ~60px (the Ask
   // chat input, footer links, the last row of a list) until answered. Reserve its height as body
   // padding while it's showing so nothing is permanently hidden behind it (WCAG 2.4.11).
@@ -47,7 +49,9 @@ const ConsentBanner: React.FC = () => {
         position: 'fixed',
         left: 0,
         right: 0,
-        bottom: 0,
+        // On phones MainLayout publishes the space taken by the bottom tab bar and the Add button
+        // here, so the banner rides above them instead of covering them (0 on pages without them).
+        bottom: `var(${BOTTOM_CHROME_VAR}, 0px)`,
         // Same layer as drawers (not the snackbar layer it used to use) so an open dialog, sheet or
         // the Ask panel is never overlapped by it; modals render later in the DOM and win the tie.
         zIndex: (t) => t.zIndex.drawer,

@@ -14,7 +14,8 @@ interface RecurringCardProps {
   onToggle: (item: RecurringTemplateDTO, newStatus: string) => void;
   onEdit: (item: RecurringTemplateDTO) => void;
   onDelete: (item: RecurringTemplateDTO) => void;
-  onRunNow?: (item: RecurringTemplateDTO) => void;
+  /** Resolve to false when nothing was added (already added this month, or it failed), so the card doesn't claim "Logged". */
+  onRunNow?: (item: RecurringTemplateDTO) => Promise<boolean | void> | boolean | void;
 }
 
 function getNextDue(dayOfMonth: number): string {
@@ -99,10 +100,11 @@ export const RecurringCard: React.FC<RecurringCardProps> = ({ item, onToggle, on
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {isActive && onRunNow && (
             <ButtonBase
-              onClick={() => {
+              onClick={async () => {
                 if (justRun) return;
+                const added = await onRunNow(item);
+                if (added === false) return;
                 setJustRun(true);
-                onRunNow(item);
                 setTimeout(() => setJustRun(false), 2000);
               }}
               sx={{

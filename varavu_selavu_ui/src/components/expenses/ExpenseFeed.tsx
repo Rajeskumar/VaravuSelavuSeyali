@@ -41,6 +41,7 @@ const rowActionHitSlopSx = {
  * everything else renders identically regardless of scope.
  */
 export interface FeedExpense {
+  createdByAssistant?: string | null;
   /** Unique across the whole feed — used as the React key and detail-sheet identity. */
   key: string;
   kind: 'personal' | 'group';

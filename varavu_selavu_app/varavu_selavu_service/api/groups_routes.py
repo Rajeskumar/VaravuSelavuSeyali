@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from varavu_selavu_service.core.expense_dates import assert_expense_date
 from varavu_selavu_service.auth.security import auth_required
 from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.core.config import Settings
@@ -467,6 +468,7 @@ def create_group_expense(
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
+    assert_expense_date(data.date)
     if data.card_id:
         card_service.assert_card_is_held(user_email, data.card_id)
     row = svc.create_expense(
@@ -535,6 +537,7 @@ def create_itemized_group_expense(
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
+    assert_expense_date(data.date)
     if data.card_id:
         card_service.assert_card_is_held(user_email, data.card_id)
     row = svc.create_itemized_expense(

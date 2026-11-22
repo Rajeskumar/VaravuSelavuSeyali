@@ -59,7 +59,7 @@ const RecurringTab: React.FC = () => {
     }, 1500);
   };
 
-  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+  const [toast, setToast] = React.useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' }>({ open: false, message: '', severity: 'success' });
   const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<RecurringTemplateDTO | null>(null);
 
@@ -152,13 +152,24 @@ const RecurringTab: React.FC = () => {
     });
   };
 
-  const handleRunNow = async (item: RecurringTemplateDTO) => {
+  const handleRunNow = async (item: RecurringTemplateDTO): Promise<boolean> => {
     try {
-      await executeRecurringNow(item.id, item.default_cost);
+      const res = await executeRecurringNow(item.id, item.default_cost);
+      if (res.success === false) {
+        setToast({ open: true, message: res.error || 'Failed to run expense', severity: 'error' });
+        return false;
+      }
+      if (res.already_added) {
+        // One occurrence per month; earlier months are added by hand from Add expense.
+        setToast({ open: true, message: 'Already added for this month. To add an earlier month, add it manually.', severity: 'warning' });
+        return false;
+      }
       refreshExpenseViews(qc);
       setToast({ open: true, message: 'Recurring expense logged', severity: 'success' });
+      return true;
     } catch {
       setToast({ open: true, message: 'Failed to run expense', severity: 'error' });
+      return false;
     }
   };
 

@@ -1,7 +1,7 @@
 import pytest
 import os
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -72,6 +72,17 @@ def test_app():
 @pytest.fixture(scope="session")
 def test_client(test_app):
     return TestClient(test_app)
+
+# The expense date window (no future, max one year back) is judged against "today". Fixtures use
+# fixed calendar dates, so the clock is pinned: the suite stays deterministic and doesn't rot.
+PINNED_TODAY = date(2026, 11, 22)
+
+
+@pytest.fixture(autouse=True)
+def _pin_expense_date_clock(monkeypatch):
+    from varavu_selavu_service.core import expense_dates
+    monkeypatch.setattr(expense_dates, "_today", lambda: PINNED_TODAY)
+
 
 @pytest.fixture(autouse=True)
 def _reset_rate_limiter():

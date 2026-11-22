@@ -121,6 +121,8 @@ class Expense(Base):
     description = Column(Text)
     notes = Column(Text)
     fingerprint = Column(String(255))
+    created_by_connection_id = Column(String(36), ForeignKey("trackspense.mcp_connections.id", ondelete="SET NULL"), nullable=True)
+    dup_fingerprint = Column(String(64), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -135,7 +137,7 @@ class ExpenseItem(Base):
     item_name = Column(String(255), nullable=False)
     normalized_name = Column(String(255))
     category_id = Column(String(100))
-    quantity = Column(Numeric(10, 2))
+    quantity = Column(Numeric(12, 3))
     unit = Column(String(50))
     unit_price = Column(Numeric(12, 2))
     line_total = Column(Numeric(12, 2), nullable=False)
@@ -531,6 +533,7 @@ class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
     __table_args__ = {"schema": "trackspense"}
 
+    authenticated_at = Column(DateTime(timezone=True), nullable=True)
     jti = Column(UUID(as_uuid=True), primary_key=True)
     family_id = Column(UUID(as_uuid=True), nullable=False, index=True)
     user_email = Column(String(255), ForeignKey("trackspense.users.email", ondelete="CASCADE"), nullable=False, index=True)
@@ -701,3 +704,10 @@ class ExpenseTag(Base):
     user_email = Column(String(255), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+
+# Register the additive MCP tables for migrations and test create_all.
+from varavu_selavu_service.db import mcp_models  # noqa: E402,F401
+
+# Match the additive MCP migration on fresh test databases.
+Index("ix_expenses_personal_date", Expense.user_email, Expense.group_id, Expense.purchased_at, Expense.id)
+Index("ix_expenses_duplicate_lookup", Expense.user_email, Expense.currency, Expense.amount, Expense.purchased_at)

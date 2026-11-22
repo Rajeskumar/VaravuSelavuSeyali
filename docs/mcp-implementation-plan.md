@@ -1,6 +1,7 @@
 # TrackSpense — MCP Implementation Plan
 
-> **Status:** Product direction approved on 2026-11-21; revised after audit. **Documentation only: no MCP implementation, migration, deployment or production enablement has occurred.**
+> **Status:** Local v1 code, additive migrations and tests implemented on 2026-11-21, with default-off flags. **No commit, deployment or production enablement.** See [implementation evidence and rollout](mcp-local-implementation.md) for concrete coverage and unfulfilled external gates.
+> **Review fixes (2026-11-22):** Expiry/save concurrency, OAuth request resource bounds and event-loop work, refresh-family lifetimes, and metadata total deadlines are corrected and regression-tested. [Local/GCP setup and enablement](mcp-setup-and-deployment.md) is documented; real-client/staging/CI acceptance remains outstanding.
 > **Companions:** [architecture review](mcp-integration-review.md) · [tool contract](mcp-tool-specification.md) · [security design](mcp-security-design.md)
 > This plan replaces the earlier direct-create/threshold proposal. Implementation must follow AGENTS.md: focused tests, relevant deterministic checks/reviews, web/mobile parity, documentation maintenance and uncommitted changes unless asked.
 
@@ -180,4 +181,4 @@ Run `scripts/quality/verify.sh` during each code phase, full checks at phase gat
 4. Privacy wording/backup-retention confirmation and operational cleanup/alert runbook before publishing.
 5. Any requested exception to the initial 24-hour expiry or request/create limits, based on real historical-import use. Such changes cannot bypass approval or introduce unbounded bulk writes.
 
-There is no outstanding approval question about browser approval, personal-only scope, historical receipts or logout-all behavior: those were explicitly accepted. Application implementation remains a subsequent task.
+There is no outstanding product-approval question about browser approval, personal-only scope, historical receipts or logout-all behavior. Local implementation now covers the v1 behavior; real-client compatibility, staging capacity/migration evidence and production operations remain release gates.

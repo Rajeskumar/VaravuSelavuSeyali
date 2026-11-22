@@ -75,6 +75,7 @@ class AccountExportService:
                 "date": _plain(r.purchased_at),
                 "description": r.description,
                 "merchant": r.merchant_name,
+                "created_by_connection_id": r.created_by_connection_id,
                 "category": r.category_id,
                 "amount": _plain(r.amount),
                 "currency": r.currency,
@@ -110,7 +111,17 @@ class AccountExportService:
         ]
         tags = [t.name for t in self.db.query(Tag).filter(Tag.user_email == email).all()]
 
+        from varavu_selavu_service.db.mcp_models import MCPConnection, MCPOperation, MCPAuditEvent, MCPUserPolicy, MCPRateCounter, OAuthRequest
+        def safe_rows(model, fields):
+            return [{key: _plain(getattr(row, key)) for key in fields} for row in self.db.query(model).filter(model.user_email == email).all()]
+
         return {
+            "assistant_policy": safe_rows(MCPUserPolicy, ["suspended"]),
+            "assistant_usage": safe_rows(MCPRateCounter, ["bucket", "window_start", "count"]),
+            "assistant_authorization_requests": safe_rows(OAuthRequest, ["client_id", "scopes", "expires_at", "consumed_at"]),
+            "assistant_connections": safe_rows(MCPConnection, ["id", "client_name", "scopes", "status", "created_at", "expires_at", "revoked_at"]),
+            "assistant_operations": safe_rows(MCPOperation, ["id", "status", "payload", "warnings", "duplicates", "created_at", "decided_at", "expense_id"]),
+            "assistant_activity": safe_rows(MCPAuditEvent, ["event", "outcome", "created_at", "connection_id", "operation_id"]),
             "exported_at": datetime.utcnow().isoformat() + "Z",
             "profile": profile,
             "personal_expenses": expenses,

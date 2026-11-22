@@ -87,7 +87,7 @@ export async function confirmRecurring(items: { template_id: string; date_iso: s
 export async function executeRecurringNow(
     templateId: string,
     cost?: number,
-): Promise<{ success: boolean; created?: boolean }> {
+): Promise<{ success: boolean; created?: boolean; already_added?: boolean; error?: string }> {
     const res = await apiFetch('/api/v1/recurring/execute_now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

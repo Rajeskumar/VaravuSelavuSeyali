@@ -69,7 +69,7 @@ export async function deleteRecurringTemplate(template_id: string): Promise<{ su
   return res.json();
 }
 
-export async function executeRecurringNow(template_id: string, cost?: number): Promise<{ success: boolean; created?: boolean }> {
+export async function executeRecurringNow(template_id: string, cost?: number): Promise<{ success: boolean; created?: boolean; already_added?: boolean; error?: string }> {
   const res = await fetchWithAuth('/api/v1/recurring/execute_now', {
     method: 'POST',
     body: JSON.stringify({ template_id, cost }),

@@ -2,6 +2,8 @@
 
 **TrackSpense** is your smart, AI-powered personal finance companion. Designed to remove the friction from tracking your daily expenses, TrackSpense helps you understand your spending habits, manage subscriptions, and take control of your financial future—all through an intuitive, automated interface.
 
+**MCP integration (local, default-off):** External assistants can read personal spending and prepare expenses for mandatory browser approval. Claude app acceptance comes first, then ChatGPT; production rollout is pending. [Local/GCP setup commands](docs/mcp-setup-and-deployment.md), operator controls and validation gates are in [the MCP runbook](docs/mcp-local-implementation.md).
+
 ---
 
 ## 🎯 Our Goal

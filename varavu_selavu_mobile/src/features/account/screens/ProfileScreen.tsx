@@ -1,3 +1,4 @@
+import { getConfig } from '../../shared/featureFlags';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, Share } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
@@ -23,6 +24,7 @@ import { logger } from '../../../core/logger';
 
 export default function ProfileScreen({ navigation }: any) {
   const { signOut, userEmail } = useAuth();
+  const { data: featureFlags } = useQuery({ queryKey: ['config'], queryFn: getConfig, staleTime: 60000 });
   const { theme, isDark, isSystemDefault, setMode: setThemeMode, useSystemTheme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -198,6 +200,7 @@ export default function ProfileScreen({ navigation }: any) {
     { name: 'Appearance', hint: isSystemDefault ? 'System' : isDark ? 'Dark' : 'Light', onPress: chooseAppearance },
     { name: 'Export data', hint: exporting ? 'Exporting…' : 'CSV · yours + group shares', onPress: exportData },
     { name: 'Download all my data', hint: downloading ? 'Preparing…' : 'JSON', onPress: downloadAll },
+    ...(featureFlags?.mcp_enabled && featureFlags.mcp_management_url ? [{ name: 'Connected assistants', hint: 'Opens browser', onPress: () => { void Linking.openURL(featureFlags.mcp_management_url!).catch(() => Alert.alert('Unable to open browser')); } }] : []),
     { name: 'Password & security', hint: 'Sign-ins', onPress: () => navigation.navigate('Security') },
     { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
     { name: 'About', onPress: () => navigation.navigate('About') },

@@ -25,6 +25,9 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 # rate-limited instead, and carry no ambient authority to abuse.
 EXEMPT_PATHS = frozenset(
     {
+        "/oauth/token",
+        "/oauth/revoke",
+        "/mcp",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
         "/api/v1/auth/google",

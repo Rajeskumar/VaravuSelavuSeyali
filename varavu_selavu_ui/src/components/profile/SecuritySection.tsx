@@ -72,7 +72,7 @@ const SecuritySection: React.FC<{ onSignedOut: () => void; children?: React.Reac
         </Typography>
 
         <Box component="form" onSubmit={submit} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxWidth: 420 }}>
-          <Typography variant="subtitle2">{hasPassword ? 'Change password' : 'Set a password'}</Typography>
+          <Typography variant="subtitle2" component="h3">{hasPassword ? 'Change password' : 'Set a password'}</Typography>
           {!hasPassword && (
             <Typography variant="body2" color="text.secondary">
               You sign in with Google. Setting a password also lets you sign in with your email.
@@ -105,7 +105,7 @@ const SecuritySection: React.FC<{ onSignedOut: () => void; children?: React.Reac
 
         {children}
 
-        <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+        <Typography variant="subtitle2" component="h3" sx={{ mt: 3, mb: 1 }}>
           Where you're signed in
         </Typography>
         {sessions.isLoading && <Typography variant="body2" color="text.secondary">Loading…</Typography>}

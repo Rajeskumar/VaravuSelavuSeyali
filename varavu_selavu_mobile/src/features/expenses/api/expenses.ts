@@ -22,6 +22,7 @@ export interface ExpensePayload {
 }
 
 export interface ExpenseRecord {
+  created_by_assistant?: string | null;
   row_id: number;
   user_id: string;
   date: string;
