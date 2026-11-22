@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-22: Fixed the QA smoke step failing in GitHub Actions (agent: Claude Code): `consent-banner-phone.spec.ts` read `e2e/auth/primary.json` when the file was loaded, before the setup project had created it on a clean runner; it now builds its context inside the tests. Verified with `playwright --list` and a run with no saved auth files.
+
 - 2026-11-22: F-06 root-caused and fixed (agent: Claude Code): the local dev database was two Alembic revisions behind the code, so login failed with `UndefinedColumn refresh_tokens.authenticated_at` (500). Upgraded the dev DB to head (rehearsed on a copy, backup taken), and added a startup check that logs `DATABASE IS BEHIND THE CODE` with the fix (`db/migration_check.py`, tests). QA docs 04/05/07/09 refreshed to the post-automation state (49 UAT scenarios automated, 24 partly, 8 not automated; gaps F-07..F-12 closed).
 
 - 2026-11-22: CI review (agent: Claude Code): the QA smoke failures on `main` were a stale locator ("Add Expense" vs the desktop "New expense" button), already fixed on PR #44; the Unit-tests Mobile job failed on a 5s Jest timeout on slow runners (`testTimeout` 20s in `varavu_selavu_mobile/jest.config.js`); new QA specs made rate-limit/once-per-run safe (forgot/reset on Chromium only, disposable-account spec on Chromium only); full Chromium + Firefox + WebKit + phone matrix verified locally; `qa/README.md` documents running the matrix and the rules that keep it green.

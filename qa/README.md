@@ -272,4 +272,5 @@ Rules that keep that matrix green (found reviewing CI failures, 2026-11-22):
 - Restart the backend between projects (or runs): the registration (5/hour), login (5/minute) and forgot-password (5/hour) limits are in memory per backend process and a full matrix exceeds them.
 - A spec that uses a rate-limited endpoint for real, or destroys an account, must run once per run: `test.skip(testInfo.project.name !== 'chromium', ...)`.
 - Role names match as substrings. Use `exact: true`, `.first()` for duplicated buttons (e.g. an empty-state and a header "New Budget"), and look group members up by email, not list position.
+- Never read `e2e/auth/*.json` (or any file the `setup` project creates) at module level in a spec: on a clean CI runner it does not exist when Playwright loads the file, and the whole run dies at collection. Read it inside the test (see `regression/consent-banner-phone.spec.ts`). Check with `npx playwright test --list` after moving the auth files away.
 - Never leave a *due* recurring template for the shared persona: the load-time prompt would cover other tests.

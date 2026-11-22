@@ -1,21 +1,34 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Browser } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { env } from '../../helpers/env';
 
 // Backlog B-01 / UAT-RESP-002 (F-01). Every other responsive test starts with the cookie
 // banner already answered, which is how it covered the phone nav and Add button unnoticed.
-// This one logs in with the saved session cookies only (no stored consent) at 390x844.
-const state = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../auth/primary.json'), 'utf8'));
-// Keep cookies and the app's own session markers; drop only the consent answer.
-const origins = (state.origins ?? []).map((o: any) => ({
-  ...o,
-  localStorage: (o.localStorage ?? []).filter((e: any) => !/consent/i.test(e.name)),
-}));
+// This one signs in with the saved session cookies only (no stored consent) at 390x844.
+//
+// The saved session (e2e/auth/primary.json) is written by the `setup` project, so it must be read
+// when a test runs, never when this file is loaded: on a clean CI runner it does not exist yet at
+// load time (that made the whole run fail at collection).
+async function phoneContextWithoutConsent(browser: Browser) {
+  const state = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../auth/primary.json'), 'utf8'));
+  // Keep cookies and the app's own session markers; drop only the consent answer.
+  const origins = (state.origins ?? []).map((o: any) => ({
+    ...o,
+    localStorage: (o.localStorage ?? []).filter((e: any) => !/consent/i.test(e.name)),
+  }));
+  return browser.newContext({
+    baseURL: env.BASE_URL,
+    storageState: { cookies: state.cookies, origins },
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+  });
+}
 
 test.describe('cookie banner on a phone (UI) @regression @critical', () => {
-  test.use({ storageState: { cookies: state.cookies, origins }, viewport: { width: 390, height: 844 }, hasTouch: true });
-
-  test('the banner does not cover the bottom nav or the Add button, and both work unanswered', async ({ page }) => {
+  test('the banner does not cover the bottom nav or the Add button, and both work unanswered', async ({ browser }) => {
+    const context = await phoneContextWithoutConsent(browser);
+    const page = await context.newPage();
     await page.goto('/dashboard');
     const banner = page.getByRole('region', { name: 'Cookie consent' });
     await expect(banner).toBeVisible();
@@ -33,12 +46,16 @@ test.describe('cookie banner on a phone (UI) @regression @critical', () => {
     // Real clicks (Playwright fails if another element intercepts them).
     await fab.click();
     await expect(page.getByTestId('keypad-1')).toBeVisible({ timeout: 10_000 });
+    await context.close();
   });
 
-  test('the bottom nav is reachable while the banner is still showing', async ({ page }) => {
+  test('the bottom nav is reachable while the banner is still showing', async ({ browser }) => {
+    const context = await phoneContextWithoutConsent(browser);
+    const page = await context.newPage();
     await page.goto('/dashboard');
     await expect(page.getByRole('region', { name: 'Cookie consent' })).toBeVisible();
     await page.getByRole('navigation', { name: 'Primary' }).getByText('Expenses').click();
     await expect(page).toHaveURL(/\/expenses/);
+    await context.close();
   });
 });
