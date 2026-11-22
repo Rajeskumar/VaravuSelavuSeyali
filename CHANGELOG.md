@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-22: Fixed the QA regression step failing on `registration.spec.ts` in GitHub Actions (agent: Claude Code): the new account-security spec added two real logins to the regression run, taking one minute's logins to 7 against the backend's limit of 5, so the registration test's auto-login was rejected. That spec is now tagged `@account` and runs in its own CI step after a 65 s pause (`npm run qa:account`); `qa/README.md` documents the login budget.
+
 - 2026-11-22: Fixed the QA smoke step failing in GitHub Actions (agent: Claude Code): `consent-banner-phone.spec.ts` read `e2e/auth/primary.json` when the file was loaded, before the setup project had created it on a clean runner; it now builds its context inside the tests. Verified with `playwright --list` and a run with no saved auth files.
 
 - 2026-11-22: F-06 root-caused and fixed (agent: Claude Code): the local dev database was two Alembic revisions behind the code, so login failed with `UndefinedColumn refresh_tokens.authenticated_at` (500). Upgraded the dev DB to head (rehearsed on a copy, backup taken), and added a startup check that logs `DATABASE IS BEHIND THE CODE` with the fix (`db/migration_check.py`, tests). QA docs 04/05/07/09 refreshed to the post-automation state (49 UAT scenarios automated, 24 partly, 8 not automated; gaps F-07..F-12 closed).

@@ -8,7 +8,11 @@ import { dismissCookieConsent } from '../../helpers/responsive.helper';
 // Backlog B-13 (UAT-ACC-002..005). Everything destructive happens to QA_DISPOSABLE_USER, an account
 // created straight in the QA database (see fixtures/users.fixture.ts) — never the shared personas.
 // One test, one sign-in: change password, look at sessions, export data, then delete the account.
-test.describe('account security and deletion (UI) @regression @critical', () => {
+// Tagged @account, NOT @regression: it signs in for real (and tries once more after deleting the
+// account), and the backend allows 5 logins a minute in total. Inside the regression run those two
+// logins pushed the minute over the limit and starved the registration test's auto-login. It runs in
+// its own step after a pause: `npm run qa:account` (see .github/workflows/qa.yml).
+test.describe('account security and deletion (UI) @account @critical', () => {
   test('change password, review sessions, export, then delete the account', async ({ browser }, testInfo) => {
     // The account is deleted at the end, so it can only be used once per run (the CI matrix repeats
     // every spec per browser project).
