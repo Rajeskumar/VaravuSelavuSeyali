@@ -17,6 +17,7 @@ function setStoredConsent(choice: ConsentChoice): void {
  * visit) — never on page load unconditionally. index.html only defines the dataLayer/gtag
  * queue stub; this is what actually turns tracking on. */
 function loadGoogleAnalytics(): void {
+  if (window.location.pathname.startsWith('/ai/')) return;
   if (document.getElementById('ga4-script')) return;
   const script = document.createElement('script');
   script.id = 'ga4-script';

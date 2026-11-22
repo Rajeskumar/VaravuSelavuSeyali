@@ -50,18 +50,33 @@ async def _validation_error_handler(request: Request, exc: RequestValidationErro
 
 @app.middleware("http")
 async def _security_headers(request: Request, call_next):
+    if settings.MCP_ENABLED and request.url.path.startswith(('/mcp', '/oauth/', '/.well-known/oauth')):
+        from urllib.parse import urlsplit
+        if request.headers.get('host') != urlsplit(settings.MCP_RESOURCE_URL).netloc:
+            return JSONResponse({'error': 'invalid_host'}, status_code=403)
+        origin = request.headers.get('origin')
+        if origin and origin not in settings.MCP_ALLOWED_ORIGINS + settings.CORS_ALLOW_ORIGINS:
+            return JSONResponse({'error': 'forbidden_origin'}, status_code=403)
     response = await call_next(request)
     h = response.headers
     h.setdefault("X-Content-Type-Options", "nosniff")
-    h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    h.setdefault("Referrer-Policy", "no-referrer" if request.url.path.startswith(("/oauth/", "/api/v1/mcp/")) else "strict-origin-when-cross-origin")
     h.setdefault("X-Frame-Options", "DENY")
     h.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
     # Authenticated JSON (and the auth endpoints that set cookies) must never be stored by a
     # shared cache or the browser's back/forward cache.
-    if request.url.path.startswith("/api/"):
+    if request.url.path.startswith(("/api/", "/oauth/", "/mcp")):
         h.setdefault("Cache-Control", "no-store")
     return response
 app.state.limiter = limiter
+
+
+@app.on_event("startup")
+def _check_database_is_current() -> None:
+    from varavu_selavu_service.db.migration_check import check
+    from varavu_selavu_service.db.session import engine
+
+    check(engine)
 
 
 @app.on_event("startup")
@@ -120,3 +135,27 @@ def privacy_policy():
 def terms_of_service():
     path = Path(__file__).resolve().parents[1] / "terms_of_service.html"
     return FileResponse(path)
+
+
+# Default-off integration. The SDK owns MCP wire-format/version negotiation.
+if settings.MCP_ENABLED:
+    from contextlib import asynccontextmanager
+    from varavu_selavu_service.oauth.routes import router as oauth_router
+    from varavu_selavu_service.mcp.server import build_app
+    from varavu_selavu_service.mcp.security import MCPError
+    from varavu_selavu_service.oauth.logging import install as redact_oauth_logs
+    redact_oauth_logs()
+    sdk_app, gateway = build_app()
+    app.include_router(oauth_router)
+    original_lifespan = app.router.lifespan_context
+    @asynccontextmanager
+    async def mcp_lifespan(application):
+        async with original_lifespan(application):
+            async with sdk_app.router.lifespan_context(sdk_app):
+                yield
+    app.router.lifespan_context = mcp_lifespan
+    # Mount at the root lets the SDK match its canonical /mcp route without a redirect.
+    app.mount('/', gateway)
+    @app.exception_handler(MCPError)
+    async def mcp_error(request, exc):
+        return JSONResponse({'error': {'code':exc.code, **exc.details}}, status_code=exc.status if exc.status != 200 else 400)

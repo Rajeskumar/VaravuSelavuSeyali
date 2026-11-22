@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
 
+from varavu_selavu_service.core.expense_dates import date_problem
 from varavu_selavu_service.core.config import Settings
 from varavu_selavu_service.models.api_models import ResolvedPeriod, ResolvedScope
 
@@ -460,6 +461,9 @@ def _create_personal_expense_from_agent(
         return "Error: amount must be a positive number."
     if not description or not description.strip():
         return "Error: a description is required."
+    problem = date_problem(expense_date or date.today().isoformat())
+    if problem:
+        return f"Error: {problem}"
     try:
         result = expense_service.add_expense(
             user_id=user_id,
@@ -686,6 +690,9 @@ def _create_group_expense_from_agent(
         # ExpenseService.add_expense, which also accepts ISO) — see its `_parse_date`.
         parsed_date = date.fromisoformat(expense_date) if expense_date else date.today()
         mmddyyyy = parsed_date.strftime("%m/%d/%Y")
+        problem = date_problem(mmddyyyy)
+        if problem:
+            return f"Error: {problem}"
         result = group_expense_service.create_expense(
             group_id=match["group_id"],
             actor_email=actor_email,

@@ -6,6 +6,8 @@ import uuid
 from fastapi import HTTPException
 
 from sqlalchemy import func
+from varavu_selavu_service.core.expense_dates import assert_expense_date
+from varavu_selavu_service.services.personal_write_lock import lock_personal_user, duplicate_fingerprint
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.models import Expense
 from varavu_selavu_service.services.tag_service import get_tags_for_expenses
@@ -25,7 +27,9 @@ class ExpenseService:
         self, user_id: str, date: Union[str, date_type], description: str, category: str, cost: float,
         merchant_name: Optional[str] = None, card_id: Optional[str] = None,
         notes: Optional[str] = None,
+        commit: bool = True, source_connection_id: str | None = None, payment_method: str | None = None,
     ) -> Dict:
+        lock_personal_user(self.db, user_id)
         if isinstance(date, date_type):
             date_str = date.strftime("%m/%d/%Y")
         else:
@@ -48,6 +52,9 @@ class ExpenseService:
             merchant_name=merchant_name,
             card_id=uuid.UUID(str(card_id)) if card_id else None,
             notes=notes,
+            created_by_connection_id=source_connection_id,
+            payment_method=payment_method,
+            dup_fingerprint=duplicate_fingerprint("USD", cost, merchant_name, description),
         )
         self.db.add(db_expense)
         
@@ -65,7 +72,9 @@ class ExpenseService:
             line_total=cost,
         )
         self.db.add(proxy_item)
-        self.db.commit()
+        self.db.flush()
+        if commit:
+            self.db.commit()
         
         return {
             "row_id": str(new_id),
@@ -88,6 +97,7 @@ class ExpenseService:
             # malformed id simply matches nothing (the route turns this into a 404).
             return None
 
+        lock_personal_user(self.db, user_id)
         expense = self.db.query(Expense).filter(
             Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None)
         ).first()
@@ -134,12 +144,16 @@ class ExpenseService:
         tags_by_expense = get_tags_for_expenses(self.db, expense_ids, user_id)
         card_refs = get_card_refs_for_expenses(self.db, [r.card_id for r in expenses])
 
+        from varavu_selavu_service.db.mcp_models import MCPConnection
+        connection_ids = {r.created_by_connection_id for r in expenses if r.created_by_connection_id}
+        connection_names = {r.id: r.client_name for r in self.db.query(MCPConnection).filter(MCPConnection.id.in_(connection_ids)).all()} if connection_ids else {}
         results = []
         for r in expenses:
             dt = r.purchased_at
             date_str = dt.strftime("%m/%d/%Y") if dt else "01/01/1970"
             results.append({
                 "row_id": str(r.id),
+                "created_by_assistant": connection_names.get(r.created_by_connection_id),
                 "user_id": user_id,
                 "date": date_str,
                 "description": r.description or "",
@@ -183,6 +197,7 @@ class ExpenseService:
             # See delete_expense: a malformed id matches nothing, rather than a DB-level 500.
             raise HTTPException(status_code=404, detail="Expense not found")
 
+        lock_personal_user(self.db, user_id)
         expense = self.db.query(Expense).filter(Expense.id == parsed_id, Expense.user_email == user_id, Expense.group_id.is_(None)).first()
         if expense is None:
             # The scoped lookup missing means the expense does not exist, belongs to someone
@@ -190,6 +205,9 @@ class ExpenseService:
             # below and reported success while writing nothing -- a silent data loss that made
             # a real bug indistinguishable from a successful save. Matches delete_expense.
             raise HTTPException(status_code=404, detail="Expense not found")
+
+        # Editing an older expense is fine as long as its date is left alone.
+        assert_expense_date(date_str, check_past=not (expense.purchased_at and expense.purchased_at.date() == purchased_at.date()))
 
         old_expense_data = None
         if expense:
@@ -202,6 +220,7 @@ class ExpenseService:
             expense.description = description
             expense.category_id = category
             expense.amount = cost
+            expense.dup_fingerprint = duplicate_fingerprint(expense.currency, cost, merchant_name, description)
             expense.merchant_name = merchant_name
             expense.card_id = uuid.UUID(str(card_id)) if card_id else None
             if notes is not NOTES_UNCHANGED:

@@ -62,7 +62,7 @@ def db_session_real():
 
     from sqlalchemy.dialects.postgresql import insert
 
-    u_stmt = insert(User).values(id=uuid.uuid4(), email=E2E_USER, password_hash="hash", name="Groups E2E").on_conflict_do_nothing()
+    u_stmt = insert(User).values(id=uuid.uuid4(), email=E2E_USER, password_hash="hash", name="Groups E2E", email_verified=True).on_conflict_do_nothing()  # groups need a verified email (spec R8)
     db.execute(u_stmt)
     db.commit()
 

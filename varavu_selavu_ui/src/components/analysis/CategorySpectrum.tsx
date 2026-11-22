@@ -34,7 +34,7 @@ export const CategorySpectrum: React.FC<CategorySpectrumProps> = ({ total, categ
         <Typography sx={{ fontFamily: 'Instrument Sans', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'text.secondary', textTransform: 'uppercase' }}>
           CATEGORY BREAKDOWN
         </Typography>
-        <Typography sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
+        <Typography data-testid="category-breakdown-total" sx={{ ...typeScale.display, fontSize: 22, color: 'text.primary' }}>
           {formatMoney(total)}
         </Typography>
       </Box>

@@ -36,12 +36,21 @@ test.describe('group balances (UI) @regression', () => {
     await expect(page.getByText('$25.00').filter({ visible: true }).first()).toBeVisible();
   });
 
-  test('a group with no expenses reads "all settled up"', async ({ page, primaryApi }) => {
+  test('a group with no expenses reads "settled up"', async ({ page, primaryApi }) => {
     const group = await primaryApi.createGroup({ name: qaLabel(`ui_settled_${uniqueSuffix()}`) });
+    // A second (name-only) member: a group of one deliberately shows "Add members to start
+    // splitting" instead of a balance (GroupBalancesPanel's `solo` case), and the Balances
+    // disclosure only renders for groups with more than one member.
+    const res = await primaryApi.post(`/api/v1/groups/${group.group_id}/members`, { data: { display_name: 'QA Guest' } });
+    expect(res.ok(), await res.text()).toBeTruthy();
 
     const groups = new GroupsPage(page);
     await groups.goto();
     await groups.openGroup(group.name);
-    await expect(page.getByText("You're all settled up")).toBeVisible({ timeout: 15_000 });
+    // The disclosure's one-line summary is the settled-state wording at every width (it's
+    // collapsed by default at lg+, expanded below). "You're all settled up" is no longer a
+    // reliable target: the desktop side panel shows it only once someone shares an expense,
+    // and the copy in the group header is mobile-only.
+    await expect(page.getByRole('button', { name: /^Balances/ })).toContainText('Everyone is settled up', { timeout: 15_000 });
   });
 });

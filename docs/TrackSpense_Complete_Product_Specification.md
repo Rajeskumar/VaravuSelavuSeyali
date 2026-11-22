@@ -5,6 +5,9 @@
 > **Product:** TrackSpense · **Company:** Cerebroos · **Repository:** `VaravuSelavuSeyali`  
 > **Production:** web `https://expense.cerebroos.com` · API `https://trackspense-api.cerebroos.com`
 
+> **MCP integration — local default-off v1, 2026-11-21.** Personal-only reads and additions use separate scoped OAuth credentials. `verify_expense` stores an immutable preview; first-party browser approval records the exact revision; `save_expense(operation_id)` commits once after policy/duplicate checks. Every addition needs approval. Historical/itemized receipts are supported; logout-all/reset/change revoke grants and approvals atomically with app sessions. Browser approval works on phones; both clients expose attribution and connection management. Ten OAuth/MCP tables, expense provenance/tombstone FKs, original session authentication time and three-decimal quantities are covered by additive migrations. Endpoint/tool contracts remain in [tool specification](mcp-tool-specification.md), [security design](mcp-security-design.md) and [local implementation/runbook](mcp-local-implementation.md). Real-client compatibility and production rollout remain pending; the older endpoint inventories below are supplemented by those MCP documents.
+> **MCP review corrections — 2026-11-22:** Read responses never persist stale expiry over a committed expense. OAuth bodies are bounded before database checkout; database work is off the event loop. Refresh families use the approved 30-day absolute / 14-day inactivity limits. Metadata fetching has a total three-second deadline across DNS/TLS/headers/body. [Local and GCP setup](mcp-setup-and-deployment.md).
+
 > **How this document was produced.** Version 1.0 was written in March 2026 and described a single-user expense tracker; the product has since grown into a personal-plus-shared finance platform (groups, budgets, Card Coach, tags, entity resolution, a redesigned mobile app, a hardened auth layer and a split CI/CD pipeline). This revision was written from the code, not from earlier documents: the endpoint tables (§8) and the data-model appendix (Appendix A) are **generated from the source** (`api/*.py` route decorators and `models/api_models.py`), and every behavioural claim was checked against the implementation. Where something is designed but not built, or built but switched off, the text says so explicitly. Per-ticket history lives in `docs/features/` and `docs/design/`; [`docs/FEATURE_STATUS.md`](FEATURE_STATUS.md) and [`docs/INFRASTRUCTURE.md`](INFRASTRUCTURE.md) are older, narrower documents — see Appendix C for what in them is now stale.
 
 ---
@@ -115,6 +118,9 @@ It ships as three clients over one backend:
 | R12 | Currency defaults to USD; groups may declare another ISO-4217 currency and expenses may carry their own currency with an FX rate to the group currency. |
 | R13 | Deleting an account hard-deletes the user's personal expenses; their group contributions survive with the member renamed to "Anonymous User". |
 | R14 | An AI write action can only ever act on the authenticated user's own ledger; the agent's tools close over the caller's identity. |
+| R15 | **Expense date window (2026-11-22).** An expense a person enters can't be future-dated (use Recurring for upcoming bills) and can't be dated more than one year back; one day of slack either side covers timezones. Enforced in the pickers, the REST API (422), AI chat tools and MCP. Editing an existing expense may keep an older stored date; recurring auto-add is exempt. Revisit later (ROADMAP). |
+| R16 | **Concurrent edits: last write wins.** Two people editing the same expense (or one person in two tabs) is not detected; the later save replaces the earlier one. |
+| R17 | **Itemized totals must reconcile.** Items + tax + tip − discount must equal the expense total (±2¢). The UI shows how far off the items are and disables Save; the API returns 400. |
 
 ---
 
@@ -159,7 +165,7 @@ Legend — **Web / Mobile**: ✅ shipped · — not applicable. **Flag** is the 
 Templates store description, category, merchant, **day of month**, default cost, start date and status (`Active` / `Paused`); a template may also be **group-scoped** with a `split_config`, in which case executing it creates a split group expense.
 
 - **Due calculation** is monthly: from the template's start (or last-processed month) up to the requested date, one occurrence per elapsed month, with day 31 clamped to the month's last day. Missed months therefore come back as multiple due items.
-- `POST /recurring/confirm` bulk-creates expenses from due items; `POST /recurring/execute_now` runs one template for the current month immediately.
+- `POST /recurring/confirm` bulk-creates expenses from due items; `POST /recurring/execute_now` runs one template for the current month immediately. **One occurrence per template per month:** a second *Run now* in the same month (also after the expense was renamed) adds nothing and returns `already_added`; clients show a warning. Earlier months are added by hand. A failed group add leaves the month unmarked so it can be retried.
 - **Surfaces:** a prompt on app open lists what is due (web dialog, mobile `RecurringPrompt`); web Expenses → *Recurring* tab; mobile **Spend → Recurring** with a cyan "Due in N days" card (*Confirm now* / *Skip*), per-template on/off switch, run-now and inline edit. Toggling or editing a template preserves its group, split and merchant (the upsert endpoint overwrites omitted fields with null, so clients must send them back).
 
 ### 3.4 Analytics, dashboard & insights
@@ -371,7 +377,7 @@ HTTP  →  Middleware (CORS, CSRF)  →  Routers  →  Services  →  SQLAlchemy
 
 | Concern | Technology |
 |:---|:---|
-| Language / runtime | Python **3.12** (container; project floor `^3.10`), Poetry (package-mode off) |
+| Language / runtime | Python **3.12** (container; project floor `>=3.11,<4.0`), Poetry (package-mode off) |
 | Framework | FastAPI ≥ 0.141, Starlette ≥ 1.6, Uvicorn 0.35 |
 | Validation | Pydantic (v2 models; settings use `pydantic.v1.BaseSettings`) |
 | ORM / DB | SQLAlchemy 2, psycopg2-binary, Alembic (<1.14), PostgreSQL |

@@ -403,7 +403,7 @@ const HomePage: React.FC = () => {
       <PageContainer id="features" maxWidth="lg" sx={{ py: { xs: 8, md: 10 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <ScrollReveal>
           <Typography sx={eyebrowSx}>01 / FEATURES</Typography>
-          <Typography sx={sectionHeadingSx}>Built for the four things you actually do.</Typography>
+          <Typography component="h2" sx={sectionHeadingSx}>Built for the four things you actually do.</Typography>
           <Typography sx={{ color: 'text.secondary', fontSize: '0.975rem', mt: 1.5, maxWidth: 560, lineHeight: 1.6 }}>
             Log it fast. Split it fairly. See who owes what. Settle up. Everything else supports those four.
           </Typography>
@@ -473,7 +473,7 @@ const HomePage: React.FC = () => {
       <PageContainer id="plan" maxWidth="lg" sx={{ py: { xs: 8, md: 9 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <ScrollReveal>
           <Typography sx={eyebrowSx}>02 / PLAN AHEAD</Typography>
-          <Typography sx={sectionHeadingSx}>Spend on purpose, not by surprise.</Typography>
+          <Typography component="h2" sx={sectionHeadingSx}>Spend on purpose, not by surprise.</Typography>
           <Typography sx={{ color: 'text.secondary', fontSize: '0.975rem', mt: 1.5, maxWidth: 560, lineHeight: 1.6 }}>
             Budgets that warn you early, a coach for the cards you already carry, and prices tracked down to the item.
           </Typography>
@@ -514,7 +514,7 @@ const HomePage: React.FC = () => {
       <PageContainer id="how" maxWidth="lg" sx={{ py: { xs: 8, md: 9 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <ScrollReveal>
           <Typography sx={eyebrowSx}>03 / HOW IT WORKS</Typography>
-          <Typography sx={sectionHeadingSx}>From "who paid?" to "all settled" in three steps.</Typography>
+          <Typography component="h2" sx={sectionHeadingSx}>From "who paid?" to "all settled" in three steps.</Typography>
         </ScrollReveal>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 3.5, mt: 5.5 }}>
           {STEPS.map(({ n, title, body }, i) => (
@@ -551,7 +551,7 @@ const HomePage: React.FC = () => {
       <PageContainer id="trust" maxWidth="lg" sx={{ py: { xs: 8, md: 9 }, scrollMarginTop: ANCHOR_SCROLL_MARGIN, position: 'relative', zIndex: 1 }}>
         <ScrollReveal>
           <Typography sx={eyebrowSx}>04 / TRUST & PRIVACY</Typography>
-          <Typography sx={sectionHeadingSx}>Your money data, held the way it should be.</Typography>
+          <Typography component="h2" sx={sectionHeadingSx}>Your money data, held the way it should be.</Typography>
         </ScrollReveal>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.25, mt: 5.5 }}>
           {TRUST_POINTS.map(({ icon, title, body, how }, i) => (
@@ -569,7 +569,7 @@ const HomePage: React.FC = () => {
         <PageContainer maxWidth={false} sx={{ maxWidth: 760, mx: 'auto', py: { xs: 8, md: 9 } }}>
           <ScrollReveal>
             <Typography sx={eyebrowSx}>05 / FAQ</Typography>
-            <Typography sx={sectionHeadingSx}>Questions, answered.</Typography>
+            <Typography component="h2" sx={sectionHeadingSx}>Questions, answered.</Typography>
           </ScrollReveal>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mt: 4.5 }}>
             {FAQS.map(({ q, a }, i) => (

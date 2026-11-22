@@ -1,4 +1,5 @@
 import React from 'react';
+import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
 import Drawer from '@mui/material/Drawer';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -148,6 +149,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
 
   const parsedAmount = parseFloat(form.amount);
   const amountValid = Number.isFinite(parsedAmount) && parsedAmount > 0;
+  const dateProblem = expenseDateProblem(form.date, undefined, toISODate(parseAppDate(expense.date)));
 
   const handleSave = async () => {
     if (itemsLoaded && items.length > 0) {
@@ -214,6 +216,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
           <Typography sx={{ ...typeScale.display, color: theme.palette.text.primary }}>
             {formatMoney(expense.groupAmount ?? expense.amount)}
           </Typography>
+          {expense.createdByAssistant && <Typography variant="caption">Added by {expense.createdByAssistant}</Typography>}
           {expense.kind === 'group' && (
             <Typography variant="caption" color="text.secondary">
               {expense.groupName} · your share {formatMoney(expense.amount)}
@@ -265,6 +268,9 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
             value={form.date}
             onChange={(e) => setForm({ ...form, date: e.target.value })}
             InputLabelProps={{ shrink: true }}
+            slotProps={{ htmlInput: { max: expenseDateBounds().max } }}
+            error={!!dateProblem}
+            helperText={dateProblem || undefined}
           />
           <TextField
             label="Amount"
@@ -300,7 +306,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
       </Box>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 3 }}>
-        <Button variant="contained" size="large" onClick={handleSave} disabled={saving || deleting || !amountValid}>
+        <Button variant="contained" size="large" onClick={handleSave} disabled={saving || deleting || !amountValid || !!dateProblem}>
           {saving ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : 'Save changes'}
         </Button>
         {expense.kind === 'personal' && onMoveToGroup && (

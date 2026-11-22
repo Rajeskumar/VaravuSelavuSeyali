@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from varavu_selavu_service.core.expense_dates import assert_expense_date
 from varavu_selavu_service.models.api_models import (
     ExpenseRequest,
     ReceiptParseResponse,
@@ -208,6 +209,8 @@ def get_config():
         "card_coach_enabled": settings_now.CARD_COACH_ENABLED,
         "tags_enabled": settings_now.TAGS_ENABLED,
         "ai_enabled": settings_now.AI_ENABLED,
+        "mcp_enabled": settings_now.MCP_ENABLED,
+        "mcp_management_url": settings_now.PUBLIC_APP_URL.rstrip("/") + "/account/assistants",
     }
 
 
@@ -302,6 +305,7 @@ def create_expense(
     card_service: CardService = Depends(get_card_service),
     user_id: str = Depends(auth_required),
 ):
+    assert_expense_date(data.date)
     # TS-CARD-114: must be one of the caller's own held cards — never an arbitrary catalog id.
     if data.card_id:
         card_service.assert_card_is_held(user_id, data.card_id)
@@ -970,6 +974,7 @@ def create_expense_with_items(
     for item in items:
         if "item_name" not in item or "line_total" not in item:
             raise HTTPException(status_code=400, detail="Invalid item")
+    assert_expense_date(header["purchased_at"])
     # `header` is an untyped dict, so its amount has not been through the
     # constrained money types the way a declared field would have been.
     amount = validate_money_amount(header["amount"], field_name="amount")
@@ -983,11 +988,12 @@ def create_expense_with_items(
     existing = repo.find_expense_by_fingerprint(user_id, header.get("fingerprint", ""))
     if existing and not force:
         raise HTTPException(status_code=409, detail={"expense_id": existing.get("id")})
-    expense_id = repo.append_expense({**header, "user_email": user_id, "split_type": "itemized"})
+    from varavu_selavu_service.services.expense_write_service import ExpenseWriteService
     try:
-        item_ids = repo.append_items(user_id, expense_id, items)
+        expense_id, item_ids = ExpenseWriteService(repo.db).create_itemized(user_id, header, items)
+        repo.db.commit()
     except Exception:
-        repo.delete_expense(expense_id)
+        repo.db.rollback()
         raise
 
     # Trigger insights aggregation for item + merchant tracking
@@ -1070,6 +1076,8 @@ def update_expense_items(
     analysis_service: AnalysisService = Depends(get_analysis_service),
     user_id: str = Depends(auth_required),
 ):
+    from varavu_selavu_service.services.personal_write_lock import lock_personal_user
+    lock_personal_user(db, user_id)
     expense = _get_owned_personal_expense(db, expense_id, user_id)
     items = [i.dict(exclude_unset=True) for i in payload.items]
     if not items:
@@ -1081,7 +1089,7 @@ def update_expense_items(
     if abs(subtotal + payload.tax - payload.discount - payload.amount) > Decimal("0.02"):
         raise HTTPException(status_code=400, detail="Totals do not reconcile")
 
-    repo.delete_items_for_expense(expense_id)
+    repo.delete_items_for_expense(expense_id, commit=False)
     expense.amount = payload.amount
     expense.tax = payload.tax
     expense.discount = payload.discount
@@ -1394,6 +1402,21 @@ def execute_recurring_now(
         except Exception:
             continue
 
+    # The template's own marker also counts: once this month's occurrence was added (or confirmed
+    # from the due prompt) the template is stamped, even if the user later renamed the expense.
+    last_iso = tpl.get("last_processed_iso")
+    if last_iso and str(last_iso)[:7] == month_key:
+        already = True
+    if already:
+        # One occurrence per template per month. Older months are added manually by the user.
+        return {
+            "success": True,
+            "created": False,
+            "already_added": True,
+            "month": month_key,
+            "message": "This recurring expense was already added for this month.",
+        }
+
     created = False
     if not already:
         group_id = tpl.get("group_id")
@@ -1451,6 +1474,9 @@ def execute_recurring_now(
             except Exception as e:
                 import logging
                 logging.warning(f"Failed to execute group recurring expense for template {template_id}: {e}")
+                # Don't stamp the month as processed: nothing was added, so the user must be able
+                # to retry instead of silently losing this month's expense.
+                return {"success": False, "created": False, "error": "Could not add the group expense. Try again."}
         else:
             expense_service.add_expense(
                 user_id=user_id,

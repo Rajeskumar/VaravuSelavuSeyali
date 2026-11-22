@@ -1,6 +1,14 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
 
+/** Accessible names of the expense-entry button: desktop header vs mobile FAB. */
+export const ADD_EXPENSE_BUTTON_NAME = /^(new expense|add expense)$/i;
+
+/** The visible expense-entry button on any page and viewport — see ExpensesPage.addExpenseButton. */
+export function addExpenseButton(page: Page): Locator {
+  return page.getByRole('button', { name: ADD_EXPENSE_BUTTON_NAME }).last();
+}
+
 export class ExpensesPage extends BasePage {
   constructor(page: Page) {
     super(page);
@@ -20,16 +28,17 @@ export class ExpensesPage extends BasePage {
   }
 
   /**
-   * On this page specifically (not Dashboard, which correctly shows only one), narrow
-   * viewports render BOTH the desktop header's text button AND a floating "+" FAB
-   * simultaneously — both named "Add Expense", both `display:flex`/visible at once, a
-   * real UI redundancy confirmed via direct DOM inspection (see TEST-PLAN.md §7e).
-   * `.last()`: the FAB consistently renders after the header button in DOM order, and is
-   * the only one present at all when there's no duplication (desktop) — so this picks
-   * the right one either way without depending on which viewport is active.
+   * The app's expense-entry button, which is named differently per viewport: desktop shows
+   * the header's "New expense" button (App.tsx, hidden below `md`), mobile shows the
+   * "Add Expense" FAB (MainLayout.tsx, mobile-only). Exactly one is visible at any width and
+   * role queries skip hidden elements, so this resolves to a single button either way.
+   * `.last()` is kept only as a guard against a future layout rendering both again (the FAB
+   * comes later in DOM order). Matching only "Add Expense" broke every desktop run once the
+   * header button was renamed (the old note here described a header/FAB duplication that
+   * no longer exists).
    */
   get addExpenseButton(): Locator {
-    return this.page.getByRole('button', { name: 'Add Expense' }).last();
+    return addExpenseButton(this.page);
   }
 
   get exportCsvButton(): Locator {
@@ -57,17 +66,22 @@ export class ExpensesPage extends BasePage {
     await this.row(description).click();
   }
 
-  /** Hover-revealed row actions — must hover the row first or the icon buttons are inactionable. */
+  /**
+   * Hover-revealed row actions — must hover the row first or the icon buttons are inactionable.
+   * `exact: true`: the row itself is a <button> named after its description (accessibility
+   * fix, no nested interactives), so a substring match on "delete"/"edit" also hit the row
+   * whenever the description contained that word ("…ui_cancel_delete_…").
+   */
   async editRow(description: string): Promise<void> {
     const target = this.row(description);
     await target.hover();
-    await target.getByRole('button', { name: 'edit' }).click();
+    await target.getByRole('button', { name: 'edit', exact: true }).click();
   }
 
   async deleteRow(description: string): Promise<void> {
     const target = this.row(description);
     await target.hover();
-    await target.getByRole('button', { name: 'delete' }).click();
+    await target.getByRole('button', { name: 'delete', exact: true }).click();
   }
 
   async confirmDelete(): Promise<void> {

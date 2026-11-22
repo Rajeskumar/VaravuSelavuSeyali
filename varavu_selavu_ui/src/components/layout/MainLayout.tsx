@@ -1,4 +1,5 @@
 import React from 'react';
+import { BOTTOM_CHROME_VAR } from '../common/ConsentBanner';
 import Box from '@mui/material/Box';
 import Fab from '@mui/material/Fab';
 import Zoom from '@mui/material/Zoom';
@@ -58,6 +59,15 @@ const MainLayout: React.FC<Props> = ({ children }) => {
     location.pathname.startsWith('/profile') ||
     location.pathname.startsWith('/contact') ||
     (location.pathname.startsWith('/analysis') && new URLSearchParams(location.search).get('tab') === 'cards');
+
+  // Tell the cookie banner how much fixed chrome sits at the bottom (tab bar + the Add button
+  // riding above it, 56px + 16px gap + 16px breathing room) so it floats above, not over, them.
+  React.useEffect(() => {
+    if (!isMobile) return;
+    const root = document.documentElement;
+    root.style.setProperty(BOTTOM_CHROME_VAR, `calc(${BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom) + 88px)`);
+    return () => { root.style.removeProperty(BOTTOM_CHROME_VAR); };
+  }, [isMobile]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: `calc(100vh - ${HEADER_HEIGHT}px)` }}>

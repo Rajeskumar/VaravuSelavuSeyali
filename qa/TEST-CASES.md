@@ -96,7 +96,7 @@ scannable — see the test file for the exact list.
 | GRP-005 | Membership (API) | Create group, add member by email, member appears in roster | Critical | API | Yes | `api/tests/groups-api.spec.ts` |
 | GRP-006 | Validation (API) | Exact-split entries not summing to total → 4xx | High | API/Negative | Yes | `api/tests/groups-api.spec.ts` |
 | GRP-007 | Validation (API) | Payers not summing to expense amount → 4xx | High | API/Negative | Yes | `api/tests/groups-api.spec.ts` |
-| GRP-008 | Authorization (API) | Non-member is rejected from a group's routes with 403 | Critical | Security | Yes | `api/tests/groups-api.spec.ts` |
+| GRP-008 | Authorization (API) | Non-member is rejected from a group's routes with 404 (same as a missing group, so ids can't be probed) | Critical | Security | Yes | `api/tests/groups-api.spec.ts` |
 
 ## Budgets
 
@@ -130,7 +130,7 @@ scannable — see the test file for the exact list.
 | NEG-001 | Malformed request | Non-JSON body on a JSON endpoint → 4xx, not 500 | High | API/Negative | Yes | `api/tests/negative-api.spec.ts` |
 | NEG-002 | Malformed request | Unknown extra field is ignored, not an error | Low | API | Yes | `api/tests/negative-api.spec.ts` |
 | NEG-003 | Missing resource | `PUT` on nonexistent expense id → 404 | High | API/Negative | Yes | `api/tests/negative-api.spec.ts` |
-| NEG-004 | Missing resource | Balances for nonexistent group → 403, not a 500 | High | API/Negative | Yes | `api/tests/negative-api.spec.ts` |
+| NEG-004 | Missing resource | Balances for nonexistent group → 404, not a 500 | High | API/Negative | Yes | `api/tests/negative-api.spec.ts` |
 | NEG-005 | File upload | Wrong-content declared-PNG upload → 415 | High | API/Negative | Yes | `api/tests/negative-api.spec.ts` |
 | NEG-006 | File upload | Unsupported file type → 415 | High | API/Negative | Yes | `api/tests/negative-api.spec.ts` |
 | NEG-007 | File upload | Oversized upload (>12MB) → 413 | Medium | API/Negative | Yes | `api/tests/negative-api.spec.ts` |

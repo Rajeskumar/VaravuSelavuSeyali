@@ -182,8 +182,10 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
             </View>
           )}
 
-          <Text style={[styles.reconcileText, { color: reconciled ? theme.colors.success : theme.colors.warning }]}>
-            {reconciled ? 'Matches total' : `Items total ${fmt(computedTotal)} — off by ${fmt(Math.abs(delta))}`}
+          <Text accessibilityRole="alert" style={[styles.reconcileText, { color: reconciled ? theme.colors.success : theme.colors.warning }]}>
+            {reconciled
+                ? 'Matches total'
+                : `Items total ${fmt(computedTotal)}, ${fmt(Math.abs(delta))} ${delta > 0 ? 'more' : 'less'} than the expense total. Fix an item or the total to save.`}
           </Text>
         </View>
       )}

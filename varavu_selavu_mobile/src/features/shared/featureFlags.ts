@@ -10,6 +10,8 @@ export interface FeatureFlags {
   card_coach_enabled: boolean;
   tags_enabled: boolean;
   ai_enabled?: boolean;
+  mcp_enabled?: boolean;
+  mcp_management_url?: string;
 }
 
 export async function getConfig(): Promise<FeatureFlags> {

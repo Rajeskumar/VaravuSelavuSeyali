@@ -3,7 +3,7 @@ import { LoginPage } from '../../pages/LoginPage';
 import { DashboardPage } from '../../pages/DashboardPage';
 import { ExpensesPage } from '../../pages/ExpensesPage';
 import { ExpenseDetailPanel } from '../../pages/ExpenseDetailPanel';
-import { QA_USERS } from '../../fixtures/users.fixture';
+import { QA_SESSION_USER } from '../../fixtures/users.fixture';
 import { qaLabel, uniqueSuffix } from '../../helpers/test-data.helper';
 import { MOBILE_VIEWPORT_MAX_WIDTH } from '../../helpers/responsive.helper';
 
@@ -38,7 +38,9 @@ test.describe('golden path @smoke @critical', () => {
     const detail = new ExpenseDetailPanel(page);
 
     await test.step('application loads and login succeeds', async () => {
-      await login.loginAndWaitForDashboard(QA_USERS.primary.email, QA_USERS.primary.password);
+      // QA_SESSION_USER, not primary: this test ends by logging out, which ends every access
+      // token the account holds, and the regression run after it reuses primary's session.
+      await login.loginAndWaitForDashboard(QA_SESSION_USER.email, QA_SESSION_USER.password);
       await dashboard.expectLoaded();
     });
 

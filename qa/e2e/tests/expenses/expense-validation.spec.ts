@@ -1,6 +1,7 @@
 import { test, expect } from '../../fixtures/auth.fixture';
 import { qaLabel, uniqueSuffix } from '../../helpers/test-data.helper';
 import { MOBILE_VIEWPORT_MAX_WIDTH } from '../../helpers/responsive.helper';
+import { addExpenseButton } from '../../pages/ExpensesPage';
 
 /**
  * Client-side validation on the Quick Capture amount field (src/utils/amount.ts,
@@ -17,9 +18,9 @@ test.describe('expense form validation (UI) @regression @validation', () => {
   test.beforeEach(async ({ page }) => {
     test.skip((page.viewportSize()?.width ?? 0) <= MOBILE_VIEWPORT_MAX_WIDTH, 'desktop-only interaction pattern');
     await page.goto('/expenses');
-    // .last() — see ExpensesPage.addExpenseButton's note on the mobile-viewport
-    // header-button/FAB duplication.
-    await page.getByRole('button', { name: 'Add Expense' }).last().click();
+    // Desktop-only spec, so this is the header's "New expense" button — see
+    // ExpensesPage.addExpenseButton.
+    await addExpenseButton(page).click();
     await expect(page.getByTestId('quick-capture-description')).toBeVisible();
   });
 

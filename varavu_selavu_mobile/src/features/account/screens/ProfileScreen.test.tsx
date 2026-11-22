@@ -1,7 +1,9 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ProfileScreen from './ProfileScreen';
+import { Linking } from 'react-native';
+import { getConfig } from '../../shared/featureFlags';
 import { getProfile } from '../api/profile';
 
 jest.mock('../../../core/theme/ThemeContext', () => {
@@ -22,6 +24,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('../../budgets/hooks/useBudgetsEnabled', () => ({ useBudgetsEnabled: () => ({ enabled: false }) }));
 jest.mock('../../cards/hooks/useCardCoachEnabled', () => ({ useCardCoachEnabled: () => ({ enabled: false }) }));
 jest.mock('expo-notifications', () => ({ getPermissionsAsync: jest.fn(async () => ({ granted: true })) }));
+jest.mock('../../shared/featureFlags', () => ({ getConfig: jest.fn(async () => ({ mcp_enabled: false })) }));
 jest.mock('../api/profile', () => ({ getProfile: jest.fn(), updateProfile: jest.fn() }));
 const mockedGetProfile = getProfile as jest.MockedFunction<typeof getProfile>;
 
@@ -39,4 +42,15 @@ it('renders the account menu once the profile has loaded (hook order stays stabl
   expect(await screen.findByText('Ada Lovelace')).toBeTruthy();
   expect(screen.getByText('Download all my data')).toBeTruthy();
   client.clear();
+});
+
+it('opens the configured assistant management page in the browser', async () => {
+  (getConfig as jest.Mock).mockResolvedValue({ mcp_enabled: true, mcp_management_url: 'https://expense.cerebroos.com/account/assistants' });
+  mockedGetProfile.mockResolvedValue({ email: 'ada@example.com', name: 'Ada Lovelace' });
+  const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  render(<QueryClientProvider client={client}><ProfileScreen navigation={{ navigate: jest.fn() }} /></QueryClientProvider>);
+  fireEvent.press(await screen.findByText('Connected assistants'));
+  await waitFor(() => expect(open).toHaveBeenCalledWith('https://expense.cerebroos.com/account/assistants'));
+  open.mockRestore(); client.clear();
 });

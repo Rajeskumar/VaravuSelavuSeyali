@@ -4,6 +4,7 @@ from datetime import datetime, date, timezone
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy.orm import Session
+from varavu_selavu_service.services.personal_write_lock import lock_personal_user, duplicate_fingerprint
 from varavu_selavu_service.core.money import to_decimal
 from varavu_selavu_service.db.models import Expense, ExpenseItem
 
@@ -63,7 +64,8 @@ class PostgresRepo:
                 continue
         return None
 
-    def append_expense(self, header: Dict[str, Any]) -> str:
+    def append_expense(self, header: Dict[str, Any], commit: bool = True) -> str:
+        lock_personal_user(self.db, header["user_email"])
         expense_id = str(uuid.uuid4())
         
         email = header.get("user_email")
@@ -100,11 +102,15 @@ class PostgresRepo:
             description=description,
             notes=notes,
             fingerprint=fingerprint,
+            created_by_connection_id=header.get("created_by_connection_id"),
+            dup_fingerprint=duplicate_fingerprint(currency, amount, merchant_name, description),
             split_type=header.get("split_type"),
             card_id=uuid.UUID(str(card_id)) if card_id else None,
         )
         self.db.add(expense)
-        self.db.commit()
+        self.db.flush()
+        if commit:
+            self.db.commit()
         return expense_id
 
     def delete_expense(self, expense_id: str) -> None:
@@ -115,10 +121,13 @@ class PostgresRepo:
 
         expense = self.db.query(Expense).filter(Expense.id == parsed_id).first()
         if expense:
+            if expense.user_email and expense.group_id is None:
+                lock_personal_user(self.db, expense.user_email)
             self.db.delete(expense)
             self.db.commit()
 
-    def append_items(self, user_email: str, expense_id: str, items: List[Dict[str, Any]]) -> List[str]:
+    def append_items(self, user_email: str, expense_id: str, items: List[Dict[str, Any]], commit: bool = True) -> List[str]:
+        lock_personal_user(self.db, user_email)
         ids = []
         db_items = []
         for item in items:
@@ -158,7 +167,9 @@ class PostgresRepo:
             db_items.append(db_item)
 
         self.db.add_all(db_items)
-        self.db.commit()
+        self.db.flush()
+        if commit:
+            self.db.commit()
         return ids
 
     def get_items_for_expense(self, expense_id: str) -> List[Dict[str, Any]]:
@@ -190,7 +201,7 @@ class PostgresRepo:
             for item in items
         ]
 
-    def delete_items_for_expense(self, expense_id: str) -> None:
+    def delete_items_for_expense(self, expense_id: str, commit: bool = True) -> None:
         try:
             parsed_id = uuid.UUID(str(expense_id))
         except ValueError:

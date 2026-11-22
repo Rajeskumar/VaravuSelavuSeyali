@@ -141,3 +141,38 @@ def test_recurring_group_expense_push_names_the_expense(db_session: Session, moc
     assert fan_out.called
     assert fan_out.call_args.kwargs["description"] == "Internet Bill"
     assert fan_out.call_args.kwargs["event_type"] == "expense_added"
+
+
+def test_run_now_twice_in_a_month_adds_only_one_expense(db_session: Session, mock_auth):
+    """One occurrence per template per month: a second Run now is refused with a flag the
+    clients turn into a warning (older months are added manually)."""
+    user, group = setup_user_and_group(db_session)
+    tpl_id = client.post("/api/v1/recurring/upsert", json={
+        "description": "Internet Bill", "category": "Utilities", "day_of_month": 5, "default_cost": 50.0,
+        "group_id": str(group.id), "split_config": {"type": "equal", "entries": []},
+    }).json()["id"]
+
+    first = client.post("/api/v1/recurring/execute_now", json={"template_id": tpl_id, "cost": 50.0}).json()
+    second = client.post("/api/v1/recurring/execute_now", json={"template_id": tpl_id, "cost": 50.0}).json()
+
+    assert first["created"] is True
+    assert second["created"] is False
+    assert second["already_added"] is True
+    assert db_session.query(Expense).filter(Expense.group_id == group.id).count() == 1
+
+
+def test_run_now_after_renaming_the_expense_still_blocked(db_session: Session, mock_auth):
+    """The template's processed marker, not only description matching, blocks a duplicate."""
+    user, group = setup_user_and_group(db_session)
+    tpl_id = client.post("/api/v1/recurring/upsert", json={
+        "description": "Internet Bill", "category": "Utilities", "day_of_month": 5, "default_cost": 50.0,
+        "group_id": str(group.id), "split_config": {"type": "equal", "entries": []},
+    }).json()["id"]
+    client.post("/api/v1/recurring/execute_now", json={"template_id": tpl_id, "cost": 50.0})
+    exp = db_session.query(Expense).filter(Expense.group_id == group.id).one()
+    exp.description = "Renamed"
+    db_session.commit()
+
+    again = client.post("/api/v1/recurring/execute_now", json={"template_id": tpl_id, "cost": 50.0}).json()
+    assert again["already_added"] is True
+    assert db_session.query(Expense).filter(Expense.group_id == group.id).count() == 1

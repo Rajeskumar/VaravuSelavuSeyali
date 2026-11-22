@@ -22,6 +22,9 @@ import { PENDING_INVITE_KEY } from './JoinGroupPage';
  * default /dashboard destination — this app has no general "return to" mechanism,
  * so the invite flow is the one deliberate exception. */
 function postLoginDestination(): string {
+  const assistantReturn = sessionStorage.getItem("vs_assistant_return");
+  sessionStorage.removeItem("vs_assistant_return");
+  if (assistantReturn && /^\/(ai\/(approve|connect)\/[A-Za-z0-9_-]+|account\/assistants)$/.test(assistantReturn)) return assistantReturn;
   const token = sessionStorage.getItem(PENDING_INVITE_KEY);
   return token ? `/groups/join/${token}` : '/dashboard';
 }

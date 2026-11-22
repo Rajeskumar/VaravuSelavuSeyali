@@ -40,6 +40,7 @@ export default function ExpenseQuickSheet({ expense, allExpenses, onClose, onEdi
   const rows: { k: string; v: string }[] = [
     ...(expense.merchant_name ? [{ k: 'Merchant', v: expense.merchant_name }] : []),
     { k: 'Split', v: 'Just me' },
+    ...(expense.created_by_assistant ? [{ k: 'Added by', v: expense.created_by_assistant }] : []),
     ...((expense.tags || []).length > 0 ? [{ k: 'Tags', v: expense.tags!.map((t) => t.name).join(', ') }] : []),
     ...(isItemized ? [{ k: 'Receipt', v: `${expense.item_count ?? 'Multiple'} items read` }] : []),
   ];

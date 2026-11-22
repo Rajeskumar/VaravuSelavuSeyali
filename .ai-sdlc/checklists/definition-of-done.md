@@ -13,4 +13,4 @@ Tick what applies; write "n/a — reason" for the rest. Trivial changes (typos, 
 **Performance:** bounded queries/lists, no N+1, indexes for new filters, heavy UI lazy.
 **Security:** no new injection/IDOR/secret exposure; LLM calls metered via `ai_quota_service`.
 **Observability:** failures logged with ids, no PII.
-**Docs:** README/spec/`docs/features` updated if user-facing or contract changed; AGENTS.md Key Decision for new patterns.
+**Docs:** `README.md` updated if product scope or setup changed; `docs/TrackSpense_Complete_Product_Specification.md` updated if business rules, schemas, endpoints, or user-facing behaviour changed; `docs/FEATURE_STATUS.md` updated for added/completed features; `docs/features/` spec added or updated for non-trivial features; `docs/ARCHITECTURE.md` updated for new services/layers/integrations; AGENTS.md Key Decision for new patterns.

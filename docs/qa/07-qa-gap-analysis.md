@@ -1,0 +1,54 @@
+# 07 — QA Gap Analysis
+
+Severity follows `.ai-sdlc/README.md` (P0 blocker · P1 high · P2 medium · P3 low). Labels: **Confirmed** (observed at runtime or in code), **Suspected** (needs verification), **Decision** (needs a product answer). Evidence tags R/C/U as in `01`.
+
+## A. Defects and risks found during the audit
+
+| ID | Sev | Status | Area | Finding | Evidence | User impact | Suggested next step |
+|---|---|---|---|---|---|---|---|
+| F-01 | **P1** | **Fixed 2026-11-22** (verified at 390×844) | Responsive / consent | At 390×844 the fixed cookie-consent banner (y 729–844) covers the **entire bottom nav** (785–844) and most of the **Add Expense FAB** (714–770). Playwright's click on the FAB failed repeatedly: "`<p>` from `div[role=region][aria-label="Cookie consent"]` intercepts pointer events". After **Decline** both are usable. | `audit-mobile-banner.png` (audit run), `ConsentBanner.tsx`, `BottomNav.tsx` | A first-time phone user cannot navigate or add an expense until they answer an analytics prompt they may not notice; existing responsive tests don't catch it because they run with consent pre-decided. | Fix layout (banner above nav with spacing, or inline) and add UAT-RESP-002 as a Tier-1 test (B-01). |
+| F-02 | **P1** | **Fixed 2026-11-22** (axe clean) | Accessibility | Header avatar initials fail contrast: #fafafa on #bdbdbd = **1.79:1** (needs 4.5:1), axe *serious*, on every authenticated route in light and dark. Also moderate heading-order on `/`, `/contact`, `/groups`, `/account`. | axe scan 2026-11-22 (`scripts/quality/axe-scan.mjs`) | Low-vision users can't read the initials; it also marks the account menu trigger (named by its `aria-label` "Account menu", so function is intact). | Theme the avatar colours; fix heading levels; add axe job to CI (B-17). |
+| F-03 | P2 | **Closed — by design** (D-08) | UX / groups | Adding a member by email for an account that **is registered but not email-verified** returns 400 "No registered user with that email — add them as a placeholder using display_name instead". The wording is wrong for that case. | `POST /groups/{id}/members` with the unverified audit user | Organiser thinks the person has no account; may create a duplicate placeholder. | Clarify copy or invite flow (Decision D-08). |
+| F-04 | P2 | **Fixed 2026-11-22** | Test docs | `qa/TEST-CASES.md` GRP-008 and NEG-004 say non-members/missing groups get 403; the specs (`groups-api.spec.ts:125`, `negative-api.spec.ts:57`) and `AGENTS.md` say 404. | read | Misleads testers/reviewers. | Update the inventory (B-18). |
+| F-05 | P2 | Confirmed (R) — open, not scheduled | Performance / design (observed, not QA-scoped) | Authenticated page loads fire many requests: Dashboard ≈ 11 calls; `GET /groups`, `/recurring/due`, `/auth/me`, `/config` fire on every page (even `/contact`), and `GET /groups/{id}/expenses` on Dashboard/Expenses. | Network log, audit run | Slower first paint on slow networks; useful for performance review. | Hand to `performance-review`. |
+| F-06 | P2 | **Fixed 2026-11-22** — root cause: dev DB behind migrations | Environment | The developer's own backend on `:8080` returned **HTTP 500** for `POST /auth/login` (CORS errors followed in the browser) on 2026-11-22 while the same code ran cleanly against a fresh bootstrapped schema. **Root cause (2026-11-22): the dev database was at migration `a6140ff1ccd2`, two behind the code (`98f3d6b1a740`). Login inserts a refresh token with `refresh_tokens.authenticated_at`, which did not exist (`UndefinedColumn` → 500); `expenses.dup_fingerprint` and the MCP tables were missing too. Fixed by `alembic upgrade head` on the dev DB (rehearsed on a copy, backup taken); the backend now logs `DATABASE IS BEHIND THE CODE` at startup when this recurs (`db/migration_check.py`).** | `curl` against `:8080` vs `:8090` | Blocks local manual UAT on that stack. | Done: migrated; startup check added. Run `poetry run alembic upgrade head` after pulling code that adds migrations. |
+| F-07 | P1 | **Closed 2026-11-22** (B-02..B-04) | Coverage | The **web UI recovery path** (unknown-outcome guard, draft restore/discard, `beforeunload`) is a stated architectural decision in `AGENTS.md` but has **no web E2E test**; only logic tests and a mobile Jest test exist. | `05` J-04 | Regressions here risk duplicate or lost financial entries (a P0 area). | B-02..B-04. |
+| F-08 | P1 | **Closed 2026-11-22** (B-06) | Coverage | **Settle-up** has no browser test (FE component test + API only). | `05` J-10 | Settlement errors move real money between people. | B-06. |
+| F-09 | P1 | **Closed 2026-11-22** (B-07, mock OCR) | Coverage / runtime | **Receipt scan UI** has no browser test and was **not observed running** here (file-picker/OCR path not exercised). | `05` J-05 | A core differentiating feature is unverified end-to-end. | B-07. |
+| F-10 | P2 | **Mostly closed 2026-11-22** (B-08..B-15) | Coverage | No UI tests for Recurring, Budgets, Cards, Tags, Analysis switching, Account security, Delete account, Connected assistants, Ask (AI), forgot/reset/verify. | `05` | Regressions caught late. | B-08..B-16. |
+| F-11 | P2 | Confirmed (C) — open (B-19) | Coverage | Mobile native journeys have **no device-level automation** (Jest only); mobile was not run in this audit. | `05` JM-* | Native-only bugs (layout, OCR, push) found manually or in production. | B-19 spike. |
+| F-12 | P2 | **Closed 2026-11-22** (B-17/B-18) | CI | Postgres-only backend tests (`*_e2e_pg.py`, `mcp_pg`, `mcp_migrations_pg`) are not in `unit.yml`; axe scan is not in CI. | workflows | SQL/migration and a11y regressions can reach main. | B-17/B-18. |
+| F-13 | P3 | Confirmed (C) — new specs use exact names | Test robustness | Text-based/case-insensitive locators (e.g. `name: 'close'`) and recent UI-text-driven test fixes show locator drift risk. | `mobile-usability.spec.ts:71`, commits `fef8bf0`, `eb5cd6d` | Flaky/failing tests after copy changes. | Prefer role+exact names; helper constants. |
+| F-14 | P3 | Suspected — open | Accessibility | Charts (Sankey, spectrum, trend lines) have no text alternative or data table that I could find. | not exercised | Blind users can't read chart insights (the numbers also appear in lists). | Verify with SR; add summaries. |
+
+## B. Product decisions (answered 2026-11-22)
+
+| ID | Decision | What changed | Follow-up |
+|---|---|---|---|
+| D-01 | "Dining out" is a **subcategory** of Food & Drink. The owner expected totals to roll up to the main category. | **Decided 2026-11-22: leave as is (subcategory-level totals, no roll-up).** Verified: they do not roll up. Expenses store only the subcategory; Analysis, Dashboard, budgets and the Sankey all group by subcategory (`analysis_service.py` groups by `category_id`). The "Food & Dining" seen in the audit was an API-seeded value that is not in the catalog. Grand totals are still consistent (sum of subcategories). | None. Closed. |
+| D-02 | Receipt items that don't add up: **warn in the UI before save** (interim). | Card shows how far off the items are and says what to fix; Save is disabled while mismatched (API already returned 400). Web + mobile. | ROADMAP: revisit tolerance / allow save-with-warning. |
+| D-03 | Hide Assistants pages when MCP is off. | `/account/assistants`, `/ai/connect/:id`, `/ai/approve/:id` render the 404 unless `config.mcp_enabled`. (The Account button was already hidden.) | — |
+| D-04 | Run now: **once per template per month**; warn, don't add twice; earlier months are manual. | `POST /recurring/execute_now` now also checks the template's processed marker and returns `already_added`; a failed group add no longer marks the month done. Web + mobile show a warning. | — |
+| D-05 | Mobile parity for Connected assistants / Contact / export. | **Clarified:** the assistant itself (MCP) needs only the backend. The only mobile question is whether to ship a *management screen* (list/revoke connections); decided web-only for v1; mobile screen is a planned future feature (ROADMAP). Mobile sessions are still revoked by "sign out everywhere". Contact and export parity not reviewed. | Confirm Contact/export parity if wanted. |
+| D-06 | Settlements: partial and over-payment allowed. | Already how it worked; test added to lock it. | — |
+| D-07 | Leave-site prompt: do what is safe. | **Kept.** Drafts live in per-tab `sessionStorage`, so closing the tab loses them; the prompt is the only guard for that, and a browser can't tell reload from close. | — |
+| D-08 | Mandatory email verification at registration (separate feature). For now, add the person as a placeholder with a display name. | The web flow already does this (placeholder seat + emailed join link) and **mobile now matches** (it showed the raw server error before). Spec drafted: `docs/features/registration_email_verification/SPEC.md`. | Implement after the spec is agreed. |
+| D-09 | No future dates; nothing older than one year. | Enforced in the web/mobile pickers, the REST API (422), AI chat tools and MCP. Edits may keep an older stored date. | ROADMAP: revisit future-dated and older entries. |
+| D-10 | Concurrent edits: **last write wins**. | Documented in `AGENTS.md` and the spec; no code change (it is the current behaviour). | — |
+
+## C. Accessibility concerns (testing view)
+
+Automated: see F-02. Verified-good at runtime: dialogs named and trap focus, Escape returns focus to trigger, errors announced (`role=alert`), route titles and one `<h1>` per page, skip link, 24/44px targets on primary routes (from the earlier a11y review and `qa` REG tests, not re-measured here). **Not verified:** screen-reader output, keyboard-only completion of every journey (only add-expense dialog and menus were exercised), reduced-motion, zoom 200%/400% beyond 320px reflow checks, chart alternatives (F-14), mobile native a11y props.
+
+## D. Functional risk ranking (where a bug costs the most)
+
+1. **Money correctness** — splits, settle-up, balances, receipt item totals, recurring (P0). Strong API coverage; weak UI coverage (F-08/F-09).
+2. **Duplicate/lost writes** — double-click, retry-after-failure, run-now, MCP approve (P0). Duplicate-click and failure guard observed working; not under automated UI test (F-07).
+3. **Data isolation / authorization** — covered well at API level (PERM-*, GRP-008…); keep adding a 403/404 assertion for every new endpoint.
+4. **Auth/session lifecycle** — good coverage; reset/verify UI and refresh edge cases thin.
+5. **First-run phone experience** — F-01.
+6. **AI features** — cost/consent controls tested in backend; UI unverified here (AI off).
+
+## E. Unverified because of environment limits
+
+AI chat answers and AI categorisation (AI disabled), real OCR and the file picker, email delivery, Google sign-in, push, MCP end-to-end, multi-browser (only Chromium via Playwright MCP), tablet widths (only 1440/390/320 via scripts), mobile app, production behaviour, and concurrent-user scenarios.

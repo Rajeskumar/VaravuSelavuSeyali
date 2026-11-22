@@ -6,7 +6,13 @@ Before ending any session where you implemented, changed, or fixed something mea
 2. If this introduces a new design decision, pattern, or constraint future sessions
    need to know, add it to this file's "Key Decisions" section.
 3. If this affects planned work, update ROADMAP.md.
-4. If schemas, endpoints, or architecture changed, update the product spec (below).
+4. If a feature was added, completed, or materially changed, update **all** relevant docs:
+   - `docs/FEATURE_STATUS.md` — mark the feature built / update its status.
+   - `README.md` — if it changes what the product does or how to set up / run it.
+   - `docs/TrackSpense_Complete_Product_Specification.md` — if it adds or changes
+     business rules, schemas, endpoints, or user-facing behaviour.
+   - `docs/features/` — add or update the feature spec for non-trivial features.
+   - `docs/ARCHITECTURE.md` — if it introduces a new service, layer, or integration.
 Do NOT log routine changes here — this file holds decisions and pointers, not a
 feature log or reference docs. Keep it short; put detail in the files below.
 
@@ -17,6 +23,7 @@ feature log or reference docs. Keep it short; put detail in the files below.
 - What's built vs. not → `docs/FEATURE_STATUS.md`; feature specs → `docs/features/`
 - Per-component setup → `varavu_selavu_app/`, `varavu_selavu_ui/`, `varavu_selavu_mobile/`, `qa/` READMEs
 - Past changes → `CHANGELOG.md`; planned work → `ROADMAP.md`
+- QA/UAT audit — feature & interaction inventory, journeys, UAT cases, coverage matrix, automation plan, gaps, release checklist → `docs/qa/` (update the affected rows when a screen or flow changes)
 - Engineering standards, review workflows, checklists, severity model → `.ai-sdlc/` (read the one file you need, never the folder)
 
 ## Always
@@ -83,3 +90,12 @@ In Claude Code, "use the security-reviewer" delegates to the matching subagent (
 - **Expense draft recovery:** structured Quick Capture drafts live in web tab `sessionStorage` / native `SecureStore`, scoped to the account with a 1-hour recovery TTL. Preserve receipt items and custom splits; refresh group membership before save. Success/discard/deliberate local logout clears the draft; auth expiry preserves it. Persist a pending/unknown outcome before a write and require checking Expenses before retrying; never automatically replay a financial write after a connection/timeout/5xx failure.
 - **Ask conversation lifetime:** web state belongs above the responsive Drawer (`useChatConversation`); retain pending work on close/breakpoint changes, clear on account change/logout, and mount API-fetching UI lazily. Transport budgets (both clients): ordinary 30s, chat/receipt 120s, refresh 15s including body reads; a transient refresh failure must not sign out the user.
 - **Store IDs are `com.cerebroos.trackspense` (iOS and Android) and must never change.**
+
+- **MCP v1 is default-off and personal-only** (`mcp/`, `oauth/`; runbook `docs/mcp-local-implementation.md`). Every addition uses immutable verify → first-party browser approval → idempotent save; no direct-create/approval-bypass tool. Keep MCP signing keys separate. Personal duplicate-relevant writes take `lock_personal_user`; flush-only helpers must not commit. Logout-all atomically revokes app sessions, MCP grants and approvals. Retain operation tombstones after payload pruning/deletion.
+
+- **A database behind the code fails per request, not at boot** (a lagging dev DB made every login 500: `refresh_tokens.authenticated_at` missing). After pulling code with new Alembic revisions run `poetry run alembic upgrade head` against your local DB; the backend logs `DATABASE IS BEHIND THE CODE` at startup when it is behind (`db/migration_check.py`). Never run migrations against a non-local DB without asking.
+- **Expense date window**: no future dates, nothing older than one year (`core/expense_dates.py`, `utils/expenseDates.ts`, spec R15). Edits keep an older stored date; recurring auto-add bypasses it. Backend tests pin the clock in `tests/conftest.py` (`PINNED_TODAY`), so use that for fixture dates.
+- **Recurring "Run now" is once per template per month** (marker + description match; returns `already_added`). **Itemized expenses must reconcile** with their total or Save is disabled. **Concurrent edits: last write wins** (no conflict detection).
+- **Adding a group member by an email with no *verified* account stays a 400 on the API; clients then create a placeholder seat and email a join link (web and mobile).
+- **MCP pages are hidden when MCP is off** (`McpGate` → 404, `varavu_selavu_ui/src/components/common/McpGate.tsx`).
+- **MCP expiry reads never persist state**: compute logical expiry for previews; only locked transitions/cleanup update status. OAuth reads the bounded request body before DB checkout and runs all synchronous DB work off the event loop.

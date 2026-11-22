@@ -1,4 +1,5 @@
 import React from 'react';
+import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
 import Drawer from '@mui/material/Drawer';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
@@ -351,7 +352,16 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const payersValid = !selectedGroup || (!!groupDetail && computePayersValid(payers, amountNum));
   const splitValid = !selectedGroup || (!!groupDetail && computeSplitValid(splitValue, amountNum));
   const knownMembers = !selectedGroup || (!!groupDetail && [...payers, ...splitValue.entries].every((entry) => groupDetail.members.some((member) => member.member_id === entry.member_id)));
-  const ready = !!owner && !unknownOutcome && (who === 'me' || !!selectedGroup) && knownMembers && isValidAmount(amountNum) && description.trim() !== '' && !saving && payersValid && splitValid;
+  const dateProblem = expenseDateProblem(expenseDate);
+  // The server refuses itemized expenses whose lines don't add up to the total (±2¢), so say
+  // so up front (ScannedItemsCard shows the figures) instead of failing at Save.
+  const itemsMismatch = (() => {
+    const named = scannedItems.filter((it) => it.item_name.trim() !== '');
+    if (!named.length) return false;
+    const sum = named.reduce((t, it) => t + (Number(it.line_total) || 0), 0) + (Number(scannedTax) || 0) - (Number(scannedDiscount) || 0);
+    return Math.abs(sum - amountNum) > 0.02;
+  })();
+  const ready = !dateProblem && !itemsMismatch && !!owner && !unknownOutcome && (who === 'me' || !!selectedGroup) && knownMembers && isValidAmount(amountNum) && description.trim() !== '' && !saving && payersValid && splitValid;
 
   const resolveCategory = async (): Promise<string> => {
     if (scannedCategory) return scannedCategory;
@@ -711,6 +721,9 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               value={expenseDate}
               onChange={(e) => setExpenseDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
+              slotProps={{ htmlInput: expenseDateBounds() }}
+              error={!!dateProblem}
+              helperText={dateProblem || undefined}
               sx={{ mt: 1 }}
             />
 
@@ -849,6 +862,9 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
             value={expenseDate}
             onChange={(e) => setExpenseDate(e.target.value)}
             InputLabelProps={{ shrink: true }}
+            slotProps={{ htmlInput: expenseDateBounds() }}
+            error={!!dateProblem}
+            helperText={dateProblem || undefined}
             sx={{ mt: 1 }}
           />
 

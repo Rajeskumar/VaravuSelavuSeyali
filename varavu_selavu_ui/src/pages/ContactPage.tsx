@@ -80,25 +80,27 @@ const ContactPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit}>
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
+            <Typography component="label" htmlFor="contact-name" variant="subtitle2" sx={{ display: 'block', mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
               Your Name (Optional)
             </Typography>
             <TextField
               fullWidth
               variant="outlined"
+              id="contact-name"
               placeholder="Jane Doe"
               value={name}
               onChange={(e) => setName(e.target.value)}
               sx={{ mb: 3 }}
             />
 
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
+            <Typography component="label" htmlFor="contact-email" variant="subtitle2" sx={{ display: 'block', mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
               Your Email *
             </Typography>
             <TextField
               fullWidth
               type="email"
               variant="outlined"
+              id="contact-email"
               placeholder="you@example.com"
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
@@ -106,19 +108,20 @@ const ContactPage: React.FC = () => {
               required
             />
 
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
+            <Typography component="label" htmlFor="contact-subject" variant="subtitle2" sx={{ display: 'block', mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
               Subject (Optional)
             </Typography>
             <TextField
               fullWidth
               variant="outlined"
+              id="contact-subject"
               placeholder="What's this about?"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               sx={{ mb: 3 }}
             />
 
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
+            <Typography component="label" htmlFor="contact-message" variant="subtitle2" sx={{ display: 'block', mb: 1, fontWeight: 600, color: 'text.secondary', textTransform: 'uppercase' }}>
               Message *
             </Typography>
             <TextField
@@ -126,6 +129,7 @@ const ContactPage: React.FC = () => {
               multiline
               rows={5}
               variant="outlined"
+              id="contact-message"
               placeholder="How can we help?"
               value={message}
               onChange={(e) => setMessage(e.target.value)}

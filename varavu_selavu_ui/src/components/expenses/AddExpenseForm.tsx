@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
@@ -406,7 +407,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
 
   const reconcileOk = () => Math.abs(reconcileDelta()) <= 0.02;
 
+  const dateProblem = expenseDateProblem(expenseDate, undefined, existing ? mmddyyyyToISO(existing.date) : undefined);
+
   const saveDisabled = () => {
+    if (dateProblem) return true;
     const requiredFilled =
       description.trim() !== '' && isValidAmount(cost) && expenseDate && subcategory && mainCategory;
     if (mode === 'group' && !existing) {
@@ -717,6 +721,9 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                   label="Date"
                   type="date"
                   value={expenseDate}
+                  slotProps={{ htmlInput: existing ? { max: expenseDateBounds().max } : expenseDateBounds() }}
+                  error={!!dateProblem}
+                  helperText={dateProblem || undefined}
                   
                   onChange={e => {
                     const iso = e.target.value;

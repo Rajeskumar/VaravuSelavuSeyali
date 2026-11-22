@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     # Analysis cache TTL (seconds)
     ANALYSIS_CACHE_TTL_SEC: int = 60
 
+    MCP_ENABLED: bool = False
+    MCP_WRITES_ENABLED: bool = False
+    MCP_RESOURCE_URL: str = "https://trackspense-api.cerebroos.com/mcp"
+    MCP_ISSUER: str = "https://trackspense-api.cerebroos.com"
+    MCP_TOKEN_SIGNING_KEY: str = ""
+    MCP_PREVIOUS_VERIFY_KEYS: List[str] = []
+    MCP_CIMD_ALLOWED_HOSTS: List[str] = []
+    MCP_APPROVAL_HOURS: int = 24
+    MCP_ALLOWED_ORIGINS: List[str] = []
+
     # PostgreSQL Toggles
     DATABASE_URL: str = ""
 

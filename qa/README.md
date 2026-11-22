@@ -122,6 +122,7 @@ a video — all under `qa/reports/`.
   - login.spec's wrong-password test stubs the response, and the empty-form test sends nothing.
   - The unknown-email check lives in `api/tests/auth-api.spec.ts`, whose login calls wait out one 429 if they land in the same window.
 - **Registrations:** setup 2 + registration.spec 1 (Chromium only, also in CI's multi-browser step) + auth-api.spec 2 = **5/hour**. The counter is in-memory, so **restart the backend before re-running** within the hour.
+- **Logging out ends every session of that account.** `POST /auth/logout` sets `users.token_valid_after`, so every access token the account holds dies, on every device. Tests that log out (smoke.spec, session.spec) therefore use `QA_SESSION_USER` (`e2e/fixtures/users.fixture.ts`), never `primary`/`secondary`, whose saved storageState the rest of the run reuses. That account is created in the QA database by `global.setup.ts` (`scripts/provision_qa_session_user.py`), so it costs no registration and needs `QA_DATABASE_URL`. Any new test that logs out, changes a password or signs out everywhere must use it too. Tests that *destroy* an account (change password then delete it — `account-security.spec.ts`) use `QA_DISPOSABLE_USER`, provisioned the same way.
 - **Shared run ID:** `make qa-all` exports one `QA_RUN_ID` for all three steps (CI uses `GITHUB_RUN_ID`). Running the `npm run qa:*` scripts separately mints a new run ID each time, re-provisions the personas, and blows both budgets.
 
 The real backend rate-limits `POST /auth/login` to **5/minute** and `POST /auth/register`
@@ -258,3 +259,20 @@ judgment call based on step 1/2's results, not something this framework enforces
 Receipt/OCR parse results, recurring expenses, Card Coach/Tags detail flows, entity
 resolution (flag off in prod), CSV export content-diffing, Google OAuth login, and the
 mobile app (React Native — not Playwright-testable) are not covered by this pass.
+
+## Running the CI matrix locally
+
+CI runs every `@regression` spec on Chromium for pull requests, and additionally on Firefox, WebKit and the phone project for pushes to `main`. All of them are installed with `npx playwright install` and can be run locally against a scratch stack (`bash scripts/bootstrap-local-db.sh`, backend on :8080, web build on :3000):
+
+```bash
+npx playwright test --grep @regression --project=setup --project=firefox
+```
+
+Rules that keep that matrix green (found reviewing CI failures, 2026-11-22):
+- Restart the backend between projects (or runs): the registration (5/hour), login (5/minute) and forgot-password (5/hour) limits are in memory per backend process and a full matrix exceeds them.
+- A spec that uses a rate-limited endpoint for real, or destroys an account, must run once per run: `test.skip(testInfo.project.name !== 'chromium', ...)`.
+- Role names match as substrings. Use `exact: true`, `.first()` for duplicated buttons (e.g. an empty-state and a header "New Budget"), and look group members up by email, not list position.
+- Seed data before scanning. The axe step runs on a dashboard with the whole run's groups and expenses; components that only render with data (the groups strip, lists, toasts) are invisible to a scan on an empty account. Reproduce a CI failure by creating a few groups first.
+- Count real logins. The backend allows 5 per minute in total, and the regression run already spends them (setup 2, wrong-password 1, logout 1, registration's auto-login 1). A spec that signs in for real goes in its own step after a pause (`@account`, `npm run qa:account`), never in `@regression`; a login that fails after deletion still counts.
+- Never read `e2e/auth/*.json` (or any file the `setup` project creates) at module level in a spec: on a clean CI runner it does not exist when Playwright loads the file, and the whole run dies at collection. Read it inside the test (see `regression/consent-banner-phone.spec.ts`). Check with `npx playwright test --list` after moving the auth files away.
+- Never leave a *due* recurring template for the shared persona: the load-time prompt would cover other tests.

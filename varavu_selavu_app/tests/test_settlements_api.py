@@ -144,6 +144,20 @@ def test_partial_payment_amount_accepted(test_client, db_session):
     assert res.json()["amount"] == 5.00
 
 
+def test_overpayment_and_repeated_partials_are_accepted(test_client, db_session):
+    """Product rule: settlements may be partial or exceed what is owed (the balance simply flips);
+    only from == to, non-positive and out-of-range amounts are rejected."""
+    group_id, admin_id, member2_id = _make_group_with_two_members(test_client, db_session)
+    for amount in (5.00, 5.00, 1000.00):
+        res = test_client.post(
+            f"/api/v1/groups/{group_id}/settlements",
+            json={"from_member_id": member2_id, "to_member_id": admin_id, "amount": amount},
+        )
+        assert res.status_code == 201, res.json()
+    listed = test_client.get(f"/api/v1/groups/{group_id}/settlements").json()
+    assert sorted(s["amount"] for s in listed) == [5.0, 5.0, 1000.0]
+
+
 def test_list_settlements_ordered_most_recent_first(test_client, db_session):
     group_id, admin_id, member2_id = _make_group_with_two_members(test_client, db_session)
 

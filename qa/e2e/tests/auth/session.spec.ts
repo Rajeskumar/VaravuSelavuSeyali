@@ -1,6 +1,6 @@
 import { test, expect } from '../../fixtures/auth.fixture';
 import { LoginPage } from '../../pages/LoginPage';
-import { QA_USERS } from '../../fixtures/users.fixture';
+import { QA_SESSION_USER } from '../../fixtures/users.fixture';
 import { env } from '../../helpers/env';
 
 test.describe('session persistence @regression @auth', () => {
@@ -16,10 +16,12 @@ test.describe('session persistence @regression @auth', () => {
     // Headroom for one 61s rate-limit wait below, plus /login's Google Sign-In script load.
     test.setTimeout(150_000);
 
-    // Fresh login in an isolated, unauthenticated context — deliberately NOT reusing the
-    // shared primary/secondary storageState files, since logging out here revokes that
-    // persona's refresh-token family server-side and would break every other test that
-    // still expects e2e/auth/{primary,secondary}.json to be a live session.
+    // Fresh login, as QA_SESSION_USER, in an isolated unauthenticated context. Logging out
+    // ends every access token the account holds (users.token_valid_after), on every device,
+    // so doing this as primary/secondary broke every other test still using
+    // e2e/auth/{primary,secondary}.json. Nothing else logs in as QA_SESSION_USER except the
+    // smoke test (see fixtures/users.fixture.ts); when CI runs this on several browsers at
+    // once, the others recover through the web app's refresh-on-401, as real devices do.
     //
     // browser.newContext() needs baseURL passed explicitly (it does NOT get it from the
     // project's `use` config the way the default `page` fixture does). It DOES inherit
@@ -37,7 +39,7 @@ test.describe('session persistence @regression @auth', () => {
     // limit. A 429 here is the shared budget, not the behaviour under test, so wait out the
     // window once and retry.
     await login.goto();
-    await login.login(QA_USERS.secondary.email, QA_USERS.secondary.password);
+    await login.login(QA_SESSION_USER.email, QA_SESSION_USER.password);
     const rateLimited = page.getByText(/too many attempts/i);
     const landed = await Promise.race([
       page.waitForURL(/\/dashboard/, { timeout: 20_000 }).then(() => 'dashboard' as const),
@@ -45,7 +47,7 @@ test.describe('session persistence @regression @auth', () => {
     ]);
     if (landed === 'rate-limited') {
       await page.waitForTimeout(61_000);
-      await login.login(QA_USERS.secondary.email, QA_USERS.secondary.password);
+      await login.login(QA_SESSION_USER.email, QA_SESSION_USER.password);
       await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
     }
 

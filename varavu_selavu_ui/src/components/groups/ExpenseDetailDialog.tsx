@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Drawer,
@@ -151,6 +152,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
   const [editCategory, setEditCategory] = useState('');
   const [editAmount, setEditAmount] = useState(0);
   const [editDate, setEditDate] = useState('');
+  const editDateProblem = expenseDateProblem(editDate, undefined, mmddyyyyToISO(expense.date));
   const [editPayers, setEditPayers] = useState<PayerSummaryItem[]>([]);
   const [editSplitValue, setEditSplitValue] = useState<SplitEditorValue>({ type: 'equal', entries: [] });
   const [editTagNames, setEditTagNames] = useState<string[]>([]);
@@ -407,7 +409,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField label="Description" fullWidth value={editDescription} onChange={(e) => setEditDescription(e.target.value)} required />
           <Box sx={{ display: 'flex', gap: 1.5 }}>
-            <TextField label="Date" type="date" fullWidth value={editDate} onChange={(e) => setEditDate(e.target.value)} InputLabelProps={{ shrink: true }} />
+            <TextField label="Date" type="date" fullWidth value={editDate} onChange={(e) => setEditDate(e.target.value)} InputLabelProps={{ shrink: true }} slotProps={{ htmlInput: { max: expenseDateBounds().max } }} error={!!editDateProblem} helperText={editDateProblem || undefined} />
             <TextField
               label="Amount"
               type="number"
@@ -478,7 +480,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
             <Button
               variant="contained"
               fullWidth
-              disabled={savingEdit || !editDescription.trim() || !editCategory.trim() || editAmount <= 0 || !editPayersValid || !editSplitValid}
+              disabled={savingEdit || !!editDateProblem || !editDescription.trim() || !editCategory.trim() || editAmount <= 0 || !editPayersValid || !editSplitValid}
               onClick={handleSaveEdit}
             >
               {savingEdit ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : 'Save'}

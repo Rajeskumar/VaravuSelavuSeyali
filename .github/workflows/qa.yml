@@ -173,6 +173,12 @@ jobs:
         working-directory: qa
         run: npm run qa:regression
 
+      - name: Accessibility scan (axe, light + dark)
+        # B-17: fails on serious/critical violations on public and signed-in routes. Reuses the
+        # session the setup project saved (qa/e2e/auth/primary.json).
+        working-directory: .
+        run: node scripts/quality/axe-scan.mjs http://localhost:3000
+
       - name: Run full browser regression matrix
         if: github.event_name != 'pull_request'
         working-directory: qa
@@ -181,6 +187,14 @@ jobs:
       - name: Run API suite
         working-directory: qa
         run: npm run qa:api
+
+      # Real logins are limited to 5 a minute for the whole backend. This spec signs in twice, so it
+      # gets a minute of its own instead of sharing one with the regression suite.
+      - name: Run account security + deletion (own login window)
+        working-directory: qa
+        run: |
+          sleep 65
+          npm run qa:account
 
       - name: Upload QA reports
         if: always()

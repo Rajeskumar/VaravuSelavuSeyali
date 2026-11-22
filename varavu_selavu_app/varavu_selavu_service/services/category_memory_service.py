@@ -81,6 +81,7 @@ class CategoryMemoryService:
         category: Optional[str],
         merchant_name: Optional[str] = None,
         main_category: Optional[str] = None,
+        commit: bool = True,
     ) -> None:
         """Best-effort: called after an expense is saved, and never fails that save."""
         if not user_email or not category or category in _NOT_REMEMBERED:
@@ -108,7 +109,12 @@ class CategoryMemoryService:
                     },
                 )
                 self.db.execute(stmt)
-            self.db.commit()
+            self.db.flush()
+            if commit:
+                self.db.commit()
         except Exception:
             logger.exception("category memory record failed")
-            self.db.rollback()
+            if commit:
+                self.db.rollback()
+            else:
+                raise

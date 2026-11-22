@@ -257,6 +257,14 @@ export function getTheme(mode: PaletteMode = 'dark'): Theme {
       },
     },
     components: {
+      // Filled alerts (the toasts) put white text on the severity colour. MUI's default info blue
+      // (3.86:1) and warning orange (3.11:1) fail the 4.5:1 minimum; success and error already pass.
+      MuiAlert: {
+        styleOverrides: {
+          filledInfo: { backgroundColor: '#01579b' },
+          filledWarning: { backgroundColor: '#8a4b00' },
+        },
+      },
       MuiCssBaseline: {
         styleOverrides: {
           // Native controls (date/time pickers, scrollbars, select popups) follow this: without

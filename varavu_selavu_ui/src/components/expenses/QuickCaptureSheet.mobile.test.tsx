@@ -154,3 +154,12 @@ test('a successful double click saves once and clears the recoverable draft', as
   expect(save).toHaveBeenCalledTimes(1);
   expect(sessionStorage.getItem('vs_expense_draft_v1')).toBeNull();
 });
+
+test('a date outside the allowed window is flagged and the picker is limited to today and one year back', async () => {
+  await openSheet();
+  const date = screen.getByLabelText('Date') as HTMLInputElement;
+  expect(date.max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(date.min < date.max).toBe(true);
+  fireEvent.change(date, { target: { value: '2999-01-01' } });
+  expect(screen.getByText(/can't be in the future/i)).toBeInTheDocument();
+});
