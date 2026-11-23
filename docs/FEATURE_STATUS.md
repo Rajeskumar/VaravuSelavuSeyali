@@ -180,3 +180,12 @@ Full MVP per [`features/budgeting/trackspense-budgets-prd.md`](features/budgetin
 > **Note:** this table stops at `TS-DES-110` and was never updated for the later `TS-DES-111`–`112` and `TS-DES-201`–`210` "Redesign v2" tickets (all already `✅ Implemented` per their own files) — a pre-existing gap, not introduced here.
 >
 > **2026-07-14, untracked (no ticket file):** Quick Capture unified into a single fast-entry surface across mobile and desktop — a shared `QuickCaptureContext`/`QuickCaptureSheet` (mobile bottom sheet + numeric keypad, desktop centered dialog), reachable from the header "+ New expense" button, the mobile FAB, `ExpensesPage`'s Add Expense button, and a group's own "+ Add expense" button (pre-scoped to that group). This replaced the old per-page `AddExpenseForm` dialogs as the *create* path everywhere (`AddExpenseForm` itself is unchanged and still used for editing). Desktop also gained the header type-to-log bar (`HeaderQuickLog`, reusing the existing regex parser + `useLogExpense`) that mobile already had. The dashboard hero (`TrueTotalHero`) gained a "Net with people" figure + My-expenses/I-paid lens toggle on both breakpoints (desktop previously had neither), and `OverviewTab` (Analysis) gained an "include group shares" toggle. Also fixed: the Dashboard "Recent" feed not refreshing after logging an expense without navigating away and back.
+
+
+## Engineering workflow (2026-11-22)
+
+The repository-local five-phase AI SDLC framework is implemented: Discover → Plan → Build → Validate →
+Deploy, with structured artifacts, evidence gates, review routing and framework CI. See
+[framework](../.ai-sdlc/README.md) and [work records](sdlc/README.md). This is development tooling, not a
+user-facing TrackSpense feature. Live deployment-gate credential provisioning and external-agent runtime
+checks remain owner rollout tasks in ROADMAP.md.

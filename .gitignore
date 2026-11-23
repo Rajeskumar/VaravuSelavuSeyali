@@ -18,3 +18,5 @@ varavu_selavu_mobile/.expo/
 .playwright-mcp/
 docs/product_review&testing_report/mobile-review-2026-10-05/*
 docs/product_review&testing_report/performance-review-2026-10-06/*
+# Local AI SDLC tooling environment
+.venv-sdlc/

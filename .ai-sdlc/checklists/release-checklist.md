@@ -1,20 +1,21 @@
 # Release checklist
 
-**Evidence**
-- [ ] `unit.yml` and `qa.yml` green on the release commit; `make release-check` green locally.
-- [ ] `scripts/quality/security.sh` clean (audits at high; no secrets).
-- [ ] `scripts/quality/accessibility.sh` clean; no open a11y P0/P1.
-- [ ] No open P0/P1 from any review; accepted P2s listed.
+Readiness evidence on the candidate:
+- [ ] unit.yml, qa.yml and framework.yml latest eligible main-branch runs pass on the exact SHA.
+- [ ] Required acceptance, deterministic checks, routed reviews and security audits are current.
+- [ ] No unresolved P0; non-P0 waivers have owner, reason, reference and expiry; fixed findings reverified.
+- [ ] Critical journeys and applicable docs/qa UAT covered; native devices checked when a native build ships.
+- [ ] Migrations rehearsed on supported baseline; compatible with previous code; lock/backfill risk assessed.
+- [ ] Config/flags/secrets provisioned and documented; release push entitlement enabled if native push ships.
+- [ ] Previous images available; schema-aware rollback/roll-forward and partial deployment response stated.
+- [ ] Product docs, feature status, privacy/terms and changelog updated where applicable.
 
-**Data and deploy**
-- [ ] Migrations reviewed: random-hex ids, reversible, backward-compatible with the deployed version (run before deploy via `migrate-db` job).
-- [ ] New env vars/flags documented and set in Cloud Run; `.env.example` updated; no secrets committed.
-- [ ] Rollback plan stated (previous image + compatible schema).
+Execution (only after explicit authorization):
+- [ ] Candidate-scoped authorization recorded; release record matches version and commit.
+- [ ] release.sh gates pass; tag pushed; both Cloud Build outcomes and migration result observed.
+- [ ] Actual serving revisions/images/traffic match the candidate for backend AND frontend.
+- [ ] Read-only production smoke passes; error signals checked over a recorded observation window.
+- [ ] Release outcome, build links, evidence and follow-up owners recorded; no unverified success claim.
 
-**Product**
-- [ ] Critical journeys smoke-tested: sign-in, add expense, group split + settle up, AI ask, export/delete account.
-- [ ] Web and mobile in step (or documented gap); mobile release builds set `TRACKSPENSE_ENABLE_PUSH=1` when push ships.
-- [ ] Privacy policy / terms updated if data collected or processors changed.
-- [ ] `CHANGELOG.md`, spec and `docs/FEATURE_STATUS.md` updated.
-
-**Launch-owner items** (outside the repo): push config, OAuth origins, SMTP, legal sign-off — see `docs/product_review&testing_report/`.
+External owner items (OAuth origins, SMTP, push, legal, token/IAM setup) require actual evidence or remain
+incomplete. A checklist or JSON field alone never grants permission. Details: workflows/deploy.md.

@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "version": "v0.0.0",
+  "candidate": "0000000000000000000000000000000000000000",
+  "work_items": [],
+  "status": "prepared",
+  "authorization": null,
+  "checks": [],
+  "components": [],
+  "recovery_plan": "Record previous images and schema compatibility before release.",
+  "notes": ""
+}

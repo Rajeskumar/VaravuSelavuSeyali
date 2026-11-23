@@ -26,6 +26,11 @@ Format: `- [ ] [enhancement] — context: [why/when this came up]`
 
 - [ ] MCP production rollout: local default-off v1 implementation now covers scoped OAuth, personal reads, verify → browser approval → save, historical/itemized receipts, logout-all revocation, web/mobile attribution and user rights. Local/PG tests and a dedicated PG CI job are added. Before enablement: exact Claude app then ChatGPT acceptance, staging migrations/load/IAM/logging/privacy checks, and passing required CI. Five local review findings fixed 2026-11-22; setup/enablement commands are in `docs/mcp-setup-and-deployment.md`. See `docs/mcp-local-implementation.md`; native approval/groups/advanced tools stay deferred (Codex, 2026-11-21).
 
+## SDLC tooling
+- [ ] Live rehearsal of the board helper (create a clearly named test card, move Ready → In progress → In review → Done, re-run to confirm idempotency, close it) — context: 2026-11-22 board integration; verified read-only/dry-run and with a fake `gh` only.
+- [ ] Optional board automations (project ⋯ → Workflows): *Item reopened → In progress*, *Item added to project → Backlog*; PR bodies should say `Closes #N` so a merge reaches the card — context: 2026-11-22; "PR merged → Done" and "Item closed → Done" are already on.
+- [ ] Per-task sub-issues (parent/child) instead of a checklist if per-task tracking is wanted — context: 2026-11-22 chose one issue per work item.
+
 ## Quality / launch readiness
 - [ ] Turn on group push notifications in real builds: `eas init` (projectId), real bundle id/package, APNs key + build with `TRACKSPENSE_ENABLE_PUSH=1`, Firebase/FCM V1 for Android, then a physical-device test — context: 2026-10-05 check found the code complete but no device had ever registered; steps in `varavu_selavu_mobile/README.md`.
 - [ ] Legal pages: `privacy_policy.html` / `terms_of_service.html` still show the "Draft template — review before publishing" banner. Have them reviewed, remove the banner, and consider serving them inside the web app (they're plain backend pages today) — context: 2026-10-05 readiness review.
@@ -76,3 +81,13 @@ All findings were fixed in code. Remaining, and not code-only:
 - [x] Receipt performance: load the HEIC converter only for HEIC files; optimized local initial gzip JavaScript reduced from 701 kB to 363 kB.
 - [ ] Validate on deployed staging with representative data and real iOS Safari/Android Chrome; test native draft recovery across process restart and software keyboard behavior. Measure deployed optimized assets/Core Web Vitals; local build and unit tests do not establish production latency.
 - [ ] Establish redacted RUM/API/save-outcome/error-budget monitoring and alerts in the production project. See `docs/features/performance-recovery.md` and the performance review for acceptance and operational checks.
+
+
+## AI SDLC framework
+- [x] Five-phase repository-local workflow, schemas/templates, risk routing, evidence gates and framework CI — implemented locally 2026-11-22 (Codex); docs/sdlc/README.md.
+- [ ] Before first release using the new Cloud Build gate: provision GITHUB_ACTIONS_READ_TOKEN and least-privilege secret access; verify exact-candidate unit/QA/framework runs and branch/tag protections. No live setup performed by the framework implementation.
+- [ ] Run adapter discovery/behavior scenarios in installed Claude Code, Copilot, Gemini CLI and Antigravity versions; .ai-sdlc/evaluations.md. Structural validation is not runtime certification.
+- [ ] Add optional GitHub Issues/Projects synchronization after repository-local workflow usage validates the artifact model.
+- [ ] Add canary rollouts, defined SLO/error budgets, sustained production monitoring and pre-authorized recovery policies; current Deploy uses monitored builds and targeted read-only smoke.
+- [ ] Framework evaluation dataset, cost/time/defect telemetry and reusable project profiles; no autonomous background orchestrator in v1.
+- [ ] Resolve release work-item links and automatically verify candidate-bound artifact evidence/waivers; v1 explicitly requires original-source review and reports that limitation in its gate output.

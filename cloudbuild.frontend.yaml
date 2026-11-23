@@ -8,6 +8,13 @@
 # the SHA tag so a revision maps to exactly one commit. Release builds also get the version tag.
 # Run this only through its trigger: SHORT_SHA is empty for `gcloud builds submit`.
 steps:
+  # Fail closed before audit/build/migrations/deploy. Setup: .ai-sdlc/workflows/deploy.md.
+  - name: 'python:3.12-slim'
+    id: 'required-ci'
+    entrypoint: 'python'
+    args: ['scripts/quality/release-gate.py', '--sha', '${COMMIT_SHA}']
+    secretEnv: ['GH_TOKEN']
+
   - name: 'bash'
     id: 'require-sha'
     args: ['-c', 'test -n "${_IMAGE_TAG}" || { echo "SHORT_SHA is empty - run this build through its trigger"; exit 1; }']
@@ -76,3 +83,10 @@ substitutions:
   _PROJECT_ID: 'gold-circlet-424313-r7'
   _FRONTEND_SERVICE: 'varavu-selavu-frontend'
   _IMAGE_TAG: '${SHORT_SHA}'
+
+# Provision a fine-grained Actions-read token and grant this build identity access before
+# the first release containing this config. Missing credentials block deployment.
+availableSecrets:
+  secretManager:
+    - versionName: projects/${_PROJECT_ID}/secrets/GITHUB_ACTIONS_READ_TOKEN/versions/latest
+      env: GH_TOKEN

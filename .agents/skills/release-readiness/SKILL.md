@@ -1,15 +1,10 @@
 ---
 name: release-readiness
-description: Decide whether a release candidate is READY, READY WITH FIXES or NOT READY by aggregating existing evidence (CI, tests, audits, open P0/P1, migrations, checklist). Use for "prepare this for production", "is this ready to release", "release review", "ready to tag". Does not redo individual reviews.
+description: Assess a release candidate from existing CI, test, review and operational evidence. Use for ready to release, release review or ready to tag. Produces PASS, PASS_WITH_APPROVED_WAIVERS, BLOCKED or INCOMPLETE_EVIDENCE; never executes deployment.
 ---
 
-# Release readiness
-
-Procedure: `.ai-sdlc/workflows/release-review.md`. Checklist: `.ai-sdlc/checklists/release-checklist.md`.
-
-1. Identify the release range/commit. Gather evidence **without redoing reviews**: CI results for `unit.yml` and `qa.yml` on that commit, local `make release-check`, any prior review findings (open P0/P1), migrations in range, config/flag/secret changes, docs/changelog.
-2. Run only what's missing and cheap: `scripts/quality/verify.sh --full`, `scripts/quality/security.sh`, `scripts/quality/accessibility.sh` — and only if no fresh result exists.
-3. Walk the release checklist; each item ticked, waived with a reason, or failing.
-4. Verdict — `READY` / `READY WITH FIXES` / `NOT READY` — with an evidence table (check → status → source), blocking items, accepted risks and exact next steps. Any open P0, red required check, or incompatible/unreviewed migration is NOT READY.
-
-Anything that needs a human/launch-owner (push config, OAuth origins, SMTP, legal) is listed, not assumed. Do not tag, push or deploy.
+Follow `.ai-sdlc/workflows/release-review.md` and `.ai-sdlc/checklists/release-checklist.md`.
+Gather exact-candidate unit, QA and framework CI, work-item validation and original review evidence.
+Run only missing applicable checks within scope. Report verdict, evidence sources, waivers, blockers
+and omissions. A readiness assessment does not authorize tags/pushes/deployment. For an explicitly
+authorized release, hand off to the deployment skill and `.ai-sdlc/workflows/deploy.md`.

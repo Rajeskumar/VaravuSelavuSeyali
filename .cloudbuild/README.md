@@ -13,13 +13,22 @@ a failure in one does not block the other.
 ## Releasing
 
 ```bash
-scripts/release.sh 1.4.0        # checks main is clean + up to date, tags release-v1.4.0, pushes it
+scripts/release.sh 1.4.0 docs/sdlc/releases/v1.4.0/release.json
 ```
 
-The tag is the deploy and there is no staging slot. The QA gate is GitHub Actions
-(`.github/workflows/qa.yml`, run on every push to `main`): the repo's pre-push hook refuses to
-push a `release-*` tag (by `scripts/release.sh` or by hand) unless that workflow passed on the
-tagged commit. Cloud Build itself runs only the dependency audits; it doesn't re-check CI. Watch the two builds at <https://console.cloud.google.com/cloud-build/builds?project=gold-circlet-424313-r7>.
+The tag is the deploy and there is no staging slot. Before using the updated pipelines, provision the
+Actions-read Secret Manager credential described in `.ai-sdlc/workflows/deploy.md`. Missing credentials
+block the pipeline before any deployment. This repository update does not provision secrets or IAM.
+
+The release script and pre-push hook require unit.yml, qa.yml and framework.yml on the exact candidate
+main-branch commit. Cloud Build independently repeats that check before audits/build/migration/deploy.
+QA now runs on docs/mobile-only candidates too; evidence is never borrowed from an ancestor.
+The local release script also validates a candidate-scoped release record and actual user authorization.
+Cloud Build enforces CI; human readiness/authorization records are checked by the release procedure,
+not authenticated by JSON fields. Remote branch/tag protections and cloud IAM remain operator controls.
+
+After tag push, follow BOTH build outcomes, migration results and serving revisions; run read-only
+production smoke and record the result. Full procedure: `.ai-sdlc/workflows/deploy.md`.
 
 ## Images, rollback
 

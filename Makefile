@@ -68,7 +68,7 @@ qa-all: qa-smoke qa-regression qa-api
 # its own run ID, so each step registered and logged in a fresh pair of QA personas, and
 # the backend's real 5/hour register and 5/minute login limits turned the run into 429s.
 # Target-specific, so it's inherited by qa-all's prerequisites; `:=` evaluates it once.
-qa-all: export QA_RUN_ID := local$(shell date +%s)
+qa-all: export QA_RUN_ID := $(if $(QA_RUN_ID),$(QA_RUN_ID),local$(shell date +%s))
 
 # Vulnerability audits — dependency-only checks (pip-audit / npm audit), not source-code
 # scanning. Requires `make install-backend`/`install-web`/`install-mobile`/`install-qa` to
@@ -149,3 +149,32 @@ install-all: install-backend install-web install-mobile install-qa install-hooks
 
 generate-mobile-assets:
 	node varavu_selavu_mobile/generate_assets.js
+
+# Repository AI SDLC tooling: install scripts/quality/requirements.txt in a local venv,
+# then set SDLC_PYTHON to its Python executable (default: python3).
+SDLC_PYTHON ?= python3
+.PHONY: framework-check test-framework test-postgres qa-account qa-regression-extra
+framework-check:
+	$(SDLC_PYTHON) scripts/quality/validate-ai-sdlc.py
+	$(SDLC_PYTHON) scripts/quality/sdlc.py validate
+	$(SDLC_PYTHON) -m unittest discover -s scripts/quality/tests -v
+
+test-framework:
+	$(SDLC_PYTHON) -m unittest discover -s scripts/quality/tests -v
+
+# Dedicated disposable local database only; PG test modules must run in separate processes.
+test-postgres:
+	$(SDLC_PYTHON) scripts/quality/check-local-test-env.py
+	cd varavu_selavu_app && poetry run pytest tests/test_analytics_e2e_pg.py -q
+	cd varavu_selavu_app && poetry run pytest tests/test_groups_e2e_pg.py -q
+	cd varavu_selavu_app && poetry run pytest 'tests/test_ai_quota.py::test_concurrent_reserves_never_overshoot_on_postgres' -q
+	cd varavu_selavu_app && poetry run pytest tests/test_mcp_pg.py tests/test_mcp_migrations_pg.py -q
+
+qa-account:
+	@echo 'Waiting for the dedicated account-test login window (65 seconds)'
+	sleep 65
+	cd qa && npm run qa:account
+
+# Complete the release browser matrix without re-running Chromium and spending auth budget twice.
+qa-regression-extra:
+	cd qa && npx playwright test --grep @regression --project=firefox --project=webkit --project=mobile-iphone

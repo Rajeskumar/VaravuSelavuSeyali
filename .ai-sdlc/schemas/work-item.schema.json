@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^TS-[A-Z0-9-]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "risk": {
+      "enum": [
+        "trivial",
+        "standard",
+        "high"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "normal",
+        "emergency"
+      ]
+    },
+    "phase": {
+      "enum": [
+        "discover",
+        "plan",
+        "build",
+        "validate",
+        "deploy"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ready",
+        "in_progress",
+        "blocked",
+        "complete"
+      ]
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^AC-[0-9]+$"
+          },
+          "outcome": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "outcome"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "implementation_approval": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "actor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "actor",
+            "reference",
+            "fingerprint"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "owner",
+    "risk",
+    "mode",
+    "phase",
+    "status",
+    "acceptance_criteria",
+    "required_evidence",
+    "implementation_approval",
+    "links",
+    "notes"
+  ],
+  "additionalProperties": false
+}

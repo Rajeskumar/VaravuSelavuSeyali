@@ -47,3 +47,20 @@ TrackSpense is powered by a robust backend architecture utilizing FastAPI, Postg
 - **[Backend Service & API (`varavu_selavu_app`)](./varavu_selavu_app/README.md)**: Setup instructions for the Python/FastAPI backend, PostgreSQL database, JWT authentication, and AI/OCR engine configurations.
 - **[Web Frontend (`varavu_selavu_ui`)](./varavu_selavu_ui/README.md)**: Development guide for the React-based web application.
 - **[Mobile Application (`varavu_selavu_mobile`)](./varavu_selavu_mobile/README.md)**: Build and deployment instructions for the native iOS and Android mobile platforms.
+
+
+## AI-assisted development lifecycle
+
+Use plain language with your coding agent: brainstorm an idea, plan a feature, implement an approved
+plan, validate changes, or assess a release. The workflow is **Discover → Plan → Build → Validate → Deploy**;
+brainstorming and release-readiness questions do not authorize implementation or deployment.
+
+- [Framework entry point](.ai-sdlc/README.md) and [phase contracts](.ai-sdlc/lifecycle.md)
+- [Work artifacts and archive conventions](docs/sdlc/README.md)
+- [Local verification setup and profiles](.ai-sdlc/verification.md)
+- [Agent entry points](.ai-sdlc/adapters.md) and [release execution/production verification](.ai-sdlc/workflows/deploy.md)
+
+Current product docs remain in docs/; work history stays in docs/sdlc/. GitHub Issues/Projects are optional.
+Changes remain uncommitted unless requested. The next release using the updated Cloud Build configuration
+requires its documented GitHub Actions read credential in Secret Manager; no cloud settings are changed
+by installing the framework.

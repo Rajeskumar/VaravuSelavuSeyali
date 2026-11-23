@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "candidate": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "work_items": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "status": {
+      "enum": [
+        "prepared",
+        "deployment_failed",
+        "verification_incomplete",
+        "verified"
+      ]
+    },
+    "authorization": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "actor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            },
+            "candidate": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            }
+          },
+          "required": [
+            "actor",
+            "reference",
+            "candidate"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "skipped"
+            ]
+          },
+          "candidate": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "candidate",
+          "source"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "deployed",
+              "failed"
+            ]
+          },
+          "expected_image": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observed_image": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "build_url": {
+            "type": "string"
+          },
+          "previous_image": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "expected_image",
+          "observed_image",
+          "revision",
+          "build_url",
+          "previous_image"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "recovery_plan": {
+      "type": "string",
+      "minLength": 1
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "version",
+    "candidate",
+    "work_items",
+    "status",
+    "authorization",
+    "checks",
+    "components",
+    "recovery_plan",
+    "notes"
+  ],
+  "additionalProperties": false
+}

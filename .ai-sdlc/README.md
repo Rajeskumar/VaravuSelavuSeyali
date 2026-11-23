@@ -1,23 +1,23 @@
-# AI SDLC — shared quality layer
+# AI SDLC — shared lifecycle
 
-One set of engineering standards for every coding agent (Claude Code, Codex) and every human reviewer.
-Tool-specific files hold only discovery metadata and routing; **the policy lives here** and is read on
-demand — never preload this folder.
+Natural-language entry: read AGENTS.md and lifecycle.md; select **Discover → Plan → Build → Validate → Deploy**
+within the user's requested scope. No keyword or slash command is required. Phase-specific skills are
+optional explicit entry points. The framework is repository-local and agent-assisted; it does not run a
+background orchestrator or grant execution permissions.
 
-## Where things live
-| What | Where |
+## Map
+
+| Content | Location |
 |---|---|
-| Standards (the rules) | `.ai-sdlc/standards/*.md` |
-| Workflows and finding format | `.ai-sdlc/workflows/*.md` |
-| Checklists | `.ai-sdlc/checklists/*.md` |
-| Skills (procedures, both tools) | `.agents/skills/<name>/SKILL.md` — mirrored for Claude by symlinks in `.claude/skills/` |
-| Claude subagents (isolated, read-only reviewers) | `.claude/agents/<role>-reviewer.md` — thin wrappers over the skills |
-| Deterministic checks and routing | `scripts/quality/` |
-| Entry point for all agents | root `AGENTS.md` (Claude reaches it via the one-line `CLAUDE.md` import) |
-
-## Lifecycle
-requirement → acceptance criteria → plan → implement → focused tests → self-review → routed reviews → fixes →
-full checks → PR readiness → release readiness. Detail: `workflows/feature-development.md`, `bug-fix.md`.
+| Phase contracts, risk, authorization, freshness | `.ai-sdlc/lifecycle.md` |
+| Phase procedures and review ownership | `.ai-sdlc/workflows/` |
+| Engineering standards | `.ai-sdlc/standards/` |
+| Checklists, reusable templates, JSON schemas | `.ai-sdlc/checklists/`, `.ai-sdlc/templates/`, `.ai-sdlc/schemas/` |
+| Portable skills / Claude wrappers | `.agents/skills/`, `.claude/agents/`, `.claude/skills/` symlinks |
+| Artifact records, archive and usage | `docs/sdlc/README.md` |
+| Current product specs / shared QA references | `docs/`, `docs/qa/` |
+| Check profiles / agent setup | `.ai-sdlc/verification.md`, `.ai-sdlc/adapters.md` |
+| Executable checks / tests | `scripts/quality/`, `make framework-check` |
 
 ## Severity model (all reviewers use exactly this)
 - **P0 Blocker** — security vulnerability, data loss/corruption, wrong money, authorization bypass, broken critical journey (sign-in, add expense, settle up), or anything that must stop a release.
@@ -28,22 +28,23 @@ full checks → PR readiness → release readiness. Detail: `workflows/feature-d
 Every finding is labelled **Confirmed** (seen in code/behaviour), **Suspected** (needs inspection or a run), or
 **Improvement** (not a defect against a standard). Never present a suspicion as confirmed.
 
-## Routing (run only what the change warrants)
-`scripts/quality/route-review.sh [base]` classifies the diff and prints the reviewers. Summary:
+## Review routing
 
-| Change | Reviewers |
+`scripts/quality/route-review.sh [base]` includes committed, staged, unstaged and untracked changes.
+`--files <paths...>` supports explicit scope; `--json` produces structured output. Path patterns are a
+conservative baseline; inspect behavior and requirements, use `--risk high` or `--product` to escalate.
+Tiny changes never bypass risk review. Unknown executable paths get implementation and test review.
+
+| Change | Baseline reviewers / evidence |
 |---|---|
-| Typo, copy, docs, comments | none — deterministic checks only |
-| Style-only (CSS/theme tokens) | `accessibility-review` only if colour, focus or sizing changed |
-| UI component/page (web or mobile) | implementation + test + ux + accessibility |
-| New user-facing feature | + product |
-| Auth, endpoints, permissions, uploads, CSRF/CORS | implementation + test + security |
-| DB model / Alembic migration | implementation (migration checklist) + test + security (privacy/authz) |
-| Heavy query, aggregation, list endpoint, bundle/chart work | implementation + test + performance |
-| LLM / AI quota / chat tools | implementation + test + security |
-| CI, Docker, Cloud Build, deploy config | implementation + security + release |
-| Release candidate | `release-readiness` (aggregates; does not redo reviews) |
+| Ordinary docs/copy | none; artifact structure if docs/sdlc |
+| Framework policy, skills, scripts | implementation + test + security; framework tests |
+| Executable code / API clients | implementation + test |
+| UI / product services (new or existing) | + product; UI adds accessibility + UX |
+| Auth/OAuth/MCP, APIs, models/migrations, money, AI | + security |
+| Heavy queries/analytics/charts | + performance |
+| CI/deploy/nested Dockerfiles | implementation + test + security; release-readiness applicability |
+| Mobile UI | native evidence; do not substitute web axe for native validation |
 
-## Review order for a substantial PR
-implementation → product → test → security → accessibility → ux → performance → release-readiness.
-Run deterministic checks (`scripts/quality/verify.sh`) **before** any AI review.
+Order: implementation → product → test → security → accessibility → UX → performance. Deterministic
+checks first. Release readiness aggregates evidence; Deploy execution additionally needs authorization.

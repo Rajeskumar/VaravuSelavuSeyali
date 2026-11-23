@@ -46,3 +46,14 @@ The existing FastAPI process mounts the official MCP SDK transport at `/mcp` and
 - **Ticket IDs:** `TS-<AREA>-<n>` (e.g. TS-CARD-114); security findings use VS-01..VS-16. Specs live in `docs/features/`, and the status board is `docs/FEATURE_STATUS.md`.
 - **Comments explain *why*** and are often long; match the surrounding density.
 - **Make targets:** `make start-backend` / `start-web` / `start-mobile-*` / `test-backend`.
+
+
+## Development lifecycle tooling
+
+The AI SDLC framework is repository-local tooling, outside the application runtime. Shared policy and
+schemas live in `.ai-sdlc/`, skills in `.agents/skills/`, checks in `scripts/quality/`, and historical work
+records in `docs/sdlc/`. Current product docs remain here; artifact ledgers link exact code evidence.
+`framework.yml` validates tooling and records. Release pipelines independently check exact-candidate
+unit/QA/framework CI before migrations/deploy; the local release procedure additionally checks user
+authorization and manual readiness, then monitors both deployments and verifies production. See
+[Deploy workflow](../.ai-sdlc/workflows/deploy.md) for credential setup and enforcement limits.

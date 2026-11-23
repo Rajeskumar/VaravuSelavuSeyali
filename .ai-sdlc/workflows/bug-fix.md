@@ -1,9 +1,9 @@
-# Bug-fix workflow
+# Bug fix — condensed lifecycle
 
-1. **Reproduce** (test, curl, or UI steps). If you cannot reproduce, say so and what you tried.
-2. **Find the root cause**, not the symptom; check whether the other client (web/mobile) or a sibling code path has the same bug.
-3. **Write the failing test first** where feasible (it must fail for the right reason).
-4. **Fix minimally.** No drive-by refactors; note them separately.
-5. **Prove it:** the new test passes, the surrounding suite passes (`scripts/quality/verify.sh`).
-6. **Route review:** `route-review.sh`. Money, auth, permissions or data-loss bugs always get security/test review; cosmetic fixes need none.
-7. **Record:** `CHANGELOG.md` line; add a Key Decision only if the fix established a rule others must follow.
+Discover: reproduce, expected/actual result and affected users; if reproduction fails, record attempts.
+Plan: identify root cause, sibling/client impact, risk, minimal fix and regression test. High risk still
+needs the current implementation authorization and safeguards; urgency is emergency mode, not low risk.
+Build: demonstrate a meaningful failing test where feasible, fix minimally, run focused checks.
+Validate: route reviews, verify the regression and related behavior, record evidence and docs/changelog.
+Deploy: only if requested, through the normal candidate gate. An implemented fix is not necessarily live.
+Use lifecycle.md and the phase workflows for gates, records, repair limits and authorization boundaries.

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Changed AC outcome under same ID could retain passing evidence; semantic fields now hashed.",
+      "owner": "Codex",
+      "source": "validation.md",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "F-002",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Additional declared release failures could be ignored; all declared checks now evaluated.",
+      "owner": "Codex",
+      "source": "validation.md",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "F-003",
+      "severity": "P2",
+      "certainty": "Improvement",
+      "summary": "Automatically resolve linked release work-item evidence and waivers; v1 explicitly requires manual original-source review. Follow-up in ROADMAP.md.",
+      "owner": "Repository owner",
+      "source": "validation.md",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    }
+  ]
+}
