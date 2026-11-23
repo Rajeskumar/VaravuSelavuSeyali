@@ -116,7 +116,41 @@ def test_hybrid_over_quota_returns_ocr_result_with_note(test_client, db_session,
     llm.assert_not_called()
     body = res.json()
     assert body["source"] == "ocr"
-    assert any("AI limit" in w for w in body["warnings"])
+    assert any("today's AI limit reached" in w for w in body["warnings"])
+
+
+def test_hybrid_with_ai_kill_switch_says_ai_is_off_not_limit_reached(test_client, db_session, engine, monkeypatch):
+    engine("hybrid")
+    monkeypatch.setenv("AI_ENABLED", "false")
+    with patch(READ_RECEIPT, return_value=_rows(MESSY_RECEIPT)), patch.object(ReceiptService, "_call_gemini") as llm:
+        res = _upload(test_client)
+    assert res.status_code == 200
+    llm.assert_not_called()
+    warnings = res.json()["warnings"]
+    assert any("AI features are turned off right now" in w for w in warnings)
+    assert not any("limit" in w for w in warnings)
+
+
+@pytest.mark.parametrize(
+    "code,reason",
+    [
+        ("ai_paused", "AI is paused right now"),
+        ("ai_blocked", "AI features aren't available on this account"),
+        ("email_not_verified", "verify your email to use AI assist"),
+        ("something_new", "AI assist is unavailable right now"),
+    ],
+)
+def test_hybrid_warning_names_why_ai_was_unavailable(test_client, db_session, engine, code, reason):
+    from varavu_selavu_service.services.ai_quota_service import AiQuotaError, AiQuotaService
+
+    engine("hybrid")
+    with patch(READ_RECEIPT, return_value=_rows(MESSY_RECEIPT)), patch.object(
+        AiQuotaService, "reserve", side_effect=AiQuotaError(403, code, "nope", feature="receipt")
+    ), patch.object(ReceiptService, "_call_gemini") as llm:
+        res = _upload(test_client)
+    assert res.status_code == 200
+    llm.assert_not_called()
+    assert any(f"Read without AI assist ({reason})" in w for w in res.json()["warnings"])
 
 
 def test_hybrid_llm_failure_refunds_and_returns_ocr_result(test_client, db_session, engine):

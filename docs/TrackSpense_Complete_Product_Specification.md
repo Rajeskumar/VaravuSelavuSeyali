@@ -149,7 +149,7 @@ Legend — **Web / Mobile**: ✅ shipped · — not applicable. **Flag** is the 
 | **Quick Capture** | The single fast-entry surface on both clients. Mobile: a bottom sheet with a numeric keypad — amount, one description, then Save; category is AI-suggested and, with date, "More" (merchant, card, repeat-monthly) sit behind chips. Web: a shared `QuickCaptureSheet` (bottom sheet on small screens, dialog on desktop) opened from the header "+ New expense", the mobile FAB, the Expenses page, or a group's own "Add expense" (pre-scoped to that group). |
 | **Type-to-log bar** | A one-line input (`"coffee 6.75 at Blue Bottle"`, optionally naming a group/split) parsed client-side by `quickLogParse`; a clean parse saves directly (personal or group), a question routes to the AI Analyst, anything else falls back to the full capture sheet. Shows a "Will log…" preview. |
 | **AI categorization** | `POST /expenses/categorize` asks the LLM for `(main, sub, merchant)` and **validates** it against the taxonomy (§14); on any failure it falls back to `Other / General`. |
-| **Receipt scan** | Image (PNG/JPEG; web also converts HEIC with an on-demand converter) or PDF, max **12 MB**, content type verified by magic bytes. The OCR engine (Gemini Vision by default; Ollama or a text mock for tests) returns a header (merchant, date, totals, tax/tip/discount, category) plus line items with normalized names. Nothing is saved until the user reviews and confirms. Repeat scans are detectable by `fingerprint`. |
+| **Receipt scan** | Image (PNG/JPEG; web also converts HEIC with an on-demand converter) or PDF, max **12 MB**, content type verified by magic bytes. The OCR engine (`hybrid` by default: on-server RapidOCR plus a rule parser, asking Gemini only when the parse is unsure; on mobile, on-device OCR sends only the text) returns a header (merchant, date, totals, tax/tip/discount, category) plus line items with normalized names. Nothing is saved until the user reviews and confirms. Repeat scans are detectable by `fingerprint`. |
 | **Itemized expenses** | `POST /expenses/with_items` stores line items (`expense_items`) that feed item-price history; items can be edited after saving (`PUT /expenses/{id}/items`). Group expenses can be itemized and assigned per person (§3.6). |
 | **Browse / search / filter** | Combined feed of personal and group rows; month, free-text search, tag filter and scope (personal / groups / combined). Edit, delete, and *move to group* (§3.6). |
 | **Expense detail** | Personal detail with merchant, split, tags, receipt info and card; the mobile sheet adds an **"above your usual"** note when an amount is ≥1.5× the mean of at least three other expenses at the same merchant (a client-side heuristic over loaded rows). |
@@ -363,7 +363,7 @@ HTTP  →  Middleware (CORS, CSRF)  →  Routers  →  Services  →  SQLAlchemy
 
 **Logging a group expense.** Client → `POST /groups/{id}/expenses` → `GroupExpenseService` validates payers, runs `SplitEngine` (cent-exact) → writes `expenses` + `expense_payers` + `expense_splits` (+ per-item splits when itemized) → `ActivityService` records the event → cache invalidated → `NotificationService.fan_out` sends pushes (background).
 
-**Receipt to expense.** Client uploads to `POST /ingest/receipt/parse` (type, size, magic-byte checks; 3/min) → `ReceiptService` (Gemini Vision) → validated header + items + fingerprint returned, **nothing persisted** → user edits → `POST /expenses/with_items` (or the group equivalent).
+**Receipt to expense.** Client uploads to `POST /ingest/receipt/parse` (type, size, magic-byte checks; 3/min) → `ReceiptService` (RapidOCR + rule parser; Gemini only for low-confidence reads under the `hybrid` engine) → validated header + items + fingerprint returned, **nothing persisted** → user edits → `POST /expenses/with_items` (or the group equivalent).
 
 **Ask.** Client → `POST /analysis/chat` (5/min) → period and group scope resolved from the text and request params → LangGraph agent with the user's tools → response + `resolved_period` + `resolved_scope` → clients render the provenance line; any expense created triggers client-side cache invalidation.
 
@@ -948,11 +948,30 @@ Pure functions over plain dicts — no DB or FastAPI. **Rule precedence: merchan
 
 ### 11.1 Receipt OCR (`ReceiptService`)
 
-`OCR_ENGINE` selects **`gemini`** (default, model `OCR_MODEL=gemini-2.5-flash`, called over the Generative Language API), **`ollama`** (local vision model) or **`mock`** (parses UTF-8 text — used by tests and CI so no real model is ever called). The output is a *header* (merchant, normalized merchant, `purchased_at`, amount, tax/tip/discount, main + subcategory) and *items* (name, normalized name, quantity, unit price, line total, category). Post-processing: the normalized merchant becomes the merchant used downstream (raw kept as `merchant_name_raw`); header and item categories are validated against the taxonomy (paraphrases like "Food and Drink" are corrected or fall back); a **fingerprint** is computed as SHA-256 of raw merchant + hour of purchase + amount + first three item names. Nothing is persisted by the parse endpoint.
+`OCR_ENGINE` selects:
+
+- **`hybrid`** (default) — RapidOCR on the server, then the rule parser `receipt_text_parser.py`. Gemini (`OCR_MODEL=gemini-2.5-flash`) re-reads the image only when the parser's confidence is below `OCR_LLM_FALLBACK_MIN_CONF` (0.75), and only through the AI quota (`FEATURE_RECEIPT`).
+- **`local`** — RapidOCR + rule parser only; never calls an LLM. A receipt OCR can't read returns 422 ("Couldn't read this receipt").
+- **`gemini`** / **`ollama`** — send the image straight to the model (quota-metered).
+- **`mock`** — parses UTF-8 text; used by tests and CI so no real model is ever called.
+
+Mobile reads the receipt on-device (Apple Vision on iOS, ML Kit on Android) and posts only the text lines to `POST /ingest/receipt/parse_ocr`, which runs the rule parser and **never calls an LLM**. When that read is weak it returns `needs_image: true` and the app uploads the photo to `/ingest/receipt/parse`, which then follows `OCR_ENGINE`. Responses carry `source` (`ocr` | `ocr+llm` | `llm`) and the parser's `confidence`.
+
+**Turning off LLM use for receipts.** Three switches, from narrowest to widest:
+
+| Switch | Scope | Effect |
+|:---|:---|:---|
+| `allow_ai=false` (query param) | One request; clients send it until the user has given AI consent | No LLM for that scan. Under `hybrid`, the OCR result is returned with the warning "Read without AI assist (AI features are off)". |
+| `OCR_ENGINE=local` | Server-wide, receipts only | The LLM is never called for receipts; categorization and chat are unaffected. |
+| `AI_ENABLED=false` | Server-wide kill switch for every LLM feature | Under `hybrid`, unsure reads return the OCR result with "Read without AI assist (AI features are turned off right now)". |
+
+When `hybrid` can't reach the LLM for a quota reason, the warning names it: today's limit reached, AI paused (global budget), account blocked, or email not verified. If OCR itself fails and the LLM is unavailable, the quota error is returned instead.
+
+The output is a *header* (merchant, normalized merchant, `purchased_at`, amount, tax/tip/discount, main + subcategory) and *items* (name, normalized name, quantity, unit price, line total, category). Post-processing: the normalized merchant becomes the merchant used downstream (raw kept as `merchant_name_raw`); header and item categories are validated against the taxonomy (paraphrases like "Food and Drink" are corrected or fall back); a **fingerprint** is computed as SHA-256 of raw merchant + hour of purchase + amount + first three item names. Nothing is persisted by the parse endpoint.
 
 ### 11.2 Categorization (`CategorizationService`)
 
-`classify(description)` asks the LLM (Gemini, `OCR_MODEL`) for `(main, sub, merchant)`, parses the JSON, rejects any pair not in the taxonomy, and otherwise returns `("Other", "General", None)`. There is no keyword/rule layer — the LLM is the only classifier, with a safe fallback.
+`POST /expenses/categorize` answers from the first tier that matches: (1) the user's own past pick for that description or merchant (`category_memory`, written whenever an expense is saved; "General" is never remembered), (2) the merchant dictionary (`services/category_rules/`, exact, word-contained and fuzzy matches), (3) weighted keyword rules, and only then (4) the LLM (Gemini, `OCR_MODEL`) through the AI quota, when `CATEGORIZE_LLM_FALLBACK` is on and the request has `allow_ai`. Any pair outside the taxonomy is rejected; the final fallback is `("Other", "General", None)`. The response's `source` says which tier answered (`memory` | `merchant` | `keyword` | `llm` | `default`). `merchant_name` comes from: the merchant saved with the remembered expense (memory tier; a later save without a merchant keeps it), the dictionary's display name, or — for keyword matches — a conservative guess from the description itself ("lunch at Joe's Pizza", or a capitalized name containing a business word such as "Taj Indian Kitchen"); ordinary phrases like "dinner with friends" get none. Everyday-word merchants ("shell", "subway", "target") match only as the whole description, after "at"/"from", or when the rest of the description agrees with them ("Shell gas", "Target run").
 
 ### 11.3 The AI Analyst agent (`chat_service.call_chat_model`)
 
@@ -986,8 +1005,8 @@ Normalizes a raw merchant/item string, then resolves it through a confidence-gat
 
 | Flow | Provider | Data sent | Persisted? |
 |:---|:---|:---|:---|
-| Receipt parse | Gemini Vision | the uploaded image/PDF | image not stored; parsed fields returned |
-| Categorize | Gemini | the description text | no |
+| Receipt parse | None by default (on-server / on-device OCR); Gemini Vision only for low-confidence `hybrid` reads or the `gemini` engine | the uploaded image/PDF (only when the LLM is used) | image not stored; parsed fields returned |
+| Categorize | None for memory/dictionary/keyword matches; Gemini only when they all miss | the description text (LLM tier only) | user's own picks kept in `category_memory` |
 | Chat / Ask-why | Gemini / OpenAI / Ollama | the user's question, history, and tool results scoped to the user | no; only explicit create tools write expenses |
 
 ---
@@ -1170,7 +1189,7 @@ The same GCP project also hosts two unrelated apps (`cerebroos`, `stock-analyzer
 | Custom domain | `expense.cerebroos.com` (Cloudflare CNAME) | `trackspense-api.cerebroos.com` (Cloud Run domain mapping) |
 | Traffic | `--allow-unauthenticated` (public) | `--allow-unauthenticated` (public API) |
 
-**Backend runtime environment (production):** `ENV`, `ENVIRONMENT=prod`, `GROUPS_ENABLED=true`, `AUTH_COOKIE_SAMESITE=strict`, `USE_POSTGRES` (legacy), `MAIL_FROM`, `MAIL_TO`, and the secrets `DATABASE_URL`, `JWT_SECRET`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `GEMINI_API_KEY`, `OPENAI_API_KEY`. Everything else runs on code defaults — notably `BUDGETS_ENABLED`, `CARD_COACH_ENABLED`, `TAGS_ENABLED` (all default `True`), `OCR_ENGINE=gemini`, and `PUBLIC_APP_URL` / `GOOGLE_CLIENT_ID` / `RATE_LIMIT_STORAGE_URI`, which are **not set** (see §19).
+**Backend runtime environment (production):** `ENV`, `ENVIRONMENT=prod`, `GROUPS_ENABLED=true`, `AUTH_COOKIE_SAMESITE=strict`, `USE_POSTGRES` (legacy), `MAIL_FROM`, `MAIL_TO`, and the secrets `DATABASE_URL`, `JWT_SECRET`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `GEMINI_API_KEY`, `OPENAI_API_KEY`. Everything else runs on code defaults — notably `BUDGETS_ENABLED`, `CARD_COACH_ENABLED`, `TAGS_ENABLED` (all default `True`), `OCR_ENGINE=hybrid`, and `PUBLIC_APP_URL` / `GOOGLE_CLIENT_ID` / `RATE_LIMIT_STORAGE_URI`, which are **not set** (see §19).
 
 ### 15.3 Domains and DNS
 
@@ -1271,7 +1290,9 @@ Read by `core/config.py` (`Settings`, `.env` loaded when present) unless noted.
 | `TAG_MAX_PER_EXPENSE` / `TAG_MAX_PER_USER` / `TAG_BULK_MAX` | `5` / `100` / `1000` | Tag limits |
 | `PUBLIC_APP_URL` | `http://localhost:3000` | **Base URL used in emailed links** (verify, reset, group, invite) — must be set in production |
 | `ANALYSIS_CACHE_TTL_SEC` | `60` | In-process analysis cache TTL |
-| `OCR_ENGINE` / `OCR_MODEL` | `gemini` / `gemini-2.5-flash` | Receipt engine (`gemini` \| `ollama` \| `mock`) and model (also used by categorization) |
+| `OCR_ENGINE` / `OCR_MODEL` | `hybrid` / `gemini-2.5-flash` | Receipt engine (`hybrid` \| `local` \| `gemini` \| `ollama` \| `mock`; `local` never calls an LLM) and the fallback model (also used by categorization) |
+| `OCR_LLM_FALLBACK_MIN_CONF` | `0.75` | Parser confidence below which `hybrid` asks the LLM |
+| `CATEGORIZE_LLM_FALLBACK` | `True` | Whether categorization may call the LLM when memory, dictionary and keywords all miss |
 | `MAX_UPLOAD_MB` / `ALLOWED_MIME` | `12` / `image/png,image/jpeg,application/pdf` | Upload limits |
 | `LLM_TIMEOUT_SEC` | `180` | Timeout for LLM calls |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | — / `gemini-3.1-flash-lite` | Gemini credentials / chat model |

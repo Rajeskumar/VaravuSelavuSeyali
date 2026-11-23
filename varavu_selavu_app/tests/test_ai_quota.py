@@ -39,6 +39,8 @@ def limits(monkeypatch):
     monkeypatch.setenv("AI_CHAT_DAILY_LIMIT", "2")
     monkeypatch.setenv("AI_RECEIPT_DAILY_LIMIT", "1")
     monkeypatch.setenv("AI_CATEGORIZE_DAILY_LIMIT", "1")
+    # The developer's .env may switch the categorization LLM off; these tests exercise it.
+    monkeypatch.setenv("CATEGORIZE_LLM_FALLBACK", "true")
     monkeypatch.setenv("AI_GLOBAL_DAILY_BUDGET_USD", "100")
     monkeypatch.setenv("AI_REQUIRE_VERIFIED_EMAIL", "true")
     monkeypatch.setenv("AI_CHAT_ALLOWED_MODELS", "gemini:gemini-3.1-flash-lite")

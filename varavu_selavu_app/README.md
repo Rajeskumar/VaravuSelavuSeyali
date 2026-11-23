@@ -237,7 +237,14 @@ LLM_TIMEOUT_SEC=180
 ## Local receipt OCR
 
 `hybrid` tries RapidOCR and the receipt rule parser before the existing metered
-Gemini fallback. `local` never calls an LLM. Receipt images are EXIF-oriented,
+Gemini fallback. `local` never calls an LLM.
+
+To keep receipts off the LLM entirely, set `OCR_ENGINE=local`. `AI_ENABLED=false`
+turns off every LLM feature, and a request with `allow_ai=false` (sent until the
+user consents to AI) skips the LLM for that scan. When `hybrid` can't use the
+LLM, it returns the OCR result with a warning naming why (AI off, daily limit,
+paused budget, blocked account or unverified email). Mobile's on-device path,
+`/ingest/receipt/parse_ocr`, never calls an LLM. Receipt images are EXIF-oriented,
 conservatively cropped to bright paper before resizing, and processed in
 bounded overlapping tiles. Ambiguous crops retain the original scene. Very wide
 receipt crops are rotated to portrait; this is a heuristic, not a general

@@ -59,7 +59,11 @@ class CategoryMemoryService:
     def __init__(self, db: Session):
         self.db = db
 
-    def lookup(self, user_email: str, description: Optional[str], merchant_name: Optional[str] = None) -> Optional[Tuple[str, str]]:
+    def lookup(
+        self, user_email: str, description: Optional[str], merchant_name: Optional[str] = None
+    ) -> Optional[Tuple[str, str, Optional[str]]]:
+        """(main_category, subcategory, merchant_name or None) the user last saved for this
+        description, else for this merchant."""
         keys: List[str] = [k for k in (memory_key(description), memory_key(merchant_name)) if k]
         if not keys:
             return None
@@ -71,7 +75,8 @@ class CategoryMemoryService:
         by_key = {r.key: r for r in rows}
         for k in keys:  # the exact description beats the merchant
             if k in by_key:
-                return by_key[k].main_category, by_key[k].category_id
+                row = by_key[k]
+                return row.main_category, row.category_id, row.merchant_name
         return None
 
     def record(
@@ -91,12 +96,14 @@ class CategoryMemoryService:
             if not main:
                 return
             keys = {k for k in (memory_key(description), memory_key(merchant_name)) if k}
+            merchant = (merchant_name or "").strip()[:255] or None
             if not keys:
                 return
             insert = pg_insert if self.db.bind.dialect.name == "postgresql" else sqlite_insert
             for key in keys:
                 stmt = insert(CategoryMemory).values(
-                    user_email=user_email, key=key, main_category=main, category_id=category, hits=1
+                    user_email=user_email, key=key, main_category=main, category_id=category,
+                    merchant_name=merchant, hits=1,
                 )
                 stmt = stmt.on_conflict_do_update(
                     index_elements=[CategoryMemory.user_email, CategoryMemory.key],
@@ -105,6 +112,8 @@ class CategoryMemoryService:
                         "hits": case((CategoryMemory.category_id == category, CategoryMemory.hits + 1), else_=1),
                         "main_category": main,
                         "category_id": category,
+                        # A save without a merchant shouldn't forget the one we already know.
+                        "merchant_name": func.coalesce(stmt.excluded.merchant_name, CategoryMemory.merchant_name),
                         "updated_at": func.now(),
                     },
                 )

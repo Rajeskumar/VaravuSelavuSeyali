@@ -64,6 +64,9 @@ class CategoryMemory(Base):
     key = Column(String(120), primary_key=True)
     main_category = Column(String(100), nullable=False)
     category_id = Column(String(100), nullable=False)
+    # The merchant the user saved alongside it, so a remembered suggestion can fill the
+    # merchant too — not just the category. Kept when a later save has no merchant.
+    merchant_name = Column(String(255), nullable=True)
     hits = Column(Integer, nullable=False, default=1, server_default="1")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

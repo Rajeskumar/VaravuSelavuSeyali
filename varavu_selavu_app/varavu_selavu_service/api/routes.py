@@ -857,6 +857,17 @@ def parse_receipt(
 
 _receipt_log = logging.getLogger("varavu_selavu.receipts")
 
+# Why the hybrid engine couldn't ask the LLM for a second read, keyed by AiQuotaError.code.
+# The kill switch, a paused global budget and a blocked account are not "your daily limit",
+# so the warning has to say which one it was.
+_RECEIPT_AI_UNAVAILABLE_REASONS = {
+    "ai_quota_exceeded": "today's AI limit reached",
+    "ai_disabled": "AI features are turned off right now",
+    "ai_paused": "AI is paused right now",
+    "ai_blocked": "AI features aren't available on this account",
+    "email_not_verified": "verify your email to use AI assist",
+}
+
 
 def _parse_receipt_locally(
     receipt_service: ReceiptService,
@@ -890,10 +901,11 @@ def _parse_receipt_locally(
 
     try:
         reservation = quota.reserve(user_id, FEATURE_RECEIPT)
-    except AiQuotaError:
+    except AiQuotaError as exc:
         if local is None:
             raise
-        local["warnings"].append("Read without AI assist (today's AI limit reached) — please review the details.")
+        reason = _RECEIPT_AI_UNAVAILABLE_REASONS.get(exc.code, "AI assist is unavailable right now")
+        local["warnings"].append(f"Read without AI assist ({reason}) — please review the details.")
         return local
     try:
         parsed = receipt_service.parse(data, content_type=content_type, save_ocr_text=save_ocr_text, engine="gemini")

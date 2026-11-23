@@ -124,3 +124,57 @@ def test_agent_category_resolution(category, description, merchant, expected):
     from varavu_selavu_service.services.chat_service import _resolve_agent_category
 
     assert _resolve_agent_category(category, description, merchant) == expected
+
+
+@pytest.mark.parametrize(
+    "description,sub,merchant",
+    [
+        ("Shell gas", "Gas/fuel", "Shell"),  # everyday-word merchant + agreeing keyword
+        ("Subway sandwich", "Dining out", "Subway"),
+        ("Target run", "Groceries", "Target"),  # + filler word
+        ("lunch at Subway", "Dining out", "Subway"),  # after "at"
+    ],
+)
+def test_exact_only_merchants_match_in_agreeing_context(rules, description, sub, merchant):
+    m = rules.classify(description)
+    assert (m.subcategory, m.merchant_name, m.source) == (sub, merchant, "merchant")
+
+
+@pytest.mark.parametrize(
+    "description,sub",
+    [
+        ("subway ticket", "Bus/Train"),  # "ticket" disagrees with the sandwich chain
+        ("steam cleaning", "Cleaning"),
+        ("cricket bat", "Sports"),
+    ],
+)
+def test_exact_only_merchants_still_rejected_when_context_disagrees(rules, description, sub):
+    m = rules.classify(description)
+    assert (m.subcategory, m.merchant_name, m.source) == (sub, None, "keyword")
+
+
+@pytest.mark.parametrize(
+    "description,merchant",
+    [
+        ("Joe's Pizza", "Joe's Pizza"),
+        ("lunch at Joe's Pizza", "Joe's Pizza"),
+        ("lunch at joe's pizza for the team", "Joe's Pizza"),  # trailing clause dropped, title-cased
+        ("Taj Indian Kitchen", "Taj Indian Kitchen"),
+        ("TST* Taj Indian Kitchen", "Taj Indian Kitchen"),  # POS prefix stripped
+        ("ACE AUTO REPAIR", "Ace Auto Repair"),  # statement caps normalized
+        ("oil change at Bob's Garage", "Bob's Garage"),
+    ],
+)
+def test_keyword_matches_name_the_business_from_the_description(rules, description, merchant):
+    m = rules.classify(description)
+    assert (m.merchant_name, m.source) == (merchant, "keyword")
+
+
+@pytest.mark.parametrize(
+    "description",
+    ["dinner with friends", "Dinner With Friends", "coffee at work", "dinner at home",
+     "coffee at the office", "Pizza", "groceries", "rent", "parking downtown"],
+)
+def test_ordinary_phrases_get_no_guessed_merchant(rules, description):
+    m = rules.classify(description)
+    assert m is not None and m.merchant_name is None

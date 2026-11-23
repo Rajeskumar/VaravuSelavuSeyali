@@ -195,11 +195,12 @@ class CategorizationService:
                 user_email, description, rule.merchant_name if rule else None
             )
             if remembered:
-                main, sub = remembered
+                main, sub, remembered_merchant = remembered
                 return {
                     "main_category": main,
                     "subcategory": sub,
-                    "merchant_name": rule.merchant_name if rule else None,
+                    # The name the user saved wins over the dictionary's display name.
+                    "merchant_name": remembered_merchant or (rule.merchant_name if rule else None),
                     "source": "memory",
                     "confidence": 0.99,
                 }

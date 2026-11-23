@@ -12,8 +12,10 @@ def _categorize(client, description):
     return res.json()
 
 
-def test_semantic_classification(test_client, db_session):
-    # Nothing local matches, so the LLM tier answers.
+def test_semantic_classification(test_client, db_session, monkeypatch):
+    # Nothing local matches, so the LLM tier answers. Pinned on: Settings reads the developer's
+    # .env, which may switch the LLM fallback off.
+    monkeypatch.setenv("CATEGORIZE_LLM_FALLBACK", "true")
     with patch.object(
         CategorizationService,
         "llm_classify",
@@ -106,3 +108,28 @@ def test_memory_learns_unknown_descriptions_and_updates_on_edit(test_client, db_
 def test_general_fallback_is_not_remembered(test_client, db_session):
     _create_expense(test_client, "Starbucks", "General")
     assert _categorize(test_client, "Starbucks")["subcategory"] == "Dining out"
+
+
+def test_keyword_suggestion_names_an_unknown_business(test_client, db_session):
+    data = _categorize(test_client, "lunch at Joe's Pizza")
+    assert (data["subcategory"], data["merchant_name"], data["source"]) == ("Dining out", "Joe's Pizza", "keyword")
+
+
+def test_memory_suggestion_returns_the_saved_merchant(test_client, db_session):
+    _create_expense(test_client, "team lunch", "Dining out", merchant="Joe's Pizza")
+    data = _categorize(test_client, "team lunch")
+    assert (data["subcategory"], data["merchant_name"], data["source"]) == ("Dining out", "Joe's Pizza", "memory")
+
+
+def test_saved_merchant_beats_dictionary_display_name(test_client, db_session):
+    _create_expense(test_client, "Costco", "Household supplies", merchant="Costco Mountain View")
+    assert _categorize(test_client, "costco")["merchant_name"] == "Costco Mountain View"
+
+
+def test_later_save_without_merchant_keeps_the_remembered_one(test_client, db_session):
+    _create_expense(test_client, "zqx vendor 42", "Parking", merchant="ZQX Parking Co")
+    _create_expense(test_client, "zqx vendor 42", "Parking")
+    row = db_session.query(CategoryMemory).filter_by(user_email="test@user.com", key="zqx vendor 42").one()
+    db_session.refresh(row)
+    assert (row.merchant_name, row.hits) == ("ZQX Parking Co", 2)
+    assert _categorize(test_client, "zqx vendor 42")["merchant_name"] == "ZQX Parking Co"

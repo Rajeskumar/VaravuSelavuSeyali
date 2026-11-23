@@ -18,7 +18,7 @@
 | CI/CD | **GCP Cloud Build** | Builds both images, runs DB migrations, deploys both services — triggered on push to `main`. |
 | Database | **Supabase** (managed Postgres) | All app data, schema `trackspense`. |
 | Secrets | **GCP Secret Manager** | DB URL, JWT signing secret, mail credentials, AI API keys. |
-| AI / OCR | **Google Gemini**, **OpenAI** | Receipt OCR + categorization (Gemini), AI Analyst chat (configurable provider, defaults vary by env). |
+| AI / OCR | **Google Gemini**, **OpenAI** | Fallback only for receipt OCR + categorization (Gemini; both run on-server rules/OCR first), AI Analyst chat (configurable provider, defaults vary by env). |
 | Email | **Gmail SMTP** | Transactional email (feedback, contact-us) via an app-password-authenticated Gmail account. |
 | Push notifications | **Expo Push Service** | Mobile push, via `EXPO_PUSH_URL`/`EXPO_ACCESS_TOKEN`. |
 | FX rates | **open.er-api.com** | Multi-currency group-expense conversion. |
@@ -196,7 +196,7 @@ All bound via `secretKeyRef: latest` — the backend picks up whatever the curre
 
 | Service | Purpose | Config |
 |:---|:---|:---|
-| Google Gemini | Receipt OCR (`OCR_ENGINE=gemini`, `OCR_MODEL=gemini-2.5-flash`), AI Analyst chat | `GEMINI_API_KEY` |
+| Google Gemini | Low-confidence receipt re-reads under `OCR_ENGINE=hybrid` (default; `local` disables this) and the categorization fallback, both `OCR_MODEL=gemini-2.5-flash`; AI Analyst chat | `GEMINI_API_KEY` |
 | OpenAI | AI Analyst chat, alternate provider | `OPENAI_API_KEY`, `OPENAI_MODEL` (defaults `gpt-5-mini`) |
 | Google OAuth | "Sign in with Google" — backend verifies the `id_token` server-side | no separate secret; uses `google-auth` library against Google's public keys |
 | Gmail SMTP | Feedback / contact-us transactional email | `MAIL_USERNAME`/`MAIL_PASSWORD` (app password), `smtp.gmail.com:587` |
