@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "W-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Commits since v1.1.0 have no routed-review evidence: PRs #43, #44, #45 merged with 0 reviews; 22 direct pushes to main.",
+      "owner": "Rajeshkumar Ganesan",
+      "source": "release readiness for v1.2.0 (2026-11-23)",
+      "status": "accepted",
+      "verification_evidence": "",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Exact-candidate unit/QA/framework CI, dependency and secret audits and a migration rehearsal pass on c235703; the waiver covers only missing review evidence. TS-QA-101's changes were fully reviewed.",
+        "expires": "2026-12-23",
+        "reference": "Claude Code chat 2026-11-23 ('Waive and release'); docs/sdlc/releases/v1.2.0/release.md"
+      }
+    }
+  ]
+}

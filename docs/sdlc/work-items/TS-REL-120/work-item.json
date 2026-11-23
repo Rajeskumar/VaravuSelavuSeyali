@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "TS-REL-120",
+  "title": "Release v1.2.0 (legacy commits since v1.1.0)",
+  "owner": "Rajeshkumar Ganesan (repository owner)",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "deploy",
+  "status": "complete",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "docs/sdlc/releases/v1.2.0"
+  ],
+  "notes": "Documented legacy release record for the 57 commits shipped in v1.2.0. Holds waiver W-1 for missing review evidence on commits since v1.1.0."
+}

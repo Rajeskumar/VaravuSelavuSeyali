@@ -151,6 +151,20 @@
       "acceptance_criteria": [
         "AC-002"
       ]
+    },
+    {
+      "id": "qa-ci",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "GitHub Actions qa.yml on main, push of c23570369a9399c1a9d0d60932538396e1e6f8e2 (UTC runner, 2 workers)",
+      "command_or_method": "smoke 3 passed; Chromium regression 104 passed; firefox+webkit+mobile-iphone matrix 288 passed, 1 flaky (webkit search-filter.spec.ts:38, passed on retry, unrelated); axe scan; API suite passed",
+      "source": "https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45112177860",
+      "recorded_at": "2026-11-23T04:46:19.160185+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-004",
+        "AC-005"
+      ]
     }
   ]
 }

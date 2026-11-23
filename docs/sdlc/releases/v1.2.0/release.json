@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "version": "v1.2.0",
+  "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+  "work_items": [
+    "TS-QA-101",
+    "TS-SDLC-001"
+  ],
+  "status": "verified",
+  "authorization": {
+    "actor": "Rajeshkumar Ganesan (repository owner)",
+    "reference": "Claude Code chat 2026-11-23: answered 'Waive and release' and 'v1.2.0 at c235703' to the release question (after 'do a release to prod now' and 'fix the QA failures and re-run')",
+    "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2"
+  },
+  "checks": [
+    {
+      "id": "unit-ci",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45112177752 (release-gate.py PASS)"
+    },
+    {
+      "id": "qa-ci",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45112177860 (smoke 3, regression 104, matrix 288 + 1 unrelated flaky passing on retry, API suite)"
+    },
+    {
+      "id": "framework-ci",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45112177735"
+    },
+    {
+      "id": "security",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "pre-push make release-check on this commit: pip-audit, web/mobile(allowlist)/qa npm audit 0 high+; secret scan clean; TS-QA-101 security review approve"
+    },
+    {
+      "id": "acceptance",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "TS-QA-101 validate gate PASS (AC-001..AC-006); QA CI on this commit covers the docs/qa automated UAT; release.md 'Scope and evidence' lists manual-UAT limits"
+    },
+    {
+      "id": "reviews",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "TS-QA-101: 7 routed reviews, no open P0-P2. Commits since v1.1.0 without review evidence: approved waiver W-1 (owner Rajeshkumar Ganesan, expires 2026-12-23) in release.md"
+    },
+    {
+      "id": "migration-compatibility",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "5 migrations (930218b82f02, a6140ff1ccd2, b49a6c2df803, 98f3d6b1a740, e7f7da5c52f6) rehearsed on Postgres 16 from the v1.1.0 (bddf298) schema: all apply; additive/widening only, v1.1.0 code compatible; quantity widening rewrites expense_items briefly"
+    },
+    {
+      "id": "configuration",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "GITHUB_ACTIONS_READ_TOKEN exists; trigger SA varavu-selavu-seyali has secretAccessor (project-level, broader than recommended); MCP_ENABLED/MCP_WRITES_ENABLED default False; OCR_ENGINE unset in prod -> hybrid default; backend already 1Gi; no new required env"
+    },
+    {
+      "id": "recovery",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "Previous images recorded (bddf298 backend rev 00127-xwm, frontend rev 00103-2sm); schema forward-compatible so rollback = redeploy previous images via Cloud Run traffic"
+    },
+    {
+      "id": "production-smoke",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "scripts/quality/verify.sh --profile production at 2026-11-23T13:51Z: prod-readonly.spec.ts 5/5 (homepage, login form, backend health, config flags, app 404)"
+    },
+    {
+      "id": "production-errors",
+      "status": "passed",
+      "candidate": "c23570369a9399c1a9d0d60932538396e1e6f8e2",
+      "source": "gcloud logging, revisions varavu-selavu-backend-00128-4rj and varavu-selavu-frontend-00104-cmg, window 2026-11-23T13:49Z-13:56Z: 0 responses >=500 and 0 severity>=ERROR entries (backend 18x200, 3x401 unauthenticated; frontend 25x200). Baseline: previous backend revision 00127-xwm had 0 such entries in the prior 24h. Limitation: low traffic; no SLO/error budget defined."
+    }
+  ],
+  "components": [
+    {
+      "name": "backend",
+      "status": "deployed",
+      "expected_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-backend:c235703",
+      "observed_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-backend:c235703",
+      "revision": "varavu-selavu-backend-00128-4rj",
+      "build_url": "https://console.cloud.google.com/cloud-build/builds/4ceb1126-1d70-4ea5-8dcc-b1b39724b053?project=952416556244",
+      "previous_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-backend@sha256:a0e63982b9083711feddedcebfde37184d328fce9ce61f3f4be0d175194003dc (tag bddf298, revision varavu-selavu-backend-00127-xwm)"
+    },
+    {
+      "name": "frontend",
+      "status": "deployed",
+      "expected_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-frontend:c235703",
+      "observed_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-frontend:c235703",
+      "revision": "varavu-selavu-frontend-00104-cmg",
+      "build_url": "https://console.cloud.google.com/cloud-build/builds/d35c38b5-6516-40c5-b53f-947462db72e7?project=952416556244",
+      "previous_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-frontend@sha256:31cac2278aa3ca2722f64d23a3f701ce1e066bcaa03b981230f279ddbd8b4746 (tag bddf298, revision varavu-selavu-frontend-00103-2sm)"
+    }
+  ],
+  "recovery_plan": "Migrations are additive/widening and v1.1.0 code runs on the new schema: roll back by routing Cloud Run traffic to varavu-selavu-backend-00127-xwm / varavu-selavu-frontend-00103-2sm (images bddf298). No schema downgrade needed. Partial deploy (one component fails): the other is compatible with the previous version; redeploy or roll back the failed one only. Recovery needs owner authorization.",
+  "notes": "Readiness verdict: PASS_WITH_APPROVED_WAIVERS (waiver W-1). Outcome: verified \u2014 both components serving c235703 at 100% traffic, migrations succeeded, prod read-only smoke 5/5, no errors in the 7-minute observation window."
+}

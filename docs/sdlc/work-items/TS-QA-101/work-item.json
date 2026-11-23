@@ -6,7 +6,7 @@
   "risk": "standard",
   "mode": "normal",
   "phase": "validate",
-  "status": "in_progress",
+  "status": "complete",
   "acceptance_criteria": [
     {
       "id": "AC-001",
@@ -51,5 +51,5 @@
   "links": [
     "https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45106153579"
   ],
-  "notes": "User authorization (chat, 2026-11-22): 'fix the QA failures and re-run'. Covers fix, checks and push of the fix; release still needs separate candidate authorization."
+  "notes": "User authorization (chat, 2026-11-22): 'fix the QA failures and re-run'. Covers fix, checks and push of the fix; release still needs separate candidate authorization. Released in v1.2.0 (verified 2026-11-23)."
 }
