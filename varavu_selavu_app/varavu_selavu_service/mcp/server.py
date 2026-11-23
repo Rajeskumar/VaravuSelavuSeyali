@@ -249,6 +249,8 @@ class Gateway:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
+        if scope.get("path", "").rstrip("/") != "/mcp":
+            return await JSONResponse({"detail": "Not Found"}, 404)(scope, receive, send)
         headers = {k.decode().lower(): v.decode() for k, v in scope["headers"]}
         settings = Settings()
         host = urlsplit(settings.MCP_RESOURCE_URL).netloc
