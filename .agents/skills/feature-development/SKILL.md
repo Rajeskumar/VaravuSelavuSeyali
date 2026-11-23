@@ -10,3 +10,5 @@ scope. Create proportional artifacts in `docs/sdlc/`, run required checks/review
 within the bounded remediation policy, and update current product docs/changelog as AGENTS.md requires.
 Do not infer deployment authorization from implementation or validation requests. Leave changes
 uncommitted unless explicitly asked. Never weaken tests or bypass gates to finish.
+
+Board tracking (queue/pick up/status mirror) follows `.ai-sdlc/lifecycle.md` "Work tracking"; that standing authorization is the only external write allowed without a new ask.

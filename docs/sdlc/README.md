@@ -2,8 +2,27 @@
 
 Current product knowledge stays in the existing docs (spec, architecture, feature specs and docs/qa).
 This directory holds change history: work-items/<ID>/, releases/<version>/ and archive/. Framework
-policy/templates live in .ai-sdlc; executable checks in scripts/quality. GitHub Issues/Projects are optional
-links/dashboards, not requirements or gate authorities. No separate service/database is required.
+policy/templates live in .ai-sdlc; executable checks in scripts/quality. Each work item is mirrored to one
+issue on the repository's GitHub Project board for queueing, pick-up and status; the board is a view, never a
+requirements or gate authority (see .ai-sdlc/lifecycle.md, "Work tracking"). No separate service/database
+is required.
+
+## Board commands
+
+Config: `.ai-sdlc/github.json`. Needs `gh` logged in with the `project` scope. Dry run unless `--apply`.
+
+```sh
+$SDLC_PYTHON scripts/quality/sdlc.py github sync TS-123 --priority P1 --size M --kind feature   # then --apply
+$SDLC_PYTHON scripts/quality/sdlc.py github next                  # Ready cards, best first, plan current?
+$SDLC_PYTHON scripts/quality/sdlc.py github status TS-123 in_progress --apply
+$SDLC_PYTHON scripts/quality/sdlc.py github status TS-123 in_review --apply
+$SDLC_PYTHON scripts/quality/sdlc.py github status TS-123 blocked --reason "..." --apply
+$SDLC_PYTHON scripts/quality/sdlc.py github show 34               # a board issue, marked untrusted input
+$SDLC_PYTHON scripts/quality/sdlc.py init TS-124 --issue 34       # seed title + link from a hand-made card
+```
+
+Board automation you can enable in the project's Workflows screen: *Pull request merged → Done* and *Item
+closed → Done* are on. Use `Closes #N` in the PR body so the merge reaches the card.
 
 ## Start and resume
 

@@ -16,3 +16,7 @@
 
 Default repair limit: two unsuccessful fix/recheck cycles per finding, then explain the remaining issue
 and required decision. Do not automatically re-run expensive unrelated suites without a change or concern.
+
+Board status: when validation starts run `sdlc.py github status TS-ID in_review --apply`. A passing gate
+leaves the card In review; Done comes from the merged-PR project workflow or the owner's instruction
+(`--allow-done`), because it closes the issue. Findings that block go on the card as `blocked` with a reason.

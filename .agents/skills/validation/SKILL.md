@@ -8,3 +8,5 @@ Read `.ai-sdlc/lifecycle.md` for scope, risk and phase boundaries, then follow
 work records live under `docs/sdlc/`. Read only the relevant product context and standards.
 Preserve user intent and existing authorization. Report the phase, artifacts, evidence and remaining
 questions. A role/skill does not grant permission to commit, push, deploy or mutate external systems.
+
+Board tracking (queue/pick up/status mirror) follows `.ai-sdlc/lifecycle.md` "Work tracking"; that standing authorization is the only external write allowed without a new ask.

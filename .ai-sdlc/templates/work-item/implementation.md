@@ -10,7 +10,12 @@ Trust boundaries, failure/abuse cases, privacy, concurrency, money, migrations a
 where applicable. State reasons for not-applicable topics.
 
 ## Ordered tasks
-Task, affected files/areas, dependencies, client parity, responsible persona and verification IDs.
+One checklist line per task, in build order: `- [ ] T1: task, affected files/areas, dependencies, client
+parity, responsible persona, verification IDs`. The GitHub board card copies these lines (unchecked);
+progress is tracked by the card's Status, so do not tick them here (editing this file changes the plan
+fingerprint).
+
+- [ ] T1: 
 
 ## Verification and documentation
 Populate required_evidence in work-item.json: deterministic checks, routed reviewers and AC verification.

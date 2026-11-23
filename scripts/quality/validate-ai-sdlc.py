@@ -88,6 +88,21 @@ for phase in ("discover", "plan", "build", "validate", "deploy"):
     if not os.path.exists(f".ai-sdlc/workflows/{phase}.md"):
         err(f"missing phase workflow: {phase}")
 
+# ---- GitHub Project board mirror (optional integration, but its config must be coherent)
+try:
+    import json as _json
+    cfg = _json.load(open(".ai-sdlc/github.json"))
+    for key in ("owner", "repo", "project_owner", "project_number", "fields", "status", "labels"):
+        if key not in cfg: err(f".ai-sdlc/github.json: missing '{key}'")
+    for key in ("backlog", "ready", "in_progress", "in_review", "done"):
+        if key not in cfg.get("status", {}): err(f".ai-sdlc/github.json: status map needs '{key}'")
+    for key in ("sdlc", "blocked", "emergency", "bug", "feature"):
+        if key not in cfg.get("labels", {}): err(f".ai-sdlc/github.json: labels need '{key}'")
+    for f in (".ai-sdlc/workflows/plan.md", ".ai-sdlc/workflows/build.md", ".ai-sdlc/workflows/validate.md"):
+        if "sdlc.py github" not in open(f).read(): err(f"{f}: must tell the agent when to use `sdlc.py github`")
+except (OSError, ValueError) as e:
+    err(f".ai-sdlc/github.json: {e}")
+
 # ---- referenced paths exist
 prefixes = (".ai-sdlc/", ".agents/", ".claude/", "scripts/", "docs/", "qa/")
 scan = glob.glob(".ai-sdlc/**/*.md", recursive=True) + skills + agent_files + ["AGENTS.md"]

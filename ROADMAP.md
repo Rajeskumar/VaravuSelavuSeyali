@@ -26,6 +26,11 @@ Format: `- [ ] [enhancement] — context: [why/when this came up]`
 
 - [ ] MCP production rollout: local default-off v1 implementation now covers scoped OAuth, personal reads, verify → browser approval → save, historical/itemized receipts, logout-all revocation, web/mobile attribution and user rights. Local/PG tests and a dedicated PG CI job are added. Before enablement: exact Claude app then ChatGPT acceptance, staging migrations/load/IAM/logging/privacy checks, and passing required CI. Five local review findings fixed 2026-11-22; setup/enablement commands are in `docs/mcp-setup-and-deployment.md`. See `docs/mcp-local-implementation.md`; native approval/groups/advanced tools stay deferred (Codex, 2026-11-21).
 
+## SDLC tooling
+- [ ] Live rehearsal of the board helper (create a clearly named test card, move Ready → In progress → In review → Done, re-run to confirm idempotency, close it) — context: 2026-11-22 board integration; verified read-only/dry-run and with a fake `gh` only.
+- [ ] Optional board automations (project ⋯ → Workflows): *Item reopened → In progress*, *Item added to project → Backlog*; PR bodies should say `Closes #N` so a merge reaches the card — context: 2026-11-22; "PR merged → Done" and "Item closed → Done" are already on.
+- [ ] Per-task sub-issues (parent/child) instead of a checklist if per-task tracking is wanted — context: 2026-11-22 chose one issue per work item.
+
 ## Quality / launch readiness
 - [ ] Turn on group push notifications in real builds: `eas init` (projectId), real bundle id/package, APNs key + build with `TRACKSPENSE_ENABLE_PUSH=1`, Firebase/FCM V1 for Android, then a physical-device test — context: 2026-10-05 check found the code complete but no device had ever registered; steps in `varavu_selavu_mobile/README.md`.
 - [ ] Legal pages: `privacy_policy.html` / `terms_of_service.html` still show the "Draft template — review before publishing" banner. Have them reviewed, remove the banner, and consider serving them inside the web app (they're plain backend pages today) — context: 2026-10-05 readiness review.

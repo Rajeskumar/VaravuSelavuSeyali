@@ -1,0 +1,15 @@
+{
+  "owner": "Rajeskumar",
+  "repo": "VaravuSelavuSeyali",
+  "project_owner": "Rajeskumar",
+  "project_number": 1,
+  "fields": { "status": "Status", "priority": "Priority", "size": "Size" },
+  "status": {
+    "backlog": "Backlog",
+    "ready": "Ready",
+    "in_progress": "In progress",
+    "in_review": "In review",
+    "done": "Done"
+  },
+  "labels": { "sdlc": "sdlc", "blocked": "blocked", "emergency": "emergency", "bug": "bug", "feature": "enhancement" }
+}

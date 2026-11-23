@@ -12,3 +12,8 @@ Update current product docs for implemented behavior, and feature status as impl
 Record decisions and changelog per AGENTS.md. Reconcile deviations with the plan; product changes need
 agreement, technical changes need updated plans/tests and refreshed fingerprints. Leave code uncommitted
 unless explicitly requested. Build exits to Validate, not directly to tagging.
+
+Pick-up and status: when the work comes from the board, `sdlc.py github next` shows the Ready cards and
+whether each plan is current; build only a card marked "ready to build". Before coding run
+`sdlc.py github status TS-ID in_progress --apply` (it refuses if the plan changed). If blocked, record it
+with `... blocked --reason`. Never mark Done from Build. See lifecycle.md, "Work tracking".

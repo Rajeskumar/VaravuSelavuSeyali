@@ -21,3 +21,7 @@
 
 Exit: an implementer can proceed without inventing product behavior. Run Plan gate. New code still
 needs the Build gate before implementation; no scope expansion from a planning-only request.
+
+Queue it: after the Plan gate passes and the user approves the plan, run `sdlc.py github sync TS-ID`
+(dry run, check the commands), then again with `--apply`, choosing `--priority`, `--size` and `--kind`
+deliberately. This creates the board card in Ready for Build to pick up. See lifecycle.md, "Work tracking".

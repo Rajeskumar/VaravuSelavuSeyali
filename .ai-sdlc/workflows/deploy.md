@@ -82,3 +82,6 @@ Outcomes: deployment_failed, verification_incomplete, verified. Persist evidence
 update product release status only after verified. On failure inspect schema compatibility before
 proposing rollback/roll-forward. Automatic rollback is not enabled; obtain recovery authorization unless
 already explicitly granted. Do not replay a tag/deploy whose outcome is unknown.
+
+After a verified release, comment the release version on each linked work-item issue
+(`gh issue comment N --body "Released in vX"`). Deployment does not move cards to Done by itself.
