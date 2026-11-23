@@ -156,6 +156,12 @@ if settings.MCP_ENABLED:
     app.router.lifespan_context = mcp_lifespan
     # Mount at the root lets the SDK match its canonical /mcp route without a redirect.
     app.mount('/', gateway)
+    logger = logging.getLogger("varavu_selavu_service.mcp")
+    logger.info(
+        "MCP server enabled and mounted at /mcp (resource: %s, writes: %s)",
+        settings.MCP_RESOURCE_URL,
+        settings.MCP_WRITES_ENABLED,
+    )
     @app.exception_handler(MCPError)
     async def mcp_error(request, exc):
         return JSONResponse({'error': {'code':exc.code, **exc.details}}, status_code=exc.status if exc.status != 200 else 400)
