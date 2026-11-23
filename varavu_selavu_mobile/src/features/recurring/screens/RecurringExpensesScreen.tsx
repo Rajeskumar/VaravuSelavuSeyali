@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { todayIso } from '../../expenses/utils/expenseDates';
 import {
     View, Text, StyleSheet, TouchableOpacity, Modal, TextInput,
     ActivityIndicator, Alert, ScrollView, RefreshControl, Platform,
@@ -80,7 +81,7 @@ const EMPTY_FORM: UpsertRecurringPayload = {
     category: '',
     day_of_month: new Date().getDate(),
     default_cost: 0,
-    start_date_iso: new Date().toISOString().split('T')[0],
+    start_date_iso: todayIso(),
     status: 'Active',
 };
 

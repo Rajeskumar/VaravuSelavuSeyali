@@ -1,5 +1,5 @@
 import React from 'react';
-import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
+import { expenseDateBounds, expenseDateProblem, todayIso } from '../../utils/expenseDates';
 import Drawer from '@mui/material/Drawer';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
@@ -107,7 +107,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [amount, setAmount] = React.useState('');
   const [amountHint, setAmountHint] = React.useState<string | null>(null);
   const [description, setDescription] = React.useState('');
-  const [expenseDate, setExpenseDate] = React.useState(() => new Date().toISOString().split('T')[0]);
+  const [expenseDate, setExpenseDate] = React.useState(() => todayIso());
   const [who, setWho] = React.useState(initialGroupId || 'me');
   const [groups, setGroups] = React.useState<GroupSummary[]>([]);
   const [scannedCategory, setScannedCategory] = React.useState<string | null>(null);
@@ -188,7 +188,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setStage('entry');
     setAmount('');
     setDescription('');
-    setExpenseDate(new Date().toISOString().split('T')[0]);
+    setExpenseDate(todayIso());
     setWho(initialGroupId || 'me');
     setScannedCategory(null);
     setScannedMerchant(null);

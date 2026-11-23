@@ -9,6 +9,12 @@ const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 export const FUTURE_DATE_MESSAGE = "Date can't be in the future. Use a recurring expense for upcoming bills.";
 export const OLD_DATE_MESSAGE = "Date can't be more than a year ago.";
 
+/** Today's date as YYYY-MM-DD in the person's own timezone. Never `toISOString()`: that is the UTC
+ * date, which west of UTC turns into "tomorrow" every evening — and tomorrow is a future date. */
+export function todayIso(now: Date = new Date()): string {
+  return toIso(now);
+}
+
 export function expenseDateBounds(now: Date = new Date()): { min: string; max: string } {
   const min = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
   return { min: toIso(min), max: toIso(now) };

@@ -1,4 +1,5 @@
 import React from 'react';
+import { todayIso } from '../../utils/expenseDates';
 import { Drawer, Box, Typography, TextField, Checkbox, IconButton, Button, Alert, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/CloseRounded';
 import CheckCircleIcon from '@mui/icons-material/CheckCircleRounded';
@@ -31,7 +32,7 @@ const RecurringPrompt: React.FC = () => {
     if (sessionStorage.getItem(sessionKey)) return;
     (async () => {
       try {
-        const todayISO = new Date().toISOString().split('T')[0];
+        const todayISO = todayIso();
         const dueList = await getRecurringDue(todayISO);
         if (dueList.length > 0) {
           const state: Record<string, ItemState> = {};

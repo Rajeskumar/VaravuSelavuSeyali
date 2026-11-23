@@ -79,6 +79,7 @@ Agent entry points and capability limitations: `.ai-sdlc/adapters.md`.
 ## Key Decisions
 - **AI SDLC uses five phases and repo-local artifacts**: `.ai-sdlc/lifecycle.md`, `docs/sdlc/README.md`. Current product docs stay separate from work history. Release readiness never grants deploy authority; Cloud Build checks exact-candidate unit/QA/framework CI before deployment.
 - **Money is `Decimal`, never float** (`core/money.py`) — float totals produced rounding artifacts.
+- **"Today" is the person's local date: use `todayIso()` (`utils/expenseDates`, web + mobile), never `new Date().toISOString().split('T')[0]`** — that's the UTC date, "tomorrow" every evening west of UTC, which the future-date rule then blocks. CI runs in UTC and won't catch it.
 - **Dashboard spend totals come from the server's `spend_breakdown` (`personal` + `group_share` / `i_paid_share`), never by summing `group_summaries`** — summaries list only active groups, but spending counts in every group whatever its status, exactly as Analysis does.
 - **The user's identity is their email** (FK `users.email`), not `users.id`. This is legacy and pervasive, so don't "fix" it piecemeal.
 - **Never trust a client-supplied `user_id`** — derive the user from the token.

@@ -1,4 +1,5 @@
 import React from 'react';
+import { todayIso } from '../../utils/expenseDates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../../api/recurring';
 import { suggestCategory } from '../../api/expenses';
@@ -35,7 +36,7 @@ const RecurringTab: React.FC = () => {
     merchant_name: '',
     day_of_month: new Date().getDate(),
     default_cost: 0,
-    start_date_iso: new Date().toISOString().split('T')[0],
+    start_date_iso: todayIso(),
     status: 'Active',
   });
 
@@ -107,7 +108,7 @@ const RecurringTab: React.FC = () => {
       merchant_name: '',
       day_of_month: new Date().getDate(),
       default_cost: 0,
-      start_date_iso: new Date().toISOString().split('T')[0],
+      start_date_iso: todayIso(),
       status: 'Active',
     });
     setFormOpen(true);

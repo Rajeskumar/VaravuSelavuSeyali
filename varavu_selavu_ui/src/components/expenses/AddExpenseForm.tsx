@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
+import { expenseDateBounds, expenseDateProblem, todayIso } from '../../utils/expenseDates';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import TextField from '@mui/material/TextField';
@@ -154,7 +154,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const defaultMain = Object.keys(CATEGORY_GROUPS)[0];
   const initialSub = existing ? existing.category : CATEGORY_GROUPS[defaultMain][0];
   const initialMain = existing ? findMainCategory(initialSub) : defaultMain;
-  const [expenseDate, setExpenseDate] = useState(existing ? mmddyyyyToISO(existing.date) : new Date().toISOString().split('T')[0]);
+  const [expenseDate, setExpenseDate] = useState(existing ? mmddyyyyToISO(existing.date) : todayIso());
   const [description, setDescription] = useState(existing?.description || '');
   const [cost, setCost] = useState(existing?.cost || 0);
   // The input is text-backed so partial entries like "10." are typable; `cost`

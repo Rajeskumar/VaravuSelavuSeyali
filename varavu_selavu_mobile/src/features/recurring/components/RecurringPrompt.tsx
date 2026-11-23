@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { todayIso } from '../../expenses/utils/expenseDates';
 import {
     Modal, View, Text, StyleSheet, TouchableOpacity,
     TextInput, ScrollView, Switch
@@ -34,7 +35,7 @@ export default function RecurringPrompt() {
 
         const checkDue = async () => {
             try {
-                const todayISO = new Date().toISOString().split('T')[0];
+                const todayISO = todayIso();
                 const dueItems = await getRecurringDue(todayISO);
                 if (dueItems.length > 0) {
                     const state: Record<string, ItemState> = {};

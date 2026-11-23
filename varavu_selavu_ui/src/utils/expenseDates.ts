@@ -1,3 +1,5 @@
+import { toISODate } from './date';
+
 /**
  * The date window for an expense a person enters: no future dates (Recurring is for upcoming
  * bills) and nothing older than a year. Mirrors the server's `core/expense_dates.py`, which is the
@@ -8,6 +10,12 @@ const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 
 export const FUTURE_DATE_MESSAGE = "Date can't be in the future. Use a recurring expense for upcoming bills.";
 export const OLD_DATE_MESSAGE = "Date can't be more than a year ago.";
+
+/** Today's date as YYYY-MM-DD in the person's own timezone. Never `toISOString()`: that is the UTC
+ * date, which west of UTC turns into "tomorrow" every evening — and tomorrow is a future date. */
+export function todayIso(now: Date = new Date()): string {
+  return toISODate(now);
+}
 
 export function expenseDateBounds(now: Date = new Date()): { min: string; max: string } {
   const min = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());

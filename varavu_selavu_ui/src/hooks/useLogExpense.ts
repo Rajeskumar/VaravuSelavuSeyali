@@ -14,6 +14,7 @@ import { findMainCategory } from '../components/expenses/AddExpenseForm';
 import { SplitEditorValue } from '../components/groups/SplitEditor';
 import { notifyExpenseChanged } from '../utils/expenseEvents';
 import { isoToMMDDYYYY } from '../utils/date';
+import { todayIso } from '../utils/expenseDates';
 
 export interface QuickLogInput {
   description: string;
@@ -93,7 +94,7 @@ export function useLogExpense() {
   const logPersonal = async (input: QuickLogInput) => {
     const payload: AddExpensePayload = {
       user_id: user,
-      date: isoToMMDDYYYY(input.date || new Date().toISOString().split('T')[0]),
+      date: isoToMMDDYYYY(input.date || todayIso()),
       description: input.description,
       category: input.category,
       cost: input.amount,
@@ -112,7 +113,7 @@ export function useLogExpense() {
     if (!myMember) throw new Error('You are not a member of this group.');
 
     const payload: GroupExpensePayload = {
-      date: isoToMMDDYYYY(input.date || new Date().toISOString().split('T')[0]),
+      date: isoToMMDDYYYY(input.date || todayIso()),
       description: input.description,
       category: input.category,
       amount: input.amount,
@@ -199,7 +200,7 @@ export function useLogExpense() {
       member_ratios: memberRatios,
     }));
     const payload: GroupExpenseWithItemsPayload = {
-      date: isoToMMDDYYYY(input.date || new Date().toISOString().split('T')[0]),
+      date: isoToMMDDYYYY(input.date || todayIso()),
       description: input.description,
       category: input.category,
       amount: input.amount,

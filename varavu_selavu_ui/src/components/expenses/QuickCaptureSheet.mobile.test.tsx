@@ -163,3 +163,19 @@ test('a date outside the allowed window is flagged and the picker is limited to 
   fireEvent.change(date, { target: { value: '2999-01-01' } });
   expect(screen.getByText(/can't be in the future/i)).toBeInTheDocument();
 });
+
+// TS-QA-101: west of UTC in the evening, toISOString() is already tomorrow. The default date
+// must be the person's local today — otherwise it's flagged "can't be in the future" and Save
+// stays disabled until they change it.
+test('the default date is local today, never a UTC "tomorrow" flagged as future', async () => {
+  const realToIso = Date.prototype.toISOString;
+  jest.spyOn(Date.prototype, 'toISOString').mockImplementation(function (this: Date) {
+    const ahead = new Date(this.getTime() + 24 * 60 * 60 * 1000); // simulate the UTC day rolling over
+    return realToIso.call(ahead);
+  });
+  await openSheet();
+  const now = new Date();
+  const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  expect(screen.getByLabelText('Date')).toHaveValue(localToday);
+  expect(screen.queryByText(/can't be in the future/)).not.toBeInTheDocument();
+});
