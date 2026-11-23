@@ -2,15 +2,17 @@
 # Tag and push a production release. The tag IS the deploy: pushing release-vX.Y.Z fires the
 # backend and frontend Cloud Build triggers (see .cloudbuild/README.md).
 #
-#   scripts/release.sh 1.4.0
+#   scripts/release.sh 1.4.0 docs/sdlc/releases/v1.4.0/release.json
 set -euo pipefail
 
 VERSION="${1:-}"
 if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "usage: $0 <MAJOR.MINOR.PATCH>   e.g. $0 1.4.0" >&2
+  echo "usage: $0 <MAJOR.MINOR.PATCH> <release.json>" >&2
   exit 2
 fi
 TAG="release-v${VERSION}"
+RECORD="${2:-}"
+[[ -n "$RECORD" ]] || { echo "A candidate release.json record is required as argument 2" >&2; exit 2; }
 
 cd "$(git rev-parse --show-toplevel)"
 
@@ -35,6 +37,26 @@ if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
   echo "Tag ${TAG} already exists." >&2
   exit 1
 fi
+
+# Readiness and exact-commit CI checks are required even when hooks are not installed.
+"${SDLC_PYTHON:-python3}" scripts/quality/sdlc.py release-gate "$RECORD"
+"${SDLC_PYTHON:-python3}" - "$RECORD" "$VERSION" <<'PYRELEASE'
+import json, pathlib, subprocess, sys
+record_path = pathlib.Path(sys.argv[1]).resolve()
+root = pathlib.Path.cwd()
+expected_dir = root / 'docs/sdlc/releases' / ('v' + sys.argv[2])
+if record_path != expected_dir / 'release.json':
+    sys.exit('Release record must be in docs/sdlc/releases/v<version>/release.json')
+record = json.loads(record_path.read_text())
+head = subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+if record['candidate'] != head or record['version'] != 'v' + sys.argv[2]:
+    sys.exit('Release record does not match HEAD and requested version')
+# The release record is prepared after freezing the candidate, so it can be untracked.
+for name in subprocess.check_output(['git','ls-files','--others','--exclude-standard','-z']).split(b'\0'):
+    if name and not (root / name.decode()).resolve().is_relative_to(expected_dir):
+        sys.exit('Untracked files outside this release record directory; freeze the candidate first')
+PYRELEASE
+python3 scripts/quality/release-gate.py --sha "$(git rev-parse HEAD)"
 
 last="$(git tag --list 'release-v*' --sort=-v:refname | head -n1 || true)"
 echo "Commit to release : $(git log -1 --format='%h %s')"

@@ -14,10 +14,14 @@ Issue: what is wrong (against which standard).
 Impact: who is affected and how.
 Fix: the concrete change.
 ```
-Severity P0–P3 and Confirmed / Suspected / Improvement are defined in `.ai-sdlc/README.md`. End with: counts per severity, what you did **not** check, and a verdict: `No blockers` / `Fix P1s first` / `Blocked (P0)`.
+Severity P0–P3 and Confirmed / Suspected / Improvement are defined in `.ai-sdlc/README.md`. End with: counts per severity, what you did **not** check, and a verdict: `PASS` / `PASS_WITH_APPROVED_WAIVERS` / `BLOCKED` / `INCOMPLETE_EVIDENCE`.
 
 ## Substantial PR — order
 implementation → product → test → security → accessibility → ux → performance. Pass earlier reviewers' findings forward so later ones don't repeat them. Fix P0/P1 between stages when cheap.
 
 ## Deduplication
 Each finding belongs to exactly one reviewer. Accessibility owns anything WCAG; UX owns clarity/flow/consistency/copy; security owns authz/injection/secrets/abuse and the privacy-specific data flows in `privacy.md`; implementation owns correctness, structure, parity and migrations' mechanics; test owns coverage/quality of tests; performance owns scaling.
+
+Persist meaningful findings in the work-item findings.json with stable IDs and linked verification.
+Follow workflows/validate.md for remediation, current evidence and waiver handling. Do not claim
+independent review when applying multiple roles yourself.

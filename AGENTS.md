@@ -30,33 +30,50 @@ feature log or reference docs. Keep it short; put detail in the files below.
 - Web ↔ mobile parity: a feature or fix in one client must be checked in the other.
 - Git: leave changes uncommitted unless asked; one commit per logical item; never push without asking.
 - CI: `qa.yml` runs the Playwright suites; `unit.yml` runs web lint/tsc/Jest, mobile tsc/Jest and backend pytest. Neither is in `release-check` — `make unit-check` runs the unit set locally.
-- Git hooks (`make install-hooks`): commits to main run fast checks for the staged areas; pushes to main run `make release-check` (pytest + audits); pushing a `release-*` tag requires the GitHub Actions QA run to have passed on that commit. Don't bypass with `--no-verify` unless the user asks.
+- Git hooks (`make install-hooks`): commits to main run fast checks for the staged areas; pushes to main run `make release-check` (pytest + audits); pushing a `release-*` tag requires unit, QA and framework CI on that exact commit (also rechecked by Cloud Build). Don't bypass with `--no-verify` unless the user asks.
 
 ## Engineering workflow (AI SDLC)
-Shared by Claude Code and Codex. Policy lives in `.ai-sdlc/`; skills in `.agents/skills/` (Claude sees them via `.claude/skills/` symlinks, and also has read-only subagents in `.claude/agents/`). Don't copy policy into tool-specific files.
-- **Commands:** `make test-backend` · `make lint-web typecheck-web test-web` · `make typecheck-mobile test-mobile` · `make qa-smoke|qa-regression|qa-api` · `make audit-all` · `make unit-check` · `make release-check`. Area-aware wrapper: `scripts/quality/verify.sh [--full]`; also `accessibility.sh`, `security.sh`, `e2e.sh`.
-- **Plan first** (and get a yes) when a change spans ≥3 files, touches an API/schema/contract, auth or permissions, money maths, a new screen, or both clients. Otherwise just implement.
-- **Tests:** every change ships with tests (bug fix: failing-first; endpoint: success + validation + 401/403; UI: RTL by role/name). Run `scripts/quality/verify.sh` before asking for review. Never weaken a test to pass.
-- **Done =** `.ai-sdlc/checklists/definition-of-done.md` (apply only the lines that fit — a typo needs none), plus the CHANGELOG line above.
-- **Review only what the change warrants:** `scripts/quality/route-review.sh` prints the reviewers; typos/docs/copy get none, a style-only change gets none unless colour/focus/size changed. Deterministic checks run before any AI review.
-- **Severity:** P0 blocker · P1 high · P2 medium · P3 low; findings are Confirmed / Suspected / Improvement (`.ai-sdlc/README.md`).
+Shared policy: `.ai-sdlc/README.md`; phase contracts/routing: `.ai-sdlc/lifecycle.md`.
+**Discover → Plan → Build → Validate → Deploy**, selected from natural-language intent and work-item state.
+Explicit phase limits win. Brainstorming does not authorize code; readiness does not authorize deployment.
+- Read only the active workflow and applicable standards. No keyword is required; name a phase to force it.
+- Risk is trivial/standard/high (urgency is separate emergency mode); line/file count never bypasses risk.
+- Reuse existing scope/implementation authorization. Ask only for material product changes or separately
+  authorized actions. High-risk work records authorization bound to the plan fingerprint.
+- Work history/artifacts: `docs/sdlc/README.md`; current product/architecture/QA docs remain in `docs/`.
+- Checks: `scripts/quality/verify.sh --profile fast|integration|release|production` (see `.ai-sdlc/verification.md`).
+  `--full` now means release, including integration prerequisites. `make framework-check` validates the framework.
+- Review routing: `scripts/quality/route-review.sh`; deterministic checks first, then relevant reviewers.
+  Correct omissions based on behavior. Tests assert behavior; bugs fail first where feasible. Never weaken tests.
+- Done: applicable definition-of-done + current evidence and maintenance docs. Distinguish validated from deployed.
+- Gates: PASS / PASS_WITH_APPROVED_WAIVERS / BLOCKED / INCOMPLETE_EVIDENCE. Missing/skipped/stale is not passing.
+- Deploy uses the existing release tag, independent GCP pipelines, observed serving versions and read-only
+  production smoke. It requires explicit authorization. Recovery is not automatic. Never commit/push unless asked.
 
-### Skill routing (natural language works; explicit names also work)
-| User says / change is | Skill |
+### Skill routing (natural language; explicit names optional)
+| Intent | Skill |
 |---|---|
-| implement, add, build, fix, change behaviour | `feature-development` |
-| "review this PR/changes", "ready to merge?" | `pr-review` (routes to the rest) |
-| "review the code", correctness, regressions, migrations | `implementation-review` |
-| acceptance criteria, spec/business rules, new feature | `product-review` |
-| "are the tests enough" | `test-review` |
-| auth, endpoints, permissions, uploads, secrets, AI quota, user data, "is this safe" | `security-review` |
-| UI change, "check accessibility/WCAG/keyboard" | `accessibility-review` |
-| "review this page/flow for UX", responsive, dark mode, copy | `ux-review` |
-| slow queries, scaling, charts, heavy screens | `performance-review` |
-| "ready for production/release", tag | `release-readiness` |
-In Claude Code, "use the security-reviewer" delegates to the matching subagent (`<role>-reviewer`, `release-reviewer` for release-readiness); in Codex, say "use the security-review skill" or just describe the task. Several reviewers may apply to one change (e.g. an auth endpoint: implementation + test + security) — run them in the order in `.ai-sdlc/workflows/code-review.md`.
+| brainstorm/explore an idea, requirements | `product-discovery` |
+| plan/design/feasibility, implementation/test specification | `implementation-planning` |
+| implement/add/build/fix/change behavior | `feature-development` |
+| validate feature against requirements/tests | `validation` |
+| review PR/changes, ready to merge | `pr-review` |
+| code correctness/regressions/migrations | `implementation-review` |
+| acceptance criteria/business rules | `product-review` |
+| test adequacy | `test-review` |
+| auth/permissions/data/AI, safe? | `security-review` |
+| accessibility/WCAG/keyboard | `accessibility-review` |
+| usability/responsive/dark mode | `ux-review` |
+| scaling/queries/charts | `performance-review` |
+| ready for release/tag? (assessment) | `release-readiness` |
+| execute authorized release, monitor, production verification | `deployment` |
+
+Claude can delegate reviewers to matching read-only agents. Other tools apply shared skills using available
+capabilities; no assumed subagent support. Follow `.ai-sdlc/workflows/code-review.md` order.
+Agent entry points and capability limitations: `.ai-sdlc/adapters.md`.
 
 ## Key Decisions
+- **AI SDLC uses five phases and repo-local artifacts**: `.ai-sdlc/lifecycle.md`, `docs/sdlc/README.md`. Current product docs stay separate from work history. Release readiness never grants deploy authority; Cloud Build checks exact-candidate unit/QA/framework CI before deployment.
 - **Money is `Decimal`, never float** (`core/money.py`) — float totals produced rounding artifacts.
 - **The user's identity is their email** (FK `users.email`), not `users.id`. This is legacy and pervasive, so don't "fix" it piecemeal.
 - **Never trust a client-supplied `user_id`** — derive the user from the token.

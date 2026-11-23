@@ -1,0 +1,23 @@
+name: AI SDLC framework
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: framework-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  framework:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r scripts/quality/requirements.txt
+      - run: make framework-check

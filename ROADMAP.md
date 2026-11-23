@@ -76,3 +76,13 @@ All findings were fixed in code. Remaining, and not code-only:
 - [x] Receipt performance: load the HEIC converter only for HEIC files; optimized local initial gzip JavaScript reduced from 701 kB to 363 kB.
 - [ ] Validate on deployed staging with representative data and real iOS Safari/Android Chrome; test native draft recovery across process restart and software keyboard behavior. Measure deployed optimized assets/Core Web Vitals; local build and unit tests do not establish production latency.
 - [ ] Establish redacted RUM/API/save-outcome/error-budget monitoring and alerts in the production project. See `docs/features/performance-recovery.md` and the performance review for acceptance and operational checks.
+
+
+## AI SDLC framework
+- [x] Five-phase repository-local workflow, schemas/templates, risk routing, evidence gates and framework CI — implemented locally 2026-11-22 (Codex); docs/sdlc/README.md.
+- [ ] Before first release using the new Cloud Build gate: provision GITHUB_ACTIONS_READ_TOKEN and least-privilege secret access; verify exact-candidate unit/QA/framework runs and branch/tag protections. No live setup performed by the framework implementation.
+- [ ] Run adapter discovery/behavior scenarios in installed Claude Code, Copilot, Gemini CLI and Antigravity versions; .ai-sdlc/evaluations.md. Structural validation is not runtime certification.
+- [ ] Add optional GitHub Issues/Projects synchronization after repository-local workflow usage validates the artifact model.
+- [ ] Add canary rollouts, defined SLO/error budgets, sustained production monitoring and pre-authorized recovery policies; current Deploy uses monitored builds and targeted read-only smoke.
+- [ ] Framework evaluation dataset, cost/time/defect telemetry and reusable project profiles; no autonomous background orchestrator in v1.
+- [ ] Resolve release work-item links and automatically verify candidate-bound artifact evidence/waivers; v1 explicitly requires original-source review and reports that limitation in its gate output.

@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "framework-tests",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "make framework-check; 34 regression tests passed",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007"
+      ]
+    },
+    {
+      "id": "configuration-checks",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "test_configuration.py: CI YAML parse/order, shell syntax and release preconditions; git diff --check",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-005",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "secret-scan",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "scripts/quality/security.sh --no-audit; tracked/untracked lightweight scan passed (gitleaks unavailable)",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-008"
+      ]
+    },
+    {
+      "id": "implementation-review",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "Codex inline implementation-review; independent focused gate re-review by Sagan",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007"
+      ]
+    },
+    {
+      "id": "product-review",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "Codex inline product-review against approved requirements and all ACs",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "test-review",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "Codex inline test-review; negative cases and independent focused tests inspected",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007"
+      ]
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "Codex inline security-review of permission, CI, secret and release boundaries",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-003",
+        "AC-006",
+        "AC-007",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "behavior-evaluation",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "Sagan independent read-only evaluation of six realistic prompts; focused re-review PASS",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-003",
+        "AC-007",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "dependency-audit",
+      "status": "passed",
+      "snapshot": "b314f592808d14d0ab58966ae3b6e524e6f4a23862983ccde11d2696a1a81920",
+      "environment": "Local macOS / isolated Python tooling venv; no live deployment",
+      "command_or_method": "pip-audit -r scripts/quality/requirements.txt --progress-spinner off; no known vulnerabilities",
+      "source": "validation.md",
+      "recorded_at": "2026-11-22T23:53:42.269814+00:00",
+      "acceptance_criteria": [
+        "AC-005",
+        "AC-008"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
 name: release-reviewer
-description: Use when asked whether a release candidate is ready for production. Aggregates existing CI, test, audit and review evidence into READY, READY WITH FIXES or NOT READY. Does not redo reviews.
+description: Use when asked whether a release candidate is ready for production. Aggregates existing CI, test, audit and review evidence into PASS, PASS_WITH_APPROVED_WAIVERS, BLOCKED or INCOMPLETE_EVIDENCE. Does not redo reviews.
 tools: Read, Grep, Glob, Bash
 ---
 

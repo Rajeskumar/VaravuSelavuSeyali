@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "id": "TS-SDLC-001",
+  "title": "Five-phase repository-local AI SDLC framework",
+  "owner": "Repository owner / Codex implementation",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "complete",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Natural-language intents select Discover, Plan, Build, Validate or Deploy while preserving explicit scope and authorization."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Repository-local requirement, implementation, test, finding, evidence and release artifacts have schemas, stable IDs and archive conventions."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "Evidence gates reject missing, failed, skipped, stale, uncovered and invalid-waiver cases; changed plans invalidate high-risk authorization."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "Risk routing covers money, OAuth/MCP, model files, nested Dockerfiles, API clients, mobile feature screens and framework policy without tiny-diff bypasses."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "Verification profiles expose scope/prerequisites and framework checks run in CI; existing PG/axe coverage is retained."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "Release tooling and both Cloud Build pipelines check exact-candidate unit/QA/framework CI before deployment; readiness and actual authorization remain separate."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "Deploy documents both-component monitoring, observed serving versions, read-only smoke/error validation, recovery boundaries and external setup prerequisites."
+    },
+    {
+      "id": "AC-008",
+      "outcome": "Agent adapters remain thin; existing current product/QA documents stay separate from historical artifacts; no commit, push or deployment occurs during this implementation."
+    }
+  ],
+  "required_evidence": [
+    "framework-tests",
+    "configuration-checks",
+    "secret-scan",
+    "implementation-review",
+    "product-review",
+    "test-review",
+    "security-review",
+    "behavior-evaluation",
+    "dependency-audit"
+  ],
+  "implementation_approval": {
+    "actor": "Repository owner",
+    "reference": "This conversation: approved detailed scope, five phases and repo storage; final instruction \"start the implementation. Dont commit any code.\" Bootstrap record captures that prior authorization.",
+    "fingerprint": "c2cebe8751c7e04e076114f217129780844cca09501120f7d0d5650d4959ea5f"
+  },
+  "links": [],
+  "notes": "User approved the scope and detailed five-phase design, then explicitly requested implementation without commits. Live GCP setup and installed external-agent runtime checks remain rollout prerequisites, not claimed here."
+}

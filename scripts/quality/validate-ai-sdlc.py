@@ -80,6 +80,14 @@ if os.path.exists("CLAUDE.md"):
     c = open("CLAUDE.md").read().strip()
     if c != "@AGENTS.md": warns.append("CLAUDE.md has content beyond the @AGENTS.md import — risk of duplicated/contradicting guidance")
 
+# ---- portable entry points and phase references
+for adapter in (".github/copilot-instructions.md", "GEMINI.md"):
+    if not os.path.exists(adapter) or "AGENTS.md" not in open(adapter).read():
+        err(f"{adapter}: must reference AGENTS.md")
+for phase in ("discover", "plan", "build", "validate", "deploy"):
+    if not os.path.exists(f".ai-sdlc/workflows/{phase}.md"):
+        err(f"missing phase workflow: {phase}")
+
 # ---- referenced paths exist
 prefixes = (".ai-sdlc/", ".agents/", ".claude/", "scripts/", "docs/", "qa/")
 scan = glob.glob(".ai-sdlc/**/*.md", recursive=True) + skills + agent_files + ["AGENTS.md"]

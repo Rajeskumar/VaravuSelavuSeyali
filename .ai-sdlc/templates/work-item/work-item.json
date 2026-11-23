@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "TS-EXAMPLE-001",
+  "title": "Replace with the outcome",
+  "owner": "Product owner",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [],
+  "notes": ""
+}

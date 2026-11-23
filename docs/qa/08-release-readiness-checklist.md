@@ -6,7 +6,7 @@ Use for every production release. It **adds QA/UAT evidence and sign-off** on to
 
 ## 1. Entry criteria (before testing starts)
 - [ ] Release candidate commit identified; `main` frozen except for release fixes.
-- [ ] `unit.yml` green on the commit (web lint/tsc/Jest, mobile tsc/Jest, backend pytest).
+- [ ] `unit.yml`, `qa.yml` and `framework.yml` green on the exact commit (web lint/tsc/Jest, mobile tsc/Jest, backend pytest).
 - [ ] `make release-check` green (pytest + `audit-all`); Postgres-only tests run (`varavu_selavu_app/run_e2e_pg_tests.sh`).
 - [ ] Migrations reviewed: random-hex id, reversible, compatible with the currently deployed code (they run **before** deploy through the `migrate-db` Cloud Run job).
 - [ ] Test environment is **not production**; synthetic users only; mail disabled; flags set as production will be (`GET /api/v1/config` captured).
@@ -70,4 +70,7 @@ Record Pass/Fail with evidence (screenshot/trace/run id). Automated where a test
 | Product owner | | | | |
 | Release manager | | | | |
 
-Store the completed checklist with the release notes (e.g. `docs/qa/releases/<tag>.md`).
+Store the completed checklist with the release notes (e.g. `docs/sdlc/releases/<version>/release.md`).
+
+The canonical lifecycle and gate vocabulary live in `.ai-sdlc/lifecycle.md`. Use the release.json schema
+with this QA evidence; a Go decision is an assessment, not automatic authorization to tag or deploy.
