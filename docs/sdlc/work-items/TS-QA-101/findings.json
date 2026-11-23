@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "F-01",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "todayIso unit tests could not fail in UTC CI (local==UTC).",
+      "owner": "Repository owner",
+      "source": "test-review",
+      "status": "fixed",
+      "verification_evidence": "web-tests",
+      "waiver": null
+    },
+    {
+      "id": "F-02",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Web hero wiring untested: dropping spendBreakdown from the hero calls would pass every unit test.",
+      "owner": "Repository owner",
+      "source": "test-review",
+      "status": "fixed",
+      "verification_evidence": "web-tests",
+      "waiver": null
+    },
+    {
+      "id": "F-03",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "i_paid_share loaded full rows via _compute_group_leg and ran twice when tag-filtered.",
+      "owner": "Repository owner",
+      "source": "performance-review, implementation-review",
+      "status": "fixed",
+      "verification_evidence": "backend-tests",
+      "waiver": null
+    },
+    {
+      "id": "F-04",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "i_paid scoping had no negative tests (another member's payments; non-member group_id).",
+      "owner": "Repository owner",
+      "source": "security-review, test-review",
+      "status": "fixed",
+      "verification_evidence": "backend-tests",
+      "waiver": null
+    },
+    {
+      "id": "F-05",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "scanUntilParsed could mistake a stale error for the retry's result and depended on the shared parse rate limit.",
+      "owner": "Repository owner",
+      "source": "test-review, implementation-review",
+      "status": "fixed",
+      "verification_evidence": "qa-local-repro",
+      "waiver": null
+    },
+    {
+      "id": "F-06",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Spec SpendBreakdown schema table missing i_paid_share.",
+      "owner": "Repository owner",
+      "source": "product-review, implementation-review",
+      "status": "fixed",
+      "verification_evidence": "product-review",
+      "waiver": null
+    },
+    {
+      "id": "F-07",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Date fix had no acceptance criterion; AC-001/002 claimed a mobile fix that mobile already had.",
+      "owner": "Repository owner",
+      "source": "product-review, test-review",
+      "status": "fixed",
+      "verification_evidence": "product-review",
+      "waiver": null
+    },
+    {
+      "id": "F-08",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "todayIso duplicated web toISODate.",
+      "owner": "Repository owner",
+      "source": "product-review, implementation-review",
+      "status": "fixed",
+      "verification_evidence": "web-tests",
+      "waiver": null
+    },
+    {
+      "id": "F-09",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "Dialog collapse fix protected only the one card.",
+      "owner": "Repository owner",
+      "source": "accessibility-review",
+      "status": "fixed",
+      "verification_evidence": "qa-local-repro",
+      "waiver": null
+    },
+    {
+      "id": "F-10",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "Mobile dashboardTotals helpers are unused (Home shows total_expenses).",
+      "owner": "Repository owner",
+      "source": "product-review, implementation-review",
+      "status": "dismissed",
+      "verification_evidence": "implementation-review",
+      "waiver": null
+    }
+  ]
+}

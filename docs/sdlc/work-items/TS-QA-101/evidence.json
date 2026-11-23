@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "backend-tests",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "verify.sh --profile fast: pytest 1030 passed, 15 skipped (incl. 9 new analytics tests: deleted/archived/left/mixed groups, i_paid scoping, scope=i_paid)",
+      "source": "scripts/quality/verify.sh",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003"
+      ]
+    },
+    {
+      "id": "web-tests",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "verify.sh --profile fast: web lint + tsc + Jest 250 passed (TrueTotalHero unit + RTL render both lenses; QuickCapture evening default date; todayIso spy test fails under TZ=UTC on a toISOString impl)",
+      "source": "scripts/quality/verify.sh",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "mobile-tests",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "verify.sh --profile fast: mobile tsc + Jest 218 passed (todayIso local + spy test; dashboardTotals breakdown)",
+      "source": "scripts/quality/verify.sh",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "qa-local-repro",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local CI-mirror: scratch Postgres 16, backend OCR_ENGINE=mock (qa.yml env), web production build; CI=1, 2 workers",
+      "command_or_method": "Reproduced both CI failures on old code (Analysis 160.37 vs Dashboard 95.37, \u039465; ScannedItemsCard rect height 2px, intercepted clicks). Final run on fixed tree in CI order: smoke 3/3, Chromium regression 104/104, firefox+webkit+mobile-iphone matrix 289 passed 0 failed",
+      "source": "qa: npm run qa:smoke; npm run qa:regression; npx playwright test --grep @regression --project=firefox --project=webkit --project=mobile-iphone",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-004",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "implementation-review",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "implementation-reviewer: PASS, 0 P0-P2, 6 P3 (all fixed except mobile dead helpers, accepted)",
+      "source": "findings.json",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "test-review",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "test-reviewer: approve with changes; 2 P2 (F-01, F-02) fixed with red->green proof; P3s fixed",
+      "source": "findings.json",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-004",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "security-reviewer: approve; security.sh clean; i_paid scoped to caller via GroupMember.user_email; rate limits/auth/date rule unchanged; P3 negative tests added (F-04)",
+      "source": "findings.json",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-002"
+      ]
+    },
+    {
+      "id": "product-review",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "product-reviewer: approve; D1 consistent with spec and closes web/mobile headline disagreement; P3 doc/AC follow-ups fixed (F-06, F-07)",
+      "source": "findings.json",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "accessibility-review",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "accessibility-reviewer: approve; fixes 1.4.10/2.1.1/2.4.11 for the items card and the misleading default date error; accessibility.sh clean; pre-existing P1/P2 recorded as F-12/F-13 for separate follow-up",
+      "source": "findings.json",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-004",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "ux-review",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "UX view folded into the accessibility review: both fixes remove dead ends (hidden scanned items; red default date + disabled Save); no visual change at normal heights",
+      "source": "findings.json",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-004",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "performance-review",
+      "status": "passed",
+      "snapshot": "7c636b0db5928b0b3ce73be91816f4e9f2b685ad7701251f0788325f1458da1a",
+      "environment": "Local macOS (America/Chicago), Python 3.11 poetry venv, Node; no live deployment",
+      "command_or_method": "performance-reviewer: PASS; one bounded index-backed query, no N+1; SUM-only rewrite and tag de-duplication done (F-03)",
+      "source": "findings.json",
+      "recorded_at": "2026-11-23T04:24:37.860924+00:00",
+      "acceptance_criteria": [
+        "AC-002"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "TS-QA-101",
+  "title": "Fix QA CI failures blocking release (analysis total parity, receipt mismatch warning)",
+  "owner": "Repository owner (Rajeshkumar) / Claude Code implementation",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "For the same month, the Dashboard hero's 'My expenses' total equals the Analysis combined total (personal + every group share, whatever the group's status: active, archived or deleted). Web fixed; mobile Home already showed total_expenses and was correct (its unused helpers are aligned)."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "The web Dashboard hero's 'I paid' lens counts what the user paid in every group (any status), from the server-computed spend_breakdown.i_paid_share. Mobile has no I-paid lens."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "The groups strip and per-group summaries still list only active groups the user is an active member of."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "In the desktop New expense dialog, a scanned receipt's item controls (Remove item, price, name) can be activated after the dialog content grows (for example several group chips), in Chromium, Firefox and WebKit."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "The QA regression matrix (Chromium, Firefox, WebKit) passes on the release candidate in CI."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "A new expense defaults to the person's local calendar date (not the UTC date) on web Quick Capture, the full expense form and quick logging, and recurring start dates / due checks on web and mobile \u2014 so it is never flagged as a future date in the evening west of UTC."
+    }
+  ],
+  "required_evidence": [
+    "backend-tests",
+    "web-tests",
+    "mobile-tests",
+    "qa-local-repro",
+    "qa-ci",
+    "implementation-review",
+    "test-review",
+    "security-review",
+    "product-review",
+    "accessibility-review",
+    "ux-review",
+    "performance-review"
+  ],
+  "implementation_approval": null,
+  "links": [
+    "https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45106153579"
+  ],
+  "notes": "User authorization (chat, 2026-11-22): 'fix the QA failures and re-run'. Covers fix, checks and push of the fix; release still needs separate candidate authorization."
+}

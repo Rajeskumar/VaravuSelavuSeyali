@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "TS-QA-102",
+  "title": "Pre-existing issues surfaced by TS-QA-101 reviews (Quick Capture a11y, balances on inactive groups)",
+  "owner": "Repository owner",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "docs/sdlc/work-items/TS-QA-101"
+  ],
+  "notes": "Pre-existing defects found by the TS-QA-101 accessibility and product reviews; not introduced by TS-QA-101. Needs prioritisation by the owner (F-12 is P1)."
+}
