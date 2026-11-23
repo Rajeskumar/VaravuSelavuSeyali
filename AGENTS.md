@@ -79,6 +79,7 @@ Agent entry points and capability limitations: `.ai-sdlc/adapters.md`.
 ## Key Decisions
 - **AI SDLC uses five phases and repo-local artifacts**: `.ai-sdlc/lifecycle.md`, `docs/sdlc/README.md`. Current product docs stay separate from work history. Release readiness never grants deploy authority; Cloud Build checks exact-candidate unit/QA/framework CI before deployment.
 - **Money is `Decimal`, never float** (`core/money.py`) — float totals produced rounding artifacts.
+- **Dashboard spend totals come from the server's `spend_breakdown` (`personal` + `group_share` / `i_paid_share`), never by summing `group_summaries`** — summaries list only active groups, but spending counts in every group whatever its status, exactly as Analysis does.
 - **The user's identity is their email** (FK `users.email`), not `users.id`. This is legacy and pervasive, so don't "fix" it piecemeal.
 - **Never trust a client-supplied `user_id`** — derive the user from the token.
 - **AI chat can create expenses but never update or delete them** — no undo for an LLM mutating the wrong record.

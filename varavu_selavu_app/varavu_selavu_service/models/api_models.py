@@ -348,6 +348,8 @@ class AnalysisFilterInfo(BaseModel):
 class SpendBreakdown(BaseModel):
     personal: float
     group_share: float
+    # What the user paid across every group (any status); the Dashboard "I paid" lens.
+    i_paid_share: float = 0.0
 
 
 class AnalysisGroupSummary(BaseModel):

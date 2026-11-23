@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional, Tuple, List
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+from decimal import Decimal
+
 from sqlalchemy import func, extract, Integer, String, literal
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, ExpenseTag, Group, GroupMember
 
@@ -180,9 +182,11 @@ class AnalysisService:
 
 
 
-    def _compute_group_leg(self, user_id, year, month, start_date, end_date, is_sqlite, group_id=None, mode="my_share", tag_ids=None) -> Dict[str, Any]:
+    def _group_leg_query(self, user_id, year, month, start_date, end_date, is_sqlite, group_id=None, mode="my_share", tag_ids=None):
+        """The rows behind a group leg. Shared by _compute_group_leg and the SUM-only
+        _group_i_paid_total, so the two can never disagree on which expenses count."""
         from varavu_selavu_service.db.models import ExpensePayer, ExpenseSplit, Expense, GroupMember
-        
+
         if mode == "my_share":
             query = (
                 self.db.query(ExpenseSplit, Expense)
@@ -216,6 +220,19 @@ class AnalysisService:
         tag_condition = self._tag_filter_condition(user_id, tag_ids)
         if tag_condition is not None:
             query = query.filter(tag_condition)
+        return query
+
+    def _group_i_paid_total(self, user_id, year, month, start_date, end_date, is_sqlite, group_id=None, tag_ids=None) -> float:
+        """What the user paid across groups (any group status) as one SQL SUM — the
+        Dashboard "I paid" lens only needs the number, not per-row details (TS-QA-101)."""
+        from varavu_selavu_service.db.models import ExpensePayer
+
+        query = self._group_leg_query(user_id, year, month, start_date, end_date, is_sqlite, group_id, "i_paid", tag_ids)
+        total = query.with_entities(func.coalesce(func.sum(ExpensePayer.amount_paid), 0)).scalar()
+        return float(round(Decimal(str(total or 0)), 2))
+
+    def _compute_group_leg(self, user_id, year, month, start_date, end_date, is_sqlite, group_id=None, mode="my_share", tag_ids=None) -> Dict[str, Any]:
+        query = self._group_leg_query(user_id, year, month, start_date, end_date, is_sqlite, group_id, mode, tag_ids)
 
         category_sums = {}
         month_sums = {}
@@ -527,10 +544,23 @@ class AnalysisService:
         }
 
 
+        # What the user fronted across every group, by the same rules as group_share (any group
+        # status). The Dashboard's "I paid" lens adds it to `personal`; summing group_summaries
+        # instead dropped deleted/archived/left groups (TS-QA-101). Computed once, SUM-only.
+        i_paid_share = None
+        if scope in ("combined", "groups", "i_paid", "group_total", "group") or tag_ids:
+            if scope == "i_paid":
+                i_paid_share = group_leg["total"] if group_leg else 0.0
+            else:
+                i_paid_share = self._group_i_paid_total(
+                    user_id, year, month, start_date, end_date, is_sqlite, group_id, tag_ids=tag_ids,
+                )
+
         if scope in ("combined", "groups", "i_paid", "group_total", "group"):
             result["spend_breakdown"] = {
                 "personal": round(personal_leg["total"], 2) if personal_leg else 0.0,
                 "group_share": round(group_leg["total"] if group_leg else 0.0, 2),
+                "i_paid_share": round(i_paid_share, 2),
             }
 
             result["group_summaries"] = self._compute_group_summaries(
@@ -551,11 +581,8 @@ class AnalysisService:
             my_share_group = group_leg if scope in ("combined", "groups") else self._compute_group_leg(
                 user_id, year, month, start_date, end_date, is_sqlite, group_id, "my_share", tag_ids=tag_ids,
             )
-            i_paid_group = group_leg if scope == "i_paid" else self._compute_group_leg(
-                user_id, year, month, start_date, end_date, is_sqlite, group_id, "i_paid", tag_ids=tag_ids,
-            )
             result["my_expenses_total"] = round(my_share_personal["total"] + my_share_group["total"], 2)
-            result["i_paid_total"] = round(my_share_personal["total"] + i_paid_group["total"], 2)
+            result["i_paid_total"] = round(my_share_personal["total"] + i_paid_share, 2)
         else:
             result["my_expenses_total"] = None
             result["i_paid_total"] = None

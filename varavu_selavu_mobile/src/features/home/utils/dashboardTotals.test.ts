@@ -30,3 +30,21 @@ describe('computeNetWithPeople', () => {
     expect(computeNetWithPeople([])).toBe(0);
   });
 });
+
+
+// TS-QA-101: a deleted/archived/left group is missing from group_summaries but still spending.
+describe('totals from the server spend_breakdown', () => {
+  const breakdown = { personal: 1180.4, group_share: 161.8, i_paid_share: 239.6 };
+
+  it('My expenses uses group_share, which includes groups the summaries omit', () => {
+    expect(computeMyExpensesTotal(1180.4, GROUPS, breakdown)).toBe(1342.2);
+  });
+
+  it('I paid uses i_paid_share', () => {
+    expect(computeIPaidTotal(1180.4, GROUPS, breakdown)).toBe(1420);
+  });
+
+  it('I paid falls back to the summaries when an older server omits i_paid_share', () => {
+    expect(computeIPaidTotal(1180.4, GROUPS, { personal: 1180.4, group_share: 96.8 })).toBeCloseTo(1180.4 + 174.6);
+  });
+});

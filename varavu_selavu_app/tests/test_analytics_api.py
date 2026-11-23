@@ -326,3 +326,123 @@ def test_analysis_scope_group_is_the_whole_groups_spend_without_personal(test_cl
     # group_id is mandatory for this scope — there's no "all groups' totals" reading of it.
     missing = test_client.get("/api/v1/analysis", params={"scope": "group", "year": 2026, "month": 9})
     assert missing.status_code == 400
+
+
+# TS-QA-101: the Dashboard hero is built from spend_breakdown, so its group figures must match
+# total_expenses even after a group leaves the "your groups" list (deleted, archived, or the
+# user is no longer an active member). group_summaries stays an active-groups-only list.
+
+def test_spend_breakdown_counts_a_deleted_groups_shares_that_summaries_omit(test_client, db_session, _groups_enabled_for_scope_tests):
+    group_id, _ = _seed_personal_and_group_scenario(test_client, db_session, year=2026, month=9)
+    group = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
+    group.status = "deleted"
+    db_session.commit()
+    AnalysisService(db_session).invalidate_cache()
+
+    body = test_client.get("/api/v1/analysis", params={"scope": "combined", "year": 2026, "month": 9}).json()
+
+    assert body["group_summaries"] == []  # no longer one of "your groups"
+    assert body["total_expenses"] == 95.00  # but the $45 share is still spending
+    breakdown = body["spend_breakdown"]
+    assert (breakdown["personal"], breakdown["group_share"], breakdown["i_paid_share"]) == (50.00, 45.00, 90.00)
+    assert round(breakdown["personal"] + breakdown["group_share"], 2) == body["total_expenses"]
+
+
+@pytest.mark.parametrize("change", ["archive_group", "leave_group"])
+def test_spend_breakdown_counts_archived_and_left_groups(test_client, db_session, _groups_enabled_for_scope_tests, change):
+    month = 10 if change == "archive_group" else 11
+    group_id, member_ids = _seed_personal_and_group_scenario(test_client, db_session, year=2026, month=month)
+    if change == "archive_group":
+        group = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
+        group.status = "archived"
+    else:
+        me = db_session.query(GroupMember).filter(GroupMember.id == uuid.UUID(member_ids["test@user.com"])).first()
+        me.status = "left"
+    db_session.commit()
+    AnalysisService(db_session).invalidate_cache()
+
+    body = test_client.get("/api/v1/analysis", params={"scope": "combined", "year": 2026, "month": month}).json()
+
+    assert body["group_summaries"] == []
+    assert body["spend_breakdown"]["group_share"] == 45.00
+    assert body["spend_breakdown"]["i_paid_share"] == 90.00
+    assert body["total_expenses"] == 95.00
+
+
+def test_spend_breakdown_i_paid_share_for_active_group(test_client, db_session, _groups_enabled_for_scope_tests):
+    _seed_personal_and_group_scenario(test_client, db_session, year=2025, month=12)
+    body = test_client.get("/api/v1/analysis", params={"scope": "combined", "year": 2025, "month": 12}).json()
+    assert body["spend_breakdown"]["i_paid_share"] == 90.00
+    assert sum(g["i_paid"] for g in body["group_summaries"]) == 90.00
+
+
+
+def _add_group_expense(test_client, group_id, member_ids, *, month, year, amount, payers, desc):
+    res = test_client.post(
+        f"/api/v1/groups/{group_id}/expenses",
+        json={
+            "date": f"{month:02d}/06/{year}",
+            "description": desc,
+            "category": "Food & Drink",
+            "amount": amount,
+            "payers": payers,
+            "split": {"type": "equal", "entries": [{"member_id": m} for m in member_ids.values()]},
+        },
+    )
+    assert res.status_code == 201, res.text
+
+
+def test_i_paid_share_counts_only_the_callers_payments(test_client, db_session, _groups_enabled_for_scope_tests):
+    """b@test.com pays a $30 expense in the same group: it adds $15 to my share but nothing to
+    what I paid — so i_paid_share differs from both group_share and the group total."""
+    group_id, member_ids = _seed_personal_and_group_scenario(test_client, db_session, year=2026, month=10)
+    _add_group_expense(test_client, group_id, member_ids, month=10, year=2026, amount=30.00,
+                       payers=[{"member_id": member_ids["b@test.com"], "amount_paid": 30.00}], desc="Taxi")
+    AnalysisService(db_session).invalidate_cache()
+
+    body = test_client.get("/api/v1/analysis", params={"scope": "combined", "year": 2026, "month": 10}).json()
+    breakdown = body["spend_breakdown"]
+    assert breakdown["group_share"] == 60.00  # 45 + 15
+    assert breakdown["i_paid_share"] == 90.00  # only my own payment, not b's $30
+    assert body["group_summaries"][0]["group_total"] == 120.00
+
+
+def test_i_paid_share_for_a_group_the_caller_is_not_in_is_zero(test_client, db_session, _groups_enabled_for_scope_tests):
+    _seed_personal_and_group_scenario(test_client, db_session, year=2026, month=9)
+    AnalysisService(db_session).invalidate_cache()
+    other = str(uuid.uuid4())  # a group id the caller has no membership in
+    body = test_client.get(
+        "/api/v1/analysis", params={"scope": "combined", "year": 2026, "month": 9, "group_id": other}
+    ).json()
+    assert body["spend_breakdown"]["i_paid_share"] == 0.0
+    assert body["spend_breakdown"]["group_share"] == 0.0
+
+
+def test_active_and_deleted_groups_both_count_while_summaries_list_only_the_active_one(test_client, db_session, _groups_enabled_for_scope_tests):
+    group_id, _ = _seed_personal_and_group_scenario(test_client, db_session, year=2026, month=8)
+    # A second, still-active group with a $20 expense split with b ($10 share, I paid 20).
+    res = test_client.post("/api/v1/groups", json={"name": "Flat"})
+    flat_id = res.json()["group_id"]
+    admin = db_session.query(GroupMember).filter(
+        GroupMember.group_id == uuid.UUID(flat_id), GroupMember.user_email == "test@user.com"
+    ).first()
+    b_member = test_client.post(f"/api/v1/groups/{flat_id}/members", json={"email": "b@test.com"}).json()["member_id"]
+    flat_members = {"test@user.com": str(admin.id), "b@test.com": b_member}
+    _add_group_expense(test_client, flat_id, flat_members, month=8, year=2026, amount=20.00,
+                       payers=[{"member_id": flat_members["test@user.com"], "amount_paid": 20.00}], desc="Milk")
+    trip = db_session.query(Group).filter(Group.id == uuid.UUID(group_id)).first()
+    trip.status = "deleted"
+    db_session.commit()
+    AnalysisService(db_session).invalidate_cache()
+
+    body = test_client.get("/api/v1/analysis", params={"scope": "combined", "year": 2026, "month": 8}).json()
+    assert [g["name"] for g in body["group_summaries"]] == ["Flat"]
+    assert (body["spend_breakdown"]["group_share"], body["spend_breakdown"]["i_paid_share"]) == (55.00, 110.00)
+    assert body["total_expenses"] == 105.00  # 50 personal + 45 deleted Trip + 10 active Flat
+
+
+def test_scope_i_paid_reuses_its_own_leg_for_i_paid_share(test_client, db_session, _groups_enabled_for_scope_tests):
+    _seed_personal_and_group_scenario(test_client, db_session, year=2026, month=7)
+    body = test_client.get("/api/v1/analysis", params={"scope": "i_paid", "year": 2026, "month": 7}).json()
+    assert body["spend_breakdown"]["i_paid_share"] == 90.00
+    assert body["total_expenses"] == 140.00  # personal 50 + paid 90

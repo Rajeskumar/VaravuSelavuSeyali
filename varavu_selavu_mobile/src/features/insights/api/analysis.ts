@@ -8,7 +8,7 @@ export interface AnalysisResponse {
   category_expense_details?: Record<string, { date: string; description: string; category: string; cost: number }[]>;
   filter_info?: { applied_user_col?: string | null; year?: number | null; month?: number | null; row_count?: number; tag_ids?: string[] | null };
   scope?: string | null;
-  spend_breakdown?: { personal: number; group_share: number } | null;
+  spend_breakdown?: { personal: number; group_share: number; i_paid_share?: number } | null;
   group_summaries?: { group_id: string; name: string; my_share: number; i_paid: number; group_total: number; my_balance: number }[] | null;
   // TS-TAG-112 — share-aware totals, populated only when tag_ids is provided (PRD §10.4).
   my_expenses_total?: number | null;

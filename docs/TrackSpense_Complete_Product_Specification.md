@@ -1056,7 +1056,7 @@ A React 19 single-page app (Create React App, TypeScript) built to static files 
 
 | Area | Components |
 |:---|:---|
-| **Dashboard** | `TrueTotalHero` (spend, MoM delta, lens toggle My expenses / I paid, Net with people), `SpendSpectrum`, `TopCategoriesChart`, `MonthlyTrendChart`, `MyGroupsStrip`, `InsightOfTheDay`, `TypeToLogBar`, `BudgetsSummaryCard`, `CardCoachSummaryCard` |
+| **Dashboard** | `TrueTotalHero` (spend, MoM delta, lens toggle My expenses / I paid, Net with people — the spend figure is `spend_breakdown.personal` + `group_share` (or `i_paid_share`), so it always equals Analysis's combined total; group shares count whatever the group's status, while `group_summaries`/`MyGroupsStrip` list only active groups), `SpendSpectrum`, `TopCategoriesChart`, `MonthlyTrendChart`, `MyGroupsStrip`, `InsightOfTheDay`, `TypeToLogBar`, `BudgetsSummaryCard`, `CardCoachSummaryCard` |
 | **Expenses** | `ExpenseFeed` (day-grouped combined feed), `QuickCaptureSheet`, `AddExpenseForm` (used for editing), `ExpenseDetailSheet`, `MoveToGroupDialog`, `ScannedItemsCard`, `CategoryPickerField`, `CardPickerField`, `TagInput`, `EntityAutocomplete`, `RecurringTab`, `RecurringPrompt`, `WillLogPreview` |
 | **Analysis** | `OverviewTab` (`CategorySpectrum`, `TrendNavigator`, `WhatChangedRail`, `SmartChangeInsightsCard`, group picker, include-group-shares toggle), `ItemsTab` (`PriceHistoryChart`, `StoreComparisonChips`, `PurchaseTape`, `StatBlock`), `MerchantsTab` (`MonthlySpendSparkline`, `WhatChangedCallout`), `BudgetsTab`, `CardsTab` (`CardDetailDialog`, `CustomCardForm`), `AskSheet`, `MoneyFlowSankey` |
 | **Groups** | `GroupsListRail`, `GroupCard`, `GroupAvatar`, `MemberAvatarStack`, `SplitEditor`, `PaidBySplitSummary`, `PayerPicker`, `ItemSplitBoard`, `BalanceList`, `GroupBalancesPanel`, `SettleUpDialog`, `ExpenseDetailDialog` (comments, history, settle-my-share), `ActivityFeed`, `GroupSettingsDialog`, `PeopleList` |
@@ -1745,6 +1745,7 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 |:---|:---|:---|
 | `personal` | `float` | required |
 | `group_share` | `float` | required |
+| `i_paid_share` | `float` | `0.0` — what the user paid across every group, any status (Dashboard "I paid" lens) |
 
 **`AnalysisGroupSummary`**
 

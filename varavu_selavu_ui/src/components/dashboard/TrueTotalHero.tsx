@@ -22,14 +22,32 @@ function formatMoney(n: number): string {
  * mixed a "money currently out of my account" concept into a page whose whole point is
  * one honest "what did I actually spend" number. `my_share` is that number; a member who
  * wants to track what they fronted has that in the group's own balance view already. */
-export function computeMyExpensesTotal(personal: number, groupSummaries: AnalysisGroupSummary[]): number {
+export function computeMyExpensesTotal(
+  personal: number,
+  groupSummaries: AnalysisGroupSummary[],
+  spendBreakdown?: SpendBreakdown | null,
+): number {
+  // The server's group share counts every group the user has spent in — including deleted,
+  // archived and left ones, exactly like Analysis's total. `group_summaries` lists only active
+  // groups (it feeds "your groups"), so summing it undercounts (TS-QA-101). Summaries are the
+  // fallback only for a response without a breakdown.
+  if (spendBreakdown) return round2(personal + spendBreakdown.group_share);
   return groupSummaries.reduce((sum, g) => sum + g.my_share, personal);
 }
 
 /** "I Paid" total (opt-in lens, see `lens` prop below): personal spend + what the user
  * actually fronted in each group (`i_paid`), vs. `computeMyExpensesTotal`'s "my share" of it. */
-export function computeIPaidTotal(personal: number, groupSummaries: AnalysisGroupSummary[]): number {
+export function computeIPaidTotal(
+  personal: number,
+  groupSummaries: AnalysisGroupSummary[],
+  spendBreakdown?: SpendBreakdown | null,
+): number {
+  if (spendBreakdown && spendBreakdown.i_paid_share != null) return round2(personal + spendBreakdown.i_paid_share);
   return groupSummaries.reduce((sum, g) => sum + g.i_paid, personal);
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /** "Net with people" (TrackSpense v3 design): sum of `my_balance` across every group — positive
@@ -69,7 +87,7 @@ interface Props {
  * spend number (personal spend + my share of every group, or "I paid" via the lens) alongside a
  * second "Net with people" figure (sum of every group's `my_balance`) — side-by-side on desktop,
  * stacked on mobile — plus a reconciled/pending status line. */
-const TrueTotalHero: React.FC<Props> = ({ personalTotal, groupSummaries, groupsEnabled, periodLabel, momDelta, lens, onLensChange }) => {
+const TrueTotalHero: React.FC<Props> = ({ personalTotal, spendBreakdown, groupSummaries, groupsEnabled, periodLabel, momDelta, lens, onLensChange }) => {
   const theme = useTheme();
   const navigate = useNavigate();
   // "Ceremony" (RECONCILED badge) has no dedicated CerebroOS hue — reuses the brand accent for a
@@ -79,8 +97,8 @@ const TrueTotalHero: React.FC<Props> = ({ personalTotal, groupSummaries, groupsE
   const negativeColor = theme.palette.error.main;
 
   const total = lens === 'paid'
-    ? computeIPaidTotal(personalTotal, groupSummaries)
-    : computeMyExpensesTotal(personalTotal, groupSummaries);
+    ? computeIPaidTotal(personalTotal, groupSummaries, spendBreakdown)
+    : computeMyExpensesTotal(personalTotal, groupSummaries, spendBreakdown);
   const hasGroups = groupsEnabled && groupSummaries.length > 0;
   // "Settled" per the prototype means no outstanding balance either way.
   const allSettled = groupSummaries.every((g) => Math.abs(g.my_balance) < 0.005);

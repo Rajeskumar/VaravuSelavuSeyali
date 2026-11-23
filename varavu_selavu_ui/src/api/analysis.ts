@@ -5,6 +5,8 @@ export type AnalysisScope = 'personal' | 'combined' | 'groups' | 'i_paid' | 'gro
 export interface SpendBreakdown {
   personal: number;
   group_share: number;
+  /** What the user paid across every group (any status); older servers omit it. */
+  i_paid_share?: number;
 }
 
 export interface AnalysisGroupSummary {
