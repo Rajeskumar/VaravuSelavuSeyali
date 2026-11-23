@@ -636,7 +636,10 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   if (isDesktop) {
     return (
-      <Dialog open={open} onClose={requestClose} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'New expense', sx: { borderRadius: 2, p: 2.5 } }}>
+      // The paper is a flex column: without `flexShrink: 0` on its children, any child that
+      // hides overflow (min-height 0) is squeezed to nothing once the content outgrows the
+      // window — the scanned-items card collapsed to 2px this way (TS-QA-101). The paper scrolls.
+      <Dialog open={open} onClose={requestClose} maxWidth="xs" fullWidth PaperProps={{ 'aria-label': 'New expense', sx: { borderRadius: 2, p: 2.5, '& > *': { flexShrink: 0 } } }}>
         {stage === 'entry' && (
           <>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

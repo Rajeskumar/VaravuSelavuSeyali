@@ -36,10 +36,65 @@ test.describe('receipt scan (UI) @regression', () => {
     await allow.click({ timeout: 4000 }).catch(() => undefined);
   }
 
+  /** For tests that need the scan to SUCCEED. The parse endpoint allows 3 requests a minute per
+   * IP, and every browser project in a run shares one IP — so a parallel worker's scans (including
+   * the rejection tests below, which still count) can use up the window first. That's the limit
+   * doing its job, not a product failure: wait out the window and pick the file again. */
+  async function scanUntilParsed(page: any, panel: QuickCapturePanel, file: { name: string; mimeType: string; buffer: Buffer }) {
+    test.setTimeout(180_000);
+    await scan(page, panel, file);
+    const items = page.getByText(/\d+ items? scanned/);
+    const failed = page.getByText('Failed to parse receipt');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(items.or(failed)).toBeVisible({ timeout: 20_000 });
+      if (await items.isVisible()) return;
+      await page.waitForTimeout(61_000);
+      await page.locator('input[type="file"]').first().setInputFiles(file);
+      // The previous error stays up until the new parse starts; don't mistake it for the result.
+      await expect(failed).toBeHidden({ timeout: 10_000 });
+    }
+    await expect(items).toBeVisible({ timeout: 20_000 });
+  }
+
+  /** Answers the parse call in the browser with the same two-item draft the mock engine returns,
+   * for tests about the dialog rather than parsing — no rate-limit dependency. Cross-origin, so the
+   * preflight and the response both carry CORS headers. */
+  async function stubParse(page: any, merchant: string) {
+    await page.route('**/api/v1/ingest/receipt/parse**', async (route: any) => {
+      const origin = route.request().headers()['origin'] || '*';
+      const cors = {
+        'access-control-allow-origin': origin,
+        'access-control-allow-credentials': 'true',
+        'access-control-allow-headers': '*',
+        'access-control-allow-methods': 'POST, OPTIONS',
+      };
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+      const item = (line_no: number, item_name: string, line_total: number) => ({
+        line_no, item_name, normalized_name: item_name, quantity: 1, unit: 'ea', unit_price: line_total, line_total, category_name: 'Groceries',
+      });
+      return route.fulfill({
+        status: 200,
+        headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          header: {
+            merchant_name: merchant, normalized_merchant_name: merchant, merchant_name_raw: merchant, purchased_at: `${recentIso()}T12:00:00`,
+            currency: 'USD', amount: 10, tax: 0, tip: 0, discount: 0, description: 'Receipt import',
+            main_category_name: 'Food & Drink', category_name: 'Groceries',
+          },
+          items: [item(1, 'Oat Milk', 4), item(2, 'Sourdough', 6)],
+          warnings: [],
+          fingerprint: `stub-${merchant}`,
+          source: 'ocr',
+          confidence: 1,
+        }),
+      });
+    });
+  }
+
   test('scanning fills the amount, shows the items, and saves one itemized expense', async ({ page, primaryApi }) => {
     const merchant = qaLabel(`store_${uniqueSuffix()}`);
     const panel = new QuickCapturePanel(page);
-    await scan(page, panel, receiptPng(merchant, TWO_ITEMS, '10.00'));
+    await scanUntilParsed(page, panel, receiptPng(merchant, TWO_ITEMS, '10.00'));
 
     await expect(page.getByText('2 items scanned')).toBeVisible({ timeout: 20_000 });
     await expect(panel.amountField).toHaveValue('10');
@@ -58,9 +113,19 @@ test.describe('receipt scan (UI) @regression', () => {
   });
 
   test('editing an item so the lines no longer match the total warns and blocks Save until fixed', async ({ page }) => {
+    // A short window makes the dialog taller than the screen. TS-QA-101: the dialog paper is a
+    // flex column, and the items card (overflow:hidden, so min-height 0) used to be the item that
+    // shrank — collapsing to its 2px border and hiding every line. CI first saw it only after
+    // earlier suites had added group chips; a short window reproduces it on any run, with no
+    // real receipt scan — the parse response is stubbed (the endpoint allows 3 per minute).
+    await page.setViewportSize({ width: 1280, height: 520 });
+    const merchant = qaLabel(`store_${uniqueSuffix()}`);
+    await stubParse(page, merchant);
     const panel = new QuickCapturePanel(page);
-    await scan(page, panel, receiptPng(qaLabel(`store_${uniqueSuffix()}`), TWO_ITEMS, '10.00'));
+    await scan(page, panel, receiptPng(merchant, TWO_ITEMS, '10.00'));
     await expect(page.getByText('2 items scanned')).toBeVisible({ timeout: 20_000 });
+    const card = page.getByRole('button', { name: /2 items scanned/ }).locator('..');
+    expect((await card.boundingBox())?.height ?? 0).toBeGreaterThan(100);
     await panel.fillDescription(qaLabel(`receipt_${uniqueSuffix()}`));
     await expect(panel.saveButton).toBeEnabled();
 

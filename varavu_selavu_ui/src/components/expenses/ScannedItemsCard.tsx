@@ -120,7 +120,10 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
   };
 
   return (
-    <Box sx={{ mt: 1.25, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden' }}>
+    // flexShrink 0: the desktop dialog paper is a flex column, and with overflow:hidden this card's
+    // min-height is 0 — so once the dialog outgrew the window it was the item that shrank,
+    // collapsing to its border and hiding every scanned line (TS-QA-101).
+    <Box sx={{ mt: 1.25, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', flexShrink: 0 }}>
       <Box
         onClick={() => setExpanded((e) => !e)}
         role="button"
