@@ -10,6 +10,7 @@ LLM involved, so these run fast and deterministically.
 import os
 
 import pytest
+from conftest import PINNED_TODAY
 from sqlalchemy import select
 
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit
@@ -95,6 +96,8 @@ def test_create_personal_expense_from_agent_defaults_missing_category(db_session
 
     row = db_session.execute(select(Expense).where(Expense.user_email == USER)).scalars().one()
     assert row.category_id == "General"
+    # No date given: defaults to the same "today" the date window checks against.
+    assert row.purchased_at.date() == PINNED_TODAY
 
 
 def test_create_personal_expense_from_agent_stores_merchant_name(db_session):

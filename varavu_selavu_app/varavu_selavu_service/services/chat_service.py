@@ -14,6 +14,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import HumanMessage, AIMessage
 
+from varavu_selavu_service.core import expense_dates
 from varavu_selavu_service.core.expense_dates import date_problem
 from varavu_selavu_service.core.config import Settings
 from varavu_selavu_service.models.api_models import ResolvedPeriod, ResolvedScope
@@ -461,13 +462,14 @@ def _create_personal_expense_from_agent(
         return "Error: amount must be a positive number."
     if not description or not description.strip():
         return "Error: a description is required."
-    problem = date_problem(expense_date or date.today().isoformat())
+    expense_date = expense_date or expense_dates.today().isoformat()
+    problem = date_problem(expense_date)
     if problem:
         return f"Error: {problem}"
     try:
         result = expense_service.add_expense(
             user_id=user_id,
-            date=expense_date or date.today().isoformat(),
+            date=expense_date,
             description=description.strip(),
             category=_resolve_agent_category(category, description, merchant_name),
             cost=float(amount),
@@ -688,7 +690,7 @@ def _create_group_expense_from_agent(
             return payer_error
         # GroupExpenseService.create_expense's `date` is strictly MM/DD/YYYY (unlike
         # ExpenseService.add_expense, which also accepts ISO) — see its `_parse_date`.
-        parsed_date = date.fromisoformat(expense_date) if expense_date else date.today()
+        parsed_date = date.fromisoformat(expense_date) if expense_date else expense_dates.today()
         mmddyyyy = parsed_date.strftime("%m/%d/%Y")
         problem = date_problem(mmddyyyy)
         if problem:
@@ -1250,7 +1252,7 @@ def call_chat_model(
     except Exception:
         logger.exception("Failed to pre-fetch default expense summary for chat")
 
-    today_str = date.today().isoformat()
+    today_str = expense_dates.today().isoformat()
     can_log = expense_service is not None
     logging_guidance = (
         (
