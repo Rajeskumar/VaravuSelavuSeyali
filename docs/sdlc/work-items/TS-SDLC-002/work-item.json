@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "id": "TS-SDLC-002",
+  "title": "Lean AI SDLC: deterministic-first routing, consolidated reviewers, enforced guardrails",
+  "owner": "Repository owner (Rajeshkumar) / Claude Code implementation",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "complete",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Routing assigns tiers by explicit high-risk paths: ordinary product UI/tests/framework docs are standard (no security review); auth, money, migrations, AI, exports, CI/deploy, gates and hooks are high; generated/scratch paths are excluded; replaying Nov-2026 commits yields far fewer high-risk routes (was 33/40)."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Reviewers are consolidated to code-reviewer, ui-reviewer, security-reviewer and product-reviewer (request-only), each read-only with a bounded turn budget and preloaded skill; Codex agents are generated from the Claude agents and validated for parity."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "verify.sh prints a bounded summary per command (failure excerpt <= 20 lines) and writes full logs to gitignored .sdlc-logs/, keeping going in the fast profile."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "Shared PreToolUse guard (Claude + Codex) denies force-push to main/release and forced audit fixes, and asks before push, hook bypass, release tags, mutating gcloud/gh, destructive git and alembic without a localhost DATABASE_URL; heredoc/quoted text is not treated as commands."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "Weakened tests (deleted test files, new skip/only/xfail, net assertion loss) fail test_integrity.py in pre-commit and CI unless acknowledged by a human trailer/env."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "CI runs secret scanning and dependency audits on every PR/main push, and a path-triggered migration rehearsal applies new revisions on the previous release schema, downgrades and re-applies them."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "release_tools.py prepare/verify produce a pre-filled release record from CI, git and read-only GCP data, leaving unprovable manual checks open; release waivers apply only to manual checks."
+    },
+    {
+      "id": "AC-008",
+      "outcome": "Root AGENTS.md is <= 9 KiB with area rules moved to nested AGENTS.md files imported by sibling CLAUDE.md files, and no Key Decision is lost."
+    },
+    {
+      "id": "AC-009",
+      "outcome": "usage_report.py reports tokens, subagent share and agent/skill counts from local Claude/Codex logs without content; eval scenarios check routing deterministically and can run behaviorally on request."
+    },
+    {
+      "id": "AC-010",
+      "outcome": "Standard-risk work may use a light record and scoped evidence; high-risk work keeps the full record and full-snapshot evidence."
+    }
+  ],
+  "required_evidence": [
+    "framework-tests",
+    "configuration-checks",
+    "routing-replay",
+    "migration-rehearsal",
+    "secret-scan",
+    "dependency-audit",
+    "release-prepare-dry-run",
+    "implementation-review",
+    "security-review"
+  ],
+  "implementation_approval": {
+    "actor": "Repository owner",
+    "reference": "This conversation, 2026-11-23: after the audit, \"Let's go ahead with this plan . Create new branch from main and implement all these changes. Don't commit to branch yet.\"",
+    "fingerprint": "44abe5b97a8f7e520f3009621af1ea92c6dae68ee2bafcde78b737a561d127ec"
+  },
+  "links": [
+    "audit: this conversation 2026-11-23 (AI SDLC framework audit and optimization plan)",
+    "prior audit: v1.2.0 release session (~/.claude/plans, local only)",
+    "github-issue:#47"
+  ],
+  "notes": "Branch chore/ai-sdlc-optimization; uncommitted per user instruction. Operator follow-ups: apply .github/rulesets/main.json, delete the disabled legacy trigger varavuselavuseyali, trust .codex/hooks.json via /hooks."
+}

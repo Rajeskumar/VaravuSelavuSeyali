@@ -1,0 +1,24 @@
+# AGENTS.md — varavu_selavu_app (FastAPI backend)
+
+Root `AGENTS.md` rules apply. This file holds backend decisions. Commands: `make test-backend`,
+`make audit-backend`, `make test-postgres` (dedicated local DB only). Tier-3 (high-risk) paths:
+`auth/`, `oauth/`, `mcp/`, `core/`, `db/`, `alembic/`, money/LLM/export services (`scripts/quality/routing.py`).
+
+## Key Decisions
+- **Auth: an `Authorization: Bearer` header wins over the `vs_token` cookie, and Bearer requests are exempt from CSRF** (`auth/security.py`, `core/csrf.py`). Native HTTP stacks resend the login cookie, which made every mobile POST 403; mobile also sends `credentials: 'omit'` — keep both.
+- **Access tokens are revocable**: `auth_required` checks `users.token_valid_after` against the token's `iat_ms`. Call `AuthService.end_access_tokens` / `end_all_sessions` on logout, password reset/change and sign-out-everywhere. Browser clients send `X-TrackSpense-Client: web` and get no tokens in JSON bodies; native clients still do.
+- **Non-members get 404 "Group not found"** (same as a missing group) — never a distinct 403, which lets group ids be probed.
+- **Rate limits are per IP and in-memory per instance**; the Postgres-backed AI quota is the real cost guard.
+- **LLM cost control**: every call goes through `ai_quota_service.py` (quota + global $ cap); client model choice is limited to `AI_CHAT_ALLOWED_MODELS`; quota admin is CLI-only (`varavu_selavu_app/scripts/ai_access.py`), deliberately no admin UI.
+- **AI chat is topic-restricted**: keyword fast path + one-word classifier (`_classify_scope` in `chat_service.py`) refuses off-topic requests with `OFF_TOPIC_REPLY` before the agent runs; it fails open with the system prompt as backstop. Refusals don't use a daily question (`_settle_chat` refunds, still recording the classifier's cost). Server-built prompts pass `enforce_scope=False`.
+- **Group expense PUT** without `payers`/`split` keeps the stored split, rescaled server-side if `amount` changes (`GroupExpenseUpdateRequest`).
+- **Every path that creates a group expense (HTTP, recurring, AI chat) calls `NotificationService.fan_out` with `description=`** (the key the push text reads).
+- **Card Coach** counts group spend at the full `amount_paid`, not "my share" (spec §8.2), defaults to all time, enforces caps per calendar window with `CapLedger`, excludes Rent/Mortgage (`NON_CARD_CATEGORIES`) and reports `default_assumed_spend` as an estimate. New surfaces use `compute_coach_report`.
+- **Budget pace never extrapolates fixed bills**: rent/mortgage and expenses matching an active recurring template are carried at face value (`FIXED_BILL_CATEGORIES`, `_fixed_spent_for`); pace can't flag at_risk/over_pace before day `MIN_PACE_DAYS` (5).
+- **In-progress periods compare like-for-like** (`_resolve_comparison_periods`: this month/year vs the same days of the previous one); explicit custom ranges are untouched.
+- **Expense date window** (spec R15): backend tests pin the clock in `tests/conftest.py` (`PINNED_TODAY`); use it for fixture dates, never `date.today()`/`datetime.now()` (breaks once the real day passes the pin). Services default "today" via `expense_dates.today()`. A test of real-clock code (e.g. `BudgetService` periods) overrides `_pin_expense_date_clock` with the real date.
+- **Alembic revision IDs must be random hex** (`a1b2c3d4e5f6` is taken). Tests and local DBs use `Base.metadata.create_all`.
+- **A database behind the code fails per request, not at boot**: after pulling new revisions run `poetry run alembic upgrade head` against your *local* DB (startup logs `DATABASE IS BEHIND THE CODE`, `db/migration_check.py`). Never against a non-local DB without asking; the guard hook asks unless a localhost `DATABASE_URL` is named in the command.
+- **API docs (`/docs`, `/openapi.json`) exist only when `ENVIRONMENT=local`.**
+- **MCP v1 is default-off and personal-only** (`mcp/`, `oauth/`; runbook `docs/mcp-local-implementation.md`). Every addition uses immutable verify → first-party browser approval → idempotent save; no direct-create/approval-bypass tool. Keep MCP signing keys separate. Personal duplicate-relevant writes take `lock_personal_user`; flush-only helpers must not commit. Logout-all atomically revokes app sessions, MCP grants and approvals. Retain operation tombstones after payload pruning/deletion.
+- **MCP expiry reads never persist state**: compute logical expiry for previews; only locked transitions/cleanup update status. OAuth reads the bounded request body before DB checkout and runs all synchronous DB work off the event loop.

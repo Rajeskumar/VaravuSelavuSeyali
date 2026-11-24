@@ -18,7 +18,7 @@ models and were never given a corresponding `CREATE TABLE` migration at all — 
 project's own `run_e2e_pg_tests.sh` works around exactly this by calling
 `Base.metadata.create_all()` instead of running alembic for its Postgres e2e tests.
 
-**This is a real gap worth flagging**, not just a QA-tooling inconvenience: `cloudbuild.yaml`'s
+**This is a real gap worth flagging**, not just a QA-tooling inconvenience: `cloudbuild.backend.yaml`'s
 prod deploy pipeline runs bare `alembic upgrade head` against Cloud Run's Postgres, with no
 `schema.sql` step. If that database were ever recreated from scratch, that step would fail
 the same way it does here. See qa/TEST-PLAN.md's risk areas / this project's final QA report.

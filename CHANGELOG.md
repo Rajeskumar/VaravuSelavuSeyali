@@ -1,5 +1,20 @@
 # Changelog
 
+- 2026-11-23: Fix the `framework` CI job (agent: Claude Code). `test_release_tools` ran `git log main` on a depth-1 checkout of a feature branch (no history, no local `main`; exit 128). The workflow now checks out with `fetch-depth: 0` and the test walks `HEAD`.
+- 2026-11-23: Fix backend CI date failures (agent: Claude Code). `tests/conftest.py` pins the expense-date window to 2026-11-22, but budget tests, the PostgreSQL analytics e2e test and the AI chat tools' default date used the real clock, so every run after 2026-11-23 UTC rejected "today" as a future date. Chat tools now default via `expense_dates.today()` (the clock the window checks); the PG test uses `PINNED_TODAY`; budget tests pin the window to the real day because `BudgetService` reads the real clock.
+- 2026-11-23: Lean AI SDLC framework (TS-SDLC-002, agent: Claude Code; branch `chore/ai-sdlc-optimization`, uncommitted). Follows the same-day framework audit:
+  - **Routing:** explicit high-risk paths; replaying November's commits gives 13 high (was 33 of 40) and at most 3 reviewers (was 7). Scratch/build paths are excluded, and each reviewer's file scope gets a content hash so unchanged reviews are skipped.
+  - **Reviewers:** 8 agents → `code-reviewer`, `ui-reviewer`, `security-reviewer` and `product-reviewer` (request-only). They preload their skill and have a turn cap; Codex agent files are generated from them.
+  - **Checks:** `verify.sh` prints a summary and writes full logs to `.sdlc-logs/`.
+  - **Guardrails:** a shared PreToolUse guard hook for Claude and Codex, plus a CHANGELOG reminder on Stop.
+  - **Test integrity:** `test_integrity.py` runs in pre-commit and CI.
+  - **CI:** secret-scan and audit job; path-triggered migration rehearsal (verified from v1.1.0: 5 revisions up, down and up again).
+  - **Releases:** `make release-prepare` / `release-verify`; release waivers allowed for manual checks only.
+  - **Records:** light records and scoped evidence for standard-risk work.
+  - **Docs:** root AGENTS.md 17 KB → 7 KB, with area rules in nested AGENTS.md files.
+  - **Measurement:** `make usage-report` and `make evals`.
+  - **Cleanup:** removed the legacy `cloudbuild.yaml` (its trigger was already disabled). Prepared the `main` ruleset in `.github/rulesets/main.json`; the owner applies it.
+
 - 2026-11-23: Released v1.2.0 (agent: Claude Code) — tag `release-v1.2.0` at `c235703`; backend and frontend builds succeeded, migrations ran, both services serving `c235703` at 100%, prod read-only smoke 5/5, no errors in the observation window. Readiness PASS_WITH_APPROVED_WAIVERS: waiver W-1 (owner Rajeshkumar Ganesan, expires 2026-12-23) for missing review evidence on commits since v1.1.0. Record: `docs/sdlc/releases/v1.2.0/`.
 
 - 2026-11-22: Fixed the QA CI failures blocking release (TS-QA-101, agent: Claude Code). (1) The Dashboard hero summed only *active* groups' shares while Analysis counted every group, so deleting, archiving or leaving a group dropped its spending from the hero only — the hero now uses `spend_breakdown` (new `i_paid_share` for the I-paid lens) on web; mobile helpers aligned. (2) The desktop New expense dialog's scanned-items card collapsed to 2px once the dialog outgrew the window (a shrinking flex item with `overflow: hidden`), hiding every item — it no longer shrinks. (3) Found while reproducing: new expenses defaulted to the UTC date, so with this release's new future-date rule every evening west of UTC the default was "tomorrow" and Save was blocked — web and mobile now use the local date (`todayIso()`). QA's receipt tests wait out the 3/minute parse limit instead of failing.

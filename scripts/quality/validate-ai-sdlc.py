@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Validate the AI SDLC setup: skills, Claude subagents, AGENTS.md/CLAUDE.md, symlinks and
 referenced paths. Stdlib only (uses PyYAML for strict frontmatter parsing when installed).
-    python3 scripts/quality/validate-ai-sdlc.py          exit 1 on any error
+    python3 scripts/quality/validate-ai-sdlc.py               exit 1 on any error
+    python3 scripts/quality/validate-ai-sdlc.py --sync-codex  regenerate .codex/agents from .claude/agents
 """
-import glob, os, re, sys
+import glob, json, os, re, sys
 
 root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 os.chdir(root)
@@ -69,6 +70,70 @@ for f in agent_files:
     m = re.search(r"\.agents/skills/([a-z-]+)/SKILL\.md", text)
     if not m or m.group(1) not in names: err(f"{f}: must reference an existing skill")
 
+# ---- Codex agents are generated from the Claude agents (one source of truth)
+CODEX_NOTE = ("Codex note: Codex cannot sandbox a single subagent; run reviews in a read-only session "
+              "(codex --sandbox read-only) and never edit files from this role.")
+
+def codex_toml(md_path):
+    fm, text = frontmatter(md_path)
+    body = re.sub(r"^---\n.*?\n---\n", "", text, flags=re.S).strip()
+    desc = " ".join(str(fm.get("description", "")).split())
+    if "'''" in body or "'" in desc:
+        err(f"{md_path}: body may not contain ''' and description may not contain a single quote (TOML literal strings)")
+    # Literal strings: no escape processing, so backslashes and quotes in the prose stay intact.
+    return (f"# Generated from {md_path} by validate-ai-sdlc.py --sync-codex. Do not edit.\n"
+            f"name = '{fm.get('name')}'\ndescription = '{desc}'\n"
+            f"developer_instructions = '''\n{body}\n\n{CODEX_NOTE}\n'''\n")
+
+expected_codex = {f".codex/agents/{os.path.basename(f)[:-3]}.toml": codex_toml(f) for f in agent_files}
+if "--sync-codex" in sys.argv:
+    os.makedirs(".codex/agents", exist_ok=True)
+    for old in glob.glob(".codex/agents/*.toml"):
+        if old not in expected_codex: os.remove(old)
+    for path, content in expected_codex.items():
+        open(path, "w").write(content)
+    print(f"synced {len(expected_codex)} Codex agents")
+try:
+    import tomllib
+except ImportError:  # Python < 3.11
+    tomllib = None
+for path, content in expected_codex.items():
+    if not os.path.exists(path) or open(path).read() != content:
+        err(f"{path}: out of sync with .claude/agents (run validate-ai-sdlc.py --sync-codex)")
+    elif tomllib:
+        try:
+            parsed = tomllib.loads(content)
+            if not parsed.get("developer_instructions", "").strip(): err(f"{path}: empty developer_instructions")
+        except tomllib.TOMLDecodeError as e:
+            err(f"{path}: invalid TOML ({e})")
+for path in glob.glob(".codex/agents/*.toml"):
+    if path not in expected_codex: err(f"{path}: no matching .claude/agents file")
+
+# ---- routing names map to real skills and agents
+sys.path.insert(0, os.path.join(root, "scripts", "quality"))
+try:
+    import routing as _routing
+    agent_names = {os.path.basename(f)[:-3] for f in agent_files}
+    for reviewer, agent in _routing.REVIEWER_AGENT.items():
+        if reviewer not in names: err(f"routing.py: reviewer skill '{reviewer}' does not exist")
+        if agent not in agent_names: err(f"routing.py: reviewer agent '{agent}' does not exist")
+except Exception as e:  # noqa: BLE001
+    err(f"routing.py import failed: {e}")
+
+# ---- hook configuration points at real scripts
+for cfg in (".claude/settings.json", ".codex/hooks.json"):
+    if not os.path.exists(cfg):
+        err(f"{cfg}: missing (shared guardrail hooks)"); continue
+    try:
+        hooks = json.load(open(cfg)).get("hooks", {})
+    except ValueError as e:
+        err(f"{cfg}: invalid JSON ({e})"); continue
+    commands = [h.get("command", "") for groups in hooks.values() for g in groups for h in g.get("hooks", [])]
+    if not any("guard-bash.py" in c for c in commands): err(f"{cfg}: PreToolUse guard-bash.py hook missing")
+    for c in commands:
+        for script in re.findall(r"scripts/hooks/[\w.-]+", c):
+            if not os.path.exists(script): err(f"{cfg}: hook script not found: {script}")
+
 # ---- entry points
 if not os.path.exists("AGENTS.md"): err("AGENTS.md missing")
 else:
@@ -76,9 +141,17 @@ else:
     for n in names:
         if f"`{n}`" not in a: err(f"AGENTS.md: skill `{n}` not in routing table")
     if len(a.encode()) > 32 * 1024: err("AGENTS.md exceeds Codex's 32 KiB default limit")
+    # Loaded into every session and subagent of both tools: keep it short (area rules go nested).
+    if len(a.encode()) > 9 * 1024: err(f"AGENTS.md is {len(a.encode())} bytes; budget is 9 KiB — move area rules to nested AGENTS.md")
 if os.path.exists("CLAUDE.md"):
     c = open("CLAUDE.md").read().strip()
     if c != "@AGENTS.md": warns.append("CLAUDE.md has content beyond the @AGENTS.md import — risk of duplicated/contradicting guidance")
+
+# Nested AGENTS.md (Codex reads them natively) need a sibling CLAUDE.md importing them for Claude.
+for nested in glob.glob("*/AGENTS.md"):
+    sibling = os.path.join(os.path.dirname(nested), "CLAUDE.md")
+    if not os.path.exists(sibling) or open(sibling).read().strip() != "@AGENTS.md":
+        err(f"{sibling}: must contain exactly '@AGENTS.md' so Claude loads {nested}")
 
 # ---- portable entry points and phase references
 for adapter in (".github/copilot-instructions.md", "GEMINI.md"):
@@ -105,7 +178,7 @@ except (OSError, ValueError) as e:
 
 # ---- referenced paths exist
 prefixes = (".ai-sdlc/", ".agents/", ".claude/", "scripts/", "docs/", "qa/")
-scan = glob.glob(".ai-sdlc/**/*.md", recursive=True) + skills + agent_files + ["AGENTS.md"]
+scan = glob.glob(".ai-sdlc/**/*.md", recursive=True) + skills + agent_files + ["AGENTS.md"] + glob.glob("*/AGENTS.md")
 for f in scan:
     for ref in re.findall(r"`([^`\s]+)`", open(f, encoding="utf-8").read()):
         ref = ref.rstrip(".,;:)").split("#")[0]

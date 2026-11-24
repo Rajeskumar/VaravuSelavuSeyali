@@ -1,10 +1,11 @@
 import pytest
 import os
 import uuid
-import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from fastapi.testclient import TestClient
+
+from conftest import PINNED_TODAY
 
 # We expect E2E_DATABASE_URL to be set by our test orchestration script
 DB_URL = os.environ.get("E2E_DATABASE_URL")
@@ -75,7 +76,7 @@ def test_full_expense_ingestion_and_analytics_flow(db_session_real):
     payload = {
         "user_email": "e2e@test.com",
         "header": {
-            "purchased_at": datetime.datetime.now().isoformat() + "Z",
+            "purchased_at": PINNED_TODAY.isoformat() + "T12:00:00Z",
             "merchant_name": "Target Validation",
             "category_id": "Groceries",
             "amount": 28.50,

@@ -1,0 +1,11 @@
+# AGENTS.md — varavu_selavu_ui (React web)
+
+Root `AGENTS.md` rules apply. Commands: `make lint-web typecheck-web test-web`, `make audit-web`,
+`scripts/quality/accessibility.sh [--axe]`.
+
+## Key Decisions
+- **Accessibility conventions** (one h1 per page, titles in `RouteA11y.tsx`, named dialogs, announced errors, no nested interactives) are the rules in `.ai-sdlc/standards/accessibility.md` — follow them for any UI change.
+- **Browser requests send `X-TrackSpense-Client: web`** and receive no tokens in JSON bodies (cookie session + CSRF).
+- **Ask conversation state lives above the responsive Drawer** (`useChatConversation`): keep pending work on close/breakpoint changes, clear on account change/logout, mount API-fetching UI lazily.
+- **MCP pages are hidden when MCP is off** (`McpGate` → 404, `src/components/common/McpGate.tsx`).
+- **Home page product tour uses real screenshots** in `public/screenshots/home/<screen>-<light|dark>.jpg` (1440×900 @1.15, demo account seeded by `varavu_selavu_app/scripts/seed_demo.py` against a local throwaway DB). Re-capture both themes when those screens change.

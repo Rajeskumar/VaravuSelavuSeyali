@@ -1,0 +1,29 @@
+{
+  "description": "TrackSpense repo guardrails, shared with Claude Code (.claude/settings.json). Trust once with /hooks.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/hooks/guard-bash.py\" --tool codex",
+            "timeout": 10,
+            "statusMessage": "Checking command against repo guardrails"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/scripts/hooks/docs-touch.py\" --hook",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

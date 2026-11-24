@@ -7,7 +7,7 @@
 # model definitions — the same gap run_e2e_pg_tests.sh works around with
 # Base.metadata.create_all()). See scripts/bootstrap_schema.py's docstring for the full
 # explanation and qa/TEST-PLAN.md's risk areas for why this also affects the real
-# cloudbuild.yaml deploy pipeline, not just QA tooling.
+# cloudbuild.backend.yaml deploy pipeline, not just QA tooling.
 #
 # Usage: npm run qa:db:bootstrap   (from qa/), or bash scripts/bootstrap-local-db.sh directly.
 # Leaves the container running (unlike run_e2e_pg_tests.sh) — this is meant to back a local

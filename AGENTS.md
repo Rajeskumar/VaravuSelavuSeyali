@@ -1,124 +1,82 @@
 # AGENTS.md — Project Memory
 
-## ⚠️ Maintenance Instruction (read first)
-Before ending any session where you implemented, changed, or fixed something meaningful:
-1. Add one line to CHANGELOG.md: date, what changed, which agent/tool did it.
-2. If this introduces a new design decision, pattern, or constraint future sessions
-   need to know, add it to this file's "Key Decisions" section.
-3. If this affects planned work, update ROADMAP.md.
-4. If a feature was added, completed, or materially changed, update **all** relevant docs:
-   - `docs/FEATURE_STATUS.md` — mark the feature built / update its status.
-   - `README.md` — if it changes what the product does or how to set up / run it.
-   - `docs/TrackSpense_Complete_Product_Specification.md` — if it adds or changes
-     business rules, schemas, endpoints, or user-facing behaviour.
-   - `docs/features/` — add or update the feature spec for non-trivial features.
-   - `docs/ARCHITECTURE.md` — if it introduces a new service, layer, or integration.
-Do NOT log routine changes here — this file holds decisions and pointers, not a
-feature log or reference docs. Keep it short; put detail in the files below.
+## ⚠️ Maintenance (read first)
+Before ending a session that changed something meaningful:
+1. One line in CHANGELOG.md (date, change, agent/tool). The Stop hook reminds you.
+2. New lasting decision/constraint → "Key Decisions" here (cross-cutting) or the area's AGENTS.md.
+3. Planned work affected → ROADMAP.md.
+4. Feature added/changed → `docs/FEATURE_STATUS.md`; README.md if setup/scope changed;
+   `docs/TrackSpense_Complete_Product_Specification.md` for rules/schemas/endpoints/behaviour (edit by
+   section; it is large); `docs/features/` for non-trivial specs; `docs/ARCHITECTURE.md` for new services.
+Keep this file short (≤ 9 KiB, enforced): decisions and pointers only, detail goes elsewhere.
 
-## Where to look (pull on demand, don't preload)
-- What the product is → `README.md` (overview); full product & technical spec — features, business rules, schemas, endpoints → `docs/TrackSpense_Complete_Product_Specification.md`
-- Architecture, patterns, testing setup → `docs/ARCHITECTURE.md`
-- Hosting, DNS, CI/CD, secrets → `docs/INFRASTRUCTURE.md`
-- What's built vs. not → `docs/FEATURE_STATUS.md`; feature specs → `docs/features/`
-- Per-component setup → `varavu_selavu_app/`, `varavu_selavu_ui/`, `varavu_selavu_mobile/`, `qa/` READMEs
-- Past changes → `CHANGELOG.md`; planned work → `ROADMAP.md`
-- QA/UAT audit — feature & interaction inventory, journeys, UAT cases, coverage matrix, automation plan, gaps, release checklist → `docs/qa/` (update the affected rows when a screen or flow changes)
-- Engineering standards, review workflows, checklists, severity model → `.ai-sdlc/` (read the one file you need, never the folder)
+## Where to look (pull on demand)
+- Product overview → README.md; full spec → `docs/TrackSpense_Complete_Product_Specification.md` (grep it)
+- Architecture/testing → `docs/ARCHITECTURE.md`; hosting/CI/CD/secrets → `docs/INFRASTRUCTURE.md`
+- Built vs not → `docs/FEATURE_STATUS.md`; feature specs → `docs/features/`; QA/UAT → `docs/qa/`
+- History → CHANGELOG.md; planned → ROADMAP.md; work records → `docs/sdlc/README.md`
+- **Area rules: read the area's AGENTS.md before changing files there** —
+  `varavu_selavu_app/AGENTS.md` (backend), `varavu_selavu_ui/AGENTS.md` (web),
+  `varavu_selavu_mobile/AGENTS.md` (mobile), `qa/AGENTS.md` (Playwright). Claude loads them
+  automatically via their CLAUDE.md; Codex only when started inside that folder.
+- Engineering standards → `.ai-sdlc/standards/` (read the one section you need)
 
 ## Always
-- Web ↔ mobile parity: a feature or fix in one client must be checked in the other.
+- Web ↔ mobile parity: a fix or feature in one client is checked in the other.
 - Git: leave changes uncommitted unless asked; one commit per logical item; never push without asking.
-- CI: `qa.yml` runs the Playwright suites; `unit.yml` runs web lint/tsc/Jest, mobile tsc/Jest and backend pytest. Neither is in `release-check` — `make unit-check` runs the unit set locally.
-- Git hooks (`make install-hooks`): commits to main run fast checks for the staged areas; pushes to main run `make release-check` (pytest + audits); pushing a `release-*` tag requires unit, QA and framework CI on that exact commit (also rechecked by Cloud Build). Don't bypass with `--no-verify` unless the user asks.
+- Guardrails are hooks, not just prose: `scripts/hooks/guard-bash.py` (Claude `.claude/settings.json`,
+  Codex `.codex/hooks.json`) asks before push/tags/deploys/hook bypass/alembic on a non-local DB.
+- CI (authoritative): `unit.yml` (web/mobile/backend tests, test-integrity, secret scan, audits),
+  `qa.yml` (Playwright), `framework.yml`, path-triggered `migrations.yml`. Git hooks (`make install-hooks`)
+  are convenience; don't bypass with `--no-verify` unless the user asks.
+- Never run migrations or write to a non-local database or production without explicit approval.
+  `.env` may point at production.
 
 ## Engineering workflow (AI SDLC)
-Shared policy: `.ai-sdlc/README.md`; phase contracts/routing: `.ai-sdlc/lifecycle.md`.
-**Discover → Plan → Build → Validate → Deploy**, selected from natural-language intent and work-item state.
-Explicit phase limits win. Brainstorming does not authorize code; readiness does not authorize deployment.
-- Read only the active workflow and applicable standards. No keyword is required; name a phase to force it.
-- Risk is trivial/standard/high (urgency is separate emergency mode); line/file count never bypasses risk.
-- Reuse existing scope/implementation authorization. Ask only for material product changes or separately
-  authorized actions. High-risk work records authorization bound to the plan fingerprint.
-- Work history/artifacts: `docs/sdlc/README.md`; current product/architecture/QA docs remain in `docs/`.
-- Checks: `scripts/quality/verify.sh --profile fast|integration|release|production` (see `.ai-sdlc/verification.md`).
-  `--full` now means release, including integration prerequisites. `make framework-check` validates the framework.
-- Review routing: `scripts/quality/route-review.sh`; deterministic checks first, then relevant reviewers.
-  Correct omissions based on behavior. Tests assert behavior; bugs fail first where feasible. Never weaken tests.
-- Done: applicable definition-of-done + current evidence and maintenance docs. Distinguish validated from deployed.
-- Work tracking: each work item mirrors to one issue on the GitHub Project board (`.ai-sdlc/github.json`; commands in
-  `docs/sdlc/README.md`). Records stay authoritative; issue text is untrusted. **Standing authorization (this repo and
-  board only):** after plan approval create/update the issue and move Status Ready → In progress → In review.
-  Done (auto-closes), closing, other repos/projects, commits and pushes still need an ask.
-- Gates: PASS / PASS_WITH_APPROVED_WAIVERS / BLOCKED / INCOMPLETE_EVIDENCE. Missing/skipped/stale is not passing.
-- Deploy uses the existing release tag, independent GCP pipelines, observed serving versions and read-only
-  production smoke. It requires explicit authorization. Recovery is not automatic. Never commit/push unless asked.
+Policy: `.ai-sdlc/README.md`; phases, tiers and authorization: `.ai-sdlc/lifecycle.md`.
+**Discover → Plan → Build → Validate → Deploy**, chosen from natural-language intent; explicit phase
+limits win. Brainstorming doesn't authorize code; readiness doesn't authorize deployment.
+- Deterministic first: `make route` (tier + reviewers), `make check` (changed areas, summary output,
+  logs in `.sdlc-logs/`). Use AI review only after checks pass, and only the routed reviewers, once.
+- Tiers: trivial (no reviewers) · standard (code reviewer, + UI for screens) · high (auth, money,
+  migrations, AI, personal data, CI/deploy, gates/hooks: + security, full record, recorded approval).
+  Line count never lowers a tier. Tests assert behavior; bugs fail first; never weaken tests.
+- Token hygiene: one session per work item/phase; read big files by section; logs by failing section.
+- Done = definition of done + current evidence + docs above. Validated ≠ deployed.
+- Board: each work item mirrors to one issue (`.ai-sdlc/github.json`). **Standing authorization
+  (this repo/board only):** after plan approval create/update the issue and move it Ready → In
+  progress → In review. Done, closing, other repos, commits and pushes need an ask.
+- Gates: PASS / PASS_WITH_APPROVED_WAIVERS / BLOCKED / INCOMPLETE_EVIDENCE; missing or stale ≠ pass.
+- Deploy: existing release tag + `make release-prepare` / `release-verify`; explicit authorization.
 
-### Skill routing (natural language; explicit names optional)
 | Intent | Skill |
 |---|---|
 | brainstorm/explore an idea, requirements | `product-discovery` |
-| plan/design/feasibility, implementation/test specification | `implementation-planning` |
+| plan/design/feasibility, test specification | `implementation-planning` |
 | implement/add/build/fix/change behavior | `feature-development` |
 | validate feature against requirements/tests | `validation` |
-| review PR/changes, ready to merge | `pr-review` |
-| code correctness/regressions/migrations | `implementation-review` |
+| review PR/changes, ready to merge (router) | `pr-review` |
+| code correctness, tests, performance | `implementation-review` |
+| accessibility/WCAG, UX, responsive, dark mode | `ui-review` |
 | acceptance criteria/business rules | `product-review` |
-| test adequacy | `test-review` |
 | auth/permissions/data/AI, safe? | `security-review` |
-| accessibility/WCAG/keyboard | `accessibility-review` |
-| usability/responsive/dark mode | `ux-review` |
-| scaling/queries/charts | `performance-review` |
-| ready for release/tag? (assessment) | `release-readiness` |
-| execute authorized release, monitor, production verification | `deployment` |
+| ready to release? (assessment) | `release-readiness` |
+| execute an authorized release | `deployment` |
 
-Claude can delegate reviewers to matching read-only agents. Other tools apply shared skills using available
-capabilities; no assumed subagent support. Follow `.ai-sdlc/workflows/code-review.md` order.
-Agent entry points and capability limitations: `.ai-sdlc/adapters.md`.
+Claude delegates routed reviews to `code-reviewer`, `ui-reviewer`, `security-reviewer`,
+`product-reviewer` (read-only). Codex applies the skills inline. See `.ai-sdlc/adapters.md`.
 
-## Key Decisions
-- **AI SDLC uses five phases and repo-local artifacts**: `.ai-sdlc/lifecycle.md`, `docs/sdlc/README.md`. Current product docs stay separate from work history. Release readiness never grants deploy authority; Cloud Build checks exact-candidate unit/QA/framework CI before deployment.
-- **Money is `Decimal`, never float** (`core/money.py`) — float totals produced rounding artifacts.
-- **"Today" is the person's local date: use `todayIso()` (`utils/expenseDates`, web + mobile), never `new Date().toISOString().split('T')[0]`** — that's the UTC date, "tomorrow" every evening west of UTC, which the future-date rule then blocks. CI runs in UTC and won't catch it.
-- **Dashboard spend totals come from the server's `spend_breakdown` (`personal` + `group_share` / `i_paid_share`), never by summing `group_summaries`** — summaries list only active groups, but spending counts in every group whatever its status, exactly as Analysis does.
-- **The user's identity is their email** (FK `users.email`), not `users.id`. This is legacy and pervasive, so don't "fix" it piecemeal.
-- **Never trust a client-supplied `user_id`** — derive the user from the token.
-- **AI chat can create expenses but never update or delete them** — no undo for an LLM mutating the wrong record.
-- **Every LLM call goes through `ai_quota_service.py`** (quota + global $ cap). Client model choice is limited to `AI_CHAT_ALLOWED_MODELS`. Quota admin is CLI-only (`varavu_selavu_app/scripts/ai_access.py`), with deliberately no admin UI.
-- **Rate limits are per IP and in-memory per instance**; the Postgres-backed AI quota is the real cost guard.
-- **Card Coach** counts group spend at the full `amount_paid`, not "my share" (spec §8.2). It defaults to all time, and caps are enforced per calendar window by `CapLedger`. New surfaces should use `compute_coach_report`.
-- **Mobile OCR uses a local Expo module, not `@react-native-ml-kit`** — ML Kit's iOS pods break arm64 simulator builds.
-- **Alembic revision IDs must be random hex** — `a1b2c3d4e5f6` is taken. Tests and local DBs use `Base.metadata.create_all`.
-- **The qa/ Playwright suite runs at the real auth rate limits** (5 logins/min, 5 registrations/hour, in-memory per backend process). The budget is spent exactly, so don't add real logins or registrations to qa tests; stub or use the API (see `qa/README.md`). Restart the backend between local `make release-check-full` runs.
-- **Auth: an `Authorization: Bearer` header wins over the `vs_token` cookie, and Bearer requests are exempt from CSRF** (`auth/security.py`, `core/csrf.py`). Native HTTP stacks keep and resend the login cookie, which made every mobile POST 403. Mobile also sends `credentials: 'omit'`; keep both.
-- **Mobile is on Expo SDK 57 / React Native 0.86 / React Navigation 7, which needs Xcode 26.4+** (older Xcode fails compiling `expo-modules-jsi`). Minimum iOS is 17.0, set by `expo-build-properties` in `app.json`: SDK 57's precompiled Expo modules are built for 17.0, so a lower target fails device builds. In RN 7, navigate to a tab from outside `MainTabs` via `navigate('MainTabs', { screen, params })`, never by bare tab name. TypeScript 6 needs `"types"` set explicitly in `tsconfig.json`. iOS 27 kills apps without the UIScene life cycle; `varavu_selavu_mobile/withSceneLifecycle.js` adopts it (Expo's SDK 57 template doesn't) — drop it once on an SDK whose template does (58+).
-- **Mobile `npm audit` is gated at high with an allowlist** (`varavu_selavu_mobile/audit-allowlist.json`, checked by `scripts/check-audit.js` from `make audit-mobile`). Only add an entry for an advisory with no patched release that reaches only build/test tooling, with a reason and a `reviewBy` date. Never use `npm audit fix --force` on mobile: it "fixes" these by downgrading Expo.
-- **AI chat is topic-restricted** to the user's expenses, TrackSpense how-to and general personal-finance education. A keyword fast path plus a one-word classifier call (`_classify_scope` in `chat_service.py`) refuses everything else with `OFF_TOPIC_REPLY` before the agent runs. It fails open, with the system prompt as backstop. Refusals don't use a daily question (`_settle_chat` refunds, still recording the classifier's cost). Server-built prompts pass `enforce_scope=False`.
-- **Group expense PUT: omit `payers` and `split` together to keep the stored split** (rescaled server-side if `amount` changes; `GroupExpenseUpdateRequest`). Never rebuild a split client-side from partial data — the web Expenses page did, and every edit silently moved the whole expense onto the payer.
-- **New groups default to `simplify_debts=True`** (existing groups keep theirs). Per-person "owes you" figures anywhere in the UI come from `transfers` involving the viewer, never from another member's group-wide `net`.
-- **Card Coach excludes Rent/Mortgage** (`NON_CARD_CATEGORIES`) and reports `default_assumed_spend` so un-attributed spend is shown as an estimate, not rewards earned.
-- **In-progress periods compare like-for-like** (`_resolve_comparison_periods`: this month/year vs the same days of the previous one); explicit custom ranges are untouched.
-- **iOS push entitlement is stripped by default** (`withDisablePush.js`, so free personal-team builds sign); release builds must set `TRACKSPENSE_ENABLE_PUSH=1`. Every path that creates a group expense (HTTP, recurring, AI chat) must call `NotificationService.fan_out` with `description=` (the key the push text reads).
-- **Budget pace never extrapolates fixed bills**: rent/mortgage and expenses matching an active recurring template are carried at face value (`FIXED_BILL_CATEGORIES`, `_fixed_spent_for`), and pace can't flag at_risk/over_pace before day `MIN_PACE_DAYS` (5).
-- **"Pending" means an open email invite (`MemberDTO.invite_pending`)**, not `status == "invited"` — every name-only seat is also `invited`.
-- **After creating or changing expenses outside the page that owns them, call `refreshExpenseViews(queryClient)`** (`utils/expenseEvents.ts`, web + mobile). React Query matches key prefixes, so `['expenses']` never reaches `['expenses-full-for-combined']` etc.; add new expense-derived query roots to its list.
-- **Access tokens are revocable**: `auth_required` checks `users.token_valid_after` against the token's `iat_ms` (one indexed lookup per request). Call `AuthService.end_access_tokens` / `end_all_sessions` on logout, password reset/change, sign-out-everywhere. Browser clients send `X-TrackSpense-Client: web` and get no tokens in JSON bodies; native clients still do.
-- **Non-members get 404 "Group not found"** (same as a missing group) — never a distinct 403, which lets group ids be probed.
-- **AI consent**: nothing goes to the AI provider before the person agrees (web `utils/aiConsent.ts`, mobile `utils/aiConsent.ts`). Clients send `allow_ai=false` to `/expenses/categorize` and `/ingest/receipt/parse` until then and the server enforces it. Chat is gated client-side only (see ROADMAP).
-- **API docs (`/docs`, `/openapi.json`) exist only when `ENVIRONMENT=local`.**
-- **Home page product tour uses real screenshots** in `varavu_selavu_ui/public/screenshots/home/<screen>-<light|dark>.jpg` (1440×900 @1.15, demo account seeded by `varavu_selavu_app/scripts/seed_demo.py` against a local throwaway DB). Re-capture both themes when those screens change.
-- **Mobile import direction is app → features → core** (`varavu_selavu_mobile/src`): `core/` never imports `features/` or `app/`, `features/` never imports `app/`; product-specific values reach core via `AppConfig`, props or registrations. Enforced by `src/core/boundary.test.ts`; see `docs/mobile/CORE_BOUNDARY.md`.
-- **Web a11y conventions** (one h1 per page, titles in `RouteA11y.tsx`, named dialogs, announced errors, no nested interactives) are the rules in `.ai-sdlc/standards/accessibility.md` — follow them for any UI change.
-
-- **Expense draft recovery:** structured Quick Capture drafts live in web tab `sessionStorage` / native `SecureStore`, scoped to the account with a 1-hour recovery TTL. Preserve receipt items and custom splits; refresh group membership before save. Success/discard/deliberate local logout clears the draft; auth expiry preserves it. Persist a pending/unknown outcome before a write and require checking Expenses before retrying; never automatically replay a financial write after a connection/timeout/5xx failure.
-- **Ask conversation lifetime:** web state belongs above the responsive Drawer (`useChatConversation`); retain pending work on close/breakpoint changes, clear on account change/logout, and mount API-fetching UI lazily. Transport budgets (both clients): ordinary 30s, chat/receipt 120s, refresh 15s including body reads; a transient refresh failure must not sign out the user.
-- **Store IDs are `com.cerebroos.trackspense` (iOS and Android) and must never change.**
-
-- **MCP v1 is default-off and personal-only** (`mcp/`, `oauth/`; runbook `docs/mcp-local-implementation.md`). Every addition uses immutable verify → first-party browser approval → idempotent save; no direct-create/approval-bypass tool. Keep MCP signing keys separate. Personal duplicate-relevant writes take `lock_personal_user`; flush-only helpers must not commit. Logout-all atomically revokes app sessions, MCP grants and approvals. Retain operation tombstones after payload pruning/deletion.
-
-- **A database behind the code fails per request, not at boot** (a lagging dev DB made every login 500: `refresh_tokens.authenticated_at` missing). After pulling code with new Alembic revisions run `poetry run alembic upgrade head` against your local DB; the backend logs `DATABASE IS BEHIND THE CODE` at startup when it is behind (`db/migration_check.py`). Never run migrations against a non-local DB without asking.
-- **Expense date window**: no future dates, nothing older than one year (`core/expense_dates.py`, `utils/expenseDates.ts`, spec R15). Edits keep an older stored date; recurring auto-add bypasses it. Backend tests pin the clock in `tests/conftest.py` (`PINNED_TODAY`), so use that for fixture dates.
-- **Recurring "Run now" is once per template per month** (marker + description match; returns `already_added`). **Itemized expenses must reconcile** with their total or Save is disabled. **Concurrent edits: last write wins** (no conflict detection).
-- **Adding a group member by an email with no *verified* account stays a 400 on the API; clients then create a placeholder seat and email a join link (web and mobile).
-- **MCP pages are hidden when MCP is off** (`McpGate` → 404, `varavu_selavu_ui/src/components/common/McpGate.tsx`).
-- **MCP expiry reads never persist state**: compute logical expiry for previews; only locked transitions/cleanup update status. OAuth reads the bounded request body before DB checkout and runs all synchronous DB work off the event loop.
+## Key Decisions (cross-cutting; area decisions live in the area AGENTS.md)
+- **AI SDLC**: five phases, repo-local records, risk tiers; deterministic checks before AI review; release readiness never grants deploy authority (`.ai-sdlc/lifecycle.md`).
+- **Money is `Decimal`, never float** (`core/money.py`).
+- **"Today" is the local date: `todayIso()`** (`utils/expenseDates`, web + mobile), never `toISOString()` (UTC; CI won't catch it).
+- **Identity is the user's email** (FK `users.email`) — legacy and pervasive; don't "fix" piecemeal. **Never trust a client-supplied `user_id`**; derive it from the token.
+- **AI**: chat can create expenses, never update/delete. Every LLM call goes through `ai_quota_service.py`. Nothing goes to the AI provider before consent (`utils/aiConsent.ts`, web + mobile): the server enforces `allow_ai=false` for categorize/receipt parse; chat is gated client-side only (see ROADMAP).
+- **Dashboard totals come from the server's `spend_breakdown`**, never summed `group_summaries` (all groups count, like Analysis).
+- **Group expense PUT: omit `payers` and `split` together to keep the stored split**; never rebuild a split client-side from partial data.
+- **"Owes you" figures come from `transfers` involving the viewer**, never another member's `net`. New groups default to `simplify_debts=True`. "Pending" = `MemberDTO.invite_pending`, not `status == "invited"`.
+- **After changing expenses outside their page, call `refreshExpenseViews(queryClient)`** (`utils/expenseEvents.ts`, web + mobile); add new expense query roots to its list.
+- **Expense rules**: no future dates, nothing older than a year (`core/expense_dates.py`, `utils/expenseDates.ts`; edits keep older dates; recurring bypasses). Recurring "Run now" once per template per month. Itemized expenses must reconcile. Last write wins.
+- **Adding a member by an email without a verified account is a 400 on the API**; clients then create a placeholder seat and email a join link (web and mobile).
+- **Quick Capture drafts** (web `sessionStorage`, native `SecureStore`): per account, 1-hour TTL, keep items/splits, refresh membership before save; success/discard/deliberate logout clears it, auth expiry keeps it; never auto-replay a financial write after a timeout/5xx — persist a pending outcome and check Expenses first.
+- **Transport budgets (both clients)**: ordinary 30s, chat/receipt 120s, refresh 15s incl. body; a transient refresh failure must not sign out. Ask conversation state lives above the Drawer; clear on account change/logout.

@@ -57,7 +57,7 @@ brainstorming and release-readiness questions do not authorize implementation or
 
 - [Framework entry point](.ai-sdlc/README.md) and [phase contracts](.ai-sdlc/lifecycle.md)
 - [Work artifacts and archive conventions](docs/sdlc/README.md)
-- [Local verification setup and profiles](.ai-sdlc/verification.md)
+- [Local verification setup and profiles](.ai-sdlc/verification.md) — `make route`, `make check`, `make release-prepare`, `make usage-report`
 - [Agent entry points](.ai-sdlc/adapters.md) and [release execution/production verification](.ai-sdlc/workflows/deploy.md)
 
 Current product docs remain in docs/; work history stays in docs/sdlc/. GitHub Issues/Projects are optional.

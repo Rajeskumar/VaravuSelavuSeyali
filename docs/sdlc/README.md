@@ -29,7 +29,7 @@ closed → Done* are on. Use `Closes #N` in the PR body so the merge reaches the
 After installing scripts/quality/requirements.txt in a venv (see .ai-sdlc/verification.md):
 
 ```sh
-$SDLC_PYTHON scripts/quality/sdlc.py init TS-123 --title 'Feature outcome' --risk standard
+$SDLC_PYTHON scripts/quality/sdlc.py init TS-123 --title 'Feature outcome' --risk standard --light   # one work-item.md
 $SDLC_PYTHON scripts/quality/sdlc.py validate
 $SDLC_PYTHON scripts/quality/sdlc.py gate docs/sdlc/work-items/TS-123 --phase plan
 $SDLC_PYTHON scripts/quality/sdlc.py plan-fingerprint docs/sdlc/work-items/TS-123
@@ -37,16 +37,19 @@ $SDLC_PYTHON scripts/quality/sdlc.py snapshot
 $SDLC_PYTHON scripts/quality/sdlc.py gate docs/sdlc/work-items/TS-123 --phase validate
 ```
 
-The CLI creates a work-item record plus requirement, implementation and test-plan templates and empty
-findings/evidence ledgers. The templates are guidance, not approved plans. Replace their content; enter
+The CLI creates a work-item record plus requirement, implementation and test-plan templates (or, with
+`--light` for standard/trivial risk, one combined work-item.md) and empty findings/evidence ledgers. The templates are guidance, not approved plans. Replace their content; enter
 observable ACs in work-item.json. required_evidence lists expected IDs for checks, reviewers and manual
 acceptance verification selected during Plan. Do not reduce that list merely to get a pass.
 For high risk, record actual existing user authorization and the plan-fingerprint, never invent approval.
 The gate command checks the EXIT evidence of a phase, except Build also checks authorization before code.
 
 Record evidence after execution with: id, passed/failed/skipped status, source snapshot, environment,
-command_or_method, source report/CI link, recorded_at (UTC timestamp), and covered AC IDs. Validate
-source evidence and coverage, not just ledger syntax. Use one current entry per evidence ID; preserve
+command_or_method, source report/CI link, recorded_at (UTC timestamp), and covered AC IDs. Optionally add
+`scope` (a list of paths, e.g. a reviewer's routed files) for standard/trivial risk: the snapshot is then
+`sdlc.py snapshot --work-item <folder> --scope <files...>` (file contents plus the work item's ACs/risk), and
+it stays current while unrelated files change. Scope entries must be files, not directories or globs. High risk always uses the
+full snapshot. Validate source evidence and coverage, not just ledger syntax. Use one current entry per evidence ID; preserve
 old detailed reports in archived summaries or Git history. Current code changes stale prior snapshots.
 Do not run local validation against historical records and rewrite them as newly passing.
 
@@ -78,6 +81,7 @@ structure but never considered current gate evidence automatically.
 ## Index
 
 - [TS-SDLC-001 — five-phase framework](work-items/TS-SDLC-001/requirements.md): implemented; local validation recorded in its evidence ledger; not deployed.
+- [TS-SDLC-002 — lean framework](work-items/TS-SDLC-002/requirements.md): implemented on `chore/ai-sdlc-optimization`; validation in its evidence ledger; uncommitted.
 
 ## Release records
 

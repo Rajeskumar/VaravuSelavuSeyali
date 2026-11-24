@@ -2,7 +2,7 @@
 
 - [ ] Work item and ACs linked for meaningful changes; scope is one logical item; description states what/why and how it was verified.
 - [ ] Applicable verification profiles green with current evidence (name profiles and omissions).
-- [ ] `scripts/quality/route-review.sh` output reviewed; listed reviewers run; no open P0; P1 acceptance requires owner/reason/expiry/reference.
+- [ ] `make check` green; `make route` reviewers run once each (CI test-integrity/security green); no open P0; P1 acceptance requires owner/reason/expiry/reference.
 - [ ] Definition of Done ticked or marked n/a with reasons.
 - [ ] Contract/schema change: both clients, spec and migration compatibility considered.
 - [ ] Screenshots/recording for UI changes (light + dark, phone + desktop).

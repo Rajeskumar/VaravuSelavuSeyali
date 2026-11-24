@@ -126,7 +126,7 @@ def root():
 def privacy_policy():
     # parents[1] is the package root (varavu_selavu_app/, i.e. /app in the container) —
     # the HTML files live there as siblings of varavu_selavu_service/, inside the Docker
-    # build context (cloudbuild.yaml builds the backend image from that directory, so a
+    # build context (cloudbuild.backend.yaml builds the backend image from that directory, so a
     # path outside it — e.g. the old parents[2] — can never resolve inside the container).
     path = Path(__file__).resolve().parents[1] / "privacy_policy.html"
     return FileResponse(path)

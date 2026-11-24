@@ -259,3 +259,105 @@ class ArtifactTests(unittest.TestCase):
         r["status"] = "failed"
         self.results["results"].append(r)
         self.assertEqual(self.gate(), "BLOCKED")
+
+    def test_light_record_allowed_for_standard_but_not_high(self):
+        for name in ("requirements.md", "implementation.md", "test-plan.md"):
+            (self.folder / name).unlink()
+        (self.folder / "work-item.md").write_text("AC-001: plan, tests and evidence in one place")
+        self.assertEqual(self.gate(), "PASS")
+        self.work["risk"] = "high"
+        self.save()
+        result = sdlc.work_gate(self.folder, "validate", SNAP)
+        self.assertTrue(any("requirements.md" in m for m in result["missing"]))
+
+    def test_scoped_evidence_survives_unrelated_changes_but_not_its_own(self):
+        scope = ["scripts/quality/routing.py"]
+        r = self.result("unit")
+        r.update(scope=scope, snapshot=sdlc.scoped_snapshot(scope, self.work))
+        self.results["results"][0] = r
+        self.save()
+        # The full snapshot ("b"*64) no longer matches, but the scoped check is still current.
+        self.assertEqual(sdlc.work_gate(self.folder, "validate", "b" * 64)["missing"], ["review: missing, stale or skipped"])
+        r["snapshot"] = "c" * 64
+        self.save()
+        missing = sdlc.work_gate(self.folder, "validate", SNAP)["missing"]
+        self.assertIn("unit: missing, stale or skipped", missing)
+
+    def test_scoped_evidence_rejected_for_high_risk(self):
+        self.work["risk"] = "high"
+        self.results["results"][0]["scope"] = ["scripts/quality/routing.py"]
+        self.save()
+        with self.assertRaises(ValueError):
+            sdlc.load_work(self.folder)
+
+    def passing_release(self):
+        candidate = "a" * 40
+        release = sdlc.read(ROOT / ".ai-sdlc/templates/release/release.json")
+        release.update(
+            candidate=candidate,
+            work_items=["TS-1"],
+            authorization={"actor": "owner", "reference": "explicit request", "candidate": candidate},
+            checks=[
+                {"id": id, "candidate": candidate, "status": "passed", "source": "run URL"}
+                for id in sdlc.RELEASE_CHECKS
+            ],
+            components=[
+                {
+                    "name": name,
+                    "status": "pending",
+                    "expected_image": "image:" + candidate,
+                    "observed_image": "",
+                    "revision": "",
+                    "build_url": "",
+                    "previous_image": "image:previous",
+                }
+                for name in ["backend", "frontend"]
+            ],
+        )
+        return release
+
+    def test_release_waivers_only_for_manual_checks(self):
+        waiver = {"owner": "owner", "reason": "accepted risk", "expires": "2999-01-01", "reference": "chat"}
+        release = self.passing_release()
+        reviews = next(c for c in release["checks"] if c["id"] == "reviews")
+        reviews.update(status="waived", waiver=waiver)
+        self.assertEqual(sdlc.release_gate(release)["verdict"], "PASS_WITH_APPROVED_WAIVERS")
+        reviews["waiver"] = dict(waiver, expires="2000-01-01")
+        self.assertEqual(sdlc.release_gate(release)["verdict"], "BLOCKED")
+        reviews.update(status="passed")
+        reviews.pop("waiver")
+        unit = next(c for c in release["checks"] if c["id"] == "unit-ci")
+        unit.update(status="waived", waiver=waiver)
+        self.assertEqual(sdlc.release_gate(release)["verdict"], "BLOCKED")
+
+    def test_scoped_evidence_goes_stale_when_requirements_change(self):
+        scope = ["scripts/quality/routing.py"]
+        r = self.result("unit")
+        r.update(scope=scope, snapshot=sdlc.scoped_snapshot(scope, self.work))
+        self.results["results"][0] = r
+        self.save()
+        self.assertNotIn("unit: missing, stale or skipped", sdlc.work_gate(self.folder, "validate", SNAP)["missing"])
+        self.work["acceptance_criteria"][0]["outcome"] = "Different behavior"
+        self.save()
+        self.assertIn("unit: missing, stale or skipped", sdlc.work_gate(self.folder, "validate", SNAP)["missing"])
+
+    def test_scope_must_name_real_files(self):
+        for bad in (["varavu_selavu_app/"], ["varavu_selavu_app"], ["scripts/*.py"], ["no/such/file.py"],
+                    ["/etc/hosts"], ["../outside.py"]):
+            with self.subTest(scope=bad):
+                self.results["results"][0]["scope"] = bad
+                self.save()
+                with self.assertRaises(ValueError):
+                    sdlc.load_work(self.folder)
+
+    def test_existing_high_risk_approvals_keep_their_fingerprint(self):
+        # Adding the optional work-item.md must not invalidate approvals recorded before it existed.
+        folder = ROOT / "docs/sdlc/work-items/TS-SDLC-001"
+        recorded = sdlc.read(folder / "work-item.json")["implementation_approval"]["fingerprint"]
+        self.assertEqual(sdlc.plan_fingerprint(folder), recorded)
+
+    def test_failed_migration_check_cannot_be_waived(self):
+        release = self.passing_release()
+        check = next(c for c in release["checks"] if c["id"] == "migration-compatibility")
+        check.update(status="waived", waiver={"owner": "o", "reason": "r", "expires": "2999-01-01", "reference": "x"})
+        self.assertEqual(sdlc.release_gate(release)["verdict"], "BLOCKED")

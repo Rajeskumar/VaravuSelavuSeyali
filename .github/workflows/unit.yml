@@ -12,6 +12,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: unit-${{ github.ref }}
   cancel-in-progress: true
@@ -164,3 +167,66 @@ jobs:
           poetry run pytest tests/test_analytics_e2e_pg.py -q
           poetry run pytest tests/test_groups_e2e_pg.py -q
           poetry run pytest "tests/test_ai_quota.py::test_concurrent_reserves_never_overshoot_on_postgres" -q
+
+  test-integrity:
+    # Deterministic backstop for "never weaken tests": deleted test files, new skip/only/xfail
+    # markers and net assertion loss fail unless a commit in the range carries a
+    # `Test-Change-Approved: <reason>` trailer (scripts/quality/test_integrity.py).
+    name: Test integrity (no weakened tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the change range
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            python3 scripts/quality/test_integrity.py --range "$PR_BASE" "$PR_HEAD"
+          elif [ -n "$BEFORE" ] && ! echo "$BEFORE" | grep -qE '^0+$'; then
+            python3 scripts/quality/test_integrity.py --range "$BEFORE" "$GITHUB_SHA"
+          else
+            # Manual dispatch / new branch: compare with the last release, never skip (a dispatch
+            # run can be the newest unit.yml run that release-gate accepts for the candidate).
+            BASE_TAG="$(git describe --tags --abbrev=0 --match 'release-v*' 2>/dev/null || true)"
+            if [ -z "$BASE_TAG" ]; then echo "No release tag to compare against" >&2; exit 1; fi
+            python3 scripts/quality/test_integrity.py --range "$BASE_TAG" "$GITHUB_SHA"
+          fi
+
+  security:
+    # Secret scanning and dependency audits on every PR and main push, so a vulnerable lockfile
+    # or leaked key shows up on the PR instead of at release time (Cloud Build re-audits).
+    name: Security (secret scan, dependency audits)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read  # gitleaks-action lists the PR's commits
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret scan (tracked files)
+        run: python3 scripts/quality/secret_scan.py
+      - name: Secret scan (commits in this push/PR)
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2 (v2.3.9)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: 'false'  # read-only token: report in the job log, never fail on commenting
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: pip install poetry
+      - name: Install backend dependencies (pip-audit audits the installed environment)
+        working-directory: varavu_selavu_app
+        run: poetry install --no-interaction
+      - name: Dependency audits (backend, web, mobile allowlist, qa)
+        run: make audit-all

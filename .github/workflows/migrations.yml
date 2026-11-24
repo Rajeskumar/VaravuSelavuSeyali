@@ -1,0 +1,59 @@
+name: Migration rehearsal
+
+# Applies new Alembic revisions on top of the previous release's schema, then downgrades and
+# re-applies them (scripts/quality/migration-rehearsal.sh). Path-triggered, so it is not a
+# required status check; release_tools.py prepare reads its result on the candidate commit
+# whenever the release contains new revisions.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'varavu_selavu_app/alembic/**'
+      - 'varavu_selavu_app/varavu_selavu_service/db/**'
+      - 'scripts/quality/migration-rehearsal.sh'
+  push:
+    branches: [main]
+    paths:
+      - 'varavu_selavu_app/alembic/**'
+      - 'varavu_selavu_app/varavu_selavu_service/db/**'
+      - 'scripts/quality/migration-rehearsal.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrations-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearsal:
+    name: Rehearse migrations from the previous release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vs_test
+          POSTGRES_PASSWORD: vs_test_pass
+          POSTGRES_DB: rehearsal_db
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U vs_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      SDLC_TEST_ENV: local
+      E2E_DATABASE_URL: postgresql://vs_test:vs_test_pass@localhost:5432/rehearsal_db
+      ENVIRONMENT: local
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # release tags and the previous release's code
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install poetry
+      - working-directory: varavu_selavu_app
+        run: poetry install --no-interaction
+      - run: scripts/quality/migration-rehearsal.sh

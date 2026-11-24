@@ -1,21 +1,155 @@
 #!/usr/bin/env python3
-"""Conservative path-based review routing; intent can add risk, never remove checks."""
+"""Risk-tiered review routing. Paths set a conservative baseline; intent can add risk, never remove it.
+
+Tiers (see .ai-sdlc/lifecycle.md):
+  trivial  docs/copy/assets only            -> deterministic checks, no reviewers
+  standard application code, tests, framework docs -> implementation-review (+ ui-review for UI)
+  high     auth, money, migrations, AI/LLM, personal-data exports, uploads, CI/deploy, gates,
+           hooks and permission settings     -> + security-review and the Tier-3 process
+Product review is requested by the work item (--product), not inferred from paths.
+"""
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
-import re
 import subprocess
 
-ORDER = [
-    "implementation-review",
-    "product-review",
-    "test-review",
-    "security-review",
-    "accessibility-review",
-    "ux-review",
-    "performance-review",
-]
+ORDER = ["implementation-review", "product-review", "security-review", "ui-review"]
+REVIEWER_AGENT = {
+    "implementation-review": "code-reviewer",
+    "product-review": "product-reviewer",
+    "security-review": "security-reviewer",
+    "ui-review": "ui-reviewer",
+}
+
+APP = "varavu_selavu_app/"
+SVC = APP + "varavu_selavu_service/"
+
+# Tier 3 (high): a wrong change here loses money, leaks data, bypasses auth or ships unchecked.
+HIGH_PREFIXES = (
+    SVC + "auth/",
+    SVC + "oauth/",
+    SVC + "mcp/",
+    SVC + "core/",
+    SVC + "db/",
+    SVC + "repo/",
+    SVC + "services/ocr/",
+    APP + "alembic/",
+    APP + "scripts/ai_access.py",
+    "varavu_selavu_ui/src/api/request.ts",
+    "varavu_selavu_ui/src/api/csrf.ts",
+    "varavu_selavu_ui/src/api/auth.ts",
+    "varavu_selavu_ui/src/api/apiconfig.ts",
+    "varavu_selavu_mobile/src/core/auth/",
+    "varavu_selavu_mobile/src/core/api/",
+    ".github/workflows/",
+    ".github/rulesets/",
+    ".cloudbuild/",
+    ".githooks/",
+    "scripts/hooks/",
+    "scripts/release.sh",
+    "scripts/pre-commit.sh",
+    "scripts/pre-push.sh",
+    ".claude/settings.json",
+    ".codex/hooks.json",
+    ".codex/config.toml",
+)
+HIGH_FILES = {SVC + "main.py"} | {
+    SVC + "services/" + name
+    for name in (
+        # Ownership/membership checks live in these (an IDOR here is a P0).
+        "expense_service.py",
+        "expense_comment_service.py",
+        "group_service.py",
+        "budget_service.py",
+        "split_suggestion_service.py",
+        "recurring_service.py",
+        "fx_rate_service.py",
+        "card_rewards_engine.py",
+        "ai_quota_service.py",
+        "chat_service.py",
+        "categorization_service.py",
+        "receipt_service.py",
+        "split_engine.py",
+        "item_split_engine.py",
+        "settlement_service.py",
+        "balance_service.py",
+        "friend_balance_service.py",
+        "group_expense_service.py",
+        "expense_write_service.py",
+        "personal_write_lock.py",
+        "account_export_service.py",
+        "personal_export_service.py",
+        "group_export_service.py",
+        "email_service.py",
+    )
+}
+# Gate/enforcement logic in the framework itself. Its tests are ordinary code.
+FRAMEWORK_GATE_FILES = {
+    "scripts/quality/" + name
+    for name in (
+        "routing.py",
+        "verification.py",
+        "release-gate.py",
+        "release_tools.py",
+        "sdlc.py",
+        "sdlc_github.py",
+        "secret_scan.py",
+        "test_integrity.py",
+        "check-local-test-env.py",
+        "migration-rehearsal.sh",
+        "validate-ai-sdlc.py",
+        "verify.sh",
+        "route-review.sh",
+        "security.sh",
+    )
+}
+# Security review at standard risk: endpoints and request models (authorization, validation),
+# consent and HTML-safety utilities, audit gating, and the reviewer instructions themselves.
+SECURITY_PREFIXES = (
+    SVC + "api/",
+    SVC + "models/",
+    # Every service scopes data to the requesting user somewhere (an IDOR is a P0), so all of them
+    # get security review; the money/auth/data-export ones above are additionally high risk.
+    SVC + "services/",
+    "varavu_selavu_ui/src/utils/aiConsent.ts",
+    "varavu_selavu_ui/src/utils/html.ts",
+    "varavu_selavu_mobile/src/features/ask/utils/aiConsent.ts",
+    "varavu_selavu_mobile/audit-allowlist.json",
+    "scripts/check-audit.js",
+    ".claude/agents/",
+    ".codex/agents/",
+    ".agents/skills/security-review/",
+    "Makefile",
+)
+DEPENDENCY_FILES = ("package.json", "package-lock.json", "pyproject.toml", "poetry.lock")
+FRAMEWORK_PREFIXES = (".ai-sdlc/", ".agents/", ".claude/", ".codex/", "scripts/quality/", "scripts/hooks/")
+FRAMEWORK_FILES = ("gemini.md", ".github/copilot-instructions.md")
+INSTRUCTION_FILES = ("agents.md", "claude.md")  # root or nested
+# Work-item ledgers: validated by framework-check, never part of a reviewer's scope (recording a
+# review would otherwise change the reviewer's own scope hash). Same exclusion idea as sdlc.snapshot().
+RECORD_SUFFIXES = (".json", ".md")
+INFRA_NAMES = ("dockerfile", "docker-compose", "cloudbuild")
+DOC_SUFFIXES = (".md", ".txt", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp")
+PERFORMANCE_HINTS = (
+    "analytics", "insight", "analysis", "aggregation", "balance", "export",
+    "recurring", "plotly", "chart", "feed", "virtual",
+)
+# Generated or scratch output is never a reviewable change; exclude it before routing.
+EXCLUDED_SEGMENTS = {
+    "node_modules", "__pycache__", "build", "dist", "coverage", ".sdlc-logs",
+    "playwright-report", "test-results", ".expo", ".pytest_cache", ".venv-sdlc",
+}
+EXCLUDED_TOP_PREFIXES = ("tmp", "scratch", ".tmp")
+
+
+def excluded(path):
+    parts = Path(path).parts
+    return bool(parts) and (
+        any(p in EXCLUDED_SEGMENTS for p in parts)
+        or parts[0].lower().startswith(EXCLUDED_TOP_PREFIXES)
+    )
 
 
 def changed_files(base=None):
@@ -45,54 +179,87 @@ def changed_files(base=None):
     return sorted(paths)
 
 
+def scope_hash(paths, root=None):
+    """Content hash of exactly these paths (missing files hash as absent).
+
+    A reviewer whose scope hash matches its recorded evidence has nothing new to review.
+    """
+    root = Path(root or Path(__file__).resolve().parents[2])
+    h = hashlib.sha256()
+    for rel in sorted(set(paths)):
+        path = root / rel
+        h.update(rel.encode() + b"\0")
+        if path.is_symlink():
+            h.update(b"link\0" + str(path.readlink()).encode())
+        elif path.is_file():
+            h.update(b"file\0" + path.read_bytes())
+        else:
+            h.update(b"absent\0")
+    return h.hexdigest()
+
+
+def _is_ui(p):
+    if ".test." in p or "/__tests__/" in p:
+        return False
+    if p.endswith((".tsx", ".jsx")) and p.startswith(
+        ("varavu_selavu_ui/src/", "varavu_selavu_mobile/src/")
+    ):
+        return True
+    return p.startswith(("varavu_selavu_ui/src/", "varavu_selavu_mobile/src/")) and (
+        p.endswith((".css", ".scss")) or "/theme" in p
+    )
+
+
 def classify(files, risk=None, product=False):
-    reviewers, checks, manual = set(), set(), set()
+    reviewers, checks, manual, focus = {}, set(), set(), set()
     high = False
+    skipped = sorted(f for f in files if excluded(f))
+    files = [f for f in files if not excluded(f)]
+
+    def add(reviewer, path):
+        reviewers.setdefault(reviewer, set()).add(path)
+
     for path in files:
         p = path.lower()
-        framework = p.startswith(
-            (".ai-sdlc/", ".agents/", ".agent/", ".claude/", "scripts/quality/")
-        ) or p in (
-            "agents.md",
-            "claude.md",
-            "gemini.md",
-            ".github/copilot-instructions.md",
+        name = Path(p).name
+        framework = (
+            p.startswith(FRAMEWORK_PREFIXES) or p in FRAMEWORK_FILES or name in INSTRUCTION_FILES
         )
         records = p.startswith("docs/sdlc/")
-        infra = (
-            p.startswith((".github/workflows/", ".cloudbuild/", ".githooks/"))
-            or Path(p).name.startswith(("dockerfile", "docker-compose", "cloudbuild"))
-            or p
-            in (
-                "makefile",
-                ".gitignore",
-                "scripts/release.sh",
-                "scripts/pre-push.sh",
-                "scripts/pre-commit.sh",
-            )
+        infra = name.startswith(INFRA_NAMES) or p == "makefile"
+        # CI/build configuration is checked by framework-check (test_configuration.py).
+        ci_config = (
+            p.startswith((".github/", ".cloudbuild/", ".githooks/"))
+            or p in (".gitignore", "makefile")
+            or (p.startswith("scripts/") and p.count("/") == 1 and p.endswith(".sh"))
         )
-        docs = Path(p).suffix in (
-            ".md",
-            ".txt",
-            ".png",
-            ".jpg",
-            ".jpeg",
-            ".gif",
-            ".svg",
-        )
-        if records:
+        docs = Path(p).suffix in DOC_SUFFIXES
+
+        if records or framework or ci_config or infra:
             checks.add("framework")
-            if Path(p).suffix in (".json", ".md"):
-                continue
-        if docs and not framework and not infra:
+        if records and Path(p).suffix in RECORD_SUFFIXES:
             continue
-        style = Path(p).suffix in (".css", ".scss") or "/theme" in p
-        reviewers.update(("implementation-review", "test-review"))
-        if framework or infra:
-            checks.add("framework")
-            reviewers.add("security-review")
+        if docs and not framework:
+            continue  # Tier 1: ordinary docs, copy and images
+
+        add("implementation-review", path)
+        gate = path in FRAMEWORK_GATE_FILES
+        is_high = (
+            path.startswith(HIGH_PREFIXES)
+            or path in HIGH_FILES
+            or gate
+            or (infra and p != "makefile")
+        )
+        if is_high:
             high = True
-        if p.startswith("varavu_selavu_app/"):
+            add("security-review", path)
+            checks.add("security")
+        elif path.startswith(SECURITY_PREFIXES):
+            add("security-review", path)
+            checks.add("security")
+        if name in DEPENDENCY_FILES:
+            checks.update(("security", "dependency-audit"))
+        if p.startswith(APP):
             checks.add("backend")
         if p.startswith("varavu_selavu_ui/"):
             checks.add("web")
@@ -101,70 +268,59 @@ def classify(files, risk=None, product=False):
         if p.startswith("qa/"):
             checks.add("qa-typecheck")
             manual.add("local-integration")
-        sensitive = re.search(
-            r"/(auth|oauth|mcp|core|db|alembic)/|/api/|permission|authoriz|csrf|cors|upload|secret|ai_quota|chat|llm|prompt|expense|split|settle|money|payment|budget",
-            p,
-        )
-        dependencies = Path(p).name in (
-            "package.json",
-            "package-lock.json",
-            "pyproject.toml",
-            "poetry.lock",
-        )
-        if sensitive or dependencies or infra or framework:
-            reviewers.add("security-review")
-            checks.add("security")
-            high = high or bool(sensitive or infra or framework)
-        ui = p.endswith((".tsx", ".jsx")) and p.startswith(
-            ("varavu_selavu_ui/src/", "varavu_selavu_mobile/")
-        )
-        behavior = ui or ("/services/" in p and p.endswith(".py"))
-        if behavior or product:
-            reviewers.add("product-review")
-        if ui or style:
-            reviewers.update(("accessibility-review", "ux-review"))
+        if _is_ui(p):
+            add("ui-review", path)
             if p.startswith("varavu_selavu_ui/"):
                 checks.add("web-accessibility")
-            if p.startswith("varavu_selavu_mobile/"):
+            else:
                 manual.add("native-device")
-        if re.search(
-            r"analytics|insight|analysis|aggregation|balance|export|recurring|plotly|chart|feed|virtual",
-            p,
-        ):
-            reviewers.add("performance-review")
-        if "/alembic/" in p or "/db/" in p:
+        if any(hint in p for hint in PERFORMANCE_HINTS) and not docs:
+            focus.add("performance")
+        if p.startswith(APP + "alembic/") or p.startswith(SVC + "db/"):
             manual.add("migration-postgres")
-        if infra:
+        if infra or p.startswith((".github/workflows/", ".cloudbuild/")):
             manual.add("release-readiness")
         if not (
             framework
             or infra
+            or ci_config
+            or records
             or p.startswith(
-                (
-                    "varavu_selavu_app/",
-                    "varavu_selavu_ui/",
-                    "varavu_selavu_mobile/",
-                    "qa/",
-                )
+                ("varavu_selavu_app/", "varavu_selavu_ui/", "varavu_selavu_mobile/", "qa/")
             )
         ):
             manual.add("unmapped-area-checks")
-    if risk == "high":
+
+    # Escalations widen review to every reviewable file, never to work-item ledgers or plain docs.
+    reviewable = [
+        f for f in files
+        if not (f.lower().startswith("docs/sdlc/") and Path(f).suffix in RECORD_SUFFIXES)
+    ]
+    if risk == "high" and files:
         high = True
-        reviewers.update(("implementation-review", "test-review", "security-review"))
-    if product and files:
-        reviewers.add("product-review")
+        for path in reviewable:
+            add("implementation-review", path)
+            add("security-review", path)
+    if product and reviewable:
+        for path in reviewable:
+            add("product-review", path)
+
+    ordered = [r for r in ORDER if r in reviewers]
     return {
         "files": files,
+        "excluded": skipped,
         "risk": "high" if high else ("standard" if reviewers else "trivial"),
-        "reviewers": [r for r in ORDER if r in reviewers],
+        "reviewers": ordered,
+        "agents": [REVIEWER_AGENT[r] for r in ordered],
+        "focus": sorted(focus),
         "checks": sorted(checks),
         "manual": sorted(manual),
+        "scopes": {r: sorted(reviewers[r]) for r in ordered},
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("base", nargs="?")
     parser.add_argument("--files", nargs="*")
     parser.add_argument("--json", action="store_true")
@@ -176,19 +332,21 @@ def main():
         args.risk,
         args.product,
     )
+    result["scope_hashes"] = {r: scope_hash(fs) for r, fs in result["scopes"].items()}
     if args.json:
         print(json.dumps(result, indent=2))
-    else:
-        print(f"Changed files: {len(result['files'])}; risk: {result['risk']}")
-        print("Reviewers to run: " + (", ".join(result["reviewers"]) or "none"))
-        print("Check categories: " + (", ".join(result["checks"]) or "none"))
-        print("Additional evidence: " + (", ".join(result["manual"]) or "none"))
-        print(
-            "Run verify.sh --profile fast first. Integration/release profiles require their documented environment."
-        )
-        print(
-            "Path routing is a baseline: inspect behavior and requirements; escalate risk when needed."
-        )
+        return
+    print(f"Changed files: {len(result['files'])}; risk: {result['risk']}")
+    if result["excluded"]:
+        print(f"Excluded (generated/scratch): {len(result['excluded'])}")
+    for r, agent in zip(result["reviewers"], result["agents"]):
+        print(f"Reviewer: {r} (agent {agent}) files={len(result['scopes'][r])} scope={result['scope_hashes'][r][:12]}")
+    if not result["reviewers"]:
+        print("Reviewers: none (deterministic checks only)")
+    print("Focus: " + (", ".join(result["focus"]) or "none"))
+    print("Check categories: " + (", ".join(result["checks"]) or "none"))
+    print("Additional evidence: " + (", ".join(result["manual"]) or "none"))
+    print("Next: make check (summary output). Skip a reviewer whose scope hash matches its recorded evidence.")
 
 
 if __name__ == "__main__":

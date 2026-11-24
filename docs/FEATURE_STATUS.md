@@ -188,4 +188,6 @@ The repository-local five-phase AI SDLC framework is implemented: Discover → P
 Deploy, with structured artifacts, evidence gates, review routing and framework CI. See
 [framework](../.ai-sdlc/README.md) and [work records](sdlc/README.md). This is development tooling, not a
 user-facing TrackSpense feature. Live deployment-gate credential provisioning and external-agent runtime
-checks remain owner rollout tasks in ROADMAP.md.
+checks remain owner rollout tasks in ROADMAP.md. 2026-11-23 (TS-SDLC-002, implemented, not yet merged):
+risk-tiered routing, 4 consolidated reviewers, guard hooks, CI test-integrity/security/migration jobs,
+scripted release prepare/verify, usage report and evals.

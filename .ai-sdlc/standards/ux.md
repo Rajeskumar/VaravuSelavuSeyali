@@ -23,4 +23,4 @@ Loading (skeleton/spinner, not blank), **empty** (explains what and offers the a
 Plain, specific, second person; say what happened and what to do next; no jargon ("Fast/Deep" was rewritten because it named the mechanism, not the choice). Errors are actionable.
 
 ## UX review output
-Per finding: screen/component, issue, severity, **UX defect vs improvement**, fix. Do not repeat accessibility findings — hand them to accessibility-review.
+Per finding: screen/component, issue, severity, **UX defect vs improvement**, fix. Accessibility findings are labelled `[a11y]` in the same ui-review pass, not repeated as UX.

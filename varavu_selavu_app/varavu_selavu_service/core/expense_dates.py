@@ -24,6 +24,12 @@ def _today() -> date:
     return datetime.now(timezone.utc).date()
 
 
+def today() -> date:
+    """The date the window is judged against. Use it for a default "today" so the default and
+    the check can never disagree (and tests that pin the clock pin both)."""
+    return _today()
+
+
 def _as_date(value: Union[str, date, datetime]) -> date:
     if isinstance(value, datetime):
         return value.date()

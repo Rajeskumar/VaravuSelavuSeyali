@@ -14,6 +14,13 @@ set -euo pipefail
 
 [[ "${SKIP_HOOKS:-}" == "1" ]] && exit 0
 
+# Every branch: catch weakened tests (deleted tests, new skip/only, assertion loss) at commit time.
+# CI re-checks the whole range. Acknowledge a deliberate change with TEST_INTEGRITY_ACK="<reason>".
+if ! python3 "$(git rev-parse --show-toplevel)/scripts/quality/test_integrity.py" --staged; then
+  echo "pre-commit: test-integrity failed — commit aborted." >&2
+  exit 1
+fi
+
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 [[ "$branch" == "main" ]] || exit 0
 

@@ -32,6 +32,14 @@ def _prior_month_date(months_back: int) -> str:
 
 
 @pytest.fixture(autouse=True)
+def _pin_expense_date_clock(monkeypatch):
+    """Overrides conftest's fixed pin: BudgetService resolves "this month" from the real clock,
+    so these tests date expenses by the real day and the date window must agree with it."""
+    from varavu_selavu_service.core import expense_dates
+    monkeypatch.setattr(expense_dates, "_today", lambda: TODAY)
+
+
+@pytest.fixture(autouse=True)
 def _groups_enabled():
     old_val = os.environ.get("GROUPS_ENABLED")
     os.environ["GROUPS_ENABLED"] = "true"
