@@ -152,7 +152,7 @@ class ReleaseToolsTests(unittest.TestCase):
 
     def test_rehearsal_on_unchanged_ancestor_counts_but_not_after_migration_changes(self):
         import subprocess
-        log = subprocess.check_output(["git", "log", "--format=%H", "-n", "40", "main"], cwd=rt.ROOT, text=True).split()
+        log = subprocess.check_output(["git", "log", "--format=%H", "-n", "40", "HEAD"], cwd=rt.ROOT, text=True).split()
         changed_since = lambda old: subprocess.run(
             ["git", "diff", "--quiet", old, log[0], "--", *rt.MIGRATION_PATHS], cwd=rt.ROOT).returncode != 0
         clean = next((c for c in log[1:] if not changed_since(c)), None)

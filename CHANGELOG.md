@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-23: Fix the `framework` CI job (agent: Claude Code). `test_release_tools` ran `git log main` on a depth-1 checkout of a feature branch (no history, no local `main`; exit 128). The workflow now checks out with `fetch-depth: 0` and the test walks `HEAD`.
 - 2026-11-23: Fix backend CI date failures (agent: Claude Code). `tests/conftest.py` pins the expense-date window to 2026-11-22, but budget tests, the PostgreSQL analytics e2e test and the AI chat tools' default date used the real clock, so every run after 2026-11-23 UTC rejected "today" as a future date. Chat tools now default via `expense_dates.today()` (the clock the window checks); the PG test uses `PINNED_TODAY`; budget tests pin the window to the real day because `BudgetService` reads the real clock.
 - 2026-11-23: Lean AI SDLC framework (TS-SDLC-002, agent: Claude Code; branch `chore/ai-sdlc-optimization`, uncommitted). Follows the same-day framework audit:
   - **Routing:** explicit high-risk paths; replaying November's commits gives 13 high (was 33 of 40) and at most 3 reviewers (was 7). Scratch/build paths are excluded, and each reviewer's file scope gets a content hash so unchanged reviews are skipped.
