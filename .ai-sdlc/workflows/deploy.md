@@ -2,8 +2,12 @@
 
 ## Readiness (read-only)
 
-Use release-review.md and release-checklist.md. Freeze a candidate commit on main, identify applicable
-work items and review the actual evidence. `scripts/quality/release-gate.py --sha <full-sha>` checks the
+Assessment only, in a fresh session; never debug inside a release. Freeze a candidate commit on main and
+run `make release-prepare VERSION=x.y.z`: it checks exact-candidate CI (unit includes secret scan and
+audits), new Alembic revisions since the last release tag and the `migrations.yml` rehearsal, previous
+serving images and linked work-item gates, and writes a pre-filled untracked release record. Then
+review only what it could not prove, using release-checklist.md. If readiness is BLOCKED, stop: open a
+bug work item with the failing run and hand off; re-enter when CI on the new SHA is green. `scripts/quality/release-gate.py --sha <full-sha>` checks the
 latest eligible main push/manual runs of unit.yml, qa.yml and framework.yml on that exact commit.
 A PR-only run, missing/skipped/red/pending run or inaccessible API blocks release. No ancestor fallback.
 
@@ -13,8 +17,10 @@ do not alter the frozen source to attach its own commit SHA. The release script 
 files within that version's release directory. A record already tracked with edits must be saved through
 an appropriate documentation commit and the candidate/evidence refreshed before another release.
 
-Populate checks: unit-ci, qa-ci, framework-ci, security, acceptance, reviews, migration-compatibility,
-configuration, recovery. A not-applicable manual check is passed only after an explicit applicability
+Checks: unit-ci, qa-ci, framework-ci, security, acceptance, reviews, migration-compatibility,
+configuration, recovery. Manual checks (acceptance, reviews, configuration, recovery,
+migration-compatibility) may be `waived` with owner/reason/expiry/reference; CI, security and
+production checks can never be waived. A not-applicable manual check is passed only after an explicit applicability
 assessment with a source/reason. Skipped/missing is incomplete. Include web/backend components, previous
 images and expected new images. Review linked work-item gates and any waivers; JSON is not authenticated
 proof. The gate reports its limits: linked work-item contents/waivers and actual approval sources require manual review.
@@ -48,8 +54,10 @@ workflows exist/passed before the first tag. No CI run can exist for uncommitted
 
 ## Monitor both independent deployments
 
-Use available authenticated GCP read tools/CLI. Resolve builds by the exact release tag/commit and the
-appropriate trigger, then poll their actual build IDs until completed; never infer success from push.
+Run `make release-verify VERSION=x.y.z WAIT=900 SMOKE=1` (read-only): it resolves both builds by
+release tag and trigger, checks the traffic-serving revisions/images, runs the prod smoke and the error
+window, and sets the record status. The manual commands below remain for investigation. Never infer
+success from a push.
 Record both build URLs/statuses and backend migration-step result. A failure in one is a partial release,
 not overall success. On timeout retain verification_incomplete and report what remains running.
 
@@ -71,8 +79,8 @@ If gcloud/credentials are unavailable, report incomplete evidence; do not assume
 
 Run `scripts/quality/verify.sh --profile production` only when production validation is in scope. This
 uses the existing read-only prod smoke (home, login rendering, health/config, 404), never auth or writes.
-Check read-only error signals for the serving revisions over a stated observation window (initially
-5 minutes, compare with pre-release baseline where available). Record query/time/source and limitations
+Check read-only error signals for the serving revisions over a stated observation window (`release-verify`
+default 10 minutes, compare with pre-release baseline where available). Record query/time/source and limitations
 as production-errors; do not claim an SLO without a defined budget. Additional feature smoke must be
 read-only or follow an explicitly authorized synthetic-account procedure. Never run the normal QA suites
 against production. Native store releases need separate build/device/store evidence; GCP proves no native

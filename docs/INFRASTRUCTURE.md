@@ -15,7 +15,7 @@
 | Domain registrar | **Porkbun** | Owns `cerebroos.com`. Registrar only — not where DNS is actually served from. |
 | DNS + edge proxy | **Cloudflare** | Authoritative nameservers for `cerebroos.com`. Also proxies (CDN/WAF/TLS-terminates) most subdomains. |
 | Compute | **GCP Cloud Run** (`us-central1`) | Frontend (static React SPA behind nginx) and backend (FastAPI) as two independent services. |
-| CI/CD | **GCP Cloud Build** | Builds both images, runs DB migrations, deploys both services — triggered on push to `main`. |
+| CI/CD | **GCP Cloud Build** | Two independent pipelines triggered by a `release-vX.Y.Z` tag: backend (gate → audit → build → migrate → deploy) and frontend (gate → audit → build → deploy). |
 | Database | **Supabase** (managed Postgres) | All app data, schema `trackspense`. |
 | Secrets | **GCP Secret Manager** | DB URL, JWT signing secret, mail credentials, AI API keys. |
 | AI / OCR | **Google Gemini**, **OpenAI** | Fallback only for receipt OCR + categorization (Gemini; both run on-server rules/OCR first), AI Analyst chat (configurable provider, defaults vary by env). |
@@ -84,7 +84,7 @@ C4Container
     Container(fe, "varavu-selavu-frontend", "nginx + static React build", "Serves the SPA. Cloud Run, scale 0–20.")
     Container(be, "varavu-selavu-backend", "FastAPI / Uvicorn", "REST API, prefix /api/v1. Cloud Run, min 1 – max 20 instances.")
     Container(job, "migrate-db", "Cloud Run Job", "Runs `alembic upgrade head`. Re-deployed and executed by every Cloud Build run.")
-    Container(cb, "Cloud Build", "cloudbuild.yaml", "Build → migrate → deploy, triggered on push to main.")
+    Container(cb, "Cloud Build", "cloudbuild.backend.yaml / cloudbuild.frontend.yaml", "Exact-commit CI gate → audit → build → migrate → deploy, triggered by a release tag.")
     ContainerDb(sm, "Secret Manager", "GCP", "DB URL, JWT secret, mail creds, AI keys.")
   }
 
@@ -146,18 +146,16 @@ The backend's `varavu-selavu-seyali` service account is also what Cloud Build ru
 
 ## 6. CI/CD — GCP Cloud Build
 
-**Trigger:** `varavuselavuseyali`, GitHub-connected to `Rajeskumar/VaravuSelavuSeyali`, fires on push to `^main$`, runs `cloudbuild.yaml` (repo root) as the `varavu-selavu-seyali` service account.
+**Triggers (updated 2026-11-23):** `varavu-backend-release` → `cloudbuild.backend.yaml` and `varavu-frontend-release` → `cloudbuild.frontend.yaml`, both on tags matching `^release-v[0-9]+\.[0-9]+\.[0-9]+$`, as the `varavu-selavu-seyali` service account. Setup and rollback: `.cloudbuild/README.md`. The legacy push-to-`main` trigger `varavuselavuseyali` is **disabled** and its `cloudbuild.yaml` was deleted (2026-11-23); deleting the disabled trigger itself is an operator action. Releases are cut with `scripts/release.sh` after `make release-prepare` (see `.ai-sdlc/workflows/deploy.md`).
 
-Pipeline steps, in order:
-1. Build backend image (`varavu_selavu_app/Dockerfile`)
-2. Build frontend image (`varavu_selavu_ui/Dockerfile`)
-3. Push backend image
-4. Push frontend image
-5. **Run migrations** — re-deploys the `migrate-db` Cloud Run Job with the just-built backend image, then executes it and waits. This step exists because migrations were historically a manual, undocumented step run by hand against prod — see `docs/product_review&testing_report/remediation-outcome.md` for the incident that prompted it. It deliberately does **not** run `alembic` directly inside the Cloud Build step: Cloud Build's default worker pool cannot reach Supabase's host over IPv6 (confirmed directly — `OperationalError: Cannot assign requested address`), while Cloud Run's own networking can, so the migration is delegated to a Cloud Run Job instead of running in-line.
-6. Deploy backend to Cloud Run
-7. Deploy frontend to Cloud Run
+Backend pipeline steps, in order (the frontend pipeline has the same gate/audit/build/deploy steps without migrations):
+1. **Required CI** — `scripts/quality/release-gate.py` fails closed unless unit, QA and framework CI passed on this exact commit
+2. Dependency audit (pip-audit / npm audit)
+3. Build and push the image tagged with the short SHA (plus the release tag)
+4. **Run migrations** — re-deploys the `migrate-db` Cloud Run Job with the just-built backend image, then executes it and waits. This step exists because migrations were historically a manual, undocumented step run by hand against prod — see `docs/product_review&testing_report/remediation-outcome.md` for the incident that prompted it. It deliberately does **not** run `alembic` directly inside the Cloud Build step: Cloud Build's default worker pool cannot reach Supabase's host over IPv6 (confirmed directly — `OperationalError: Cannot assign requested address`), while Cloud Run's own networking can, so the migration is delegated to a Cloud Run Job instead of running in-line.
+5. Deploy to Cloud Run
 
-Migrations always run *before* either service deploys, so new code never ships ahead of the schema it depends on.
+Migrations always run *before* the backend deploys, so new code never ships ahead of the schema it depends on.
 
 ---
 
@@ -217,9 +215,24 @@ All bound via `secretKeyRef: latest` — the backend picks up whatever the curre
 
 ## 11. Quick reference
 
-- **Deploy:** push to `main` — Cloud Build handles build, migrate, deploy automatically (§6). No manual deploy step exists or is needed.
+- **Deploy:** `make release-prepare VERSION=x.y.z` → explicit authorization → `scripts/release.sh x.y.z <record>` (pushes the release tag; both pipelines run, §6) → `make release-verify VERSION=x.y.z`. Pushing to `main` does not deploy.
 - **Run a migration by hand** (e.g. outside a deploy): `gcloud run jobs execute migrate-db --region=us-central1 --wait` (uses whatever image the job is currently pointed at — i.e. the last deployed backend image).
 - **Check what's actually live:** `gcloud run services describe varavu-selavu-backend --region=us-central1` / `...-frontend` for the serving revision and env config; `gcloud builds list --limit=5` for recent pipeline runs.
-- **Pipeline definition:** `cloudbuild.yaml` (repo root).
+- **Pipeline definitions:** `cloudbuild.backend.yaml`, `cloudbuild.frontend.yaml` (repo root).
 - **Migrations:** `varavu_selavu_app/alembic/`.
 - **Auth/cookie/CSRF deep-dive:** `docs/product_review&testing_report/remediation-outcome.md` and `TS-SEC-101-same-origin-auth-cookies.md`.
+
+## Branch protection (operator action, prepared 2026-11-23)
+
+`main` is currently unprotected, so red CI can land and is only discovered at release time. The ruleset in
+`.github/rulesets/main.json` requires a pull request (0 approvals, so the owner can merge their own work),
+blocks force-pushes and deletion, and requires the unit, QA and framework CI jobs. Repository admins may
+bypass only through a pull request (emergencies). `migrations.yml` is path-triggered and deliberately not
+required. Apply once (the repo guard hook asks for confirmation):
+
+```sh
+gh api repos/Rajeskumar/VaravuSelavuSeyali/rulesets -X POST --input .github/rulesets/main.json
+```
+
+Keep the required check names in sync with the job `name:` fields in `.github/workflows/unit.yml`,
+`qa.yml` and `framework.yml` (`scripts/quality/tests/test_configuration.py` checks this).

@@ -57,3 +57,6 @@ records in `docs/sdlc/`. Current product docs remain here; artifact ledgers link
 unit/QA/framework CI before migrations/deploy; the local release procedure additionally checks user
 authorization and manual readiness, then monitors both deployments and verifies production. See
 [Deploy workflow](../.ai-sdlc/workflows/deploy.md) for credential setup and enforcement limits.
+Since TS-SDLC-002 the order is: deterministic checks (`make check`, CI) → routed AI review (at most code,
+UI, security, product reviewers) → human approval. Guardrail hooks in `scripts/hooks/` are shared by
+Claude Code and Codex; `migrations.yml` rehearses new Alembic revisions from the previous release.

@@ -8,7 +8,7 @@ start-backend:
 	cd varavu_selavu_app && poetry run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
 test-backend:
-	cd varavu_selavu_app && poetry run pytest
+	cd varavu_selavu_app && poetry run pytest -q
 
 # Web Frontend
 install-web:
@@ -161,6 +161,41 @@ framework-check:
 
 test-framework:
 	$(SDLC_PYTHON) -m unittest discover -s scripts/quality/tests -v
+
+# ---- AI SDLC entry points (deterministic first; see .ai-sdlc/verification.md)
+.PHONY: route check check-full test-integrity docs-touch release-prepare release-verify usage-report evals migration-rehearsal sync-codex
+# Tier, reviewers, per-reviewer scopes/hashes for the current change.
+route:
+	@python3 scripts/quality/routing.py $(BASE)
+# Changed-area checks; prints a summary, full logs in .sdlc-logs/.
+check:
+	@scripts/quality/verify.sh --profile fast $(if $(BASE),--base $(BASE),)
+# Release profile (local integration stack required); CI normally supplies this evidence.
+check-full:
+	@scripts/quality/verify.sh --profile release
+test-integrity:
+	@python3 scripts/quality/test_integrity.py $(if $(BASE),--base $(BASE),)
+docs-touch:
+	@python3 scripts/hooks/docs-touch.py
+# make release-prepare VERSION=1.3.0 [WORK_ITEMS="TS-1 TS-2"]
+release-prepare:
+	@test -n "$(VERSION)" || { echo "VERSION=x.y.z required"; exit 2; }
+	@$(SDLC_PYTHON) scripts/quality/release_tools.py prepare $(VERSION) $(if $(WORK_ITEMS),--work-items $(WORK_ITEMS),)
+# make release-verify VERSION=1.3.0 [WAIT=900] [SMOKE=1]
+release-verify:
+	@test -n "$(VERSION)" || { echo "VERSION=x.y.z required"; exit 2; }
+	@$(SDLC_PYTHON) scripts/quality/release_tools.py verify $(VERSION) --wait $(or $(WAIT),0) $(if $(SMOKE),--smoke,)
+# Token/agent usage from local session logs (numbers only); SINCE=YYYY-MM-DD
+usage-report:
+	@python3 scripts/quality/usage_report.py --codex $(if $(SINCE),--since $(SINCE),)
+# Routing evals (free). Behavioral: make evals AGENT=claude|codex (costs tokens).
+evals:
+	@python3 scripts/quality/evals/run_evals.py $(if $(AGENT),--agent $(AGENT),)
+# Needs SDLC_TEST_ENV=local and a throwaway localhost E2E_DATABASE_URL.
+migration-rehearsal:
+	@scripts/quality/migration-rehearsal.sh $(BASE)
+sync-codex:
+	@$(SDLC_PYTHON) scripts/quality/validate-ai-sdlc.py --sync-codex
 
 # Dedicated disposable local database only; PG test modules must run in separate processes.
 test-postgres:

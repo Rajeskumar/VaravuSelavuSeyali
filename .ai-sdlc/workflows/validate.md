@@ -1,10 +1,11 @@
 # Validate — QA lead and specialist reviewers
 
-1. Capture the final source snapshot; choose fast/integration checks from verification.md and the test plan.
-   Run deterministic checks first. Missing dependencies/environment are incomplete evidence, never a pass.
+1. Capture the final source snapshot; run `make check` (summary output) and use CI for integration
+   evidence. Missing dependencies/environment are incomplete evidence, never a pass.
 2. Check every AC against behavior and original requirements, not only tests written by the implementer.
    Assess whether tests would fail on regression, whether mocks hide boundaries, and manual/device coverage.
-3. Run route-review.sh; apply reviewer skills in code-review.md order. Inspect actual code and evidence.
+3. `make route`; run each routed reviewer once on its scope (skip one whose recorded evidence the gate
+   still reports current), in code-review.md order. Inspect actual code and evidence.
    Read-only review stays read-only unless fixes were authorized. Preserve reviewer provenance and limits.
 4. Persist findings with stable IDs, severity, certainty, owner, source and disposition. Feed authorized
    fixes back to Build, then rerun affected checks/reviewers. After the final source change, refresh the

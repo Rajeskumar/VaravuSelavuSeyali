@@ -427,7 +427,6 @@ A single monorepo (`git ls-files`: ~209 web, ~183 backend, ~149 mobile, ~56 QA, 
 VaravuSelavuSeyali/
 ├── cloudbuild.backend.yaml        # Backend release pipeline (audit → build → push → migrate → deploy)
 ├── cloudbuild.frontend.yaml       # Frontend release pipeline (audit → build → push → deploy)
-├── cloudbuild.yaml                # DEPRECATED all-in-one pipeline; delete once cutover is complete
 ├── .cloudbuild/
 │   ├── README.md                  # How releases, rollback and registry retention work
 │   ├── registry-cleanup-policy.json   # Keep newest 10 images per service
@@ -1219,7 +1218,7 @@ scripts/release.sh 1.4.0      # on a clean, up-to-date main: shows the diff sinc
 - Migrations run **before** the backend deploy so new code never queries a column that does not exist yet. They run in a Cloud Run **Job** because Cloud Build's default worker pool cannot reach Supabase over IPv6; the standing `migrate-db` job is re-pointed at each new image and executed with `--wait`.
 - Cloud Run always deploys the **SHA-tagged image**, so every revision maps to one commit. **Rollback** is a redeploy of an older tag — `gcloud run deploy … --image …:release-vX.Y.Z` (see `.cloudbuild/README.md`); rolling the backend back does *not* undo migrations.
 - **Registry retention:** `.cloudbuild/registry-cleanup-policy.json` keeps the newest 10 versions of each image. It is applied in **dry-run** mode (logs only) pending review; enforce with `gcloud artifacts repositories set-cleanup-policies gcr.io --location=us --policy=… --no-dry-run`. The one-time pruning of 188 old images already happened (104 → 10 versions each).
-- **Cutover status:** the legacy all-in-one trigger `varavuselavuseyali` (push to `main` → `cloudbuild.yaml`) is **disabled**; `cloudbuild.yaml` is retained only until the first tagged release has succeeded, then it should be deleted. The last production deploy (2026-09-19, commit `a759584`) used the legacy pipeline.
+- **Cutover status:** complete. The legacy all-in-one trigger `varavuselavuseyali` (push to `main`) is **disabled** and `cloudbuild.yaml` was deleted on 2026-11-23 after the verified v1.2.0 tagged release. The last production deploy (2026-09-19, commit `a759584`) used the legacy pipeline.
 - **QA** (`.github/workflows/qa.yml`) is separate: it runs on PRs to and pushes to `main` (skipping mobile-only and docs-only changes) and can be run on demand.
 
 ### 15.5 Container images
@@ -1404,7 +1403,7 @@ Items marked **⚠ verify** were derived from reading code and live configuratio
 
 ### 19.2 Reliability and delivery
 
-- **First tagged release not yet run** — the new pipelines are imported and validated but unproven; `cloudbuild.yaml` remains until they succeed. Registry cleanup is in dry-run.
+- **Tagged releases are proven** (v1.2.0 verified 2026-11-23; legacy `cloudbuild.yaml` deleted). Registry cleanup is in dry-run.
 - **No staging environment or deploy-time smoke gate;** a tag is a production deploy.
 - **Cannot rebuild the database from scratch with Alembic** (§15.6).
 - **Analysis cache is per-instance** (≤ 60 s staleness across instances); there is no scheduler, so anything time-based is computed lazily.
@@ -1431,7 +1430,7 @@ Items marked **⚠ verify** were derived from reading code and live configuratio
 
 ### 19.5 Suggested next steps (in order)
 1. Resolve **S1–S3** (a config change and a small code change each).
-2. Run the first `release-vX.Y.Z`, confirm both pipelines, then delete `cloudbuild.yaml`; enforce the registry cleanup policy after reviewing the dry-run log.
+2. ~~Run the first `release-vX.Y.Z` and delete `cloudbuild.yaml`~~ (done 2026-11-23); enforce the registry cleanup policy after reviewing the dry-run log.
 3. Add an invite-preview endpoint and a staging environment with a deploy-time smoke gate.
 4. Decide whether to enable Entity Resolution, and finish item canonicalization.
 5. Close the mobile gaps above and add screen-level tests for the V2 flows.

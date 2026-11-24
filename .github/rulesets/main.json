@@ -1,0 +1,73 @@
+{
+  "name": "main: PRs with green CI",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          {
+            "context": "Web (lint, typecheck, Jest)"
+          },
+          {
+            "context": "Mobile (typecheck, Jest)"
+          },
+          {
+            "context": "Backend (pytest)"
+          },
+          {
+            "context": "MCP PostgreSQL transactions and migrations"
+          },
+          {
+            "context": "Backend PostgreSQL (analytics, groups, AI quota)"
+          },
+          {
+            "context": "Test integrity (no weakened tests)"
+          },
+          {
+            "context": "Security (secret scan, dependency audits)"
+          },
+          {
+            "context": "Smoke, regression & API tests"
+          },
+          {
+            "context": "framework"
+          }
+        ]
+      }
+    }
+  ],
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "pull_request"
+    }
+  ]
+}

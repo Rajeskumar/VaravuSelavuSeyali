@@ -14,6 +14,19 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 PHASES = ["discover", "plan", "build", "validate", "deploy"]
 PLAN_FIELDS = ("id", "risk", "mode", "acceptance_criteria", "required_evidence")
+PLAN_DOCS = ("requirements.md", "implementation.md", "test-plan.md")
+# Standard/trivial work may use one combined document instead of the three plan documents.
+LIGHT_DOC = "work-item.md"
+# Release checks that a waiver can never satisfy: CI, security and production observations.
+NON_WAIVABLE_RELEASE_CHECKS = {
+    "unit-ci",
+    "qa-ci",
+    "framework-ci",
+    "security",
+    "migration-compatibility",
+    "production-smoke",
+    "production-errors",
+}
 
 
 def read(path):
@@ -38,7 +51,10 @@ def plan_fingerprint(folder):
     work = read(folder / "work-item.json")
     payload = {k: work[k] for k in PLAN_FIELDS}
     h = hashlib.sha256(json.dumps(payload, sort_keys=True).encode())
-    for name in ("requirements.md", "implementation.md", "test-plan.md"):
+    # work-item.md is hashed only when present, so existing three-document fingerprints (and the
+    # approvals recorded against them) stay byte-identical.
+    names = PLAN_DOCS + ((LIGHT_DOC,) if (folder / LIGHT_DOC).exists() else ())
+    for name in names:
         h.update(name.encode())
         h.update(
             (folder / name).read_bytes() if (folder / name).exists() else b"<missing>"
@@ -93,6 +109,54 @@ def snapshot(root=ROOT):
     return h.hexdigest()
 
 
+def validate_scope(paths, root=ROOT):
+    """Scope entries must be concrete files: present, or tracked and deleted in this change.
+
+    Directories, globs and unknown paths would hash as a constant and never go stale.
+    """
+    for rel in paths:
+        path = Path(root) / rel
+        if Path(rel).is_absolute() or ".." in Path(rel).parts:
+            raise ValueError(f"scope entry must be a repository-relative path: {rel}")
+        if rel.endswith("/") or any(c in rel for c in "*?[") or path.is_dir():
+            raise ValueError(f"scope entry must be a file, not a directory or glob: {rel}")
+        if not path.is_file() and not path.is_symlink():
+            kind = subprocess.run(
+                ["git", "cat-file", "-t", f"HEAD:{rel}"], cwd=root, capture_output=True, text=True
+            ).stdout.strip()
+            if kind != "blob":  # a deleted directory (tree) would hash as a constant
+                raise ValueError(f"scope entry does not exist and is not a tracked deletion: {rel}")
+
+
+def scoped_snapshot(paths, work=None, root=ROOT):
+    """Hash of these files plus the work item's plan fields (standard/trivial risk only).
+
+    Folding in acceptance criteria/risk/required evidence means changed requirement text under
+    the same AC ID still invalidates scoped evidence, as for full snapshots.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from routing import scope_hash
+
+    h = hashlib.sha256(scope_hash(paths, root).encode())
+    if work is not None:
+        h.update(json.dumps({k: work[k] for k in PLAN_FIELDS}, sort_keys=True).encode())
+    return h.hexdigest()
+
+
+def plan_documents_missing(folder, risk, index):
+    """Return missing plan documents. Non-high risk may use one combined work-item.md."""
+    folder = Path(folder)
+
+    def present(name):
+        p = folder / name
+        return p.exists() and bool(p.read_text().strip())
+
+    names = ["requirements.md"] + (["implementation.md", "test-plan.md"] if index >= 1 else [])
+    if risk != "high" and present(LIGHT_DOC):
+        return []
+    return [n for n in names if not present(n)]
+
+
 def load_work(folder):
     folder = Path(folder)
     docs = {}
@@ -112,6 +176,12 @@ def load_work(folder):
     for result in docs["evidence"]["results"]:
         if not set(result["acceptance_criteria"]) <= ac:
             raise ValueError(f"unknown acceptance criterion in {result['id']}")
+        if result.get("scope") and w["risk"] == "high":
+            raise ValueError(
+                f"{result['id']}: scoped evidence is not allowed for high-risk work; use the full snapshot"
+            )
+        if result.get("scope"):
+            validate_scope(result["scope"])
     return docs
 
 
@@ -162,13 +232,7 @@ def work_gate(folder, phase, current_snapshot):
     index = PHASES.index(phase)
     if not w["acceptance_criteria"]:
         missing.append("observable acceptance criteria")
-    names = ["requirements.md"] + (
-        ["implementation.md", "test-plan.md"] if index >= 1 else []
-    )
-    for name in names:
-        p = Path(folder) / name
-        if not p.exists() or not p.read_text().strip():
-            missing.append(name)
+    missing += plan_documents_missing(folder, w["risk"], index)
     if index >= 1 and not w["required_evidence"]:
         missing.append("required evidence IDs established in Plan")
     if index >= 2 and w["risk"] == "high":
@@ -180,20 +244,22 @@ def work_gate(folder, phase, current_snapshot):
     waived = False
     if index >= 3:
         results = {r["id"]: r for r in docs["evidence"]["results"]}
-        passed = {
-            k
-            for k, r in results.items()
-            if r["status"] == "passed" and r["snapshot"] == current_snapshot
-        }
+
+        def current(r):
+            # Scoped evidence goes stale only when its own files change (never for high risk).
+            expected = scoped_snapshot(r["scope"], w) if r.get("scope") else current_snapshot
+            return r["snapshot"] == expected
+
+        passed = {k for k, r in results.items() if r["status"] == "passed" and current(r)}
         blocked += [
             f"{key}: failed"
             for key, r in results.items()
-            if r["snapshot"] == current_snapshot and r["status"] == "failed"
+            if current(r) and r["status"] == "failed"
         ]
         # Required entries are explicitly selected in Plan; source content changes invalidate them.
         for key in w["required_evidence"]:
             r = results.get(key)
-            if not r or r["snapshot"] != current_snapshot or r["status"] == "skipped":
+            if not r or not current(r) or r["status"] == "skipped":
                 missing.append(f"{key}: missing, stale or skipped")
         covered = {ac for key in passed for ac in results[key]["acceptance_criteria"]}
         missing += [
@@ -240,12 +306,21 @@ def release_gate(record, production=False):
     required = RELEASE_CHECKS | (
         {"production-smoke", "production-errors"} if production else set()
     )
+    waived = False
     for key in sorted(required | set(checks)):
         c = checks.get(key)
         if not c or c["candidate"] != candidate or c["status"] == "skipped":
             missing.append(f"{key}: missing, stale or skipped")
         elif c["status"] == "failed":
             blocked.append(f"{key}: failed")
+        elif c["status"] == "waived":
+            waiver = c.get("waiver")
+            if key in NON_WAIVABLE_RELEASE_CHECKS:
+                blocked.append(f"{key}: CI, security and production checks cannot be waived")
+            elif not waiver or date.fromisoformat(waiver["expires"]) < date.today():
+                blocked.append(f"{key}: missing or expired waiver")
+            else:
+                waived = True
     components = {c["name"]: c for c in record["components"]}
     if len(components) != len(record["components"]):
         raise ValueError("duplicate component names")
@@ -265,7 +340,7 @@ def release_gate(record, production=False):
                 missing.append(f"{name}: deployed image, revision and build evidence")
     if not record["work_items"]:
         missing.append("linked work items or a documented legacy release record")
-    result = verdict(blocked, missing)
+    result = verdict(blocked, missing, waived)
     result["limitations"] = [
         "Linked work-item content, candidate-bound validation and waiver validity require original-source review; a nonempty link list is not proof.",
         "Recorded authorization and manual results are declarations; verify the actual user and evidence sources. Exact-candidate CI is independently checked by release-gate.py.",
@@ -303,12 +378,19 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("validate")
-    sub.add_parser("snapshot")
+    snap = sub.add_parser("snapshot", help="full worktree snapshot, or a scoped one for evidence")
+    snap.add_argument("--work-item", help="work-item folder (required with --scope)")
+    snap.add_argument("--scope", nargs="+", help="files the evidence covers (standard/trivial risk)")
     init = sub.add_parser("init")
     init.add_argument("id")
     init.add_argument("--title", help="required unless --issue supplies it")
     init.add_argument(
         "--risk", choices=["trivial", "standard", "high"], default="standard"
+    )
+    init.add_argument(
+        "--light",
+        action="store_true",
+        help="standard/trivial risk: one combined work-item.md instead of three plan documents",
     )
     init.add_argument(
         "--issue",
@@ -347,7 +429,13 @@ def main():
         if args.command == "validate":
             validate_all()
         elif args.command == "snapshot":
-            print(snapshot())
+            if args.scope:
+                if not args.work_item:
+                    raise ValueError("--scope needs --work-item (plan fields are part of the hash)")
+                validate_scope(args.scope)
+                print(scoped_snapshot(args.scope, read(Path(args.work_item) / "work-item.json")))
+            else:
+                print(snapshot())
         elif args.command == "plan-fingerprint":
             print(plan_fingerprint(args.folder))
         elif args.command == "github":
@@ -364,7 +452,12 @@ def main():
             dest = ROOT / "docs/sdlc/work-items" / args.id
             if any((ROOT / "docs/sdlc").rglob(args.id + "/work-item.json")):
                 raise ValueError("work item ID already exists")
-            shutil.copytree(ROOT / ".ai-sdlc/templates/work-item", dest)
+            if args.light and args.risk == "high":
+                raise ValueError("high-risk work needs the full record (no --light)")
+            ignore = shutil.ignore_patterns(*PLAN_DOCS) if args.light else None
+            shutil.copytree(ROOT / ".ai-sdlc/templates/work-item", dest, ignore=ignore)
+            if args.light:
+                shutil.copy(ROOT / ".ai-sdlc/templates/work-item-light" / LIGHT_DOC, dest / LIGHT_DOC)
             w = read(dest / "work-item.json")
             w.update(id=args.id, title=args.title, risk=args.risk)
             if args.issue:

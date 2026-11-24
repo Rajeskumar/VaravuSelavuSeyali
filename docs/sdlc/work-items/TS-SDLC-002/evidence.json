@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "framework-tests",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "make check (fast profile: framework-check, backend pytest, web lint/tsc/Jest, mobile tsc/Jest, qa typecheck, secret scan, test-integrity)",
+      "source": "7/7 PASS; framework unit tests 127 OK (routing, guard, test-integrity, verification, artifacts, release tools, usage, evals, configuration); backend 1030 passed/15 skipped; web 218; mobile 250; logs .sdlc-logs (local)",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010"
+      ]
+    },
+    {
+      "id": "configuration-checks",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "validate-ai-sdlc.py + tests/test_configuration.py (ruleset \u21c4 job names, CI jobs, cloudbuild.yaml removed, shell syntax)",
+      "source": "skills=11 agents=4 errors=0; Codex agents generated and TOML-parsed; nested AGENTS.md imports present; hook configs reference existing scripts",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-002",
+        "AC-006",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "routing-replay",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "classify() over git log --since=2026-11-01 main (40 commits) + 8 eval scenarios",
+      "source": "high 13 (was 33/40), standard 24, trivial 3; reviewers per commit max 3 (was 7); evals 8/8 PASS",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-009"
+      ]
+    },
+    {
+      "id": "migration-rehearsal",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "SDLC_TEST_ENV=local scripts/quality/migration-rehearsal.sh release-v1.1.0 on throwaway localhost DB",
+      "source": "PASS: b7c4e2a91d05 -> e7f7da5c52f6 (5 revisions) upgrade, downgrade, re-upgrade; DB dropped afterwards",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-006"
+      ]
+    },
+    {
+      "id": "secret-scan",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "scripts/quality/security.sh --no-audit (secret_scan.py)",
+      "source": "No known secret patterns found (gitleaks not installed locally; CI job runs gitleaks-action pinned to v2 SHA)",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-006"
+      ]
+    },
+    {
+      "id": "dependency-audit",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "make audit-all",
+      "source": "pip-audit: no known vulnerabilities; web/qa npm audit: 0; mobile allowlist gate: pass",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-006"
+      ]
+    },
+    {
+      "id": "release-prepare-dry-run",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "release_tools.py prepare 9.9.9 against main 802c736 (read-only GitHub/GCP), record deleted afterwards; release_tools component evaluation vs live v1.2.0",
+      "source": "CI checks PASSED with run links; security correctly SKIPPED (candidate predates job); migration PASSED; previous digests captured; gate INCOMPLETE_EVIDENCE for manual checks as designed; v1.2.0 evaluated deployed with matching revisions/build URLs",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-007",
+        "AC-010"
+      ]
+    },
+    {
+      "id": "implementation-review",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "code-reviewer: cycle 1 (10 P2/10 P3) -> fixes -> cycle 2 PASS (all P2 fixed, 4 P3 then fixed)",
+      "source": "Subagent reviews in this session. After cycle 2 the only source changes were guard-bash.py fixes requested by the security confirmation (R1\u2013R4), covered by test_guard_bash probes in framework-tests",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010"
+      ]
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "snapshot": "e15fa7360326f04d76bbf0ee0b26678b659db82bfb01e4f50a9afc0aa56e6202",
+      "environment": "local macOS, Python 3.11, Postgres 16, branch chore/ai-sdlc-optimization (uncommitted)",
+      "command_or_method": "security-reviewer: cycle 1 BLOCKED (3 P1) -> fixes -> cycle 2 BLOCKED (alembic per-segment) -> fix -> narrow confirmation PASS; R1/R2 P2 + R3/R4 P3 then fixed",
+      "source": "Subagent reviews in this session; every reported probe is a regression case in tests/test_guard_bash.py / test_routing.py; final fixes verified by framework-tests on this snapshot",
+      "recorded_at": "2026-11-23T20:38:38Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-010"
+      ]
+    }
+  ]
+}

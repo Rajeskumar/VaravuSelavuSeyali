@@ -69,4 +69,4 @@ P0 = anything that can lose, duplicate or mis-state money, leak another user's d
 **This is not a claim of 100% coverage.** Counts of interactions, scenarios or tests are inventory sizes, not proof of correctness.
 
 ## 7. Maintenance
-IDs are stable (`PG-`, `INT-`, `J-`, `UAT-`, `F-`, `D-`, `B-`). When a screen or flow changes: update `01`/`02`, the affected journey, its UAT rows and the coverage matrix in the same PR; the `product-review` and `test-review` skills should check this. Re-run `scripts/quality/axe-scan.mjs` and refresh `07` §A each release.
+IDs are stable (`PG-`, `INT-`, `J-`, `UAT-`, `F-`, `D-`, `B-`). When a screen or flow changes: update `01`/`02`, the affected journey, its UAT rows and the coverage matrix in the same PR; the `product-review` and `implementation-review` skills should check this. Re-run `scripts/quality/axe-scan.mjs` and refresh `07` §A each release.

@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "SEC-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Narrowed routing dropped security review for services holding ownership/membership checks (IDOR risk); now all backend services, repo/, ocr/, consent utils, gates, reviewer instructions are security-routed",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23); security-review cycle 2 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "SEC-2",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Guard alembic check accepted E2E_DATABASE_URL/echo/other-segment localhost while alembic reads DATABASE_URL (.env may be prod); now per-segment leading DATABASE_URL with local URL and no query",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23); security-review cycle 2 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "security-review",
+      "waiver": null
+    },
+    {
+      "id": "SEC-3",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "git -C/-c/-p and other global options bypassed push/force-push/hook rules; now any global option is skipped, core.hooksPath and abbreviated --no-verify ask",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23); security-review cycle 2 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "security-review",
+      "waiver": null
+    },
+    {
+      "id": "SEC-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Scoped evidence could stay current forever (directory/missing/absolute scope); scope must be concrete repo files, plan fields folded into the hash",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "SEC-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Edited/deleted Alembic revisions counted as 'no new revisions'; now failed in release_tools and migration-rehearsal.sh",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "migration-rehearsal",
+      "waiver": null
+    },
+    {
+      "id": "SEC-6",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Gate and prod-DB guard files routed as standard without security review",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "SEC-7",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "test_integrity missed skipif/pytestmark/xtest/.skip( and renames; net assertion count hid per-file loss",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "SEC-8",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Guard hardening: gcloud verb allowlist/mutating verbs, quoted refs, non-object input, ack rules; unit.yml permissions, pinned gitleaks, dispatch range; --sha validation; libpq ?host= rejected",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security-review cycle 1 (2026-11-23); security-review cycle 2 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "test_integrity parsing disabled by diff.noprefix/mnemonicPrefix; diff format now pinned",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Moving a test to a non-test path went undetected",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "PR range used two-dot diff (false deletions when behind main); now merge-base",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Work-item ledgers were in reviewer scopes (self-invalidating scope hashes), incl. under --risk high/--product",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23); implementation-review cycle 2 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Hooks/release scripts no longer triggered framework-check",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-6",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Adding work-item.md to plan_fingerprint invalidated existing approvals; hashed only when present (TS-SDLC-001 pinned)",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-7",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Scoped evidence ignored AC text changes",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-8",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Failed migration rehearsal recorded as skipped and waivable; now failed and non-waivable",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-9",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Rehearsal looked up only on candidate SHA; now unchanged ancestor runs count, cancelled runs ignored, dispatch instruction printed",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23); implementation-review cycle 2 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "release-prepare-dry-run",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-10",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Key Decision caveat lost (chat consent client-side only) and Quick Capture clear semantics dropped",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "IMPL-11",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "previous_tag could select the current version; Codex TOML escaping; excerpt noise; release profile lacked test_integrity; evals tested HEAD; usage cwd prefix; stale docs refs",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "implementation-review cycle 1 (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "SEC-9",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Lone &, $(...) and backticks let alembic borrow another command's local DATABASE_URL; separators and substitutions now judged",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security confirmation (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "SEC-10",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Command substitution inside double quotes was treated as data; bodies are now evaluated as commands (plus quoted alembic verb, gcloud full path, triggers run)",
+      "owner": "Claude Code (TS-SDLC-002)",
+      "source": "security confirmation (2026-11-23)",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    }
+  ]
+}

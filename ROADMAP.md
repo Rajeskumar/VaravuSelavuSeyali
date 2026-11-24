@@ -89,5 +89,8 @@ All findings were fixed in code. Remaining, and not code-only:
 - [ ] Run adapter discovery/behavior scenarios in installed Claude Code, Copilot, Gemini CLI and Antigravity versions; .ai-sdlc/evaluations.md. Structural validation is not runtime certification.
 - [ ] Add optional GitHub Issues/Projects synchronization after repository-local workflow usage validates the artifact model.
 - [ ] Add canary rollouts, defined SLO/error budgets, sustained production monitoring and pre-authorized recovery policies; current Deploy uses monitored builds and targeted read-only smoke.
-- [ ] Framework evaluation dataset, cost/time/defect telemetry and reusable project profiles; no autonomous background orchestrator in v1.
+- [x] Lean framework (TS-SDLC-002, 2026-11-23): tiered routing, 4 reviewers, guard hooks, test integrity, CI security + migration rehearsal, release prepare/verify, usage report and routing evals.
+- [ ] Owner actions for TS-SDLC-002: apply `.github/rulesets/main.json` (PRs + required CI on `main`); trust `.codex/hooks.json` via `/hooks`; delete the disabled `varavuselavuseyali` trigger.
+- [ ] Run `make evals AGENT=claude` and `AGENT=codex` and log results; compare `make usage-report` before/after TS-SDLC-002 over the next few work items.
+- [ ] Reusable project profiles; no autonomous background orchestrator.
 - [ ] Resolve release work-item links and automatically verify candidate-bound artifact evidence/waivers; v1 explicitly requires original-source review and reports that limitation in its gate output.

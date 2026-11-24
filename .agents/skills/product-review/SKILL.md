@@ -1,14 +1,14 @@
 ---
 name: product-review
-description: Review a change against product intent — acceptance criteria, business rules in the spec, consistency of numbers across screens, scope, and missing states. Use for "does this meet the requirement", new user-facing features, or spec/rule changes.
+description: Review a change against product intent — acceptance criteria, business rules in the spec, consistency of numbers across screens, scope, and missing states. Use for "does this meet the requirement", and when the work item is a new user-facing feature or a spec/business-rule change (requested, not path-routed).
 ---
 
 # Product review
 
-Scope: only your specialty — leave other domains to their reviewers. Standards (in `.ai-sdlc/standards/`): `product.md` (+ the relevant `docs/features/` spec and `docs/TrackSpense_Complete_Product_Specification.md` section). Procedure and output: `.ai-sdlc/workflows/code-review.md`.
+Requested by the work item or `--product` routing; read-only, your specialty only. Standards (in `.ai-sdlc/standards/`): `product.md` (+ the relevant `docs/features/` spec and `docs/TrackSpense_Complete_Product_Specification.md` section). Procedure and output: `.ai-sdlc/workflows/code-review.md`.
 
-1. Determine the changed files/PR; read only the applicable standard sections.
-2. Run the relevant deterministic check first if it exists (see the standard).
+1. Read the work item's acceptance criteria and only the relevant spec section (grep; the spec is large).
+2. Read deterministic results first (`make check` summary or CI).
 3. Inspect the actual code before claiming anything; quote `file:line`.
 4. Check:
    - Each acceptance criterion is met by observable behaviour; unhappy paths exist.

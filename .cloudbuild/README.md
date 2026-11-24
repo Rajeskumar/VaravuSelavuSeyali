@@ -76,7 +76,7 @@ gcloud builds triggers import --project=gold-circlet-424313-r7 --source=.cloudbu
    The build files are read from the *tagged commit* on GitHub, so commit and push `cloudbuild.backend.yaml` /
    `cloudbuild.frontend.yaml` to `main` before the first `scripts/release.sh`. That first release is a real
    production deploy of both services; there is no dry run.
-2. Disable the old `varavuselavuseyali` trigger (the one running `cloudbuild.yaml` on every push to `main`).
-3. Delete `cloudbuild.yaml`.
-
-Until step 3, `cloudbuild.yaml` must stay: the old trigger still points at it.
+2. ~~Disable the old `varavuselavuseyali` trigger~~ — disabled (verified 2026-11-22).
+3. ~~Delete `cloudbuild.yaml`~~ — deleted 2026-11-23 after the verified v1.2.0 tagged release. The disabled
+   trigger can be deleted by an operator (`gcloud builds triggers delete varavuselavuseyali`); if it were
+   ever re-enabled it would now fail on the missing file instead of deploying without the CI gate.

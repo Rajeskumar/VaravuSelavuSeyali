@@ -71,7 +71,8 @@
             "enum": [
               "passed",
               "failed",
-              "skipped"
+              "skipped",
+              "waived"
             ]
           },
           "candidate": {
@@ -81,6 +82,34 @@
           "source": {
             "type": "string",
             "minLength": 1
+          },
+          "waiver": {
+            "type": "object",
+            "properties": {
+              "owner": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expires": {
+                "type": "string",
+                "format": "date"
+              },
+              "reference": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "owner",
+              "reason",
+              "expires",
+              "reference"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
