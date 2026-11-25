@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "checks",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "make check (fast profile: framework-check, test-backend, web lint/typecheck/test, mobile typecheck/test, security.sh, audit-backend/mobile/web, test_integrity); python3 -m unittest scripts.quality.tests.test_routing",
+      "source": "scripts: .sdlc-logs/fast-sdlc1795632026998526000 (7/7 passed, final tree); mobile Jest, web analytics Jest, routing tests",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-003"
+      ]
+    },
+    {
+      "id": "catalog-contract",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "Web: react-scripts test src/analytics/events.test.ts (70 tests incl. catalog contract; mutation-checked by editing a catalog value -> 3 failures, restored). Mobile: jest src/features/shared/analytics/events.test.ts + src/app/screenRegistry.test.ts",
+      "source": "docs/analytics/catalog.v1.json; varavu_selavu_ui/src/analytics/events.test.ts; varavu_selavu_mobile/src/features/shared/analytics/events.test.ts",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003"
+      ]
+    },
+    {
+      "id": "consent-identity",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "jest src/core/analytics (client, consent, ConsentUi, crash reconcile), src/features/shared/analytics/auth.test.ts: consent gate, in-flight operations, revocation, first-answer reconcile, identity reset on sign-out/401/account switch, stale callbacks, two independent opt-ins",
+      "source": "varavu_selavu_mobile/src/core/analytics/*.test.ts*",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-004",
+        "AC-005",
+        "AC-007"
+      ]
+    },
+    {
+      "id": "screen-tracking",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "jest src/core/analytics/screenTracker.test.ts + screenNavigation.test.tsx (real NavigationContainer: one event per route-name change, params-only changes ignored, nested leaf only) + src/app/screenRegistry.test.ts; not exercised: RootNavigator wiring in a component test",
+      "source": "varavu_selavu_mobile/src/core/analytics/screen*.test.ts*",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-008"
+      ]
+    },
+    {
+      "id": "business-events",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "jest src/features/shared/analytics/{apiEvents,operations,permissions,links,auth}.test.ts + src/app/{linking,notificationResponse}.test.ts: confirmed-write producers against a mocked transport (success, 4xx, 5xx, lost reply, retry reuse, withdrawn consent mid-flight), receipts/permissions/deep links/Ask/recurring/groups/settlements; failing-first run recorded for core client and crash reporter. Not covered by a component test: AddExpenseScreen capture path",
+      "source": "varavu_selavu_mobile/src/features/shared/analytics/*.test.ts",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-006",
+        "AC-009"
+      ]
+    },
+    {
+      "id": "crash-reporting",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "jest src/core/analytics/crash.test.ts (sanitizers, fail-closed fatal handler, rejection tracker, consent, unsent-report discard, QA-only test crash); runtime delivery and symbolication are NOT verified (see firebase-runtime)",
+      "source": "varavu_selavu_mobile/src/core/analytics/crash.test.ts",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-011"
+      ]
+    },
+    {
+      "id": "environment-isolation",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "jest src/app/analytics.test.ts (env matrix: unset/look-alike/dev-production/e2e -> no Firebase) + src/core/analytics/environment.test.ts + withFirebasePrivacy.test.js (config selection, plist/JSON agreement, required FIREBASE_EXPECTED_PROJECT_ID, qa refused on release profile, config files gitignored)",
+      "source": "varavu_selavu_mobile/src/app/analytics.test.ts; withFirebasePrivacy.test.js",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-010"
+      ]
+    },
+    {
+      "id": "native-config",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS; scratch copy of the final tree with synthetic Firebase config files (not real projects)",
+      "command_or_method": "Real expo prebuild + native Release builds of the FINAL tree in a scratch copy with EXPO_PUBLIC_ANALYTICS_ENV=qa and DUMMY Firebase config files. Prebuild refuses without FIREBASE_EXPECTED_PROJECT_ID and succeeds with it; pod install OK; iOS arm64 simulator BUILD SUCCEEDED with receipt-ocr; Android arm64 assembleRelease BUILD SUCCESSFUL. Inspected outputs: Android merged manifest has no AD_ID/ACCESS_ADSERVICES_* and every collection/ad flag false; iOS Info.plist has collection, screen-reporting, ad-storage and ad-network flags false, no ATT string, AdSupport linked by no binary, NSPrivacyTracking false. A default (no env) prebuild has no FirebaseApp and no google-services plugin (earlier tree; the selection logic is unit-tested)",
+      "source": "docs/analytics/mobile.md section 9 (verified facts)",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-010",
+        "AC-012"
+      ]
+    },
+    {
+      "id": "native-e2e",
+      "status": "skipped",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "Native Maestro E2E on iOS Simulator and Android Emulator not re-run since this change. Per AGENTS.md it is release-time evidence collected by make release-prepare when mobile code changed; the consent sheet and Privacy row are hidden in e2e/dev builds by design. Owner decision 2026-11-25: do not run now; run after analytics testing (release-time).",
+      "source": "docs/qa/08-release-readiness-checklist.md section 5",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-014"
+      ]
+    },
+    {
+      "id": "firebase-runtime",
+      "status": "skipped",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "DebugView verification and the controlled test crash with symbolication on a non-production Firebase project, on iOS and Android, plus a pre-consent traffic capture, are NOT done: they need owner-created Dev Firebase config files and real device builds (docs/analytics/mobile.md section 6). Owner confirmed 2026-11-25 that this setup is not needed to continue other work.",
+      "source": "docs/analytics/mobile.md sections 6, 7, 11",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-011",
+        "AC-013"
+      ]
+    },
+    {
+      "id": "docs",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "docs/analytics/mobile.md (audit, architecture, inventory, consent/identity, environments, runbook, Crashlytics plan, store disclosures, residual risks), catalog.v1.json, event-catalog.md mobile section, privacy.md/ga4-configuration.md/audit.md pointers, UAT-ANA-001..007, release checklist, AGENTS/CORE_BOUNDARY/ARCHITECTURE/FEATURE_STATUS/ROADMAP/CHANGELOG, privacy-policy draft paragraph; python3 scripts/quality/sdlc.py validate; make framework-check; policy edits applied (first-launch timing, third-party list, rights, what Google receives, retention placeholder); eas.json test",
+      "source": "docs/analytics/mobile.md",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-012",
+        "AC-014"
+      ]
+    },
+    {
+      "id": "code-review",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "code-reviewer agent, one pass (focus performance): no P0/P1; 3 P2 and 8 P3 reported; the test-gap, registry-pin and several P3 findings were fixed afterwards; the fixes were NOT re-reviewed by this reviewer. Self-review caveat: reviewer is a model agent of the same session. Fixes made after the review (several P3s, producer tests, overlay gate) were not re-reviewed by this reviewer.",
+      "source": "findings.json C-1..C-4",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011",
+        "AC-012",
+        "AC-013",
+        "AC-014"
+      ]
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "security-reviewer agent, two passes: pass 1 no P0/P1, 5 P2 + 5 P3; pass 2 (targeted) PASS_WITH_NOTES, no new P0/P1/P2, 7 of 8 earlier findings fixed and the environment-binding gap then closed by requiring FIREBASE_EXPECTED_PROJECT_ID. Open: S-6..S-9 (S-9 pre-consent traffic capture is a P2 needing a real build). Changes after pass 2 not re-reviewed: required FIREBASE_EXPECTED_PROJECT_ID, sanitizer installed whenever analytics is on, early fatalGuard (index.js), save-failure message, overlay gate.. Also not re-reviewed: consent moved to first launch, eas.json profiles, the mobile privacy-policy paragraph.",
+      "source": "findings.json S-1..S-9",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011",
+        "AC-012",
+        "AC-013",
+        "AC-014"
+      ]
+    },
+    {
+      "id": "ui-review",
+      "status": "passed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "ui-reviewer agent, two passes: pass 1 changes requested (1 P1); pass 2 PASS_WITH_NOTES with fixes verified; on-state switch contrast fixed after pass 2 and not re-reviewed. Open: U-3 (consent sheet vs RecurringPrompt modal, needs a device), U-4. No device/VoiceOver/TalkBack run Changes after pass 2 not re-reviewed: overlay gate sequencing the consent sheet behind RecurringPrompt (U-3, needs a device check), save-failure toast, disabled switch dimming.",
+      "source": "findings.json U-1..U-4",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-007",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "product-review",
+      "status": "failed",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "product-reviewer agent, one pass: verdict needs changes. P-1 (consent after sign-in) has since been fixed by the owner's decision to ask at first launch, and P-2 and the doc findings were fixed, but the reviewer has NOT re-run. Owner decision 2026-11-25: re-review (security, UI, product) after the Firebase/device testing. Until then this stays failed",
+      "source": "findings.json P-1..P-7",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011",
+        "AC-012",
+        "AC-013",
+        "AC-014"
+      ]
+    },
+    {
+      "id": "acceptance",
+      "status": "skipped",
+      "snapshot": "e690e13e2247eff8f6b2087691cf1b0cdade8e0085a15550752559aac174d165",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27, JDK 17 + Android SDK from qa/mobile/.tools); no Firebase project, no network collection; synthetic fixtures only",
+      "command_or_method": "AC-001..AC-012 are implemented and evidenced above or documented; AC-013 (DebugView and test crash on both platforms) and the native-E2E part of AC-014 cannot be verified without owner-provided Firebase projects and device runs; recorded as missing, not passing",
+      "source": "docs/sdlc/work-items/TS-GA4-002/test-plan.md AN-15, AN-16",
+      "recorded_at": "2026-11-25T18:44:30.072466+00:00",
+      "acceptance_criteria": [
+        "AC-013",
+        "AC-014"
+      ]
+    }
+  ]
+}
