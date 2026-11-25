@@ -287,6 +287,10 @@ RELEASE_CHECKS = {
     "migration-compatibility",
     "configuration",
     "recovery",
+    # Local iOS + Android regression when mobile code changed since the previous release (release_tools.py records it as
+    # not applicable otherwise). Always required, so a record that lost the entry cannot pass the gate. Waivable like the
+    # other manual checks (owner, reason, reference, expiry).
+    "native-mobile-e2e",
 }
 
 
