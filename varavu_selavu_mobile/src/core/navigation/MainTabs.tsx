@@ -26,6 +26,7 @@ function FloatingActionButton({ spec, theme }: { spec: FloatingActionSpec; theme
       activeOpacity={0.85}
       accessibilityRole="button"
       accessibilityLabel={spec.accessibilityLabel}
+      testID="fab.add"
     >
       <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fab}>
         <Ionicons name="add" size={30} color={inkOnPastel} />
@@ -55,6 +56,8 @@ export default function MainTabs({ tabs, renderTabIcon, floatingAction }: Pick<C
           headerShown: false,
           tabBarIcon: ({ color }) => renderTabIcon(route.name, color),
           tabBarLabel: labels[route.name] ?? route.name,
+          // Native E2E selector (qa/mobile); route names are contracts, so the id is derived from them.
+          tabBarButtonTestID: `tabs.${route.name.replace(/\s+/g, '-')}`,
           tabBarLabelStyle: tabStyles.tabLabel,
           tabBarActiveTintColor: theme.colors.primary,
           tabBarInactiveTintColor: theme.colors.textTertiary,

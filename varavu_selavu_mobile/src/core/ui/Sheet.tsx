@@ -25,10 +25,15 @@ export default function Sheet({ visible, onClose, children, tall }: SheetProps) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} onAccessibilityEscape={onClose}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kav}>
           <Pressable
             onPress={(e) => e.stopPropagation()}
+            // accessible={false}: a Pressable is an accessibility element by default, which on iOS collapses the whole
+            // panel (every row and button) into one element. It only exists to swallow backdrop taps.
+            accessible={false}
+            focusable={false}
+            testID="sheet.panel"
             style={[
               styles.panel,
               { paddingBottom: Math.max(insets.bottom, 16) + 4, maxHeight: height * (tall ? 0.94 : 0.92) },

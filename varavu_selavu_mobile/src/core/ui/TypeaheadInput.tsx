@@ -149,8 +149,9 @@ const TypeaheadInput = <T extends TypeaheadSuggestion,>({
       />
       {showDropdown && anchor && (
         <Modal visible transparent animationType="none" onRequestClose={dismissDropdown}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={dismissDropdown}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={dismissDropdown} accessible={false}>
             <View
+              onAccessibilityEscape={dismissDropdown}
               style={[
                 styles.dropdown,
                 {

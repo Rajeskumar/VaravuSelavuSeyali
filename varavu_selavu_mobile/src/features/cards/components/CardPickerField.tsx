@@ -46,8 +46,8 @@ export default function CardPickerField({ value, onChange }: Props) {
       </Pressable>
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setModalVisible(false)} />
-        <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surface }]}>
+        <Pressable style={styles.backdrop} onPress={() => setModalVisible(false)} accessible={false} />
+        <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surface }]} onAccessibilityEscape={() => setModalVisible(false)}>
           <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.header}>
             <Text style={{ fontFamily: 'InstrumentSans-Bold', fontSize: 18, color: theme.colors.text }}>Card used</Text>

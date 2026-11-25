@@ -276,7 +276,7 @@ eas build --profile production --platform all
 | Issue | Solution |
 |:---|:---|
 | Missing icon/splash errors | Run `node generate_assets.js` |
-| Cannot connect to backend (Android emulator) | Use `http://10.0.2.2:8000` in `apiconfig.ts` |
+| Cannot connect to backend (Android emulator) | Set `EXPO_PUBLIC_API_URL=http://10.0.2.2:8080` in `varavu_selavu_mobile/.env` (dev builds only) and restart the native process |
 | Cannot connect to backend (physical device) | Use your computer's LAN IP; ensure same WiFi network |
 | Backend connection refused | Start backend with `--host 0.0.0.0` |
 | `@babel/runtime` version mismatch | The `overrides` field in `package.json` pins it to `7.20.0` |

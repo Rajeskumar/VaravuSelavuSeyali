@@ -56,8 +56,8 @@ const CategoryPickerField: React.FC<CategoryPickerFieldProps> = ({
       </TouchableOpacity>
 
       <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setVisible(false)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={styles.backdrop} onPress={() => setVisible(false)} accessible={false} onAccessibilityEscape={() => setVisible(false)}>
+          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
             <View style={styles.dragPillWrap}>
               <View style={styles.dragPill} />
             </View>

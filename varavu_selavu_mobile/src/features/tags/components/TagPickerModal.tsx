@@ -56,8 +56,8 @@ export default function TagPickerModal({ visible, value, onChange, onClose }: Pr
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surface }]}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} />
+      <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surface }]} onAccessibilityEscape={onClose}>
         <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.colors.text }]}>Tags</Text>

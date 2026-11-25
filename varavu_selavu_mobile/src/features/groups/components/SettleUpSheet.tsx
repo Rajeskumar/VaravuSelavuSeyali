@@ -228,8 +228,8 @@ export default function SettleUpSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} accessible={false} />
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={stage === 'settling' ? undefined : onClose}>
           <View style={styles.pill} />
           <View style={styles.titleRow}>
             <Text style={styles.title}>Settle up</Text>

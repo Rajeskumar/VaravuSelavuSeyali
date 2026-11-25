@@ -30,7 +30,7 @@ export default function ScreenHeader({ title, subtitle, back, right, style }: Sc
     <View style={[styles.row, style]}>
       {back ? <IconButton icon="arrow-back" accessibilityLabel="Back" onPress={onBack} style={styles.back} /> : null}
       <View style={styles.titles}>
-        <Text style={[styles.title, back ? styles.titlePushed : styles.titleRoot]} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.title, back ? styles.titlePushed : styles.titleRoot]} numberOfLines={1} testID={`header.${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>{title}</Text>
         {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
       </View>
       {right}

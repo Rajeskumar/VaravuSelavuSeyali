@@ -41,8 +41,8 @@ export default function SimpleSelect({ label, value, onChange, options, placehol
         transparent
         onRequestClose={() => setOpen(false)}
       >
-        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setOpen(false)}>
-          <View style={styles.sheet}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={() => setOpen(false)} accessible={false}>
+          <View style={styles.sheet} onAccessibilityEscape={() => setOpen(false)}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{label || 'Select'}</Text>
               <TouchableOpacity onPress={() => setOpen(false)}><Text style={styles.close}>✕</Text></TouchableOpacity>

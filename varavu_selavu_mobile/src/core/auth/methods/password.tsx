@@ -40,6 +40,7 @@ function PasswordForm() {
     <>
       <FieldBox
         label="Email"
+        testID="login.email"
         placeholder="you@example.com"
         value={email}
         onChangeText={setEmail}
@@ -50,6 +51,7 @@ function PasswordForm() {
       />
       <FieldBox
         label="Password"
+        testID="login.password"
         placeholder="Enter your password"
         value={password}
         onChangeText={setPassword}
@@ -62,7 +64,7 @@ function PasswordForm() {
         <Text style={styles.forgotLinkText}>Forgot password?</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity activeOpacity={0.85} onPress={handleLogin} disabled={loading} accessibilityRole="button">
+      <TouchableOpacity activeOpacity={0.85} onPress={handleLogin} disabled={loading} accessibilityRole="button" testID="login.submit">
         <LinearGradient colors={theme.gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.cta, loading && { opacity: 0.7 }]}>
           {loading ? <ActivityIndicator color={inkOnPastel} /> : <Text style={styles.ctaText}>Sign in</Text>}
         </LinearGradient>

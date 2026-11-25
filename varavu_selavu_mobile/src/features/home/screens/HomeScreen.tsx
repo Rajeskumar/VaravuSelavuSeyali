@@ -145,7 +145,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1, minWidth: 0 }}>
             <SectionLabel style={{ letterSpacing: 1.5 }}>{dateEyebrow}</SectionLabel>
-            <Text style={styles.greeting} numberOfLines={1}>{greeting(now)}, {firstName}</Text>
+            <Text style={styles.greeting} numberOfLines={1} testID="home.greeting">{greeting(now)}, {firstName}</Text>
           </View>
           <IconButton icon="notifications-outline" accessibilityLabel="Activity" onPress={() => navigation.navigate('Activity')} />
         </View>
