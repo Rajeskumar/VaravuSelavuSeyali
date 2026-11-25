@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "id": "TS-GA4-002",
+  "title": "Mobile analytics and crash reporting (Firebase, iOS and Android)",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Mobile events use one closed catalog shared with web (catalog.v1.json, platforms web/ios/android); web and mobile contract tests fail on drift."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Analytics runs behind a provider-independent core interface with Firebase, no-op and recording providers; Firebase calls stay out of screens and business logic."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "Only allowlisted events and properties are sent; unknown names, keys or values reject the whole event, and no personal, financial, receipt, token, resource-id or free-text data reaches analytics."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "Analytics and crash reporting are separate opt-ins: nothing is collected before grant, revocation stops collection including in-flight work, and no pre-grant activity is replayed."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "No user identifier is sent; identity and operation state reset on sign-out, forced 401 sign-out and account change, and stale-account callbacks emit nothing."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "Analytics or Crashlytics failure, absence or blocking never changes product behavior or interrupts an operation."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "Consent is offered once at first launch, before sign-in, with equally prominent choices, and each category is changeable in Account."
+    },
+    {
+      "id": "AC-008",
+      "outcome": "Exactly one screen_view per route-name change with stable registered names and no route parameters; Firebase automatic screen reporting is off."
+    },
+    {
+      "id": "AC-009",
+      "outcome": "Business events distinguish attempts from confirmed outcomes, emit one terminal event per operation despite retries, callbacks and re-renders, never fabricate success or replay writes, and cover the mobile-specific receipt, permission and link events."
+    },
+    {
+      "id": "AC-010",
+      "outcome": "Development, tests, E2E and web preview never reach Firebase; collection needs an explicit build environment variable; advertising identifiers and personalization are disabled on iOS and Android."
+    },
+    {
+      "id": "AC-011",
+      "outcome": "Crashlytics reports fatal and sanitized non-fatal errors with only build, version, environment and platform metadata and event-name breadcrumbs; no messages, amounts, descriptions, tokens or API responses."
+    },
+    {
+      "id": "AC-012",
+      "outcome": "Native configuration, SDK privacy manifests, privacy policy and App Store/Play Data Safety recommendations are reviewed and documented with residual risks, without claiming compliance from configuration alone."
+    },
+    {
+      "id": "AC-013",
+      "outcome": "Controlled DebugView and test-crash verification pass on a non-production Firebase project for iOS and Android, including symbolication, or the missing evidence is recorded honestly."
+    },
+    {
+      "id": "AC-014",
+      "outcome": "Existing mobile UAT, native E2E and release-readiness checklists cover both platforms, and analytics documentation extends the existing files without duplicating specifications."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "catalog-contract",
+    "consent-identity",
+    "screen-tracking",
+    "business-events",
+    "crash-reporting",
+    "environment-isolation",
+    "native-config",
+    "native-e2e",
+    "firebase-runtime",
+    "docs",
+    "code-review",
+    "security-review",
+    "ui-review",
+    "product-review",
+    "acceptance"
+  ],
+  "implementation_approval": {
+    "actor": "Rajeshkumar Ganesan",
+    "reference": "User message 2026-11-25: 'Ok for all' to the approvals list (renewed approval of the plan after the owner changed consent timing to first launch; privacy-policy edits; scripts/quality/routing.py gate change; Firebase packages, @grpc/grpc-js override, .gitignore entries and ios.useFrameworks dynamic; eas.json qa/production profiles; board cards for follow-ups; commits by phase on the branch, no push). Re-review after Firebase testing. No production/Firebase/GA4 change, release or push authorized.",
+    "fingerprint": "d3ac866bfbf9e8aabda27a9093758843d838fbcdec99eb58271f8dab7801e9b8"
+  },
+  "links": [
+    "docs/analytics/event-catalog.md",
+    "docs/analytics/privacy.md",
+    "docs/analytics/ga4-configuration.md",
+    "docs/sdlc/work-items/TS-GA4-001/work-item.json",
+    "github-issue:#54"
+  ],
+  "notes": "Plan agreed 2026-11-25: TrackSpense Production property, separate opt-in consents, no User-ID, nudge emails via backend (separate item). No production Firebase/GA4 change, EAS upload or release authorized. Validate 2026-11-25: gate BLOCKED (product-review failed; P-1 open: consent after sign-in makes mobile acquisition unmeasurable, needs owner decision; native-e2e, firebase-runtime and acceptance not run: need owner Firebase projects and device runs). Nothing committed, pushed or released. Owner changed the consent timing on 2026-11-25 from 'after sign-in' to 'first launch (before sign-in)'; AC-007, requirements, T4 and AN-06 updated, so the plan fingerprint changed and the implementation approval must be renewed. Approval renewed 2026-11-25 after the consent-timing change."
+}
