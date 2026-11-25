@@ -22,6 +22,7 @@ core/       → imports only core and npm packages — never features/ or app/
 - `navigation/` `CoreApp` (the app root), `RootNavigator`, `MainTabs`.
 - `notifications/` push registration, device API.
 - `config/` the `AppConfig` type, `defaultAppConfig`, `getAppConfig`/`setAppConfig`.
+- `analytics/` consent-gated, fail-safe analytics and crash reporting: client, whole-event validator, providers (`firebase`, `noop`, `recording`), sanitizers, consent store/UI, screen tracker. It takes the app's event table and screen registry as data (`configureAnalytics`, `AppConfig.analytics.screens`) and names only the cross-app events (`screen_view`, `permission_result`). Auth outcomes reach the app through `core/auth/authObserver`. TrackSpense's table and producers are in `features/shared/analytics/`.
 - `logger.ts` — silent in production; never prints URLs, tokens or response bodies. Use it instead of `console.*` in core.
 - `utils/` generic helpers (`identity`).
 

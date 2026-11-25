@@ -1,7 +1,7 @@
 # GA4 audit — Phase 1
 
 2026-11-24 · TS-GA4-001 · Source baseline `aa254b84c3f62d974cd9a594fbc5568841ef3208`.
-Status: source audit and isolated harness verification complete; production runtime and GA4 Admin unverified. No application or GA4 configuration changes made.
+Status: source audit and isolated harness verification complete; production runtime and GA4 Admin unverified. No application or GA4 configuration changes made. Web only: the iOS/Android audit is in [`mobile.md`](mobile.md) §1.
 
 ## Evidence boundaries
 

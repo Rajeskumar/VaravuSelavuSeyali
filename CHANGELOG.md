@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-25: Added consent-gated Firebase Analytics and Crashlytics to the iOS and Android app (TS-GA4-002, Claude Code): shared closed event catalog (`docs/analytics/catalog.v1.json`) with web, two separate opt-ins, sanitized crash reports, consent asked once at first launch (before sign-in), one `screen_view` per navigation, confirmed-write producers, no advertising ID, environment-gated native config and `eas.json` qa/production profiles; mobile paragraph added to the draft privacy policy; analytics privacy boundary routed as high risk. Implemented locally and unreleased; Firebase projects, DebugView and test-crash verification are owner actions (`docs/analytics/mobile.md`).
+
 - 2026-11-25: Enabled consent-gated GA4 collection for the next TrackSpense frontend release after owner confirmation of the production stream settings (TS-GA4-001, Codex).
 
 - 2026-11-25: Configured the dedicated TrackSpense production GA4 destination, with both activation gates off pending Admin verification and rollout (TS-GA4-001, Codex).

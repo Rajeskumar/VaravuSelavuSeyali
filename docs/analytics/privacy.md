@@ -1,6 +1,6 @@
 # Analytics privacy design — proposed
 
-2026-11-24 · TS-GA4-001 · Approval pending. Applies to web; native/MCP implementation excluded.
+2026-11-24 · TS-GA4-001 · Approval pending. Applies to web. Mobile (iOS/Android, TS-GA4-002) follows the same boundary with two separate opt-ins and a Firebase provider; differences, store disclosures and residual risks are in [`mobile.md`](mobile.md). MCP is excluded.
 
 ## Data boundary
 

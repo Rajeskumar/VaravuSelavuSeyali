@@ -23,6 +23,10 @@
 
 🚧 Web consent preferences, environment gates, normalized page tracking and event schemas are in place. Web product-event producers are wired. The local DebugView test passed. The production build enables consent-gated collection on the dedicated TrackSpense property. Deployment and live smoke verification are pending. See [product events](analytics/product-events-status.md) and [rollout status](analytics/foundation-status.md#production-destination).
 
+## Mobile analytics and crash reporting (TS-GA4-002) — implemented locally (2026-11-25)
+
+🚧 iOS and Android share one Firebase Analytics + Crashlytics layer with the web event catalog: two separate opt-ins (Account → Privacy), screen views, confirmed-write business events, receipt/permission/deep-link events, sanitized crash reports, no advertising ID, collection only in explicitly configured `qa`/`production` builds. Not released: Firebase projects, real-device DebugView and test-crash verification, store disclosures. See [mobile analytics](analytics/mobile.md).
+
 ## 1. Core Product (Section 3 of the master spec)
 
 All shipped and working — verified via direct API/route inspection and live testing in a prior session.
