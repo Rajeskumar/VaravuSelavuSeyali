@@ -5,23 +5,15 @@ name: Mobile E2E
 # "Native mobile gate" job is ever meant to become a required check (after the promotion criteria in the work
 # item are met, and the owner applies .github/rulesets/main.json).
 #
-# The workflow STARTS on every pull request and push to main on purpose: a workflow-level `paths:` filter would skip the
-# whole workflow (including the gate) and leave a required check pending. The device jobs (the expensive emulator and
-# simulator runs) only run when the change can affect the native app or the suite: "not applicable" is decided inside the
-# `changes` job by scripts/quality/mobile_e2e_gate.py (web, backend and documentation changes skip them and the gate passes).
-# Nightly and manual runs always run.
-#
-# Suite per event: pull_request -> smoke; push to main, nightly -> regression; workflow_dispatch -> input. The release gate
-# needs a regression run of both platforms on the candidate commit: when the candidate has none (no mobile change in its
-# push), dispatch one: gh workflow run mobile-e2e.yml --ref main -f suite=regression.
+# DORMANT (owner decision 2026-11-25): the native E2E runs LOCALLY, at release time, and only when mobile code changed since
+# the previous release (`make release-prepare` adds a required `native-mobile-e2e` check then; see qa/mobile/README.md). This
+# workflow therefore has no pull_request, push or schedule trigger; it runs only when started by hand
+# (gh workflow run mobile-e2e.yml -f suite=smoke|regression) and is kept correct so it can be re-enabled. To re-enable, add
+# the pull_request/push/schedule triggers back: the `changes` job then skips the device jobs for changes that cannot affect
+# the native app (scripts/quality/mobile_e2e_gate.py). Hosted-runner limits seen on the first CI runs: the iOS build takes
+# ~35 min and flows run 3-7x slower than locally, so iOS needs a longer timeout (or caching) before it is practical here.
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-  schedule:
-    - cron: '17 3 * * *'
   workflow_dispatch:
     inputs:
       suite:
@@ -148,6 +140,9 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_6
+          # The action's default (2 cores, default RAM) left the launcher hanging ("Quickstep isn't responding") under load.
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
           script: qa/mobile/scripts/run.sh --platform android --suite ${{ needs.changes.outputs.suite }} --retries 1 --shuffle ${{ github.run_number }} --run-id ${{ github.run_id }}
 
@@ -248,6 +243,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Evaluate
+        # `shell: bash` = bash -eo pipefail. Without it GitHub runs `bash -e` (no pipefail) and `verdict | tee` exits 0 even
+        # when the verdict FAILS: the first CI runs reported a green gate for a failed Android job and a cancelled iOS job.
+        shell: bash
         env:
           CHANGES: ${{ needs.changes.result }}
           RELEVANT: ${{ needs.changes.outputs.relevant }}

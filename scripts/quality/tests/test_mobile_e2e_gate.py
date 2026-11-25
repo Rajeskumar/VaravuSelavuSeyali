@@ -201,11 +201,38 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual(job["if"].strip(), "always()")
         self.assertEqual(set(job["needs"]), {"changes", "android", "ios"})
 
-    def test_runs_on_every_pull_request_without_a_path_filter(self):
+    def test_the_workflow_only_runs_when_dispatched_by_hand(self):
+        # Owner decision 2026-11-25: native E2E is a local, release-time step; CI keeps the workflow dormant (no PR, push or
+        # nightly runs) so it can be re-enabled later.
         triggers = self.wf.get("on") or self.wf.get(True)  # YAML 1.1 parses the key `on` as True
-        self.assertIn("pull_request", triggers)
-        self.assertNotIn("paths", triggers["pull_request"] or {})
-        self.assertNotIn("paths-ignore", triggers["pull_request"] or {})
+        self.assertEqual(set(triggers), {"workflow_dispatch"})
+
+    def run_gate_step(self, verdict_exit: int) -> int:
+        import subprocess
+
+        step = next(s for s in self.wf["jobs"]["gate"]["steps"] if s.get("name") == "Evaluate")
+        # How GitHub runs a step: `shell: bash` -> bash --noprofile --norc -eo pipefail; no shell on Linux -> bash -e (no pipefail).
+        flags = ["--noprofile", "--norc", "-eo", "pipefail"] if step.get("shell") == "bash" else ["-e"]
+        with tempfile.TemporaryDirectory() as d:
+            stub = Path(d) / "python3"
+            stub.write_text(f"#!/bin/sh\necho 'verdict'\nexit {verdict_exit}\n")
+            stub.chmod(0o755)
+            script = Path(d) / "step.sh"
+            script.write_text(step["run"])
+            env = {"PATH": f"{d}:/usr/bin:/bin", "GITHUB_STEP_SUMMARY": str(Path(d) / "summary"),
+                   "CHANGES": "success", "RELEVANT": "true", "ANDROID": "failure", "IOS": "cancelled"}
+            return subprocess.run(["bash", *flags, str(script)], env=env, cwd=d, capture_output=True).returncode
+
+    def test_a_failing_verdict_fails_the_gate_job(self):
+        # Seen on the first CI runs: the verdict printed FAIL but `| tee` (no pipefail) turned it into a green job.
+        self.assertNotEqual(self.run_gate_step(1), 0)
+        self.assertEqual(self.run_gate_step(0), 0)
+
+    def test_the_ci_emulator_gets_the_resources_the_suite_needs(self):
+        # With the action's default 2 cores the launcher hung ("Quickstep isn't responding") and covered every flow.
+        emu = next(s for s in self.wf["jobs"]["android"]["steps"] if "android-emulator-runner" in s.get("uses", ""))
+        self.assertEqual(str(emu["with"]["cores"]), "4")
+        self.assertEqual(emu["with"]["ram-size"], "4096M")
 
     def test_the_android_job_makes_postgresql_available_before_the_emulator_step(self):
         # First CI run: ubuntu-latest moved to ubuntu-26.04 (PostgreSQL 18) and the lookup only knew 14-16. The iOS job installs
