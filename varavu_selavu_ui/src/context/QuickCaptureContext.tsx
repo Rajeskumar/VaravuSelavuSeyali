@@ -1,3 +1,4 @@
+import { analytics } from '../analytics/browser';
 import React from 'react';
 import { useSessionIdentity } from '../hooks/useSessionIdentity';
 import { readExpenseDraft } from '../utils/expenseDraft';
@@ -27,10 +28,16 @@ export const QuickCaptureProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [open, setOpen] = React.useState(false);
   const [initialGroupId, setInitialGroupId] = React.useState<string | undefined>(undefined);
 
+  const trackedOpening = React.useRef(false);
+  React.useEffect(() => { if (!open) trackedOpening.current = false; }, [open]);
   const openQuickCapture = React.useCallback((groupId?: string) => {
+    if (!trackedOpening.current && !open && user) {
+      trackedOpening.current = true;
+      analytics.track('expense_creation_started', { entry_method: 'manual', expense_scope: groupId ? 'group' : 'personal' });
+    }
     setInitialGroupId(groupId);
     setOpen(true);
-  }, []);
+  }, [open, user]);
 
   return (
     <QuickCaptureContext.Provider value={{ openQuickCapture }}>

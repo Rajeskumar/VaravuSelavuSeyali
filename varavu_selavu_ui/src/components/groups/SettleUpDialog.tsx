@@ -171,7 +171,10 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
     return found ? owed : null;
   };
 
+  const settlementLock = React.useRef(false);
   const handleSubmit = async () => {
+    if (settlementLock.current) return;
+    settlementLock.current = true;
     setError(null);
     setStage('settling');
     const owedBefore = owedBetween(fromMemberId, toMemberId);
@@ -190,6 +193,8 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Failed to record settlement');
       setStage('review');
+    } finally {
+      settlementLock.current = false;
     }
   };
 

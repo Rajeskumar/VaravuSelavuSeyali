@@ -1,3 +1,5 @@
+import { analytics } from '../analytics/browser';
+import { observe, safeFailure } from '../analytics/operations';
 import { useRef, useState } from 'react';
 import { parseReceipt, ReceiptParseDraft } from '../api/expenses';
 import { ensureAiConsent } from '../utils/aiConsent';
@@ -29,9 +31,11 @@ export function useReceiptScan(options: UseReceiptScanOptions = {}) {
 
   const isMobile = typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent);
 
+  const parseLock = useRef(false);
   const parseFile = async (target?: File): Promise<ReceiptParseDraft | null> => {
     const f = target || file;
-    if (!f) return null;
+    if (!f || parseLock.current) return null;
+    parseLock.current = true;
     try {
       setError(null);
       // Our own OCR reads the receipt first; only when it isn't confident may the image go to a
@@ -39,13 +43,21 @@ export function useReceiptScan(options: UseReceiptScanOptions = {}) {
       // runs without AI assist (the server never forwards the image).
       await ensureAiConsent();
       setParsing(true);
-      return await parseReceipt(f);
+      const operation = analytics.beginOperation();
+      analytics.track('receipt_parse_started', {}, operation);
+      return await observe(() => parseReceipt(f), (draft, op) => {
+        if (draft?.header && Array.isArray(draft.items)) analytics.track('receipt_parse_completed', {}, op);
+        else analytics.track('receipt_parse_failed', { outcome: 'failure', error_code: 'validation' }, op);
+      }, (error, op) => analytics.track('receipt_parse_failed', {
+        ...(error instanceof AiLimitError ? { outcome: 'failure', error_code: 'quota' } as const : safeFailure(error)),
+      }, op), operation);
     } catch (err) {
       // Daily scan limit / AI paused get their own copy (e.g. "enter this one manually");
       // anything else stays generic.
       setError(err instanceof AiLimitError ? err.message : 'Failed to parse receipt');
       return null;
     } finally {
+      parseLock.current = false;
       setParsing(false);
     }
   };

@@ -1,3 +1,4 @@
+import { analytics } from '../analytics/browser';
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { Box, Paper } from '@mui/material';
@@ -18,6 +19,12 @@ const AskPage: React.FC = () => {
   const user = typeof window !== 'undefined' ? localStorage.getItem('vs_user') : null;
   const theme = useTheme();
   const location = useLocation();
+  const tracked = React.useRef(false);
+  React.useEffect(() => {
+    if (tracked.current) return;
+    tracked.current = true;
+    analytics.track('ai_analyst_opened', {});
+  }, []);
   const initialQuery = new URLSearchParams(location.search).get('q') || undefined;
 
   return (

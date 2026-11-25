@@ -51,6 +51,7 @@ const RecurringPrompt: React.FC = () => {
     })();
   }, [user]);
 
+  const confirmLock = React.useRef(false);
   if (!user || !open || !due || due.length === 0) return null;
 
   const handleConfirmOne = (key: string) => {
@@ -59,6 +60,8 @@ const RecurringPrompt: React.FC = () => {
   };
 
   const onConfirm = async () => {
+    if (confirmLock.current) return;
+    confirmLock.current = true;
     setError(null);
     try {
       const toSend: { template_id: string; date_iso: string; cost: number }[] = [];
@@ -83,6 +86,8 @@ const RecurringPrompt: React.FC = () => {
       setOpen(false);
     } catch (e) {
       setError('Failed to add one or more expenses. Please try again.');
+    } finally {
+      confirmLock.current = false;
     }
   };
 

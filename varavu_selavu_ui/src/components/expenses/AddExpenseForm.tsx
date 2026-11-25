@@ -1,3 +1,6 @@
+import { analytics } from '../../analytics/browser';
+import { categoryDisposition, ExpenseCapture, confirmed } from '../../analytics/operations';
+import { useTrackedCategory } from '../../hooks/useTrackedCategory';
 import React, { useState, useRef, useEffect } from 'react';
 import { expenseDateBounds, expenseDateProblem, todayIso } from '../../utils/expenseDates';
 import Box from '@mui/material/Box';
@@ -21,7 +24,6 @@ import {
   addExpense,
   updateExpense,
   addExpenseWithItems,
-  suggestCategory,
   ExpenseRecord,
   AddExpensePayload,
   ReceiptParseDraft,
@@ -313,10 +315,22 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const scan = useReceiptScan({ onAutoParse: applyParseResult });
   const { file, converting, parsing, fileInputRef, cameraInputRef, isMobile } = scan;
 
+  const requestCategory = useTrackedCategory(description.trim(), !existing);
+  const suggested = useRef<{ description: string; category: string } | undefined>(undefined);
+  const submitLock = useRef(false);
+  const opened = useRef(false);
+  useEffect(() => {
+    if (existing || opened.current) return;
+    opened.current = true;
+    analytics.track('expense_creation_started', { entry_method: 'manual', expense_scope: 'personal' });
+  }, [existing]);
+
   const fetchCategory = async () => {
     if (!description.trim() || userPickedCategory) return;
     try {
-      const res = await suggestCategory(description.trim());
+      const res = await requestCategory(value => !!CATEGORY_GROUPS[value.main_category]?.includes(value.subcategory));
+      if (!res) return;
+      suggested.current = { description: description.trim(), category: res.subcategory };
       if (CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) {
         setMainCategory(res.main_category);
         setSubcategory(res.subcategory);
@@ -426,12 +440,19 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLock.current) return;
     setMessage(null);
     const user = localStorage.getItem('vs_user');
     if (!user) {
       setMessage('Please login first.');
       return;
     }
+    submitLock.current = true;
+    const capture: ExpenseCapture = {
+      operation: analytics.beginOperation(),
+      method: draft ? 'receipt' : 'manual',
+      categoryDisposition: categoryDisposition(!draft && suggested.current?.description === description.trim() ? suggested.current.category : undefined, subcategory),
+    };
     try {
       setSaving(true);
       const formattedDate = isoToMMDDYYYY(expenseDate);
@@ -448,7 +469,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               payers,
               items: groupItems,
               card_id: cardCoachEnabled ? cardId : undefined,
-            });
+            }, capture);
           } else {
             await createGroupExpense(selectedGroupId, {
               date: formattedDate,
@@ -459,7 +480,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
               payers,
               split: { type: 'equal', entries: splitEntries },
               card_id: cardCoachEnabled ? cardId : undefined,
-            });
+            }, capture);
           }
           setMessage('Group expense added successfully.');
           setDescription('');
@@ -493,7 +514,8 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           tag_names: tagsEnabled ? tagNames : undefined,
           card_id: cardCoachEnabled ? cardId : undefined,
         };
-        await updateExpense(existing.row_id, payload);
+        await confirmed(() => updateExpense(existing.row_id, payload), 'expense_updated',
+          { expense_scope: 'personal' }, result => result?.success === true);
         setMessage('Expense updated successfully.');
         if (recurring) {
           await upsertRecurringTemplate({
@@ -521,7 +543,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
           card_id: cardCoachEnabled ? cardId : undefined,
         };
-        await addExpenseWithItems(payload);
+        await addExpenseWithItems(payload, capture);
       } else {
         await addExpense({
           user_id: user,
@@ -532,7 +554,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
           merchant_name: merchantName || undefined,
           tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
           card_id: cardCoachEnabled ? cardId : undefined,
-        });
+        }, capture);
         setMessage('Expense added successfully.');
         if (recurring) {
           await upsertRecurringTemplate({
@@ -554,6 +576,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       setMessage(msg);
       onError?.(msg);
     } finally {
+      submitLock.current = false;
       setSaving(false);
     }
   };

@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "id": "TS-GA4-001",
+  "title": "Privacy-preserving GA4 web and product analytics",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Retain GA4 through a provider-independent no-throw interface, closed reusable definitions and mock/no-op adapters without a new analytics dependency."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Emit exactly one normalized static-title page_view per committed meaningful navigation, including initial grant/back/forward, excluding redirects, query-only changes and sensitive routes."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "Allowlisted custom and automatic outbound metadata contain no prohibited personal/financial data, raw dynamic IDs, query/hash contents or unsafe referrers."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "Basic opt-in and reachable preferences enforce denial/revocation across tabs and pending work without breaking authentication, drafts or AI consent."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "Catalog P events cover existing important web journeys with explicit intent/persistence semantics and documented reserved unsupported milestones."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "One authoritative web producer and operation dedup prevent repeated callbacks/retries/double clicks inflating success; failures, cancellations and unknown writes never fabricate success or replay financial writes."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "No account/email-derived analytics identity; logout/switch/expiry clear context and reset consented owned browser identity with stale-account callbacks suppressed."
+    },
+    {
+      "id": "AC-008",
+      "outcome": "Development/test collection is disabled, staging uses a separate property, production is explicitly configured, and blocked/failed analytics never interrupts product functionality."
+    },
+    {
+      "id": "AC-009",
+      "outcome": "GA Admin changes are documented, coordinated with marketing and separately authorized; no historical deletion or irreversible filter activation without approval."
+    },
+    {
+      "id": "AC-010",
+      "outcome": "Catalog schemas/source/UAT mappings, acquisition/activation/engagement/retention/reliability formulas and limitations are maintained; mobile/MCP definitions reusable without instrumenting those platforms."
+    },
+    {
+      "id": "AC-011",
+      "outcome": "Deterministic tests plus actual SDK outbound/DebugView verification establish acceptance; record missing evidence honestly and pass routed checks/reviews before release consideration."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "schema-unit",
+    "navigation",
+    "consent-identity",
+    "business-events",
+    "outbound-payloads",
+    "ga4-admin-runtime",
+    "reporting",
+    "code-review",
+    "security-review",
+    "ui-review",
+    "product-review",
+    "acceptance"
+  ],
+  "implementation_approval": {
+    "actor": "Rajeshkumar Ganesan",
+    "reference": "User message 2026-11-24: approved. proceed next \u2014 approval of proposed plan; proceed with Phase 2 foundations. No production action authorized.",
+    "fingerprint": "0ad8204f820d9d1988d73cf278841dbfb69b5067c9d637246d7866824d328016"
+  },
+  "links": [
+    "docs/analytics/audit.md",
+    "docs/analytics/event-catalog.md",
+    "docs/analytics/implementation-plan.md",
+    "docs/analytics/ga4-configuration.md",
+    "docs/analytics/privacy.md",
+    "docs/analytics/verification-report.md",
+    "github-issue:#51"
+  ],
+  "notes": "Approved 2026-11-24. Phase 2 and 3 implemented locally. Source and intercepted fixture checks pass. Actual GA4 and reporting validation depend on a separately configured non-production property. Production settings, deployment and deletion remain separately authorized."
+}

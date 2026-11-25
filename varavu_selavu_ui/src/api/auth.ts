@@ -1,3 +1,5 @@
+import { analytics } from '../analytics/browser';
+import { observe, safeFailure } from '../analytics/operations';
 import { clearExpenseDraft } from '../utils/expenseDraft';
 import { boundedFetch, SESSION_ENDED_KEY } from './request';
 // src/api/auth.ts
@@ -51,26 +53,30 @@ const withCookies: RequestInit = { credentials: 'include' };
 const WEB_CLIENT = { 'X-TrackSpense-Client': 'web' };
 
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
-  const params = new URLSearchParams();
-  params.append('username', payload.username);
-  params.append('password', payload.password);
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-    ...withCookies,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...WEB_CLIENT,
-    },
-    body: params.toString(),
-  });
+  return observe(async () => {
+    const params = new URLSearchParams();
+    params.append('username', payload.username);
+    params.append('password', payload.password);
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+      ...withCookies,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...WEB_CLIENT,
+      },
+      body: params.toString(),
+    });
 
-  if (!response.ok) {
-    throw new ApiError('Login failed', response.status);
-  }
+    if (!response.ok) {
+      throw new ApiError('Login failed', response.status);
+    }
 
-  const data: LoginResponse = await response.json();
-  setCsrfToken(data.csrf_token);
-  return data;
+    const data: LoginResponse = await response.json();
+    setCsrfToken(data.csrf_token);
+    return data;
+  }, (data, op) => {
+    if (data.email) analytics.track('login', { authentication_method: 'password' }, op);
+  }, (error, op) => analytics.track('login_failed', { authentication_method: 'password', ...safeFailure(error) }, op));
 }
 
 // Attempt to help backend map fields correctly by also sending decoded email/name
@@ -96,59 +102,68 @@ function decodeGoogleIdToken(idToken: string): { email?: string; name?: string }
 }
 
 export async function loginWithGoogle(id_token: string): Promise<LoginResponse> {
-  const decoded = decodeGoogleIdToken(id_token);
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/google`, {
-    ...withCookies,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...WEB_CLIENT,
-    },
-    // Include email/name to avoid backend mis-mapping (e.g., into phone column)
-    body: JSON.stringify({ id_token, email: decoded.email, name: decoded.name }),
-  });
+  return observe(async () => {
+    const decoded = decodeGoogleIdToken(id_token);
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/google`, {
+      ...withCookies,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...WEB_CLIENT,
+      },
+      // Include email/name to avoid backend mis-mapping (e.g., into phone column)
+      body: JSON.stringify({ id_token, email: decoded.email, name: decoded.name }),
+    });
 
-  if (!response.ok) {
-    throw new Error('Google login failed');
-  }
+    if (!response.ok) {
+      throw Object.assign(new Error('Google login failed'), { status: response.status });
+    }
 
-  const data: LoginResponse = await response.json();
-  setCsrfToken(data.csrf_token);
-  return data;
+    const data: LoginResponse = await response.json();
+    setCsrfToken(data.csrf_token);
+    return data;
+  }, (data, op) => {
+    if (data.email) analytics.track('login', { authentication_method: 'google' }, op);
+  }, (error, op) => analytics.track('login_failed', { authentication_method: 'google', ...safeFailure(error) }, op));
 }
 
 export async function register(payload: RegisterPayload): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-    ...withCookies,
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+  return observe(async () => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+      ...withCookies,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    const err = new ApiError('Registration failed', response.status) as ApiError & { fieldErrors?: Record<string, string> };
-    if (response.status === 422) {
-      // FastAPI validation errors: [{ loc: ['body', 'email'], msg: '...' }, ...]. Surface them per
-      // field — the old single "Registration failed" never said which field was wrong.
-      const body = await response.json().catch(() => null);
-      const fieldErrors: Record<string, string> = {};
-      for (const d of (body?.detail || []) as { loc?: string[]; msg?: string; type?: string }[]) {
-        const field = d.loc?.[d.loc.length - 1];
-        if (!field || fieldErrors[field]) continue;
-        fieldErrors[field] =
-          field === 'email' ? "That email address isn't valid. Check for typos, like name@example.com."
-            : field === 'password' ? 'Use at least 8 characters.'
-              : (d.msg || 'Check this field.');
+    if (!response.ok) {
+      const err = new ApiError('Registration failed', response.status) as ApiError & { fieldErrors?: Record<string, string> };
+      if (response.status === 422) {
+        // FastAPI validation errors: [{ loc: ['body', 'email'], msg: '...' }, ...]. Surface them per
+        // field — the old single "Registration failed" never said which field was wrong.
+        const body = await response.json().catch(() => null);
+        const fieldErrors: Record<string, string> = {};
+        for (const d of (body?.detail || []) as { loc?: string[]; msg?: string; type?: string }[]) {
+          const field = d.loc?.[d.loc.length - 1];
+          if (!field || fieldErrors[field]) continue;
+          fieldErrors[field] =
+            field === 'email' ? "That email address isn't valid. Check for typos, like name@example.com."
+              : field === 'password' ? 'Use at least 8 characters.'
+                : (d.msg || 'Check this field.');
+        }
+        err.fieldErrors = fieldErrors;
       }
-      err.fieldErrors = fieldErrors;
+      throw err;
     }
-    throw err;
-  }
+  },
+    (_result, op) => analytics.track('sign_up', { authentication_method: 'password' }, op),
+    (error, op) => analytics.track('signup_failed', { authentication_method: 'password', ...safeFailure(error, true) }, op));
 }
 
 export async function logout(): Promise<void> {
+  analytics.track('logout', {});
   clearExpenseDraft();
   try { sessionStorage.removeItem(SESSION_ENDED_KEY); } catch { /* storage blocked */ }
   await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {

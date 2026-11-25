@@ -1,3 +1,4 @@
+import { confirmed, expenseCreation, ExpenseCapture } from '../analytics/operations';
 import { hasAiConsent } from '../utils/aiConsent';
 import { fetchWithAuth } from './api';
 import { aiErrorFromResponse } from './aiUsage';
@@ -25,13 +26,15 @@ export interface AddExpenseResponse {
   expense: Record<string, unknown>;
 }
 
-export async function addExpense(payload: AddExpensePayload): Promise<AddExpenseResponse> {
-  const res = await fetchWithAuth(`/api/v1/expenses`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to add expense');
-  return res.json();
+export async function addExpense(payload: AddExpensePayload, capture?: ExpenseCapture): Promise<AddExpenseResponse> {
+  return expenseCreation(async () => {
+    const res = await fetchWithAuth(`/api/v1/expenses`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw Object.assign(new Error('Failed to add expense'), { status: res.status });
+    return res.json();
+  }, capture, 'personal', value => value?.success === true && !!value.expense);
 }
 
 export interface ExpenseRecord {
@@ -80,10 +83,12 @@ export async function updateExpense(row_id: number, payload: AddExpensePayload):
 }
 
 export async function deleteExpense(row_id: number): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/expenses/${row_id}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok) throw new Error('Failed to delete expense');
+  return confirmed(async () => {
+    const res = await fetchWithAuth(`/api/v1/expenses/${row_id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete expense');
+  }, 'expense_deleted', { expense_scope: 'personal' });
 }
 
 export interface ReceiptParseDraft {
@@ -105,13 +110,15 @@ export async function parseReceipt(file: File): Promise<ReceiptParseDraft> {
   return res.json();
 }
 
-export async function addExpenseWithItems(payload: any) {
-  const res = await fetchWithAuth(`/api/v1/expenses/with_items`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to save expense');
-  return res.json();
+export async function addExpenseWithItems(payload: any, capture?: ExpenseCapture) {
+  return expenseCreation(async () => {
+    const res = await fetchWithAuth(`/api/v1/expenses/with_items`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw Object.assign(new Error('Failed to save expense'), { status: res.status });
+    return res.json();
+  }, capture, 'personal', value => !!value?.expense_id);
 }
 
 export interface ExpenseItemDTO {
@@ -187,21 +194,23 @@ export async function suggestCategory(description: string): Promise<CategorySugg
 
 /** Downloads the caller's personal expenses as CSV. Bounds are MM/DD/YYYY. */
 export async function exportMyExpensesCsv(startDate?: string, endDate?: string): Promise<void> {
-  const params = new URLSearchParams();
-  if (startDate) params.set('start_date', startDate);
-  if (endDate) params.set('end_date', endDate);
-  const query = params.toString();
+  return confirmed(async () => {
+    const params = new URLSearchParams();
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const query = params.toString();
 
-  const res = await fetchWithAuth(`/api/v1/expenses/export.csv${query ? `?${query}` : ''}`);
-  if (!res.ok) throw new Error('Failed to export expenses');
+    const res = await fetchWithAuth(`/api/v1/expenses/export.csv${query ? `?${query}` : ''}`);
+    if (!res.ok) throw new Error('Failed to export expenses');
 
-  const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'trackspense_expenses.csv';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'trackspense_expenses.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }, 'data_export_completed', { export_type: 'expenses_csv' });
 }

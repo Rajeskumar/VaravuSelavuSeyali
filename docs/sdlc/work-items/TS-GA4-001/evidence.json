@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "phase1-checks",
+      "status": "passed",
+      "snapshot": "2b46b7f2b4ecb01c5dc02e1986a3c68aaa470aafde706ae54ccb6853ef47c4ac",
+      "environment": "Local macOS; planning-only artifacts; no real GA collection",
+      "command_or_method": "SDLC_PYTHON=.venv-sdlc/bin/python make check BASE=HEAD",
+      "source": ".sdlc-logs/fast-sdlc1795578281255967000/summary.json",
+      "recorded_at": "2026-11-25T03:45:13.371337+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "phase1-baseline-tests",
+      "status": "passed",
+      "snapshot": "2b46b7f2b4ecb01c5dc02e1986a3c68aaa470aafde706ae54ccb6853ef47c4ac",
+      "environment": "Local macOS; planning-only artifacts; no real GA collection",
+      "command_or_method": "CI=true npm test -- --watchAll=false --runInBand --runTestsByPath src/components/common/ConsentBanner.test.tsx src/components/common/RouteA11y.test.tsx",
+      "source": "docs/analytics/verification-report.md",
+      "recorded_at": "2026-11-25T03:45:13.371554+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "phase1-plan",
+      "status": "passed",
+      "snapshot": "2b46b7f2b4ecb01c5dc02e1986a3c68aaa470aafde706ae54ccb6853ef47c4ac",
+      "environment": "Local macOS; planning-only artifacts; no real GA collection",
+      "command_or_method": ".venv-sdlc/bin/python scripts/quality/sdlc.py gate docs/sdlc/work-items/TS-GA4-001 --phase plan; local Markdown link target check; git diff --check",
+      "source": "docs/analytics/verification-report.md",
+      "recorded_at": "2026-11-25T03:45:13.371558+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "phase2-browser-fixture",
+      "status": "passed",
+      "snapshot": "5cad7f9bde0e72650f4ff7763d35cbbfcfc3af4f268810626f9db1407c11222f",
+      "environment": "Local macOS, no live GA destination",
+      "command_or_method": "qa/node_modules/.bin/playwright test --config=analytics.playwright.config.ts (from qa)",
+      "source": "docs/sdlc/work-items/TS-GA4-001/validation.md",
+      "recorded_at": "2026-11-25T11:56:45.100546+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "phase2-build",
+      "status": "passed",
+      "snapshot": "5cad7f9bde0e72650f4ff7763d35cbbfcfc3af4f268810626f9db1407c11222f",
+      "environment": "Local macOS, no live GA destination",
+      "command_or_method": "CRA npm run build with REACT_APP_ANALYTICS_ENABLED=false and temporary BUILD_PATH",
+      "source": "docs/analytics/verification-report.md",
+      "recorded_at": "2026-11-25T11:56:45.100549+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "phase2-inline-review",
+      "status": "passed",
+      "snapshot": "5cad7f9bde0e72650f4ff7763d35cbbfcfc3af4f268810626f9db1407c11222f",
+      "environment": "Local macOS, no live GA destination",
+      "command_or_method": "Implementation, security, UI and product review of Phase 2 source and evidence",
+      "source": "docs/sdlc/work-items/TS-GA4-001/validation.md",
+      "recorded_at": "2026-11-25T11:56:45.100550+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "status": "passed",
+      "snapshot": "600b076e09a899db22315fe7cfbd0e5dafa514f10f3b44ec199d7d1866fded6b",
+      "environment": "Local macOS; disabled destination and intercepted Chromium fixture",
+      "recorded_at": "2026-11-25T12:10:31.101157+00:00",
+      "id": "checks",
+      "command_or_method": "make check BASE=HEAD; rerun corrected scope with make lint-web typecheck-web test-web; npm run build",
+      "source": "docs/sdlc/work-items/TS-GA4-001/validation.md",
+      "acceptance_criteria": []
+    },
+    {
+      "status": "passed",
+      "snapshot": "600b076e09a899db22315fe7cfbd0e5dafa514f10f3b44ec199d7d1866fded6b",
+      "environment": "Local macOS; disabled destination and intercepted Chromium fixture",
+      "recorded_at": "2026-11-25T12:10:31.101157+00:00",
+      "id": "schema-unit",
+      "command_or_method": "Web Jest schema and provider tests",
+      "source": "docs/sdlc/work-items/TS-GA4-001/validation.md",
+      "acceptance_criteria": [
+        "AC-001"
+      ]
+    },
+    {
+      "status": "passed",
+      "snapshot": "600b076e09a899db22315fe7cfbd0e5dafa514f10f3b44ec199d7d1866fded6b",
+      "environment": "Local macOS; disabled destination and intercepted Chromium fixture",
+      "recorded_at": "2026-11-25T12:10:31.101157+00:00",
+      "id": "phase3-business-unit",
+      "command_or_method": "Web Jest API producers, Quick Capture and suggestion revision tests",
+      "source": "docs/sdlc/work-items/TS-GA4-001/validation.md",
+      "acceptance_criteria": []
+    },
+    {
+      "status": "passed",
+      "snapshot": "600b076e09a899db22315fe7cfbd0e5dafa514f10f3b44ec199d7d1866fded6b",
+      "environment": "Local macOS; disabled destination and intercepted Chromium fixture",
+      "recorded_at": "2026-11-25T12:10:31.101157+00:00",
+      "id": "phase3-browser-fixture",
+      "command_or_method": "Playwright analytics.playwright.config.ts; intercepted all requests, fixture SDK",
+      "source": "docs/sdlc/work-items/TS-GA4-001/validation.md",
+      "acceptance_criteria": []
+    },
+    {
+      "status": "passed",
+      "snapshot": "600b076e09a899db22315fe7cfbd0e5dafa514f10f3b44ec199d7d1866fded6b",
+      "environment": "Local macOS; disabled destination and intercepted Chromium fixture",
+      "recorded_at": "2026-11-25T12:10:31.101157+00:00",
+      "id": "phase3-inline-review",
+      "command_or_method": "Inline implementation, security, UI and product review; source checks only",
+      "source": "docs/sdlc/work-items/TS-GA4-001/validation.md",
+      "acceptance_criteria": []
+    }
+  ]
+}

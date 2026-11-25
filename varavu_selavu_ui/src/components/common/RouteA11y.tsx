@@ -1,33 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
-const SUFFIX = 'TrackSpense';
+import { routeForPath } from '../../analytics/routes';
 
-const TITLES: Array<[RegExp, string]> = [
-  [/^\/ai\/connect/, 'Connect an assistant'],
-  [/^\/ai\/approve/, 'Review expense'],
-  [/^\/ai\/reauth/, 'Sign in again'],
-  [/^\/account\/assistants/, 'Connected assistants'],
-  [/^\/$/, 'Track less. Understand more.'],
-  [/^\/login/, 'Log in'],
-  [/^\/register/, 'Create account'],
-  [/^\/forgot-password/, 'Forgot password'],
-  [/^\/reset-password/, 'Reset password'],
-  [/^\/verify-email/, 'Verify email'],
-  [/^\/contact/, 'Help & support'],
-  [/^\/groups\/join/, 'Join group'],
-  [/^\/dashboard/, 'Dashboard'],
-  [/^\/expenses/, 'Expenses'],
-  [/^\/groups/, 'Groups'],
-  [/^\/analysis/, 'Analysis'],
-  [/^\/ask/, 'Ask'],
-  [/^\/(account|profile)/, 'Account'],
-];
-
-export function titleForPath(pathname: string): string {
-  const hit = TITLES.find(([re]) => re.test(pathname));
-  return hit ? `${hit[1]} — ${SUFFIX}` : `Page not found — ${SUFFIX}`;
-}
+export function titleForPath(pathname: string): string { return routeForPath(pathname).title; }
 
 /** SPA route changes don't reload the page, so without this every screen shares one document
  * title and assistive tech never hears that navigation happened (WCAG 2.4.2, 4.1.3). On each

@@ -1,3 +1,4 @@
+import { confirmed } from '../analytics/operations';
 import { fetchWithAuth } from './api';
 
 export interface RecurringTemplateDTO {
@@ -22,13 +23,15 @@ export interface UpsertRecurringTemplatePayload {
   status?: string;
 }
 
-export async function upsertRecurringTemplate(payload: UpsertRecurringTemplatePayload): Promise<RecurringTemplateDTO> {
-  const res = await fetchWithAuth('/api/v1/recurring/upsert', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error('Failed to save recurring template');
-  return res.json();
+export async function upsertRecurringTemplate(payload: UpsertRecurringTemplatePayload, action: 'saved' | 'paused' | 'resumed' = 'saved'): Promise<RecurringTemplateDTO> {
+  return confirmed(async () => {
+    const res = await fetchWithAuth('/api/v1/recurring/upsert', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Failed to save recurring template');
+    return res.json();
+  }, 'recurring_template_changed', { action }, value => !!value?.id);
 }
 
 export async function listRecurringTemplates(): Promise<RecurringTemplateDTO[]> {
@@ -53,27 +56,33 @@ export async function getRecurringDue(asOfISO?: string): Promise<DueOccurrenceDT
 }
 
 export async function confirmRecurring(items: { template_id: string; date_iso: string; cost: number }[]): Promise<{ success: boolean }> {
-  const res = await fetchWithAuth('/api/v1/recurring/confirm', {
-    method: 'POST',
-    body: JSON.stringify({ items }),
-  });
-  if (!res.ok) throw new Error('Failed to confirm recurring expenses');
-  return res.json();
+  return confirmed(async () => {
+    const res = await fetchWithAuth('/api/v1/recurring/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+    if (!res.ok) throw new Error('Failed to confirm recurring expenses');
+    return res.json();
+  }, 'recurring_run_completed', { action: 'confirmed' }, value => value?.success === true);
 }
 
 export async function deleteRecurringTemplate(template_id: string): Promise<{ success: boolean }> {
-  const res = await fetchWithAuth(`/api/v1/recurring/templates/${template_id}`, {
-    method: 'DELETE',
-  });
-  if (!res.ok) throw new Error('Failed to delete recurring template');
-  return res.json();
+  return confirmed(async () => {
+    const res = await fetchWithAuth(`/api/v1/recurring/templates/${template_id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete recurring template');
+    return res.json();
+  }, 'recurring_template_changed', { action: 'deleted' }, value => value?.success === true);
 }
 
 export async function executeRecurringNow(template_id: string, cost?: number): Promise<{ success: boolean; created?: boolean; already_added?: boolean; error?: string }> {
-  const res = await fetchWithAuth('/api/v1/recurring/execute_now', {
-    method: 'POST',
-    body: JSON.stringify({ template_id, cost }),
-  });
-  if (!res.ok) throw new Error('Failed to execute template');
-  return res.json();
+  return confirmed(async () => {
+    const res = await fetchWithAuth('/api/v1/recurring/execute_now', {
+      method: 'POST',
+      body: JSON.stringify({ template_id, cost }),
+    });
+    if (!res.ok) throw new Error('Failed to execute template');
+    return res.json();
+  }, 'recurring_run_completed', { action: 'executed' }, value => value?.success === true && value.created === true && !value.already_added);
 }

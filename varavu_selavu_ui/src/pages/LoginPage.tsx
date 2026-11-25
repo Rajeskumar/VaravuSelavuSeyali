@@ -46,7 +46,10 @@ const LoginPage: React.FC = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
 
 
+  const submissionLock = useRef(false);
   const handleGoogleCredential = async (credential: string) => {
+    if (submissionLock.current) return;
+    submissionLock.current = true;
     try {
       setGoogleLoading(true);
       const data = await loginWithGoogle(credential);
@@ -59,6 +62,7 @@ const LoginPage: React.FC = () => {
     } catch {
       setError('Google login failed');
     } finally {
+      submissionLock.current = false;
       setGoogleLoading(false);
     }
   };
@@ -72,6 +76,8 @@ const LoginPage: React.FC = () => {
       setError('Enter your email and password.');
       return;
     }
+    if (submissionLock.current) return;
+    submissionLock.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -95,6 +101,7 @@ const LoginPage: React.FC = () => {
         setError("Can't reach the server — check your connection and try again.");
       }
     } finally {
+      submissionLock.current = false;
       setLoading(false);
       // Submitting disables the fields, which drops focus to <body>; put it back on the field to
       // retype so keyboard and screen-reader users land next to the (role=alert) message.

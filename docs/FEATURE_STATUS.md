@@ -19,6 +19,10 @@
 ✅ Scoped OAuth/PKCE, personal read tools, mandatory verify/browser-approval/save, historical and itemized receipts, duplicate reapproval, idempotency, logout-all revocation, management/activity, export/deletion and web/mobile attribution/link. Default-off deployment/runtime controls and additive migrations are included. 🚧 Exact Claude app/ChatGPT acceptance, production-sized migration/load evidence and deployment/privacy/operations gates remain. Native approval, groups and advanced mutations are deferred. The five review findings were fixed with regression coverage on 2026-11-22. See [implementation evidence](mcp-local-implementation.md) and [local/GCP setup](mcp-setup-and-deployment.md).
 
 
+## GA4 behavioral analytics — web instrumentation implemented locally (2026-11-25)
+
+🚧 Web consent preferences, environment gates, normalized page tracking and event schemas are in place. Web product-event producers are wired. The local DebugView test passed. The production build enables consent-gated collection on the dedicated TrackSpense property. Deployment and live smoke verification are pending. See [product events](analytics/product-events-status.md) and [rollout status](analytics/foundation-status.md#production-destination).
+
 ## 1. Core Product (Section 3 of the master spec)
 
 All shipped and working — verified via direct API/route inspection and live testing in a prior session.

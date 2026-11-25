@@ -1,3 +1,5 @@
+import { analytics } from '../../analytics/browser';
+import { safeFailure } from '../../analytics/operations';
 import { useChatConversation, ChatConversation, Message } from '../../hooks/useChatConversation';
 import { ensureAiConsent } from '../../utils/aiConsent';
 import React, { useState, useRef, useEffect } from "react";
@@ -123,6 +125,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, initialQu
       }
     }
 
+    const operation = analytics.beginOperation();
+    analytics.track('ai_query_started', {}, operation);
     try {
       const res = await fetchWithAuth(`/api/v1/analysis/chat`, {
         method: "POST",
@@ -141,6 +145,10 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, initialQu
       }
 
       const data = await res.json();
+      const answer = data.response || data.reply;
+      if (controller.signal.aborted) analytics.track('ai_query_failed', safeFailure(null, false, true), operation);
+      else if (typeof answer === 'string' && answer.trim()) analytics.track('ai_query_completed', {}, operation);
+      else analytics.track('ai_query_failed', { outcome: 'failure', error_code: 'validation' }, operation);
       setMessages(prev => [
         ...prev, 
         { 
@@ -152,6 +160,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, initialQu
         }
       ]);
     } catch (err: any) {
+      analytics.track('ai_query_failed', err instanceof AiLimitError && !controller.signal.aborted
+        ? { outcome: 'failure', error_code: 'quota' } : safeFailure(err, false, controller.signal.aborted), operation);
       const msg = err.message ?? "An error occurred";
       const isTechnical = /quota|429|500|502|503|api.key|insufficient/i.test(msg);
       setError(err instanceof AiLimitError || !isTechnical ? msg : "The AI analyst is temporarily unavailable. Please try again later.");

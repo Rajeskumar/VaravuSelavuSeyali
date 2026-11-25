@@ -1,3 +1,5 @@
+import { Operation } from '../../analytics/client';
+import { analytics } from '../../analytics/browser';
 import React from 'react';
 import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
 import Drawer from '@mui/material/Drawer';
@@ -48,7 +50,7 @@ interface ExpenseDetailSheetProps {
   expense: FeedExpense | null;
   open: boolean;
   onClose: () => void;
-  onSave: (expense: FeedExpense, patch: ExpenseDetailForm) => Promise<void> | void;
+  onSave: (expense: FeedExpense, patch: ExpenseDetailForm, operation?: Operation) => Promise<void> | void;
   onDelete: (expense: FeedExpense) => Promise<void> | void;
   onMoveToGroup?: (expense: FeedExpense) => void;
   saving?: boolean;
@@ -145,13 +147,14 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expense?.id, isItemized]);
 
+  const saveLock = React.useRef(false);
   if (!expense || !form) return null;
 
   const parsedAmount = parseFloat(form.amount);
   const amountValid = Number.isFinite(parsedAmount) && parsedAmount > 0;
   const dateProblem = expenseDateProblem(form.date, undefined, toISODate(parseAppDate(expense.date)));
 
-  const handleSave = async () => {
+  const saveForm = async (operation: Operation) => {
     if (itemsLoaded && items.length > 0) {
       const itemsPayload = {
         items: items.map((it) => ({
@@ -172,7 +175,12 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
         await updateExpenseItems(expense.id, itemsPayload);
       }
     }
-    await onSave(expense, form);
+    await onSave(expense, form, operation);
+  };
+  const handleSave = async () => {
+    if (saveLock.current) return;
+    saveLock.current = true;
+    try { await saveForm(analytics.beginOperation()); } finally { saveLock.current = false; }
   };
 
   return (

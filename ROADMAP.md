@@ -1,5 +1,8 @@
 # Roadmap / Planned Enhancements
 
+## GA4 web and product analytics (2026-11-24)
+- [ ] TS-GA4-001: Phases 2 and 3 implemented locally. Local DebugView confirmed a synthetic save. The production release build enables consent-gated collection. Release checks, deployment and a live smoke check remain. See [foundation status](docs/analytics/foundation-status.md).
+
 Format: `- [ ] [enhancement] — context: [why/when this came up]`
 
 ## Product gaps

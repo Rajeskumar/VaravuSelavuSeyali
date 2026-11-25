@@ -276,3 +276,14 @@ Rules that keep that matrix green (found reviewing CI failures, 2026-11-22):
 - Count real logins. The backend allows 5 per minute in total, and the regression run already spends them (setup 2, wrong-password 1, logout 1, registration's auto-login 1). A spec that signs in for real goes in its own step after a pause (`@account`, `npm run qa:account`), never in `@regression`; a login that fails after deletion still counts.
 - Never read `e2e/auth/*.json` (or any file the `setup` project creates) at module level in a spec: on a clean CI runner it does not exist when Playwright loads the file, and the whole run dies at collection. Read it inside the test (see `regression/consent-banner-phone.spec.ts`). Check with `npx playwright test --list` after moving the auth files away.
 - Never leave a *due* recurring template for the shared persona: the load-time prompt would cover other tests.
+
+
+### Isolated analytics foundation checks
+
+Run `./node_modules/.bin/playwright test --config=analytics.playwright.config.ts` from `qa`.
+These tests transpile the actual analytics modules and intercept **all** browser requests on a
+synthetic origin. They require no backend, `.env`, account setup or real Google property. A clearly
+marked SDK transport fixture exercises GET/beacon serialization and navigation isolation; it is
+**not** real-Google privacy evidence. Actual-tag/DebugView verification against an approved test
+property remains required before collection can be enabled. Do not replace the fixture ID with a
+production ID. The standalone config is separate from database-backed QA projects.

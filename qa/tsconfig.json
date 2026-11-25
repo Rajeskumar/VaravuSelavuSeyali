@@ -13,6 +13,6 @@
     "noUnusedParameters": false,
     "types": ["node", "@playwright/test"]
   },
-  "include": ["e2e/**/*.ts", "api/**/*.ts", "playwright.config.ts"],
+  "include": ["e2e/**/*.ts", "api/**/*.ts", "analytics/**/*.ts", "analytics.playwright.config.ts", "playwright.config.ts"],
   "exclude": ["node_modules", "reports"]
 }

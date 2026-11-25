@@ -60,3 +60,14 @@ authorization and manual readiness, then monitors both deployments and verifies 
 Since TS-SDLC-002 the order is: deterministic checks (`make check`, CI) → routed AI review (at most code,
 UI, security, product reviewers) → human approval. Guardrail hooks in `scripts/hooks/` are shared by
 Claude Code and Codex; `migrations.yml` rehearses new Alembic revisions from the previous release.
+
+
+## Optional web behavioral analytics (TS-GA4-001)
+
+`varavu_selavu_ui/src/analytics` is a small browser-neutral event/schema/client layer with a GA4
+provider and no-op/recording adapters. Browser consent, route/history containment and identity
+lifecycle live in `browser.ts`; `RouteAnalytics` observes committed React navigation and shares
+static descriptors with `RouteA11y`. No backend pipeline or financial/identity domain objects cross
+this boundary. The actual SDK is loaded only after consent and exact environment/destination
+approval. The production release build enables consented collection on the dedicated TrackSpense property. The local real-tag test confirmed receipt in DebugView. See [foundation status](analytics/foundation-status.md), [privacy](analytics/privacy.md) and
+[runbook](analytics/ga4-configuration.md). This layer is distinct from financial `/analytics` APIs.
