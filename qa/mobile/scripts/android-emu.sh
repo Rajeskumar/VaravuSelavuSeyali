@@ -59,6 +59,8 @@ case "${cmd}" in
     done
     [ "${ok}" -ge 5 ] || { echo "emulator connection never stabilised (see ${LOG})" >&2; exit 1; }
     for s in window_animation_scale transition_animation_scale animator_duration_scale; do adb -s "${SERIAL}" shell settings put global "${s}" 0; done
+    # A system "<app> isn't responding" dialog stays on top until dismissed and fails every later flow: never show one.
+    adb -s "${SERIAL}" shell settings put global hide_error_dialogs 1
     echo "${SERIAL}" ;;
   stop)
     case "${AVD}" in trackspense-e2e-*) ;; *) echo "refusing to touch AVD ${AVD}" >&2; exit 1 ;; esac
