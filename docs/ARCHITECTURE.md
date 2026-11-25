@@ -69,5 +69,5 @@ provider and no-op/recording adapters. Browser consent, route/history containmen
 lifecycle live in `browser.ts`; `RouteAnalytics` observes committed React navigation and shares
 static descriptors with `RouteA11y`. No backend pipeline or financial/identity domain objects cross
 this boundary. The actual SDK is loaded only after consent and exact environment/destination
-approval. Collection is currently disabled. The web product producers are wired and real-provider acceptance remains pending. See [foundation status](analytics/foundation-status.md), [privacy](analytics/privacy.md) and
+approval. The production release build enables consented collection on the dedicated TrackSpense property. The local real-tag test confirmed receipt in DebugView. See [foundation status](analytics/foundation-status.md), [privacy](analytics/privacy.md) and
 [runbook](analytics/ga4-configuration.md). This layer is distinct from financial `/analytics` APIs.

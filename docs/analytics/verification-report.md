@@ -93,3 +93,13 @@ DebugView ingestion for that synthetic session. The failure, group-route and wit
 checks remain supported by intercepted network evidence. Broader reporting and production
 readiness remain open. The stream screenshot showed Enhanced Measurement off, and the
 owner confirmed the property Internal Traffic filter was in Testing.
+
+### Production build configuration check
+
+The owner confirmed the production privacy settings and requested collection at deployment.
+An optimized local build using the exact Cloud Build substitutions was exercised in Chromium
+with every request intercepted. Accepting consent at the TrackSpense production hostname queued
+one page view and requested only the new TrackSpense tag, with DebugView disabled.
+Before consent, after decline, or on the marketing hostname, the build made no tag request.
+The focused analytics and consent suites passed all 26 tests. Live production verification
+remains a post-deploy step.

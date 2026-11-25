@@ -88,8 +88,8 @@ options:
 
 substitutions:
   _ANALYTICS_ENV: production
-  _ANALYTICS_ENABLED: 'false'
-  _ANALYTICS_CONFIG_VERIFIED: 'false'
+  _ANALYTICS_ENABLED: 'true'
+  _ANALYTICS_CONFIG_VERIFIED: 'true'
   _GA4_MEASUREMENT_ID: 'G-X3QFP5HNK2'
   _REGION: 'us-central1'
   _PROJECT_ID: 'gold-circlet-424313-r7'

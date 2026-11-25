@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-25: Enabled consent-gated GA4 collection for the next TrackSpense frontend release after owner confirmation of the production stream settings (TS-GA4-001, Codex).
+
 - 2026-11-25: Configured the dedicated TrackSpense production GA4 destination, with both activation gates off pending Admin verification and rollout (TS-GA4-001, Codex).
 
 - 2026-11-25: Fixed duplicate initial GA4 page views found with the real tag and explicitly marked staging events for DebugView (TS-GA4-001, Codex).
