@@ -7,6 +7,7 @@
  */
 import { apiFetch } from '../../../core/api/apiFetch';
 import { getConfig } from '../../shared/featureFlags';
+import { confirmed, expenseCreation, ExpenseCapture } from '../../shared/analytics/operations';
 import { TagRefDTO } from '../../tags/api/tags';
 import { CardRefDTO } from '../../cards/api/cards';
 
@@ -69,7 +70,15 @@ export async function updateGroup(
   return handleResponse<GroupDetail>(res);
 }
 
-export async function updateGroupExpense(
+export function updateGroupExpense(
+  groupId: string,
+  expenseId: string,
+  payload: AddGroupExpensePayload
+): Promise<GroupExpenseRow> {
+  return confirmed(() => updateGroupExpenseRequest(groupId, expenseId, payload), 'group_expense_updated', { expense_scope: 'group' });
+}
+
+async function updateGroupExpenseRequest(
   groupId: string,
   expenseId: string,
   payload: AddGroupExpensePayload
@@ -88,9 +97,11 @@ export async function updateGroupExpense(
   return data.expense;
 }
 
-export async function deleteGroupExpense(groupId: string, expenseId: string): Promise<void> {
-  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' });
-  return handleResponse<void>(res);
+export function deleteGroupExpense(groupId: string, expenseId: string): Promise<void> {
+  return confirmed(async () => {
+    const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' });
+    return handleResponse<void>(res);
+  }, 'expense_deleted', { expense_scope: 'group' });
 }
 
 export interface GroupActivityDTO {
@@ -340,13 +351,15 @@ export async function listGroups(includeArchived = false, includeDeleted = false
   return handleResponse<GroupSummary[]>(res);
 }
 
-export async function createGroup(payload: CreateGroupPayload): Promise<GroupSummary> {
-  const res = await apiFetch('/api/v1/groups', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return handleResponse<GroupSummary>(res);
+export function createGroup(payload: CreateGroupPayload): Promise<GroupSummary> {
+  return confirmed(async () => {
+    const res = await apiFetch('/api/v1/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<GroupSummary>(res);
+  }, 'group_created', {});
 }
 
 export async function deleteGroup(groupId: string, force = false): Promise<void> {
@@ -394,13 +407,15 @@ export async function getGroupActivity(groupId: string, limit = 50, offset = 0):
 
 /** Mints a join link for a pending placeholder seat. With `email`, the backend also emails
  * the link to that address and pins the seat to it (only that address can redeem it). */
-export async function createInvite(groupId: string, memberId: string, email?: string): Promise<CreateInviteResponse> {
-  const res = await apiFetch(`/api/v1/groups/${groupId}/invites`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(email ? { member_id: memberId, email } : { member_id: memberId }),
-  });
-  return handleResponse<CreateInviteResponse>(res);
+export function createInvite(groupId: string, memberId: string, email?: string): Promise<CreateInviteResponse> {
+  return confirmed(async () => {
+    const res = await apiFetch(`/api/v1/groups/${groupId}/invites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(email ? { member_id: memberId, email } : { member_id: memberId }),
+    });
+    return handleResponse<CreateInviteResponse>(res);
+  }, 'group_member_invited', {});
 }
 
 export async function removeMember(groupId: string, memberId: string, force = false): Promise<void> {
@@ -414,13 +429,15 @@ export async function leaveGroup(groupId: string): Promise<void> {
   return handleResponse<void>(res);
 }
 
-export async function acceptInvite(token: string): Promise<AcceptInviteResponse> {
-  const res = await apiFetch('/api/v1/groups/invites/accept', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token }),
-  });
-  return handleResponse<AcceptInviteResponse>(res);
+export function acceptInvite(token: string): Promise<AcceptInviteResponse> {
+  return confirmed(async () => {
+    const res = await apiFetch('/api/v1/groups/invites/accept', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }), // the invite token is request data only; it is never an analytics value
+    });
+    return handleResponse<AcceptInviteResponse>(res);
+  }, 'group_invitation_accepted', {});
 }
 
 export async function listGroupExpenses(
@@ -449,32 +466,38 @@ export async function listAllMyGroupExpenses(): Promise<UnifiedGroupExpenseRow[]
   return perGroup.flat();
 }
 
-export async function addGroupExpense(
+export function addGroupExpense(
   groupId: string,
   payload: AddGroupExpensePayload,
+  capture?: ExpenseCapture,
 ): Promise<GroupExpenseRow> {
-  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
-  return data.expense;
+  return expenseCreation(async () => {
+    const res = await apiFetch(`/api/v1/groups/${groupId}/expenses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
+    return data.expense;
+  }, capture, 'group', (expense) => !!expense);
 }
 
-export async function addGroupExpenseWithItems(
+export function addGroupExpenseWithItems(
   groupId: string,
   payload: GroupExpenseWithItemsPayload,
+  capture?: ExpenseCapture,
 ): Promise<GroupExpenseRow> {
-  // Backend route is /expenses/itemized (see groups_routes.py) — not /with_items,
-  // which only exists for the personal (non-group) receipt-scan endpoint.
-  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/itemized`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
-  return data.expense;
+  return expenseCreation(async () => {
+    // Backend route is /expenses/itemized (see groups_routes.py) — not /with_items,
+    // which only exists for the personal (non-group) receipt-scan endpoint.
+    const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/itemized`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await handleResponse<{ success: boolean; expense: GroupExpenseRow }>(res);
+    return data.expense;
+  }, capture, 'group', (expense) => !!expense);
 }
 
 export interface MoveToGroupPayload {
@@ -505,29 +528,34 @@ export async function getGroupBalances(groupId: string): Promise<BalanceResponse
   return handleResponse<BalanceResponse>(res);
 }
 
-export async function recordSettlement(
+export function recordSettlement(
   groupId: string,
   payload: RecordSettlementPayload,
 ): Promise<void> {
-  const res = await apiFetch(`/api/v1/groups/${groupId}/settlements`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  await handleResponse<unknown>(res);
+  // A recorded settlement, not proof that money moved through a payment provider.
+  return confirmed(async () => {
+    const res = await apiFetch(`/api/v1/groups/${groupId}/settlements`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    await handleResponse<unknown>(res);
+  }, 'settlement_completed', {});
 }
 
-export async function settleExpenseShare(
+export function settleExpenseShare(
   groupId: string,
   expenseId: string,
   payload: { member_id: string; payer_member_id?: string; method?: string; notes?: string },
 ): Promise<void> {
-  const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/settle_share`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  await handleResponse<unknown>(res);
+  return confirmed(async () => {
+    const res = await apiFetch(`/api/v1/groups/${groupId}/expenses/${expenseId}/settle_share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    await handleResponse<unknown>(res);
+  }, 'settlement_completed', {});
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 import { ensureAiConsent, hasAiConsent } from '../../ask/utils/aiConsent';
 import { apiFetch } from '../../../core/api/apiFetch';
+import { HttpStatusError } from '../../../core/api/request';
+import { confirmed, expenseCreation, ExpenseCapture } from '../../shared/analytics/operations';
 import { aiErrorFromResponse } from '../../ask/api/aiUsage';
 import { TagRefDTO } from '../../tags/api/tags';
 import { CardRefDTO } from '../../cards/api/cards';
@@ -49,16 +51,19 @@ export interface CategorizeResult {
   source?: string;
 }
 
-export async function addExpense(payload: ExpensePayload, token: string): Promise<void> {
-  const response = await apiFetch(`/api/v1/expenses`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+/** `capture` is the analytics context of a user-initiated save; without it nothing is reported. */
+export function addExpense(payload: ExpensePayload, token: string, capture?: ExpenseCapture): Promise<void> {
+  return expenseCreation(async () => {
+    const response = await apiFetch(`/api/v1/expenses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    throw new Error('Failed to add expense');
-  }
+    if (!response.ok) {
+      throw new HttpStatusError('Failed to add expense', response.status);
+    }
+  }, capture, 'personal');
 }
 
 export async function listExpenses(token: string, userId: string, offset = 0, limit = 30, tagIds?: string[]): Promise<ExpenseListResponse> {
@@ -80,26 +85,30 @@ export async function listExpenses(token: string, userId: string, offset = 0, li
   return response.json();
 }
 
-export async function deleteExpense(rowId: number, token: string): Promise<void> {
-  const response = await apiFetch(`/api/v1/expenses/${rowId}`, {
-    method: 'DELETE',
-  });
+export function deleteExpense(rowId: number, token: string): Promise<void> {
+  return confirmed(async () => {
+    const response = await apiFetch(`/api/v1/expenses/${rowId}`, {
+      method: 'DELETE',
+    });
 
-  if (!response.ok) {
-    throw new Error('Failed to delete expense');
-  }
+    if (!response.ok) {
+      throw new HttpStatusError('Failed to delete expense', response.status);
+    }
+  }, 'expense_deleted', { expense_scope: 'personal' });
 }
 
-export async function updateExpense(rowId: number, payload: ExpensePayload, token: string): Promise<void> {
-  const response = await apiFetch(`/api/v1/expenses/${rowId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+export function updateExpense(rowId: number, payload: ExpensePayload, token: string): Promise<void> {
+  return confirmed(async () => {
+    const response = await apiFetch(`/api/v1/expenses/${rowId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    throw new Error('Failed to update expense');
-  }
+    if (!response.ok) {
+      throw new HttpStatusError('Failed to update expense', response.status);
+    }
+  }, 'expense_updated', { expense_scope: 'personal' });
 }
 
 export async function uploadReceipt(uri: string, token: string): Promise<any> {
@@ -122,7 +131,8 @@ export async function uploadReceipt(uri: string, token: string): Promise<any> {
   });
 
   if (!response.ok) {
-    throw await aiErrorFromResponse(response, 'Failed to parse receipt');
+    // Same error as before (AiLimitError or a plain Error); the status rides along so a failure can be classified.
+    throw Object.assign(await aiErrorFromResponse(response, 'Failed to parse receipt'), { status: response.status });
   }
 
   return response.json();
@@ -139,7 +149,7 @@ export async function parseReceiptOcr(ocr: OcrResult): Promise<any> {
     body: JSON.stringify(ocr),
   });
   if (!response.ok) {
-    throw new Error('Failed to parse receipt');
+    throw new HttpStatusError('Failed to parse receipt', response.status);
   }
   return response.json();
 }
@@ -157,7 +167,7 @@ export async function categorizeExpense(description: string): Promise<Categorize
   });
 
   if (!response.ok) {
-    throw new Error('Failed to categorize');
+    throw new HttpStatusError('Failed to categorize', response.status);
   }
 
   return response.json();
@@ -233,17 +243,19 @@ export async function addExpenseWithItems(payload: {
   // TS-TAG-104 — same top-level (sibling to header/items) field the backend's
   // ExpenseWithItemsRequest declares; applied inline on create, same as the plain addExpense().
   tag_names?: string[];
-}): Promise<{ expense_id: string; item_ids: string[] }> {
-  const response = await apiFetch(`/api/v1/expenses/with_items`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+}, capture?: ExpenseCapture): Promise<{ expense_id: string; item_ids: string[] }> {
+  return expenseCreation(async () => {
+    const response = await apiFetch(`/api/v1/expenses/with_items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error((errData as any).detail || 'Failed to save expense with items');
-  }
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new HttpStatusError((errData as any).detail || 'Failed to save expense with items', response.status);
+    }
 
-  return response.json();
+    return response.json();
+  }, capture, 'personal', (result) => !!result?.expense_id);
 }

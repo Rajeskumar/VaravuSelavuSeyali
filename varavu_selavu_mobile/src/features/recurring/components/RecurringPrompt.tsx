@@ -11,6 +11,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { showToast } from '../../../core/ui/Toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { refreshExpenseViews } from '../../expenses/utils/expenseEvents';
+import { setOverlayBusy } from '../../../core/ui/overlayGate';
 
 interface ItemState {
     selected: boolean;
@@ -33,6 +34,8 @@ export default function RecurringPrompt() {
         if (!userEmail) return;
         if (promptedSessions.has(userEmail)) return;
 
+        // Hold the overlay gate while checking, so the consent sheet cannot open underneath this prompt.
+        setOverlayBusy('recurring', true);
         const checkDue = async () => {
             try {
                 const todayISO = todayIso();
@@ -50,10 +53,19 @@ export default function RecurringPrompt() {
                 }
             } catch (err) {
                 // silently ignore failures
+            } finally {
+                // Nothing due: free the gate now. When the prompt opened it stays held until it closes (below).
+                if (!promptedSessions.has(userEmail)) setOverlayBusy('recurring', false);
             }
         };
         checkDue();
     }, [userEmail]);
+
+    useEffect(() => {
+        if (open && due.length > 0) setOverlayBusy('recurring', true);
+        else if (userEmail && promptedSessions.has(userEmail)) setOverlayBusy('recurring', false); // it was shown and is now closed
+    }, [open, due.length, userEmail]);
+    useEffect(() => () => setOverlayBusy('recurring', false), []); // never leave the gate held if this unmounts
 
     if (!open || due.length === 0) return null;
 

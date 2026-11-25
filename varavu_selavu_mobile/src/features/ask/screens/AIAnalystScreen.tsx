@@ -7,7 +7,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { track } from '../../shared/analytics/operations';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { sendChatMessageFull, ChatPayload, ChatMessage } from '../api/chat';
 import { scopeLine } from '../utils/chatScope';
@@ -49,6 +50,8 @@ export default function AIAnalystScreen() {
     const styles = useMemo(() => createStyles(theme), [theme]);
     const insets = useSafeAreaInsets();
     const route = useRoute<any>();
+    // One event per visit to the tab (focus), not per render; the screen id is reported separately.
+    useFocusEffect(React.useCallback(() => { track('ai_analyst_opened', {}); }, []));
     const [messages, setMessages] = useState<DisplayMessage[]>([]);
     const [inputText, setInputText] = useState('');
     const submitLock = useRef(false);

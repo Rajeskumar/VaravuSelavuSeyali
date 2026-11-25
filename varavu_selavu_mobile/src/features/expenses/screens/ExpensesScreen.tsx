@@ -443,7 +443,7 @@ export default function ExpensesScreen() {
             merchant_name: t.merchant_name,
             group_id: t.group_id,
             split_config: t.split_config,
-        }),
+        }, t.status === 'Paused' ? 'resumed' : 'paused'),
         onSuccess: () => qc.invalidateQueries({ queryKey: ['recurringTemplates'] }),
         onError: () => showToast({ message: 'Failed to update template', type: 'error' }),
     });

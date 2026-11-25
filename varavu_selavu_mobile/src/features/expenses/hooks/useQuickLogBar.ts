@@ -88,7 +88,8 @@ export function useQuickLogBar() {
             user_id: userEmail,
             merchant_name: parsed.merchant ?? undefined,
           },
-          accessToken
+          accessToken,
+          { method: 'quick_log' },
         );
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast({ message: 'Expense saved', type: 'success' });
@@ -109,7 +110,7 @@ export function useQuickLogBar() {
           merchant_name: parsed.merchant ?? undefined,
           payers: [{ member_id: myMember.member_id, amount_paid: parsed.amount }],
           split: { type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) },
-        });
+        }, { method: 'quick_log' });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showToast({ message: 'Group expense added', type: 'success' });
         notifyExpenseChanged();

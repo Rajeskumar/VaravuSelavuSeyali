@@ -23,4 +23,16 @@ export const trackSpenseConfig: AppConfig = {
     },
   },
   notifications: { androidChannelName: 'Group activity' },
+  analytics: {
+    // Stable ids, never route params: MerchantDetail/ItemDetail/GroupDetail/JoinGroup carry names, ids and
+    // invite tokens that must not leave the device. `MainTabs` and other containers are not leaves.
+    screens: {
+      Login: 'login', Register: 'register', ForgotPassword: 'forgot_password',
+      Dashboard: 'home', Expenses: 'expenses', GroupsTab: 'groups', Groups: 'groups',
+      Analysis: 'insights', 'AI Analyst': 'ask', GroupDetail: 'group_detail', JoinGroup: 'join_group',
+      Activity: 'activity', Profile: 'profile', Recurring: 'recurring', ItemDetail: 'item_detail',
+      MerchantDetail: 'merchant_detail', Cards: 'cards', Tags: 'tags', About: 'about', Feedback: 'feedback',
+      Security: 'security', DeleteAccount: 'delete_account', Privacy: 'privacy',
+    },
+  },
 };

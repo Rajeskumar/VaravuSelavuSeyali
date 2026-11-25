@@ -10,6 +10,8 @@ import { ThemeProvider, useAppTheme } from '../theme/ThemeContext';
 import { bootScreen, darkTheme } from '../theme/theme';
 import { fontMap } from '../theme/fonts';
 import { setAppConfig } from '../config/appConfig';
+import AnalyticsLifecycle from '../analytics/AnalyticsLifecycle';
+import { crashReporter } from '../analytics';
 import RootNavigator from './RootNavigator';
 import { CoreAppProps } from './types';
 
@@ -63,11 +65,12 @@ export default function CoreApp(props: CoreAppProps) {
   }
 
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <ErrorBoundary FallbackComponent={ErrorFallback} onError={(error) => crashReporter.recordError(error)}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
           <ThemeProvider>
             <AuthProvider>
+              <AnalyticsLifecycle />
               <ThemedStatusBarAndNav {...props} />
             </AuthProvider>
           </ThemeProvider>

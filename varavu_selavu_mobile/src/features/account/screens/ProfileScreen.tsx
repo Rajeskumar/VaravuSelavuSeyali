@@ -1,3 +1,4 @@
+import { isAnalyticsAvailable } from '../../../core/analytics';
 import { getConfig } from '../../shared/featureFlags';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, Share } from 'react-native';
@@ -202,6 +203,7 @@ export default function ProfileScreen({ navigation }: any) {
     { name: 'Download all my data', hint: downloading ? 'Preparing…' : 'JSON', onPress: downloadAll },
     ...(featureFlags?.mcp_enabled && featureFlags.mcp_management_url ? [{ name: 'Connected assistants', hint: 'Opens browser', onPress: () => { void Linking.openURL(featureFlags.mcp_management_url!).catch(() => Alert.alert('Unable to open browser')); } }] : []),
     { name: 'Password & security', hint: 'Sign-ins', onPress: () => navigation.navigate('Security') },
+    ...(isAnalyticsAvailable() ? [{ name: 'Privacy', hint: 'Analytics · crash reports', onPress: () => navigation.navigate('Privacy') }] : []),
     { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
     { name: 'About', onPress: () => navigation.navigate('About') },
   ];

@@ -24,6 +24,9 @@
 import { expenseDateMin, expenseDateProblem } from '../utils/expenseDates';
 import { readExpenseDraft, writeExpenseDraft, clearExpenseDraft } from '../utils/expenseDraft';
 import { RequestError } from '../../../core/api/request';
+import { analytics } from '../../../core/analytics';
+import { categoryDisposition, durationBucket, ExpenseCapture, safeFailure, track } from '../../shared/analytics/operations';
+import { reportPermission } from '../../shared/analytics/permissions';
 import React, { useState, useRef, useCallback, createContext, useMemo } from 'react';
 import {
   Alert,
@@ -183,6 +186,11 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [savedAmt, setSavedAmt] = useState(0);
   const [savedLine, setSavedLine] = useState('');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The category the server last suggested for this form, as "main/sub" (analytics only; never sent).
+  const suggestedCategoryRef = useRef<string | undefined>(undefined);
+  const suggestSeq = useRef(0);
+  // One suggestion outcome per draft: a draft is typed with pauses, and each pause would otherwise count.
+  const suggestionReported = useRef(false);
 
   const { accessToken, userEmail } = useAuth();
   const insets = useSafeAreaInsets();
@@ -195,6 +203,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
 
   const resetForm = (initialWho: string) => {
     clearExpenseDraft().catch(() => {});
+    suggestedCategoryRef.current = undefined; suggestSeq.current++; suggestionReported.current = false;
     restoringSplit.current = null;
     setRestored(false); setUnknownOutcome(false);
     setDetailsOpen(false);
@@ -299,17 +308,33 @@ export default function AddExpenseProvider({ children }: { children: React.React
 
   const handleDescChange = useCallback((text: string) => {
     setDesc(text);
+    suggestSeq.current++; // every edit makes an in-flight suggestion stale
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (text.trim().length >= 3) {
       debounceRef.current = setTimeout(async () => {
+        const seq = suggestSeq.current;
+        const startedAt = Date.now();
         try {
           const result = await categorizeExpense(text.trim());
+          if (seq === suggestSeq.current) {
+            if (result.main_category) suggestedCategoryRef.current = `${result.main_category}/${result.subcategory || 'General'}`;
+            if (!suggestionReported.current) {
+              suggestionReported.current = true;
+              track('category_suggestion_completed', { duration_bucket: durationBucket(Date.now() - startedAt) });
+            }
+          }
           if (!userPickedCategory) {
             if (result.main_category) setMainCategory(result.main_category);
             if (result.subcategory) setSubcategory(result.subcategory);
           }
           if (!userPickedMerchant && result.merchant_name) setMerchantName(result.merchant_name);
-        } catch { /* best-effort — falls back to defaults at save time */ }
+        } catch (error) {
+          /* best-effort — falls back to defaults at save time */
+          if (seq === suggestSeq.current && !suggestionReported.current) {
+            suggestionReported.current = true;
+            track('category_suggestion_failed', { ...safeFailure(error), duration_bucket: durationBucket(Date.now() - startedAt) });
+          }
+        }
       }, 800);
     }
   }, [userPickedCategory, userPickedMerchant]);
@@ -377,6 +402,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
   // found — the Items review sheet opens; otherwise the filled-in capture sheet is left showing.
   const parseReceiptUri = async (uri: string, width?: number) => {
     setScanning(true);
+    const operation = analytics.beginOperation();
+    const startedAt = Date.now();
+    track('receipt_parse_started', {}, operation);
     try {
       // On-device OCR first: only the recognized text leaves the phone. When ML Kit is
       // unavailable or the server can't vouch for that read (needs_image), upload the photo so
@@ -393,10 +421,13 @@ export default function AddExpenseProvider({ children }: { children: React.React
       }
       if (!res) res = await uploadReceipt(await toUploadableJpeg(uri, width), accessToken || '');
       applyParseResult(res);
+      track('receipt_parse_completed', { duration_bucket: durationBucket(Date.now() - startedAt) }, operation);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setScanVisible(false);
       if ((res.items || []).length > 0) setItemsVisible(true);
     } catch (error: any) {
+      // Declining the AI prompt is a user choice, not a service failure.
+      track('receipt_parse_failed', { ...safeFailure(error, false, error?.name === 'AiConsentDeclined'), duration_bucket: durationBucket(Date.now() - startedAt) }, operation);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       showToast({ message: error.message || 'Failed to parse receipt', type: 'error' });
     } finally {
@@ -409,6 +440,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
       const permission = source === 'camera'
         ? await ImagePicker.requestCameraPermissionsAsync()
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      reportPermission(source === 'camera' ? 'camera' : 'photos', permission);
       if (!permission.granted) {
         showToast({ message: 'Permission needed to scan a receipt', type: 'error' });
         return;
@@ -417,6 +449,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
         ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
       if (result.canceled || !result.assets?.[0]) return;
+      track('receipt_image_selected', { source });
       await parseReceiptUri(result.assets[0].uri, result.assets[0].width);
     } catch {
       showToast({ message: 'Failed to open camera or photo library', type: 'error' });
@@ -518,6 +551,12 @@ export default function AddExpenseProvider({ children }: { children: React.React
     if (!capReady || !accessToken || !userEmail || loading || saveLock.current) return;
     saveLock.current = true;
     setLoading(true);
+    // One operation per save attempt: a retry after a definite failure is a new attempt, a transport retry is not.
+    const capture: ExpenseCapture = {
+      method: scannedFingerprint || itemsToSave.length > 0 ? 'receipt' : 'manual',
+      operation: analytics.beginOperation(),
+      categoryDisposition: categoryDisposition(suggestedCategoryRef.current, `${mainCategory || 'Other'}/${subcategory || 'General'}`),
+    };
     const pendingDraft = { ...draftRef.current, unknownOutcome: true };
     writeExpenseDraft(userEmail, pendingDraft).catch(() => {});
     const today = new Date();
@@ -552,7 +591,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
           user_email: userEmail, header, items,
           card_id: cardCoachEnabled ? cardId : undefined,
           tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
-        });
+        }, capture);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notifyExpenseChanged();
         setSavedAmt(numAmount);
@@ -570,7 +609,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
             card_id: cardCoachEnabled ? cardId : undefined,
             tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
           },
-          accessToken
+          accessToken,
+          capture,
         );
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         notifyExpenseChanged();
@@ -627,7 +667,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             payers,
             items,
             card_id: cardCoachEnabled ? cardId : undefined,
-          });
+          }, capture);
           myShare = row.my_share;
           groupExpenseRowId = row.row_id;
         } else {
@@ -640,7 +680,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
             payers,
             split: splitValue,
             card_id: cardCoachEnabled ? cardId : undefined,
-          });
+          }, capture);
           myShare = row.my_share;
           groupExpenseRowId = row.row_id;
         }

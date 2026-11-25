@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from './storageKeys';
 import { logger } from '../logger';
 import { getAppConfig } from '../config/appConfig';
 import { runSignOutCleanups } from './signOutRegistry';
+import { notifyAuth } from './authObserver';
 import { login as apiLogin, LoginPayload, register as apiRegister, RegisterPayload, logout as apiLogout } from './authApi';
 import { setLogoutCallback } from '../api/apiFetch';
 import { registerForPushNotifications, unregisterPushNotifications } from '../notifications/notifications';
@@ -49,6 +50,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
     await SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
     await runSignOutCleanups('after');
+    // Before the state change that resets the analytics identity, so the event is not orphaned.
+    notifyAuth({ type: 'signed_out' });
 
     setState({
       accessToken: null,
@@ -108,15 +111,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         userEmail: email,
       });
 
+      notifyAuth({ type: 'signed_in' });
       registerForPushNotifications();
     } catch (error) {
       logger.error('Sign-in failed', error);
+      notifyAuth({ type: 'sign_in_failed', error });
       throw error;
     }
   };
 
   const signUp = async (payload: RegisterPayload) => {
-    await apiRegister(payload);
+    notifyAuth({ type: 'register_started' });
+    try {
+      await apiRegister(payload);
+    } catch (error) {
+      notifyAuth({ type: 'register_failed', error });
+      throw error;
+    }
+    notifyAuth({ type: 'registered' });
   };
 
   return (

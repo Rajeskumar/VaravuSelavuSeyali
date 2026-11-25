@@ -1,6 +1,8 @@
 import { AiConsentDeclined, ensureAiConsent } from '../utils/aiConsent';
 import { apiFetch } from '../../../core/api/apiFetch';
-import { aiErrorFromResponse } from './aiUsage';
+import { aiErrorFromResponse, AiLimitError } from './aiUsage';
+import { analytics } from '../../../core/analytics';
+import { durationBucket, safeFailure, track } from '../../shared/analytics/operations';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -52,20 +54,34 @@ export async function sendChatMessage(token: string, payload: ChatPayload): Prom
 export async function sendChatMessageFull(_token: string, payload: ChatPayload): Promise<ChatResult> {
   // Questions are answered by a third-party AI service; ask the person first.
   if (!(await ensureAiConsent())) throw new AiConsentDeclined();
-  const response = await apiFetch(`/api/v1/analysis/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  // Counted only once the question really goes out: no prompt text, model, scope or answer is ever reported.
+  const operation = analytics.beginOperation();
+  const startedAt = Date.now();
+  let failedStatus: number | undefined;
+  track('ai_query_started', {}, operation);
+  try {
+    const response = await apiFetch(`/api/v1/analysis/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    throw await aiErrorFromResponse(response, 'Failed to send message');
+    if (!response.ok) {
+      failedStatus = response.status;
+      throw await aiErrorFromResponse(response, 'Failed to send message');
+    }
+
+    const data = await response.json();
+    track('ai_query_completed', { duration_bucket: durationBucket(Date.now() - startedAt) }, operation);
+    return {
+      response: data.response || 'No response',
+      resolved_period: data.resolved_period,
+      resolved_scope: data.resolved_scope,
+    };
+  } catch (error) {
+    const failure = error instanceof AiLimitError ? { outcome: 'failure' as const, error_code: 'quota' as const }
+      : failedStatus !== undefined ? safeFailure({ status: failedStatus }) : safeFailure(error);
+    track('ai_query_failed', { ...failure, duration_bucket: durationBucket(Date.now() - startedAt) }, operation);
+    throw error;
   }
-
-  const data = await response.json();
-  return {
-    response: data.response || 'No response',
-    resolved_period: data.resolved_period,
-    resolved_scope: data.resolved_scope,
-  };
 }
