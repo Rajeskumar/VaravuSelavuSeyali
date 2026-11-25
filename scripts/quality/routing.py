@@ -15,6 +15,12 @@ import json
 from pathlib import Path
 import subprocess
 
+# Keep identical to MOBILE_AFFECTING_* in mobile_e2e_gate.py (test_routing pins them together): the SDLC asks for native-E2E
+# evidence exactly when CI runs the device jobs.
+MOBILE_E2E_PREFIXES = ("varavu_selavu_mobile/", "qa/mobile/")
+MOBILE_E2E_FILES = (".github/workflows/mobile-e2e.yml", "scripts/quality/mobile_e2e_gate.py",
+                    "qa/scripts/bootstrap_schema.py", "qa/scripts/provision_qa_session_user.py")
+
 ORDER = ["implementation-review", "product-review", "security-review", "ui-review"]
 REVIEWER_AGENT = {
     "implementation-review": "code-reviewer",
@@ -268,6 +274,12 @@ def classify(files, risk=None, product=False):
         if p.startswith("qa/"):
             checks.add("qa-typecheck")
             manual.add("local-integration")
+        if p.startswith(MOBILE_E2E_PREFIXES) or p in MOBILE_E2E_FILES:
+            # Native device evidence is the mobile-e2e CI job (TS-QA-103); report it instead of leaving it implicit.
+            # Only for changes that can affect the native app or the suite, exactly when CI runs the device jobs.
+            manual.add("native-e2e")
+        if p.startswith("qa/mobile/scripts/"):
+            checks.add("framework")  # their unit tests live in scripts/quality/tests
         if _is_ui(p):
             add("ui-review", path)
             if p.startswith("varavu_selavu_ui/"):

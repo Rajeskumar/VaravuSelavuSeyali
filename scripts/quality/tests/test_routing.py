@@ -207,3 +207,40 @@ class RoutingTests(unittest.TestCase):
                 r = routing.classify(files, **kwargs)
                 for scope in r["scopes"].values():
                     self.assertNotIn(files[0], scope)
+
+
+class NativeE2ERoutingTests(unittest.TestCase):
+    """TS-QA-103: native device E2E evidence comes from the mobile-e2e CI job, so changes that can affect it say so."""
+
+    def test_mobile_app_and_suite_changes_list_the_native_e2e_evidence(self):
+        for path in ["varavu_selavu_mobile/src/features/home/screens/HomeScreen.tsx", "qa/mobile/flows/smoke/login-relaunch.yaml",
+                     "qa/mobile/scripts/run.sh"]:
+            with self.subTest(path=path):
+                self.assertIn("native-e2e", routing.classify([path])["manual"])
+
+    def test_docs_web_backend_and_other_changes_do_not(self):
+        for path in ["docs/qa/06-automation-strategy.md", "varavu_selavu_ui/src/App.tsx",
+                     "varavu_selavu_app/varavu_selavu_service/main.py", "Makefile", ".github/workflows/unit.yml",
+                     "qa/tests/smoke/login.spec.ts"]:
+            with self.subTest(path=path):
+                self.assertNotIn("native-e2e", routing.classify([path])["manual"])
+
+    def test_the_workflow_gate_and_shared_backend_launchers_do(self):
+        for path in [".github/workflows/mobile-e2e.yml", "scripts/quality/mobile_e2e_gate.py",
+                     "qa/scripts/bootstrap_schema.py", "qa/scripts/provision_qa_session_user.py"]:
+            with self.subTest(path=path):
+                self.assertIn("native-e2e", routing.classify([path])["manual"])
+
+    def test_routing_and_the_ci_classifier_agree_on_what_is_mobile_affecting(self):
+        # Two places answer "does this change need the native E2E?": the SDLC routing (evidence to collect) and
+        # mobile_e2e_gate.py (whether CI runs the device jobs). They must not drift apart.
+        gspec = importlib.util.spec_from_file_location("mobile_e2e_gate", ROOT / "scripts/quality/mobile_e2e_gate.py")
+        gate = importlib.util.module_from_spec(gspec)
+        gspec.loader.exec_module(gate)
+        self.assertEqual(routing.MOBILE_E2E_PREFIXES, gate.MOBILE_AFFECTING_PREFIXES)
+        self.assertEqual(routing.MOBILE_E2E_FILES, gate.MOBILE_AFFECTING_FILES)
+
+    def test_suite_scripts_run_the_framework_tests_that_cover_them(self):
+        # The guard/evidence/gate scripts are unit-tested under scripts/quality/tests (make framework-check).
+        self.assertIn("framework", routing.classify(["qa/mobile/scripts/e2e_guard.py"])["checks"])
+        self.assertIn("framework", routing.classify([".github/workflows/mobile-e2e.yml"])["checks"])
