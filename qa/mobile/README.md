@@ -16,16 +16,28 @@ deletes everything. Reports: `qa/mobile/reports/ios-<runId>/` (JUnit, screenshot
 Needs PostgreSQL server binaries (Homebrew `postgresql@16`); no Docker.
 On macOS the scripts re-run themselves under `caffeinate` so an unattended run is not suspended by sleep (a step that spans a sleep fails hours later).
 
-## When CI runs it
-`.github/workflows/mobile-e2e.yml` starts on every pull request and push to `main`, but the emulator/simulator jobs run **only for a
-change that can affect the native app or this suite**: `varavu_selavu_mobile/`, `qa/mobile/`, the workflow and
-`scripts/quality/mobile_e2e_gate.py`, and the backend launchers `qa/scripts/bootstrap_schema.py` / `provision_qa_session_user.py`
-(`MOBILE_AFFECTING_*` in the gate script; `routing.py` uses the same list to ask for native-E2E evidence, and a test keeps them
-identical). Web, backend and documentation changes skip the device jobs and the `Native mobile gate` passes as "not applicable".
-If the changed files cannot be determined, the jobs run. Pull requests run the smoke suite, `main` the full regression, and the
-nightly and manual runs always run (the nightly also catches a backend change that breaks the app). To also run on backend
-changes, add `varavu_selavu_app/` to `MOBILE_AFFECTING_PREFIXES` (both lists). A release candidate whose push had no mobile
-change has no regression run, so before the release gate needs it run `gh workflow run mobile-e2e.yml --ref main -f suite=regression`.
+## When it runs: locally, at release time, when mobile code changed
+Owner decision 2026-11-25: the native E2E is a **local, release-phase** step, required only when mobile code changed since the
+previous release. `make release-prepare VERSION=x.y.z` checks the diff since the previous release tag against the mobile-affecting
+paths (`MOBILE_AFFECTING_*` in `scripts/quality/mobile_e2e_gate.py`: `varavu_selavu_mobile/`, `qa/mobile/`, the workflow and gate
+script, the backend launchers `qa/scripts/bootstrap_schema.py` / `provision_qa_session_user.py`; `routing.py` uses the same list,
+a test keeps them identical) and, if any changed (or there is no previous tag), adds a required `native-mobile-e2e` check to the
+release record. Run the full regression on both platforms against the candidate, then record that check as passed with both
+reports (`qa/mobile/reports/<platform>-<runId>/summary.json`):
+
+    make mobile-e2e-build-ios && make mobile-e2e-ios SUITE=regression
+    make mobile-e2e-build-android && make mobile-e2e-android SUITE=regression
+
+With no mobile change the check is recorded as not applicable. During development, run single flows as you work (`FLOW=`).
+Backend-only changes do not make it required (owner decision); if a release changes an API the app uses, run it anyway.
+On an emulator the suite did not start (`E2E_REUSE_EMULATOR=1`) it hides system crash/ANR dialogs for the run and restores
+the previous setting afterwards.
+
+**CI is dormant.** `.github/workflows/mobile-e2e.yml` only runs when started by hand (`gh workflow run mobile-e2e.yml -f suite=...`);
+it has no pull request, push or nightly trigger. It is kept correct so it can be re-enabled by adding those triggers back (its
+`changes` job then skips the device jobs for changes that cannot affect the native app). The first hosted-runner runs showed why
+it is off for now: the iOS Release build took ~35 minutes and flows ran 3-7x slower than locally (the 60-minute job timed out),
+and the Android launcher hung under the emulator action's default 2 cores (now 4 cores / 4 GB in the workflow).
 
 ## Android (local)
 No Android SDK is needed system-wide. `qa/mobile/scripts/install-android-sdk.sh --accept-licenses` installs a pinned SDK, NDK and an
@@ -71,7 +83,7 @@ backend directly. A flow arms a fault through the control API (`PROXY_CONTROL_UR
 - `clearKeychain` wipes the whole iOS simulator keychain: only ever run on the dedicated `trackspense-e2e-*` simulators.
 
 ## Writing a flow
-- Put it in `flows/smoke/` (PR) or `flows/regression/` (main/nightly). Header comment: scenario ID, journey,
+- Put it in `flows/smoke/` (the quick set) or `flows/regression/` (the release run includes both). Header comment: scenario ID, journey,
   preconditions, interactions, assertions, cleanup, platforms, `# LOGINS: n`.
 - Select by `testID` (`id:`), named `<screen>.<element>`; prefer them over text. The Jest test
   `varavu_selavu_mobile/src/e2eSelectors.test.ts` fails if a flow references an id the app no longer has.

@@ -33,10 +33,11 @@ throwaway localhost Postgres DB (schema/pg_trgm/tables as in unit.yml backend-po
 qa/README.md. Never a production database. Restart the backend before another full profile.
 Real-device evidence (camera capture, push delivery, device performance, VoiceOver/TalkBack, signed
 install/upgrade) remains manual. Simulator/emulator evidence for the covered journeys comes from the native E2E
-suite (`qa/mobile`, `make mobile-e2e-ios`, CI `mobile-e2e.yml`): cite the run (local report or CI link), the platform
-and the OS. It is required only for a change that can affect the native app or the suite (`make route` lists
-`native-e2e` then; CI runs the device jobs for exactly the same paths), not for web, backend or documentation changes. A local run needs Xcode 26.4+, Maestro and PostgreSQL binaries; where they are missing, report
-`INCOMPLETE_EVIDENCE: rely on CI` rather than skipping silently. Record exactly which environments supplied the
+suite (`qa/mobile`, `make mobile-e2e-ios` / `make mobile-e2e-android`), run LOCALLY: cite the report, the platform and the OS.
+It is release-time evidence, required only when mobile code changed since the previous release (`make release-prepare` adds
+the `native-mobile-e2e` check then; `make route` lists `native-e2e` for the same paths as a reminder); the CI workflow is
+dormant (manual dispatch). A local run needs Xcode 26.4+, the Android SDK (qa/mobile/scripts/install-android-sdk.sh), Maestro
+and PostgreSQL binaries; where they are missing, report `INCOMPLETE_EVIDENCE` rather than skipping silently. Record exactly which environments supplied the
 evidence; never label a fast run full.
 
 **Where each check is enforced**

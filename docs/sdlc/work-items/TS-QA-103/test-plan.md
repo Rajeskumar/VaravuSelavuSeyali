@@ -21,9 +21,9 @@ Requirements: requirements.md; AC text: work-item.json. Levels: U = Jest/pytest 
 | T-015 | AC-005 | users A and B | logout A, login B | no A data or draft visible | D regression |
 | T-016 | AC-005 | receipt fixture via addMedia | scan | proxy log shows parse_ocr text lines, no image upload | D regression |
 | T-017 | AC-005 | join token | openLink signed-in / signed-out | join screen / documented resume behavior (parity gap reported) | D regression |
-| T-018 | AC-006 | PR touching docs only | workflow | gate passes as N/A | C |
-| T-019 | AC-006 | one platform job cancelled or skipped | workflow | gate fails | C |
-| T-020 | AC-007 | candidate SHA with smoke-only / one-platform / cancelled / schedule-only runs | release-gate | rejected | U `scripts/quality/tests` |
+| T-018 | AC-006 | change classified not applicable | gate verdict | passes as N/A | U `test_mobile_e2e_gate.py` |
+| T-019 | AC-006 | one platform job failed, cancelled or skipped | the gate step executed with GitHub's shell rules | job fails (exit status survives `| tee`) | U `test_mobile_e2e_gate.py` |
+| T-020 | AC-007 | release candidate with / without mobile-affecting changes since the previous tag, and with no previous tag | release_tools prepare + release gate | `native-mobile-e2e` required (missing until recorded) / not applicable / required | U `test_release_tools.py` |
 | T-021 | AC-008 | docs and standards | framework-check, test_configuration | consistent, B-19 not marked done without CI link | S + U |
 
 Manual: none for in-scope; excluded items stay in docs/qa/08. Exact results go in evidence.json during Validate.

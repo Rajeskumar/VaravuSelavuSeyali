@@ -8,7 +8,7 @@
 | Web | Jest + RTL | `make test-web`, `make lint-web`, `make typecheck-web` |
 | Mobile | Jest + tsc | `make test-mobile`, `make typecheck-mobile` |
 | Browser/API E2E | Playwright (`qa/`) | `make qa-smoke`, `qa-regression`, `qa-api` |
-| Native mobile E2E (iOS Simulator + Android Emulator) | Maestro (`qa/mobile`), CI `mobile-e2e.yml` | `make mobile-e2e-build-ios`, `make mobile-e2e-ios` |
+| Native mobile E2E (iOS Simulator + Android Emulator) | Maestro (`qa/mobile`), local; at release when mobile code changed (CI workflow dormant) | `make mobile-e2e-build-ios`, `make mobile-e2e-ios` |
 | Dependencies | pip-audit / npm audit | `make audit-all` |
 Aggregates: `make unit-check`, `make release-check`, `make release-check-full`. Wrapper: `scripts/quality/verify.sh`.
 

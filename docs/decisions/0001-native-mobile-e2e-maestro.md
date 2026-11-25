@@ -60,6 +60,11 @@ synchronisation is ever needed.
   nightly run exercises the app against the current backend), and a release candidate with no mobile change in its push has no
   regression run, so one is dispatched for it before the release gate (AC-007 still requires successful `ios (regression)` and
   `android (regression)` jobs on the exact commit; it never required them to run automatically).
+- Owner decision 2026-11-25 (supersedes the CI parts above): the native E2E runs LOCALLY at release time, only when mobile code
+  changed since the previous release (`release_tools.py prepare` adds a required `native-mobile-e2e` check; not applicable otherwise).
+  The workflow is dormant (manual dispatch only). Why: the first hosted-runner runs took ~35 min to build iOS with flows 3-7x
+  slower (the 60-minute job timed out), and the Android emulator's launcher hung with the action's default 2 cores. The same runs
+  exposed a gate bug (a FAIL verdict piped through `tee` without pipefail passed the job), fixed with `shell: bash`.
 - The workflow is advisory until the promotion criteria in TS-QA-103 are met; `Native mobile gate` is the only job
   meant to become a required check, and `release-gate.py` can require both platforms' regression jobs
   (`ENFORCE_MOBILE_E2E`, off until promotion).

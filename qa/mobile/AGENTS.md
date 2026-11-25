@@ -13,5 +13,7 @@ Maestro flows + scripts that run the compiled app on iOS Simulator / Android Emu
 - Flows that count network requests (`seed.py expect-proxy`) rely on `run_flows.py` resetting the fault proxy before every attempt;
   never share proxy state between flows. A flow without an Android variant declares `# PLATFORMS: ios`; it is then reported SKIPPED
   on Android (never as a pass).
+- The suite is local, release-time evidence (owner decision 2026-11-25): `make release-prepare` requires it only when mobile code
+  changed since the previous release; the CI workflow is dormant (manual dispatch). Do not re-add CI triggers without the owner.
 - Do not delete flows or remove assertions to get green (`scripts/quality/test_integrity.py` treats that as weakening).
 - Build outputs, tools and reports are gitignored (`.build/`, `.tools/`, `reports/`).

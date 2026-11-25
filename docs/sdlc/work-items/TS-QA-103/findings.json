@@ -522,6 +522,94 @@
       "status": "fixed",
       "verification_evidence": "framework-tests",
       "waiver": null
+    },
+    {
+      "id": "C-15",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "The Native mobile gate reported success on both CI runs although Android failed and iOS was cancelled: the verdict printed FAIL, but the step piped it through `tee` and GitHub's default Linux shell is `bash -e` without pipefail, so the job took tee's exit status. FIXED: the Evaluate step runs with `shell: bash` (-eo pipefail); a test executes the real step script with GitHub's shell rules and a failing/passing verdict.",
+      "owner": "Claude Code (TS-QA-103)",
+      "source": "first CI runs 45543304611 (PR) and 45545414850 (main), 2026-11-25",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "A-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "receipt-ocr-native-android failed on the CI emulator: it uses the plain Android image (`target: default`), whose photo picker is com.android.providers.media.module, while the flow tapped the Google APIs image's id (com.google.android.providers.media.module). The photo was on screen. FIXED: the picker id is matched as a pattern covering both; a unit test matches the selector against both exact ids (the one seen on the CI image and the local one); that test is the only verification. Not re-run on a device (owner: no more device runs for this change).",
+      "owner": "Claude Code (TS-QA-103)",
+      "source": "first CI runs 45543304611 (PR) and 45545414850 (main), 2026-11-25",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "A-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "On the PR run the Android emulator's launcher hung (\"Quickstep isn't responding\") with the emulator action's default 2 cores; the system dialog stayed on top and failed every flow and retry (the main-branch run had no such dialog and passed 12/13). MITIGATED, NOT VERIFIED (kept open): the dormant workflow gives the emulator 4 cores / 4096M, and both emulator paths set hide_error_dialogs so such a dialog can never cover the app. Not verified on CI (the workflow is dormant).",
+      "owner": "Claude Code (TS-QA-103)",
+      "source": "first CI runs 45543304611 (PR) and 45545414850 (main), 2026-11-25",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "I-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "iOS on a hosted macos-26 runner: the Release build took ~35 min and flows 133-404 s each (about 55 s locally); the 60-minute job timed out mid-suite and was cancelled (functionally it worked: group-expense passed on retry). RESOLVED by owner decision 2026-11-25 (verified by the dormant-workflow test): the native E2E runs locally at release time when mobile code changed; the CI workflow is dormant. Re-enabling iOS in CI needs a longer timeout and build caching.",
+      "owner": "Repository owner",
+      "source": "first CI runs 45543304611 (PR) and 45545414850 (main), 2026-11-25",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "S-11",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Security + code review: the release gate enforced native-mobile-e2e only when the record contained it, so deleting the entry from release.json (or a hand-written record) let a release with untested mobile changes pass. FIXED: native-mobile-e2e is in RELEASE_CHECKS (always required; prepare records it not applicable when nothing mobile changed); waivable like the other manual checks (documented). Tested: a record without the entry is incomplete.",
+      "owner": "Claude Code (TS-QA-103)",
+      "source": "review of the local release-time change, 2026-11-25",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
+    },
+    {
+      "id": "C-16",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Code review: with the nightly run gone and the backend outside MOBILE_AFFECTING_*, a backend-only release never runs the native app on a simulator, so an API contract change could break the installed app unnoticed (web/API tests cover the server). Consequence of the owner's 'only when mobile code changed' rule; the release checklist and README now say to run it anyway when an API the app uses changed. Owner decision whether to add varavu_selavu_app/ (or its API/schema paths) to the release-time paths.",
+      "owner": "Repository owner",
+      "source": "review of the local release-time change, 2026-11-25",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "S-12",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Security + code review: the 'previous release' baseline is the newest local release-v* tag below the version; a stray or force-moved local tag near the candidate could shrink the diff and mark the native check not applicable (missing or stale tags only widen the diff, which fails safe). Follow-up: compare against the previous release record's candidate or verify the tag with git ls-remote.",
+      "owner": "Repository owner",
+      "source": "review of the local release-time change, 2026-11-25",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "C-17",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Code review P3s, FIXED: run.sh restores hide_error_dialogs on an emulator it did not start (E2E_REUSE_EMULATOR=1); --no-renames is asserted in the release-tools test; stale text (release-gate hint, classifier docstring, README flow note, work-item notes) now describes the dormant workflow and local release-time run; A-5 kept open as unverified; the approval reference states Claude's fail-safe reading and the gate-fix evidence.",
+      "owner": "Claude Code (TS-QA-103)",
+      "source": "review of the local release-time change, 2026-11-25",
+      "status": "fixed",
+      "verification_evidence": "framework-tests",
+      "waiver": null
     }
   ]
 }
