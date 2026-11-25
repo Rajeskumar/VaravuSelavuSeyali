@@ -41,6 +41,23 @@ class TestIntegrityTests(unittest.TestCase):
                 f = analyse([], diff("qa/tests/a.spec.ts", added=[marker]))
                 self.assertTrue(any("skip/only" in x for x in f), f)
 
+    def test_deleted_maestro_flow_and_its_verify_script_are_flagged(self):
+        # TS-QA-103: native E2E flows are tests; deleting one (or its server-side check) weakens the suite.
+        for path in ("qa/mobile/flows/smoke/login-relaunch.yaml", "qa/mobile/flows/smoke/expense-create.verify.py"):
+            with self.subTest(path=path):
+                self.assertTrue(any("deleted test file" in x for x in analyse([f"D\t{path}"], "")))
+
+    def test_removed_maestro_assertions_are_flagged(self):
+        d = diff("qa/mobile/flows/smoke/tabs-render.yaml", removed=["- assertVisible:", "- extendedWaitUntil:"],
+                 added=["- tapOn:"])
+        self.assertTrue(any("assertion loss" in x for x in analyse([], d)))
+
+    def test_maestro_assertion_swapped_for_assertion_passes_and_helpers_are_not_tests(self):
+        d = diff("qa/mobile/flows/smoke/tabs-render.yaml", removed=["- assertVisible:"], added=["- assertVisible:"])
+        self.assertEqual(analyse([], d), [])
+        # subflows and scripts are helpers, not tests
+        self.assertEqual(analyse(["D\tqa/mobile/subflows/login.yaml", "D\tqa/mobile/scripts/run.sh"], ""), [])
+
     def test_net_assertion_loss_is_flagged(self):
         d = diff(
             "varavu_selavu_mobile/src/x.test.ts",

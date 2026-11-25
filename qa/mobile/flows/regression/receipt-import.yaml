@@ -1,0 +1,30 @@
+# SCENARIO AC-005 (JM-03) regression: receipt import runs the NATIVE on-device OCR (Apple Vision / ML Kit)
+# LOGINS: 1
+# PLATFORMS: ios
+# Preconditions: fresh verified user; the synthetic receipt fixtures/receipt.jpg in the device photo library (addMedia); the
+#   backend runs with AI and LLM fallback OFF and OCR_ENGINE=mock, so a server-side fallback could not read a receipt anyway.
+# Native interactions: sign in; Add > Scan > Choose from library > pick the receipt.
+# Assertions (UI): the parsed items from the receipt appear. Persisted/network (receipt-import.verify.py): the app asked the
+#   server to parse the recognised TEXT (exactly one POST /ingest/receipt/parse_ocr) and never uploaded the image
+#   (zero POST /ingest/receipt/parse). That is the proof the native module ran: a build that ships without it silently falls
+#   back to the image upload (this suite found exactly that once: the build clone had lost modules/receipt-ocr/ios and
+#   /android to an unanchored rsync exclude, so the e2e app shipped without the module).
+# Reset/cleanup: none (own user, disposable DB). Platforms: iOS only. On Android, ML Kit's reading of this synthetic receipt scores below the
+#   server's OCR_LLM_FALLBACK_MIN_CONF (0.75), so the app offers the photo-upload fallback instead of showing items (finding F-015).
+#   receipt-ocr-native-android.yaml covers what Android does prove: the native module ran and nothing was uploaded.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- addMedia:
+    - ../../fixtures/receipt.jpg
+- tapOn:
+    id: "fab.add"
+- tapOn: "Scan"
+- tapOn: "Choose from library"
+- runFlow: ../../subflows/pick-library-photo.yaml
+- extendedWaitUntil:
+    visible: ".*[Ll][Aa][Tt][Tt][Ee].*"
+    timeout: 60000

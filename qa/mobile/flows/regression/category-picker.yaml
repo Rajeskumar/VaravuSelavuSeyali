@@ -1,0 +1,23 @@
+# SCENARIO F-002 (JM-02) regression: the Category picker's rows must be individually reachable
+# LOGINS: 1
+# Preconditions: fresh verified user; env USER_EMAIL, USER_PASSWORD.
+# Native interactions: sign in; open Add; expand "More"; open the Category picker; choose Food & Drink > Groceries.
+# Assertions: the picker's own chips and rows can be tapped (before the fix iOS exposed the whole sheet as ONE
+#   accessibility element, so neither VoiceOver nor a UI test could reach them) and the choice shows in the form.
+# Reset/cleanup: none (own user, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "fab.add"
+- tapOn: "More"
+# The field is one touchable whose label is "Category ✨, Choose a category, ›": match around the text.
+- tapOn: ".*Choose a category.*"
+- tapOn: "Food & Drink"
+- tapOn: "Groceries"
+- assertVisible: ".*Groceries.*"
+# The choice applied and the picker closed: the empty-state prompt that was there before is gone.
+- assertNotVisible: ".*Choose a category.*"

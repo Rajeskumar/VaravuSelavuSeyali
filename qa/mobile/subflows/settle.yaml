@@ -1,0 +1,9 @@
+# A bounded 3 s wait for "negative" assertions: assertNotVisible passes at once if the element has not rendered YET, so give
+# async work (a draft read, a list load) time to show up before asserting that something is absent. Maestro has no sleep
+# command; waiting (optionally) for an element that never appears is one.
+appId: com.cerebroos.trackspense
+---
+- extendedWaitUntil:
+    visible: "__settle_never_appears__"
+    timeout: 3000
+    optional: true

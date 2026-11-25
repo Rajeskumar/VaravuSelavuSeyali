@@ -31,8 +31,13 @@ minus generated/scratch paths. Unknown flags/refs fail. A green profile is not a
 Integration/release need `SDLC_TEST_ENV=local` and `E2E_DATABASE_URL` pointing to an initialized,
 throwaway localhost Postgres DB (schema/pg_trgm/tables as in unit.yml backend-postgres); see
 qa/README.md. Never a production database. Restart the backend before another full profile.
-Native device evidence remains manual. Record exactly which environments supplied the evidence;
-never label a fast run full.
+Real-device evidence (camera capture, push delivery, device performance, VoiceOver/TalkBack, signed
+install/upgrade) remains manual. Simulator/emulator evidence for the covered journeys comes from the native E2E
+suite (`qa/mobile`, `make mobile-e2e-ios`, CI `mobile-e2e.yml`): cite the run (local report or CI link), the platform
+and the OS. It is required only for a change that can affect the native app or the suite (`make route` lists
+`native-e2e` then; CI runs the device jobs for exactly the same paths), not for web, backend or documentation changes. A local run needs Xcode 26.4+, Maestro and PostgreSQL binaries; where they are missing, report
+`INCOMPLETE_EVIDENCE: rely on CI` rather than skipping silently. Record exactly which environments supplied the
+evidence; never label a fast run full.
 
 **Where each check is enforced**
 

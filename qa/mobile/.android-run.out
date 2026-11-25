@@ -1,0 +1,49 @@
+==> Verifying build evidence
+==> Postgres cluster for trackspense_e2e_android_and10 on 127.0.0.1:56119
+==> Bootstrapping schema
+==> Starting API on 127.0.0.1:18081, fault proxy on 18080 (control 18082)
+==> No running emulator: starting a dedicated one (trackspense-e2e-and10)
+==> regression/receipt-import: SKIPPED (not declared for android); not counted as coverage
+==> smoke/tabs-render (attempt 1)
+    PASS in 51.7s
+==> smoke/login-relaunch (attempt 1)
+    PASS in 65.7s
+==> regression/deep-link-join (attempt 1)
+    PASS in 40.1s
+==> smoke/group-expense (attempt 1)
+    PASS in 61.4s
+==> regression/receipt-ocr-native-android (attempt 1)
+    PASS in 54.3s
+==> regression/category-picker (attempt 1)
+    PASS in 50.0s
+==> regression/lost-save-response (attempt 1)
+    PASS in 64.2s
+==> regression/date-picker (attempt 1)
+    PASS in 42.6s
+==> regression/deep-link-signed-out (attempt 1)
+    FAIL in 48.5s
+==> regression/account-switch (attempt 1)
+    PASS in 107.4s
+==> smoke/expense-create (attempt 1)
+    PASS in 61.0s
+==> smoke/draft-recovery (attempt 1)
+    PASS in 58.6s
+==> regression/insights-scope-select (attempt 1)
+    PASS in 45.0s
+
+Results:
+  SKIPPED regression/receipt-import
+  PASSED  smoke/tabs-render
+  PASSED  smoke/login-relaunch
+  PASSED  regression/deep-link-join
+  PASSED  smoke/group-expense
+  PASSED  regression/receipt-ocr-native-android
+  PASSED  regression/category-picker
+  PASSED  regression/lost-save-response
+  PASSED  regression/date-picker
+  FAILED  regression/deep-link-signed-out
+  PASSED  regression/account-switch
+  PASSED  smoke/expense-create
+  PASSED  smoke/draft-recovery
+  PASSED  regression/insights-scope-select
+==> Reports: /Users/rajeshkumarganesan/Documents/workspaces/VaravuSelavuSeyali/qa/mobile/reports/android-and10

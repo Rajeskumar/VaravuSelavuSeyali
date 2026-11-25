@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "mobile-unit-tests",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "cd varavu_selavu_mobile && npx tsc --noEmit && npx jest (via make check)",
+      "source": "tsc clean; Jest 347 passed / 39 suites (baseUrl, withE2eVariant, selector contract, sheet/backdrop accessibility contract, keyboard hook incl. the Android inset and re-scroll, Add-sheet accessibility)",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-003",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "framework-tests",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "make test-framework; make framework-check",
+      "source": "254 framework unit tests OK, including this round's: fault proxy (framing, origin/host/content-type, allow_ai logging, unanswered-request logging, runner clients against the real control API), run_flows (infra retries, DeviceGone abort incl. main(), SIGTERM, platform gating, proxy reset), seed expect_proxy, the CI classifier (mobile-only scoping, push classification, real-git unusual file names), routing/classifier agreement, release-gate hint; validate-ai-sdlc errors=0",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "configuration-checks",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "make framework-check (test_configuration.py + validate-ai-sdlc.py)",
+      "source": "errors=0 warnings=0; workflow job names pinned to release-gate MOBILE_E2E_REQUIRED_JOBS; plan fingerprint unchanged (184b9395e4f0e973)",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-006",
+        "AC-007",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "safety-negatives",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "manual negative runs (2026-11-23/24) on the same code paths plus unit tests on the final tree",
+      "source": "build-ios.sh refuses a production URL and a LAN URL; expo config refuses the e2e variant with EAS_BUILD/EAS_BUILD_PROFILE=production and TRACKSPENSE_ENABLE_PUSH=1; run.sh refuses a tampered artifact; stop script refuses a hostile state file; the fault proxy control API refuses Origin/foreign-Host/non-JSON requests and ambiguous framing (unit-tested); run.sh no longer stops an emulator it did not start (exit 3); scram-protected cluster, 0700 work dir, no database URL on argv. The live negatives were run on earlier trees; the guarded code has not changed behaviour since",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002"
+      ]
+    },
+    {
+      "id": "ios-smoke-local",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "qa/mobile/scripts/run.sh --platform ios --suite regression --shuffle 72 --run-id ios10 (sleep prevention on); earlier full runs full52/full63 and single-flow reruns",
+      "source": "qa/mobile/reports/ios-ios10/summary.json (local, gitignored): ALL 13 flows PASSED on the first attempt on an iOS 27 simulator, zero infra retries, against an e2e-variant Release app with the on-device OCR module: smoke (login-relaunch, expense-create, draft-recovery, tabs-render, group-expense) and regression (category-picker, date-picker, insights-scope-select, account-switch, lost-save-response, deep-link-join, deep-link-signed-out, receipt-import). AC-005 verified on iOS: lost-save-response (exactly one expense and one POST, one faulted), account-switch, receipt-import (Apple Vision ran, parse_ocr once, no image upload), deep links. NOT covered by that run: changes made after it started (Android-only keyboard re-scroll, the run_flows refactor/SIGTERM handler, CI scoping, release-gate hint), which are unit-tested; iOS app behaviour is unchanged by them",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-003",
+        "AC-005"
+      ]
+    },
+    {
+      "id": "android-smoke-local",
+      "status": "failed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "qa/mobile/scripts/run.sh --platform android --suite regression --shuffle 71 --run-id and10 (arm64 API 35 emulator); earlier full run and9",
+      "source": "qa/mobile/reports/android-and10/summary.json (local, gitignored): 12 of 13 flows passed on the first attempt, zero infra retries; regression/deep-link-signed-out FAILED: Sign in stayed hidden behind the keyboard once (finding A-3: the keyboard-inset fix from A-1 is not 100% reliable; about 1 failure in 45 sign-in screens). The earlier full run and9 (a slightly earlier tree) was 13/13. receipt-import is iOS-only (skipped); receipt-ocr-native-android passed. MITIGATION NOT DEVICE-VERIFIED: the Android re-scroll added afterwards is covered by unit tests only (owner chose not to run more device suites). Whether the flake recurs is for the Android CI runs to show",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-003",
+        "AC-005"
+      ]
+    },
+    {
+      "id": "release-gate-tests",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "python3 -m unittest scripts/quality/tests/test_release_gate.py scripts/quality/tests/test_mobile_e2e_gate.py",
+      "source": "smoke-only, one-platform, cancelled, skipped, pending, duplicate-failed and scheduled runs rejected; main() glue; the hint to dispatch a regression run for no-run and skipped-job candidates; ENFORCE_MOBILE_E2E deliberately False until promotion (pinned by a test)",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-006",
+        "AC-007"
+      ]
+    },
+    {
+      "id": "secret-scan",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "bash scripts/quality/security.sh --no-audit (via make check)",
+      "source": "no secret patterns (lightweight scan; gitleaks unavailable locally)",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002"
+      ]
+    },
+    {
+      "id": "dependency-audit",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "make audit-mobile; no dependency manifest changed",
+      "source": "check-audit: OK, no unlisted advisories at or above high",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-008"
+      ]
+    },
+    {
+      "id": "implementation-review",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "code-reviewer agent, five passes (2026-11-23/24)",
+      "source": "pass 1: 1 P1 + 3 P2 fixed; pass 2: PASS; pass 3: CHANGES_REQUESTED (1 P1, 5 P2: C-5..C-10, T-1) fixed; pass 4: CHANGES_REQUESTED (1 P1 KeyError crash C-11, 2 P2: C-12, C-13) fixed; pass 5: PASS_WITH_NOTES (0 P0/P1, 2 P2: the quoted-path classifier bypass S-9 and the release-gate hint C-14; 3 P3) fixed with tests. Those last fixes were not re-reviewed. CI-only paths (x86_64 emulator, reactivecircus runner, in-place builds) are unreviewed by execution",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008"
+      ]
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "security-reviewer agent, five passes (2026-11-23/24)",
+      "source": "pass 1: 2 P2 fixed; pass 2: PASS; pass 3: PASS (5 P3); pass 4: PASS_WITH_NOTES (1 P2 + 5 P3: C-12, S-7, S-8); pass 5: PASS_WITH_NOTES (1 P2 quoted-path classifier bypass, reproduced and FIXED with a real-git test S-9; 1 P3 open: no CODEOWNERS, S-10). The S-9 fix was not re-reviewed",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-005",
+        "AC-006",
+        "AC-007"
+      ]
+    },
+    {
+      "id": "ui-review",
+      "status": "passed",
+      "snapshot": "a551b8d56cdf2560fb309d4726e27c89ae7ee253c3a63eaa0b37c67816008a04",
+      "environment": "local macOS (Darwin 25.6), Xcode 27.0, iOS 27.0 simulator (iPhone 17 Pro), Android 15 (API 35, arm64) emulator, Maestro 2.12.1, Node 20, Python 3.11 + Poetry venv, PostgreSQL 16 (Homebrew); branch mobile-qa-implementation (uncommitted)",
+      "command_or_method": "ui-reviewer agent, four passes (2026-11-23/24)",
+      "source": "pass 3 (Android keyboard inset): PASS_WITH_NOTES, F-016/F-017/F-018 open; pass 4 (the Android re-scroll): PASS_WITH_NOTES, 0 P0-P2, 2 P3 (recorded as F-019). No UI code has changed since. TalkBack/VoiceOver gestures, landscape, API < 35 and real devices not exercised",
+      "recorded_at": "2026-11-25T03:24:01Z",
+      "acceptance_criteria": [
+        "AC-003",
+        "AC-008"
+      ]
+    }
+  ]
+}

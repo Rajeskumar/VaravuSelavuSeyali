@@ -1,0 +1,44 @@
+# SCENARIO T-008 (JM-01) smoke
+# LOGINS: 2
+# Preconditions: fresh verified user (runner provisions it); env USER_EMAIL, USER_PASSWORD.
+# Native interactions: sign in with a wrong then the right password; kill and relaunch the app.
+# Assertions: wrong password shows the error and stays on login; right password lands on Home;
+#   after a kill + relaunch the session is restored from SecureStore (no login screen).
+# Reset/cleanup: none (own user, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - smoke
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow:
+    file: ../../subflows/fill-login.yaml
+    env:
+      LOGIN_EMAIL: ${USER_EMAIL}
+      LOGIN_PASSWORD: "definitely-not-the-password"
+- tapOn:
+    id: "login.submit"
+# The toast's accessibility label includes its icon glyph, so match the message with wildcards.
+- assertVisible: ".*Login failed.*"
+# Still on the sign-in screen. The Sign in button, not the email field: with the keyboard up the form is scrolled to its
+# end, so on Android the (correctly scrolled-away) email field is clipped and absent from the accessibility tree.
+- assertVisible:
+    id: "login.submit"
+# Start the second attempt from a clean launch: Maestro's eraseText does not clear an iOS secure field, so
+# re-filling the same form would append the right password to the wrong one.
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow:
+    file: ../../subflows/fill-login.yaml
+    env:
+      LOGIN_EMAIL: ${USER_EMAIL}
+      LOGIN_PASSWORD: ${USER_PASSWORD}
+- tapOn:
+    id: "login.submit"
+- runFlow: ../../subflows/reach-home.yaml
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: "tabs.Dashboard"
+    timeout: 30000
+- assertNotVisible:
+    id: "login.email"

@@ -1,0 +1,258 @@
+name: Mobile E2E
+
+# Native E2E (Maestro) on a real iOS Simulator and Android Emulator against an isolated backend (TS-QA-103).
+# Docs: qa/mobile/README.md. Rollout: this workflow runs and its failures stay red, but only the final
+# "Native mobile gate" job is ever meant to become a required check (after the promotion criteria in the work
+# item are met, and the owner applies .github/rulesets/main.json).
+#
+# The workflow STARTS on every pull request and push to main on purpose: a workflow-level `paths:` filter would skip the
+# whole workflow (including the gate) and leave a required check pending. The device jobs (the expensive emulator and
+# simulator runs) only run when the change can affect the native app or the suite: "not applicable" is decided inside the
+# `changes` job by scripts/quality/mobile_e2e_gate.py (web, backend and documentation changes skip them and the gate passes).
+# Nightly and manual runs always run.
+#
+# Suite per event: pull_request -> smoke; push to main, nightly -> regression; workflow_dispatch -> input. The release gate
+# needs a regression run of both platforms on the candidate commit: when the candidate has none (no mobile change in its
+# push), dispatch one: gh workflow run mobile-e2e.yml --ref main -f suite=regression.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Suite to run
+        type: choice
+        options: [smoke, regression]
+        default: smoke
+
+permissions:
+  contents: read
+
+# Only superseded PR runs are cancelled. Every other run gets its own group: a newer push to main must never cancel
+# or replace the pending run for an earlier commit, because the release gate needs that commit's regression jobs.
+concurrency:
+  group: mobile-e2e-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Compiled into the app under test; must match qa/mobile/scripts (default 18080).
+  E2E_API_PORT: '18080'
+  E2E_BUILD_IN_PLACE: '1'
+  MAESTRO_CLI_NO_ANALYTICS: '1'
+
+jobs:
+  changes:
+    name: Classify change
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+      suite: ${{ steps.scope.outputs.suite }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          INPUT_SUITE: ${{ github.event.inputs.suite }}
+        run: |
+          python3 scripts/quality/mobile_e2e_gate.py scope \
+            --event "$EVENT" --base "$BASE_SHA" --head "$HEAD_SHA" --input-suite "$INPUT_SUITE"
+
+  android:
+    name: android (${{ needs.changes.outputs.suite }})
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: varavu_selavu_mobile/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ hashFiles('varavu_selavu_app/poetry.lock') }}
+
+      - name: Install backend and app dependencies
+        run: |
+          (cd varavu_selavu_app && poetry install --no-root)
+          (cd varavu_selavu_mobile && npm ci)
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('varavu_selavu_mobile/package-lock.json') }}
+
+      # The isolated backend needs the PostgreSQL SERVER binaries (initdb, pg_ctl). The runner image ships some major version
+      # (16 on ubuntu-24.04, 18 on ubuntu-26.04) in /usr/lib/postgresql/<major>/bin, which is not on PATH: find it, install one
+      # if the image has none, and hand the path to the launcher (the iOS job installs its binaries the same explicit way).
+      - name: PostgreSQL server binaries
+        run: |
+          pg_bin() { ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -t/ -k5 -rn | head -1; }
+          PG_BIN="$(pg_bin || true)"
+          if [ -z "${PG_BIN}" ] || [ ! -x "${PG_BIN}/initdb" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql
+            PG_BIN="$(pg_bin)"
+          fi
+          echo "E2E_PG_BIN=${PG_BIN}" >> "$GITHUB_ENV"
+          "${PG_BIN}/initdb" --version
+
+      # The app artifact is ALWAYS rebuilt from the current JS and env (never restored from a cache).
+      - name: Build e2e-variant APK
+        run: qa/mobile/scripts/build-android.sh
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run native E2E on the emulator
+        # Third-party action: pinned to the commit of v2.38.0 (not a mutable tag).
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: qa/mobile/scripts/run.sh --platform android --suite ${{ needs.changes.outputs.suite }} --retries 1 --shuffle ${{ github.run_number }} --run-id ${{ github.run_id }}
+
+      - name: Summarise
+        if: always()
+        run: |
+          for f in qa/mobile/reports/android-*/summary.json; do [ -f "$f" ] && { echo '### Android' >> "$GITHUB_STEP_SUMMARY"; python3 -c "import json,sys; [print('- %s: **%s**' % (x['flow'], x['status'])) for x in json.load(open(sys.argv[1]))['flows']]" "$f" >> "$GITHUB_STEP_SUMMARY"; }; done || true
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-e2e-android
+          path: |
+            qa/mobile/reports/
+            qa/mobile/.build/artifacts/build-evidence-android.json
+            qa/mobile/.build/build-android.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  ios:
+    name: ios (${{ needs.changes.outputs.suite }})
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
+    # Xcode >= 26.4 is required (see varavu_selavu_mobile/AGENTS.md). The exact image/Xcode pairing is confirmed
+    # by the spike run (workflow_dispatch) before this job is trusted.
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: varavu_selavu_mobile/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Cache Poetry dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pypoetry
+          key: poetry-${{ runner.os }}-${{ hashFiles('varavu_selavu_app/poetry.lock') }}
+
+      - name: Install dependencies (backend, app, PostgreSQL server binaries)
+        run: |
+          (cd varavu_selavu_app && poetry install --no-root)
+          (cd varavu_selavu_mobile && npm ci)
+          command -v initdb >/dev/null 2>&1 || brew install postgresql@16
+          xcodebuild -version
+
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('varavu_selavu_mobile/package-lock.json') }}
+
+      # The app artifact is ALWAYS rebuilt from the current JS and env (never restored from a cache).
+      - name: Build e2e-variant app (Release, simulator)
+        run: qa/mobile/scripts/build-ios.sh
+
+      - name: Run native E2E on a dedicated simulator
+        run: qa/mobile/scripts/run.sh --platform ios --suite ${{ needs.changes.outputs.suite }} --retries 1 --shuffle ${{ github.run_number }} --run-id ${{ github.run_id }}
+
+      - name: Summarise
+        if: always()
+        run: |
+          for f in qa/mobile/reports/ios-*/summary.json; do [ -f "$f" ] && { echo '### iOS' >> "$GITHUB_STEP_SUMMARY"; python3 -c "import json,sys; [print('- %s: **%s**' % (x['flow'], x['status'])) for x in json.load(open(sys.argv[1]))['flows']]" "$f" >> "$GITHUB_STEP_SUMMARY"; }; done || true
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-e2e-ios
+          path: |
+            qa/mobile/reports/
+            qa/mobile/.build/artifacts/build-evidence-ios.json
+            qa/mobile/.build/build-ios.log
+          retention-days: 14
+          if-no-files-found: warn
+
+  gate:
+    name: Native mobile gate
+    needs: [changes, android, ios]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Evaluate
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          RELEVANT: ${{ needs.changes.outputs.relevant }}
+          ANDROID: ${{ needs.android.result }}
+          IOS: ${{ needs.ios.result }}
+        run: |
+          python3 scripts/quality/mobile_e2e_gate.py verdict \
+            --changes "$CHANGES" --relevant "$RELEVANT" --android "$ANDROID" --ios "$IOS" | tee -a "$GITHUB_STEP_SUMMARY"

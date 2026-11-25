@@ -1,0 +1,31 @@
+# SCENARIO T-010 (JM-02) smoke
+# LOGINS: 1
+# Preconditions: fresh verified user; env USER_EMAIL, USER_PASSWORD, RUN_LABEL.
+# Native interactions: start an expense, kill the app, relaunch.
+# Assertions (UI): the Add sheet reopens with the restored notice and the typed description.
+#   Persisted (draft-recovery.verify.py): NOTHING was saved or auto-submitted (0 expenses with RUN_LABEL).
+# Reset/cleanup: the draft is discarded at the end. Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - smoke
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "fab.add"
+- tapOn:
+    id: "addExpense.key.7"
+- tapOn:
+    id: "addExpense.description"
+- inputText: "${RUN_LABEL} draft"
+- hideKeyboard
+# Drafts are written by an effect after each change; give the write a moment before the kill.
+- waitForAnimationToEnd
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your unsaved expense was restored.*"
+    timeout: 30000
+- assertVisible: "${RUN_LABEL} draft"
+- tapOn: "Discard draft"
+- tapOn: "Discard"

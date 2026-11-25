@@ -8,6 +8,7 @@
 | Web | Jest + RTL | `make test-web`, `make lint-web`, `make typecheck-web` |
 | Mobile | Jest + tsc | `make test-mobile`, `make typecheck-mobile` |
 | Browser/API E2E | Playwright (`qa/`) | `make qa-smoke`, `qa-regression`, `qa-api` |
+| Native mobile E2E (iOS Simulator + Android Emulator) | Maestro (`qa/mobile`), CI `mobile-e2e.yml` | `make mobile-e2e-build-ios`, `make mobile-e2e-ios` |
 | Dependencies | pip-audit / npm audit | `make audit-all` |
 Aggregates: `make unit-check`, `make release-check`, `make release-check-full`. Wrapper: `scripts/quality/verify.sh`.
 
@@ -18,6 +19,8 @@ Aggregates: `make unit-check`, `make release-check`, `make release-check-full`. 
 - **New UI:** RTL test by role/name for the main flow, empty/error states and a11y name; E2E only for critical journeys.
 - **Migration/Postgres-specific SQL:** a `_pg` test.
 - **Money:** assert exact `Decimal` results, never approximate.
+
+- **New critical mobile journey or native-only behaviour** (layout, SecureStore, picker, OCR, deep link): a Maestro flow in `qa/mobile/flows` with `testID`s, plus a server-side check for financial writes. Simulator/emulator only; real camera, push delivery, device performance and screen-reader passes stay manual (`docs/qa/08-release-readiness-checklist.md`).
 
 ## Constraints
 - The qa suite runs at real auth rate limits (5 logins/min, 5 registrations/hour per backend process). Don't add real logins/registrations to qa tests; stub or use the API; restart the backend between local `release-check-full` runs.

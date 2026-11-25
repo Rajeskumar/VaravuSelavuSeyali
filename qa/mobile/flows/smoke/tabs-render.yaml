@@ -1,0 +1,35 @@
+# SCENARIO T-011 (JM-06) smoke
+# LOGINS: 1
+# Preconditions: fresh verified user; env USER_EMAIL, USER_PASSWORD.
+# Native interactions: sign in, then tap every bottom tab.
+# Assertions: each tab renders its own header (catches blank/collapsed native layouts such as the
+#   SegmentedTabs Yoga bug that web previews never showed).
+# Reset/cleanup: none. Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - smoke
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- assertVisible:
+    id: "home.greeting"
+- tapOn:
+    id: "tabs.Expenses"
+- assertVisible:
+    id: "header.expenses"
+- tapOn:
+    id: "tabs.GroupsTab"
+- assertVisible:
+    id: "header.groups"
+- tapOn:
+    id: "tabs.Analysis"
+- assertVisible:
+    id: "header.insights"
+- tapOn:
+    id: "tabs.AI-Analyst"
+- assertVisible:
+    id: "header.ask"
+- tapOn:
+    id: "tabs.Dashboard"
+- assertVisible:
+    id: "home.greeting"

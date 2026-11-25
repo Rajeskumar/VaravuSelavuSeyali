@@ -146,6 +146,15 @@ describe('Sheet', () => {
     rerender(<Sheet visible onClose={() => {}}><Text>inside</Text></Sheet>);
     expect(queryByText('inside')).toBeTruthy();
   });
+
+  it('is not itself an accessibility element, so its rows stay individually reachable', () => {
+    // The panel is a Pressable (it swallows backdrop taps), and a Pressable is accessible by default. On iOS an
+    // accessible container collapses its whole subtree into ONE element ("Who was this for?, Close, Just me, ..."),
+    // so VoiceOver users and UI tests cannot pick a row.
+    const { getByTestId } = render(<Sheet visible onClose={() => {}}><Text>inside</Text></Sheet>);
+    expect(getByTestId('sheet.panel')).toHaveProp('accessible', false);
+    expect(getByTestId('sheet.panel')).toHaveProp('focusable', false); // Android: not a TalkBack focus stop either
+  });
 });
 
 describe('theme tokens the V2 primitives rely on', () => {

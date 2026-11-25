@@ -92,3 +92,24 @@ test('closing a recovered group draft preserves its customized payers and split'
   const calls = (writeExpenseDraft as jest.Mock).mock.calls;
   expect(calls[calls.length - 1][1]).toMatchObject({ customized: true, payers: groupDraft.payers, splitValue: groupDraft.splitValue });
 });
+
+test('the sheet container is not an accessibility element, so the keypad and Save stay individually reachable', async () => {
+  // A Pressable is accessible by default; on iOS an accessible container collapses its whole subtree into ONE
+  // element ("Discard draft, Type, Scan, Close, $0.00, ..."), so VoiceOver and UI tests cannot reach the keys.
+  mount();
+  await screen.findByPlaceholderText('What was it? (AI suggests the category)');
+  expect(screen.getByTestId('addExpense.sheet')).toHaveProp('accessible', false);
+  // Pressable also defaults focusable to true, which on Android can leave the wrapper as a TalkBack focus stop.
+  expect(screen.getByTestId('addExpense.sheet')).toHaveProp('focusable', false);
+});
+
+test('keypad keys are buttons with spoken names, including the two that are only glyphs', async () => {
+  mount();
+  await screen.findByPlaceholderText('What was it? (AI suggests the category)');
+  for (const key of ['1', '5', '0']) {
+    expect(screen.getByTestId(`addExpense.key.${key}`)).toHaveProp('accessibilityRole', 'button');
+  }
+  expect(screen.getByTestId('addExpense.key.dot')).toHaveProp('accessibilityLabel', 'Decimal point');
+  expect(screen.getByTestId('addExpense.key.backspace')).toHaveProp('accessibilityLabel', 'Delete');
+  expect(screen.getByTestId('addExpense.key.dot')).toHaveProp('accessibilityRole', 'button');
+});

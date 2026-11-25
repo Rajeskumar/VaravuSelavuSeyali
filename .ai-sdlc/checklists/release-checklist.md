@@ -5,6 +5,8 @@ Readiness evidence on the candidate (`make release-prepare` fills what it can pr
 - [ ] Required acceptance, deterministic checks, routed reviews and security audits are current.
 - [ ] No unresolved P0; non-P0 waivers have owner, reason, reference and expiry; fixed findings reverified.
 - [ ] Critical journeys and applicable docs/qa UAT covered; native devices checked when a native build ships.
+- [ ] Native mobile E2E (once `ENFORCE_MOBILE_E2E` is on): green `ios (regression)` and `android (regression)` on the exact SHA. It only
+  runs for mobile-affecting changes, so if the candidate's push had none, dispatch it: `gh workflow run mobile-e2e.yml --ref main -f suite=regression`.
 - [ ] Migrations rehearsed from the previous release (`migrations.yml`); compatible with previous code; lock/backfill risk assessed.
 - [ ] Config/flags/secrets provisioned and documented; release push entitlement enabled if native push ships.
 - [ ] Previous images available; schema-aware rollback/roll-forward and partial deployment response stated.

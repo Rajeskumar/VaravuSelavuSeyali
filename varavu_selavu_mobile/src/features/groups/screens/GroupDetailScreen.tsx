@@ -538,8 +538,8 @@ export default function GroupDetailScreen() {
       />
 
       <Modal visible={inviteVisible} transparent animationType="slide" onRequestClose={() => setInviteVisible(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setInviteVisible(false)} />
-        <View style={[styles.inviteSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setInviteVisible(false)} accessible={false} />
+        <View style={[styles.inviteSheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={() => setInviteVisible(false)}>
           <View style={styles.modalPill} />
           <Text style={styles.inviteTitle}>Add Member</Text>
           <TextInput

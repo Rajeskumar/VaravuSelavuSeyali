@@ -1,0 +1,38 @@
+# SCENARIO AC-005 (JM-03) regression, ANDROID: the on-device ML Kit OCR module runs and the photo is not uploaded without consent
+# LOGINS: 1
+# PLATFORMS: android
+# Preconditions: fresh verified user; the synthetic receipt fixtures/receipt.jpg in the device photo library (addMedia); the backend
+#   runs with AI and LLM fallback OFF and OCR_ENGINE=mock.
+# Native interactions: sign in; Add > Scan > Choose from library > pick the receipt in the system photo picker.
+# Assertions (UI + network, receipt-ocr-native-android.verify.py): the native module is in the app and ran (the app posted the
+#   recognised TEXT: exactly one POST /ingest/receipt/parse_ocr; a build that ships without the module silently skips this and
+#   goes straight to the upload fallback). The outcome is either the parsed items or the AI-consent prompt that guards the
+#   fallback. Declining does NOT stop the app calling our own server's /ingest/receipt/parse; it sends allow_ai=false and the
+#   SERVER enforces that no AI provider is used. So the check is: at most one /parse request and every one carries allow_ai=false
+#   (the proxy log keeps that single query value). The check waits a few seconds first, because the proxy logs a request only once
+#   the backend has answered.
+# What this does NOT prove: parse quality, or what the server does with allow_ai=false (backend tests cover that). On this synthetic receipt ML Kit's text currently scores below the server's
+#   fallback bar, so the app offers the upload fallback (finding F-015). The iOS flow (receipt-import) asserts the items.
+# Reset/cleanup: none (own user, disposable DB). Platforms: Android only (the iOS equivalent is receipt-import).
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- addMedia:
+    - ../../fixtures/receipt.jpg
+- tapOn:
+    id: "fab.add"
+- tapOn: "Scan"
+- tapOn: "Choose from library"
+- runFlow: ../../subflows/pick-library-photo.yaml
+- extendedWaitUntil:
+    visible: ".*([Ll][Aa][Tt][Tt][Ee]|Use AI features\\?).*"
+    timeout: 90000
+- runFlow:
+    when:
+      visible: ".*Use AI features\\?.*"
+    commands:
+      - tapOn: "[Nn][Oo][Tt] [Nn][Oo][Ww]"
+- waitForAnimationToEnd

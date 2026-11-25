@@ -207,10 +207,11 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
+      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
+        onAccessibilityEscape={onClose}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />

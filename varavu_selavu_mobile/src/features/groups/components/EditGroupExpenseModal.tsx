@@ -179,9 +179,9 @@ export default function EditGroupExpenseModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} onAccessibilityEscape={onClose}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
             <View style={styles.pill} />
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Edit Expense</Text>

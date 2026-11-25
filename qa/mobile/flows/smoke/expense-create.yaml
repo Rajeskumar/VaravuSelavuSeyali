@@ -1,0 +1,36 @@
+# SCENARIO T-009 (JM-02) smoke
+# LOGINS: 1
+# Preconditions: fresh verified user; env USER_EMAIL, USER_PASSWORD, RUN_LABEL.
+# Native interactions: sign in; open Add; enter 12.50 on the custom keypad and a labelled description; Save.
+# Assertions (UI): the saved confirmation shows. Persisted data is checked by expense-create.verify.py:
+#   exactly ONE expense carrying RUN_LABEL exists server-side.
+# Reset/cleanup: none (own user, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - smoke
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "fab.add"
+- assertVisible:
+    id: "addExpense.amount"
+- tapOn:
+    id: "addExpense.key.1"
+- tapOn:
+    id: "addExpense.key.2"
+- tapOn:
+    id: "addExpense.key.dot"
+- tapOn:
+    id: "addExpense.key.5"
+- tapOn:
+    id: "addExpense.description"
+- inputText: "${RUN_LABEL} coffee"
+# hideKeyboard does not dismiss the keyboard inside this sheet; Return submits the single-line field and blurs it.
+- pressKey: Enter
+- tapOn:
+    id: "addExpense.save"
+- extendedWaitUntil:
+    visible:
+      id: "addExpense.saved"
+    timeout: 20000

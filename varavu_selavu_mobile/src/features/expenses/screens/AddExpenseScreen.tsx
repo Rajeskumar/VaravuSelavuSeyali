@@ -105,6 +105,10 @@ function fmt(n: number): string {
 const GROUP_TYPE_EMOJI: Record<string, string> = { other: '👥', trip: '✈️', home: '🏠', couple: '💑' };
 
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
+// Stable ASCII ids for the native E2E suite (a '.' or '⌫' in a testID is a regex trap in Maestro).
+const KEY_TEST_ID: Record<string, string> = { '.': 'dot', '⌫': 'backspace' };
+// Spoken names for the two keys that are only glyphs (digits are read as themselves).
+const KEY_A11Y_LABEL: Record<string, string> = { '.': 'Decimal point', '⌫': 'Delete' };
 
 export interface AddExpenseContextType {
   /** `initialGroupId` pre-selects that group's "who" chip on open — used by GroupDetailScreen's
@@ -691,8 +695,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
       {children}
 
       <Modal transparent visible={visible && hydrated && !!accessToken} animationType="none" onRequestClose={closeAddExpense} statusBarTranslucent>
-        <View style={styles.modalRoot}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeAddExpense}>
+        <View style={styles.modalRoot} onAccessibilityEscape={closeAddExpense}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={closeAddExpense} accessible={false} onAccessibilityEscape={closeAddExpense}>
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: theme.colors.overlay }]} />
           </Pressable>
 
@@ -702,7 +706,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
               { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY }] },
             ]}
           >
-            <Pressable onPress={(e) => e.stopPropagation()}>
+            {/* accessible={false}: a Pressable is an accessibility element by default, and on iOS that collapses the whole
+                sheet (keypad, Save, chips) into one element, unreachable for VoiceOver. It only swallows backdrop taps. */}
+            <Pressable onPress={(e) => e.stopPropagation()} accessible={false} focusable={false} testID="addExpense.sheet">
               <View style={styles.dragPillWrap}>
                 <View style={styles.dragPill} />
               </View>
@@ -749,11 +755,12 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   </View>
 
                   <View style={styles.amountDisplayWrap}>
-                    <Text style={styles.amountDisplay}>{amtDisplay}</Text>
+                    <Text style={styles.amountDisplay} testID="addExpense.amount">{amtDisplay}</Text>
                   </View>
 
                   <RNTextInput
                     style={styles.descInput}
+                    testID="addExpense.description"
                     placeholder="What was it? (AI suggests the category)"
                     placeholderTextColor={theme.colors.textQuaternary}
                     value={desc}
@@ -893,8 +900,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   {showDatePicker && (
                     Platform.OS === 'ios' ? (
                       <Modal transparent animationType="slide" visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
-                        <Pressable style={styles.datePickerBackdrop} onPress={() => setShowDatePicker(false)}>
-                          <Pressable style={styles.datePickerSheet} onPress={(e) => e.stopPropagation()}>
+                        <Pressable style={styles.datePickerBackdrop} onPress={() => setShowDatePicker(false)} accessible={false} onAccessibilityEscape={() => setShowDatePicker(false)}>
+                          <Pressable style={styles.datePickerSheet} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
                             <View style={styles.datePickerHeader}>
                               <TouchableOpacity onPress={() => setShowDatePicker(false)}>
                                 <Text style={styles.datePickerDone}>Done</Text>
@@ -977,7 +984,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
 
                   <View style={styles.keypad}>
                     {KEYS.map((k) => (
-                      <TouchableOpacity key={k} style={styles.key} onPress={() => capPress(k)} activeOpacity={0.6}>
+                      <TouchableOpacity key={k} style={styles.key} onPress={() => capPress(k)} activeOpacity={0.6} testID={`addExpense.key.${KEY_TEST_ID[k] ?? k}`} accessibilityRole="button" accessibilityLabel={KEY_A11Y_LABEL[k]}>
                         <Text style={styles.keyLabel}>{k}</Text>
                       </TouchableOpacity>
                     ))}
@@ -988,6 +995,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     disabled={!capReady || loading}
                     activeOpacity={0.85}
                     accessibilityRole="button"
+                    testID="addExpense.save"
                   >
                     <LinearGradient
                       colors={theme.gradients.primary}
@@ -1004,7 +1012,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
                   </TouchableOpacity>
                 </ScrollView>
               ) : (
-                <View style={styles.savedWrap}>
+                <View style={styles.savedWrap} testID="addExpense.saved">
                   <View style={styles.savedCheck}>
                     <Text style={styles.savedCheckText}>✓</Text>
                   </View>

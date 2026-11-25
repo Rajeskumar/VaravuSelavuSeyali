@@ -1,0 +1,11 @@
+# Fresh install state: app data AND keychain cleared (SecureStore tokens/drafts live in the keychain on iOS).
+# clearKeychain wipes the whole simulator keychain, so run.sh only ever targets its own dedicated simulator.
+appId: com.cerebroos.trackspense
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- assertVisible:
+    id: "login.email"

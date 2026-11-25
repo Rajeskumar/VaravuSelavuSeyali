@@ -19,14 +19,18 @@ import subprocess
 import sys
 
 TEST_FILE = re.compile(
-    r"(^|/)(tests?|__tests__)/|(^|/)test_[^/]+\.py$|_test\.py$|\.(test|spec)\.[jt]sx?$"
+    r"(^|/)(tests?|__tests__)/|(^|/)test_[^/]+\.py$|_test\.py$|\.(test|spec)\.[jt]sx?$|"
+    r"(^|/)qa/mobile/flows/.+\.(ya?ml|py)$"  # native E2E flows and their server-side verify/seed scripts (TS-QA-103)
 )
 SKIP_MARKER = re.compile(
     r"\bpytest\.mark\.(skip|skipif|xfail)\b|\bpytest\.(skip|xfail|importorskip)\(|"
     r"\bunittest\.(skip|skipIf|skipUnless|expectedFailure)\b|"
     r"\.(skip|only|todo|fixme)\(|\b(xit|xtest|xdescribe|fit|fdescribe)\(|\bself\.skipTest\("
 )
-ASSERTION = re.compile(r"\bassert\b|\bself\.assert\w*\(|\bexpect\(|\bassert_\w+\(|\.should\(")
+ASSERTION = re.compile(
+    r"\bassert\b|\bself\.assert\w*\(|\bexpect\(|\bassert_\w+\(|\.should\("
+    r"|\bassert(?:Not)?Visible\b|\bassertTrue\b|\bextendedWaitUntil\b"  # Maestro flow steps that assert
+)
 TRAILER = "Test-Change-Approved:"
 # This checker's own fixtures contain the markers it detects.
 SELF_FIXTURES = {"scripts/quality/tests/test_test_integrity.py"}

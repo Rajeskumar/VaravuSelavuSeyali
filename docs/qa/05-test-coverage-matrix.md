@@ -61,7 +61,7 @@ Legend: **E2E** Playwright UI · **API** Playwright request · **BE** pytest · 
 | J-17 Export/delete account | BE `account_deletion`, `personal_export`; qa **none** | ❌ | ✅ | ❌ | UI export download, delete flow (disposable user) | E2E (disposable) |
 | J-18 MCP assistants | FE `AssistantAccessPage.test`; BE `test_mcp`, `mcp_oauth`, `mcp_pg`, `mcp_migrations_pg` | ❌ | ✅ | ✅ | Browser consent/approve E2E with a scripted client | E2E |
 | J-19 Responsive/mobile web | qa REG-001..005, 020..023 (`responsive-mobile`, `mobile-usability`, 23 tests) | ✅ | — | ✅ | Run **before consent answered** (F-01); 320px; tablet; landscape | E2E |
-| Mobile JM-01..07 | M Jest (utils, core, selected components); no device E2E | ❌ | — | 🟡 | All device journeys (none automated); on-device OCR; push routing | Detox/Maestro (see 06) |
+| Mobile JM-01..07 | M Jest (utils, core, selected components); **native iOS Simulator E2E (Maestro, `qa/mobile`, TS-QA-103, 2026-11-23, local run only): JM-01 login + relaunch, JM-02 add expense + draft recovery, JM-04 group expense, JM-06 tab render**; no Android run and no CI run yet | 🟡 | — | 🟡 | CI runs on both platforms; JM-03 on-device OCR; JM-04 deep link; JM-05 push (manual by design); JM-07 profile/delete account; regression flows | Maestro (see 06, `docs/decisions/0001`) |
 
 ## 3. Feature-level view (UAT IDs ↔ existing tests; approximate, hand-summarised)
 

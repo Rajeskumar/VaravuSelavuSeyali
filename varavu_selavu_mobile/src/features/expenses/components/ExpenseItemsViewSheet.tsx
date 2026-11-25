@@ -49,8 +49,8 @@ export default function ExpenseItemsViewSheet({ visible, expense, onClose }: Pro
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} onAccessibilityEscape={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
           <View style={styles.pill} />
           <View style={styles.header}>
             <View style={{ flex: 1, marginRight: 12 }}>

@@ -269,8 +269,9 @@ export default function GroupsScreen() {
           <Pressable
             style={styles.modalBackdrop}
             onPress={() => setShowCreate(false)}
+            accessible={false}
           />
-          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+          <View style={[styles.modalSheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={() => setShowCreate(false)}>
             <ScrollView 
               keyboardShouldPersistTaps="handled" 
               bounces={false} 

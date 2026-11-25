@@ -172,8 +172,8 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
+      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView} onAccessibilityEscape={onClose}>
         <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surfaceElevated, paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.header}>

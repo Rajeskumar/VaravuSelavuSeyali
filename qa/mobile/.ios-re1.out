@@ -1,0 +1,10 @@
+==> Verifying build evidence
+==> Postgres cluster for trackspense_e2e_ios_iosre1 on 127.0.0.1:53703
+==> Bootstrapping schema
+==> Starting API on 127.0.0.1:18081, fault proxy on 18080 (control 18082)
+==> regression/date-picker (attempt 1)
+    PASS in 61.8s
+
+Results:
+  PASSED  regression/date-picker
+==> Reports: /Users/rajeshkumarganesan/Documents/workspaces/VaravuSelavuSeyali/qa/mobile/reports/ios-iosre1

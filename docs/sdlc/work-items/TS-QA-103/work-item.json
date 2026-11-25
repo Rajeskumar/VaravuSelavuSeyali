@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "id": "TS-QA-103",
+  "title": "Native mobile E2E on iOS Simulator and Android Emulator (Maestro) in CI",
+  "owner": "Repository owner / Claude Code implementation",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "A native test build can only point at a local backend and only when built as the e2e variant: production builds ignore the URL override; an e2e build with a missing or non-local URL, a production profile combined with the e2e variant, or an artifact whose checksum differs from build-evidence.json is refused."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "The test backend launcher refuses any database that is not a local disposable trackspense_e2e_* database, explicitly sets every sensitive/outbound setting (AI, LLM fallback, mail, push, JWT) so a local .env cannot leak in, and uses a separate database per run and platform."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "On the iOS Simulator, the smoke flows (login and relaunch, expense creation, draft recovery, tab render, group expense) pass against the compiled app, each runnable alone and in any order, with persisted data verified through the API."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "On the Android Emulator in CI, the same smoke flows pass against the compiled app."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "Regression flows prove: a lost save response is not blindly resubmitted and leaves exactly one expense; account switch leaks no data or draft; receipt import runs the native OCR path (parse_ocr text lines, no image fallback); deep-link join behaves as specified."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "A mobile-e2e workflow runs on every PR with change detection, Android and iOS jobs, uploaded diagnostics, and a final Native mobile gate that passes only for a classified not-applicable change or when both platforms pass, and fails on classification failure or any failed, cancelled or unexpectedly skipped platform job."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "The release gate accepts a candidate only when the exact main commit has successful ios and android regression jobs from the mobile-e2e workflow; smoke-only, single-platform, cancelled and schedule-only runs are rejected."
+    },
+    {
+      "id": "AC-008",
+      "outcome": "Testing standards, verification and definition of done, QA docs, architecture/infrastructure docs, AGENTS files, roadmap, feature status and changelog describe the native E2E layer and its limits (simulator/emulator only); B-19 and JM coverage are marked complete only with CI evidence."
+    }
+  ],
+  "required_evidence": [
+    "mobile-unit-tests",
+    "framework-tests",
+    "configuration-checks",
+    "safety-negatives",
+    "ios-smoke-local",
+    "android-smoke-ci",
+    "ci-gate-negative",
+    "release-gate-tests",
+    "secret-scan",
+    "dependency-audit",
+    "implementation-review",
+    "security-review",
+    "ui-review",
+    "acceptance-verification"
+  ],
+  "implementation_approval": {
+    "actor": "Repository owner",
+    "reference": "This conversation, 2026-11-24: \"Lets continue with Android flow, pardon me. I approve #1 and continue #4. After all this is done commit the branch and push and create PR\" (re-approval of the plan with ui-review added to required_evidence; Android and the AC-005 regression flows stay in scope; commit, push and PR authorized once done)",
+    "fingerprint": "184b9395e4f0e973f948413356659274d87d07ce9e068f5646e5f395cb2c51c1"
+  },
+  "links": [
+    "docs/qa/06-automation-strategy.md (B-19)",
+    "ROADMAP.md (Maestro smoke flows)",
+    "plan: ~/.claude/plans/i-need-to-comeup-hazy-willow-of-2c5fd456-1d5c-4ee8-961a-2772a2dccd74.md (local only)",
+    "github-issue:#49"
+  ],
+  "notes": "Simulator/emulator automation only; physical-device validation tracked separately. Working branch mobile-qa-implementation (created from main after PR #48 by the user/another session); all changes uncommitted. Promotion to required check and ruleset activation are owner actions. STATE 2026-11-24: Phases 0-2 built; iOS smoke green locally; gate BLOCKED by design until (1) owner decides F-002 (5 more sheets), (2) Android + first CI runs exist (AC-004, ci-gate-negative), (3) regression flows are built (AC-005), then acceptance-verification."
+}

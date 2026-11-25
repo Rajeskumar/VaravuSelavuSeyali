@@ -748,9 +748,9 @@ export default function ExpensesScreen() {
 
             {/* Edit Modal — bottom sheet, standardized with the group expense edit/view sheets */}
             <Modal visible={editModalVisible} animationType="slide" transparent onRequestClose={() => setEditModalVisible(false)}>
-                <Pressable style={styles.editSheetBackdrop} onPress={() => setEditModalVisible(false)}>
+                <Pressable style={styles.editSheetBackdrop} onPress={() => setEditModalVisible(false)} accessible={false} onAccessibilityEscape={() => setEditModalVisible(false)}>
                     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                        <Pressable style={styles.editSheetContent} onPress={(e) => e.stopPropagation()}>
+                        <Pressable style={styles.editSheetContent} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
                             <View style={styles.editSheetPill} />
                             <View style={styles.editSheetHeader}>
                                 <Text style={styles.editSheetTitle}>Edit Transaction</Text>

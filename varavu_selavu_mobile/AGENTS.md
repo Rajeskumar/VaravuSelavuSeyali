@@ -14,6 +14,7 @@ Expo SDK 57 / React Native 0.86 / React Navigation 7 client for TrackSpense. Roo
 - Core: no `console.*` (use `core/logger`), no raw colors outside `core/theme/theme.ts`, SecureStore keys only from `core/auth/storageKeys.ts` (values are persisted; never rename).
 - Route names, `trackspense://` deep-link paths and notification payload handling are contracts — keep them.
 - Auth: Bearer requests with `credentials: 'omit'` (see root AGENTS.md).
+- Native E2E selectors: `testID` is a test contract with `qa/mobile` (Maestro), named `<screen>.<element>` (`login.email`, `tabs.Expenses`, `addExpense.save`). Add one only where a flow interacts; never rename or remove one without updating the flows (`src/e2eSelectors.test.ts` fails if a flow references a missing id).
 - OCR is the local `modules/receipt-ocr` Expo module. Push entitlement is stripped unless `TRACKSPENSE_ENABLE_PUSH=1` (`withDisablePush.js`); iOS 27 needs `withSceneLifecycle.js`.
 
 ## Commands (from repo root)
@@ -25,3 +26,5 @@ Expo SDK 57 / React Native 0.86 / React Navigation 7 client for TrackSpense. Roo
 - **OCR uses the local Expo module, not `@react-native-ml-kit`** — ML Kit's iOS pods break arm64 simulator builds.
 - **iOS push entitlement is stripped by default** (`withDisablePush.js`, so free personal-team builds sign); release builds must set `TRACKSPENSE_ENABLE_PUSH=1`.
 - **Store IDs are `com.cerebroos.trackspense` (iOS and Android) and must never change.**
+- **Sheets/modals must not collapse into one iOS accessibility element.** A sheet panel (the `Pressable` that swallows backdrop taps) and its backdrop are `accessible={false}` (`focusable={false}` on the panel); never give a backdrop an `accessibilityLabel`/`accessibilityRole` (it swallows the sheet's rows); put `onAccessibilityEscape` (VoiceOver two-finger Z) on an *ancestor* of the content. `src/core/ui/sheetAccessibility.test.ts` scans every backdrop and panel, so a new sheet that forgets fails Jest.
+- **Native E2E build variant (`EXPO_PUBLIC_APP_VARIANT=e2e`)**: the only way a non-dev build may use `EXPO_PUBLIC_API_URL`, and then only for a local test backend origin (`core/api/baseUrl.ts` throws otherwise). `withE2eVariant.js` refuses it for EAS and push-enabled (release) builds and adds Android cleartext (app-wide, as the manifest cannot scope it to one host; the API origin is pinned by `baseUrl.ts`) only for it. Never set the variant in a release/EAS profile; production builds ignore the override. Suite and rules: `qa/mobile/README.md`.

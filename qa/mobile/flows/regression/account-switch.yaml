@@ -1,0 +1,65 @@
+# SCENARIO AC-005 (JM-01/JM-07) regression: signing out and in as another user leaks nothing between accounts
+# LOGINS: 2
+# Preconditions: user A (USER_*) with one saved expense; second verified user B (B_EMAIL/B_PASSWORD) from account-switch.seed.py.
+# Native interactions: A signs in, starts an expense (an unsaved draft is persisted; a relaunch proves it), closes the
+#   sheet, signs out from Profile; B signs in.
+# Assertions (UI): B's Expenses list does not show A's expense and B's Add sheet shows no restored draft and no text of A's.
+#   Persisted (account-switch.verify.py): A still has exactly one expense, nothing was saved from A's draft, B has none.
+# Reset/cleanup: none (own users, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "tabs.Expenses"
+- assertVisible: ".*private-A.*"
+- tapOn:
+    id: "fab.add"
+- tapOn:
+    id: "addExpense.key.9"
+- tapOn:
+    id: "addExpense.description"
+- inputText: "${RUN_LABEL} draftA"
+- pressKey: Enter
+# Drafts are written by an effect after each change; let it persist, then PROVE it did: kill and relaunch, and A's draft
+# must come back. (Without this the "B sees no draft" checks below could pass simply because no draft ever existed.)
+- waitForAnimationToEnd
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Your unsaved expense was restored.*"
+    timeout: 30000
+- assertVisible: ".*draftA.*"
+- tapOn: "Close"
+# The Account avatar is in the Home header.
+- tapOn:
+    id: "tabs.Dashboard"
+- tapOn: "Account"
+- scrollUntilVisible:
+    element: "Sign out"
+- tapOn: "Sign out"
+- assertVisible:
+    id: "login.email"
+- runFlow:
+    file: ../../subflows/fill-login.yaml
+    env:
+      LOGIN_EMAIL: ${B_EMAIL}
+      LOGIN_PASSWORD: ${B_PASSWORD}
+- tapOn:
+    id: "login.submit"
+- runFlow: ../../subflows/reach-home.yaml
+- tapOn:
+    id: "tabs.Expenses"
+- assertVisible:
+    id: "header.expenses"
+- runFlow: ../../subflows/settle.yaml
+- assertNotVisible: ".*private-A.*"
+- tapOn:
+    id: "fab.add"
+- assertVisible:
+    id: "addExpense.amount"
+- runFlow: ../../subflows/settle.yaml
+- assertNotVisible: "Your unsaved expense was restored.*"
+- assertNotVisible: ".*draftA.*"

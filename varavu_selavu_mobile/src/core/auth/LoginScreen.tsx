@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, ScrollView, Platform, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from './AuthContext';
@@ -7,6 +7,7 @@ import { useAppTheme } from '../theme/ThemeContext';
 import { AppTheme } from '../theme/theme';
 import SectionLabel from '../ui/SectionLabel';
 import AmbientBackground from '../ui/AmbientBackground';
+import { useScrollToEndOnKeyboard } from '../ui/useScrollToEndOnKeyboard';
 import { getApiBaseUrl } from '../api/baseUrl';
 import { getAppConfig } from '../config/appConfig';
 import { getEnabledAuthMethods } from './methods';
@@ -25,12 +26,17 @@ export default function LoginScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { brand } = getAppConfig();
   const methods = getEnabledAuthMethods();
+  const scrollRef = useRef<ScrollView>(null);
+  // Keep the password field and Sign in above the keyboard (iOS: scroll; Android pan mode: also reserve its height).
+  const { keyboardInset, onContentSizeChange } = useScrollToEndOnKeyboard(scrollRef);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <AmbientBackground />
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 48, paddingBottom: Math.max(insets.bottom, 20) + 6 }]}
+        ref={scrollRef}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 48, paddingBottom: Math.max(insets.bottom, 20) + 6 + keyboardInset }]}
+        onContentSizeChange={onContentSizeChange}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
