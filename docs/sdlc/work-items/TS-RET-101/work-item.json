@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "TS-RET-101",
+  "title": "Lifecycle and nudge emails from first-party backend data",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "github-issue:#57"
+  ],
+  "notes": "Backlog card created 2026-11-25 with the owner's approval; no plan yet. Risk shown is a placeholder: set it at Plan (expected high)."
+}
