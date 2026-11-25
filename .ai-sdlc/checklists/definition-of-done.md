@@ -4,7 +4,7 @@ Tick what applies; write "n/a — reason" for the rest. Trivial changes (typos, 
 
 **Always:** builds/typechecks/lints; relevant tests pass; diff self-reviewed; no debug code or secrets; `CHANGELOG.md` line for meaningful changes.
 
-**Functional:** acceptance criteria met incl. edge cases; business rules match the spec; flags honoured server- and client-side; web↔mobile parity addressed.
+**Functional:** acceptance criteria met incl. edge cases; business rules match the spec; flags honoured server- and client-side; web↔mobile parity addressed. A new critical mobile journey or native-only behaviour has a `qa/mobile` flow (with `testID`s; financial writes verified on the server), or the plan records why not.
 **UX:** desktop + phone widths (390/320); light + dark; loading, empty, error, success states; destructive actions confirmed; copy is specific.
 **Validation & errors:** input validated client and server; errors are actionable and announced.
 **Authorization & privacy:** ownership/membership + role checked; unauthorised and forbidden tested; new user data covered by export + deletion; consent respected.
