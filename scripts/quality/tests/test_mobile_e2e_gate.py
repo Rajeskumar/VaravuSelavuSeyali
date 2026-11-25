@@ -207,6 +207,16 @@ class WorkflowContract(unittest.TestCase):
         self.assertNotIn("paths", triggers["pull_request"] or {})
         self.assertNotIn("paths-ignore", triggers["pull_request"] or {})
 
+    def test_the_android_job_makes_postgresql_available_before_the_emulator_step(self):
+        # First CI run: ubuntu-latest moved to ubuntu-26.04 (PostgreSQL 18) and the lookup only knew 14-16. The iOS job installs
+        # its server binaries explicitly; the Android job must not depend on whatever the runner image happens to ship.
+        steps = self.wf["jobs"]["android"]["steps"]
+        pg = [i for i, s in enumerate(steps) if "E2E_PG_BIN" in s.get("run", "") and "GITHUB_ENV" in s.get("run", "")]
+        emu = [i for i, s in enumerate(steps) if "android-emulator-runner" in s.get("uses", "")]
+        self.assertTrue(pg, "no step exports E2E_PG_BIN for the later steps")
+        self.assertTrue(emu)
+        self.assertLess(pg[0], emu[0])
+
     def test_pushes_are_classified_against_the_previous_commit(self):
         env = self.wf["jobs"]["changes"]["steps"][-1]["env"]
         self.assertIn("github.event.before", env["BASE_SHA"])

@@ -116,6 +116,21 @@ jobs:
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('varavu_selavu_mobile/package-lock.json') }}
 
+      # The isolated backend needs the PostgreSQL SERVER binaries (initdb, pg_ctl). The runner image ships some major version
+      # (16 on ubuntu-24.04, 18 on ubuntu-26.04) in /usr/lib/postgresql/<major>/bin, which is not on PATH: find it, install one
+      # if the image has none, and hand the path to the launcher (the iOS job installs its binaries the same explicit way).
+      - name: PostgreSQL server binaries
+        run: |
+          pg_bin() { ls -d /usr/lib/postgresql/*/bin 2>/dev/null | sort -t/ -k5 -rn | head -1; }
+          PG_BIN="$(pg_bin || true)"
+          if [ -z "${PG_BIN}" ] || [ ! -x "${PG_BIN}/initdb" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql
+            PG_BIN="$(pg_bin)"
+          fi
+          echo "E2E_PG_BIN=${PG_BIN}" >> "$GITHUB_ENV"
+          "${PG_BIN}/initdb" --version
+
       # The app artifact is ALWAYS rebuilt from the current JS and env (never restored from a cache).
       - name: Build e2e-variant APK
         run: qa/mobile/scripts/build-android.sh

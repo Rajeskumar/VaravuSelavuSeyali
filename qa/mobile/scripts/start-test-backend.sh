@@ -33,16 +33,8 @@ mkdir -p "${STATE_DIR}"
 
 free_port() { python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])'; }
 
-find_pg_bin() {
-  if [ -n "${E2E_PG_BIN:-}" ]; then echo "${E2E_PG_BIN}"; return; fi
-  local c
-  for c in "$(command -v pg_ctl 2>/dev/null | xargs -I{} dirname {} 2>/dev/null || true)" \
-           /opt/homebrew/opt/postgresql@16/bin /opt/homebrew/opt/postgresql@15/bin /usr/local/opt/postgresql@16/bin \
-           /usr/lib/postgresql/16/bin /usr/lib/postgresql/15/bin /usr/lib/postgresql/14/bin; do
-    [ -n "${c}" ] && [ -x "${c}/initdb" ] && { echo "${c}"; return; }
-  done
-  echo "PostgreSQL server binaries not found (set E2E_PG_BIN)" >&2; return 1
-}
+# shellcheck source=pg_bin.sh
+source "${HERE}/pg_bin.sh"
 
 cleanup_on_error() {
   if [ "${E2E_KEEP_ON_ERROR:-0}" = 1 ]; then echo "start-test-backend failed; kept ${WORK:-<none>} for inspection" >&2; return; fi
