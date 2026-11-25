@@ -1,5 +1,8 @@
 # Roadmap / Planned Enhancements
 
+## GA4 web and product analytics (2026-11-24)
+- [ ] TS-GA4-001: Phases 2 and 3 implemented locally. Local DebugView confirmed a synthetic save. The production destination is configured and defaults off. Remaining work includes production GA4 settings verification, release checks and an approved rollout. See [foundation status](docs/analytics/foundation-status.md).
+
 Format: `- [ ] [enhancement] — context: [why/when this came up]`
 
 ## Product gaps

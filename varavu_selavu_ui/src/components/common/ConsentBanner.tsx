@@ -1,4 +1,5 @@
 import React from 'react';
+import { CONSENT_CHANGED } from '../../analytics/browser';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -13,6 +14,12 @@ export const BOTTOM_CHROME_VAR = '--ts-bottom-chrome';
 
 const ConsentBanner: React.FC = () => {
   const [decided, setDecided] = React.useState(() => getStoredConsent() !== null);
+
+  React.useEffect(() => {
+    const update = () => setDecided(getStoredConsent() !== null);
+    window.addEventListener(CONSENT_CHANGED, update);
+    return () => window.removeEventListener(CONSENT_CHANGED, update);
+  }, []);
 
   const bannerRef = React.useRef<HTMLDivElement>(null);
   // The banner is position:fixed, so it used to sit on top of the page's last ~60px (the Ask
@@ -37,7 +44,7 @@ const ConsentBanner: React.FC = () => {
   const decide = (accept: boolean) => {
     if (accept) grantAnalyticsConsent();
     else denyAnalyticsConsent();
-    setDecided(true);
+    setDecided(getStoredConsent() !== null);
   };
 
   return (

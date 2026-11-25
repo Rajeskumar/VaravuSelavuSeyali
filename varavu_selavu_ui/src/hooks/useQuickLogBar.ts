@@ -1,3 +1,4 @@
+import { analytics } from '../analytics/browser';
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { parseQuickLog, QuickLogParsed } from '../utils/quickLogParse';
@@ -71,8 +72,9 @@ export function useQuickLogBar(): QuickLogBarState {
   const memberCount = matchedGroup?.member_count ?? 1;
   const isQuestion = !parsed && text.trim() !== '';
 
+  const submitLock = React.useRef(false);
   const submit = async () => {
-    if (submitting) return;
+    if (submitLock.current) return;
     if (!parsed) {
       if (text.trim()) {
         openAsk(text.trim());
@@ -85,11 +87,15 @@ export function useQuickLogBar(): QuickLogBarState {
       setError("Couldn't find a group with that name. Type the exact group name, or use + New expense to pick one.");
       return;
     }
+    submitLock.current = true;
+    analytics.track('expense_creation_started', { entry_method: 'quick_log', expense_scope: parsed.groupId ? 'group' : 'personal' });
+    const operation = analytics.beginOperation();
     setSubmitting(true);
     setError(null);
     try {
       if (parsed.groupId) {
         await logToGroup(parsed.groupId, {
+          analyticsCapture: { method: 'quick_log', operation },
           description: parsed.description,
           category: parsed.category,
           amount: parsed.amount,
@@ -97,6 +103,7 @@ export function useQuickLogBar(): QuickLogBarState {
         });
       } else {
         await logPersonal({
+          analyticsCapture: { method: 'quick_log', operation },
           description: parsed.description,
           category: parsed.category,
           amount: parsed.amount,
@@ -111,6 +118,7 @@ export function useQuickLogBar(): QuickLogBarState {
     } catch {
       setError('Failed to log expense. Please try again.');
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   };

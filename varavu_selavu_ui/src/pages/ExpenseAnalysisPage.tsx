@@ -1,3 +1,4 @@
+import { analytics } from '../analytics/browser';
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
@@ -42,6 +43,13 @@ const ExpenseAnalysisPage: React.FC = () => {
     : tabParam === 'budgets' && budgetsEnabled ? 'budgets'
     : tabParam === 'cards' && cardCoachEnabled ? 'cards'
     : 'overview';
+
+  const lastView = React.useRef<AnalysisTab | undefined>(undefined);
+  React.useEffect(() => {
+    if (lastView.current === tab) return;
+    lastView.current = tab;
+    analytics.track('analysis_viewed', { view: tab });
+  }, [tab]);
 
   const handleTabChange = (next: AnalysisTab) => {
     const params = new URLSearchParams(searchParams);

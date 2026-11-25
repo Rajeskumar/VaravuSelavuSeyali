@@ -1,3 +1,4 @@
+import { confirmed } from '../analytics/operations';
 import { fetchWithAuth } from './api';
 import { setCsrfToken } from './csrf';
 
@@ -53,15 +54,17 @@ export async function deleteAccount(proof: { password?: string; confirm_email?: 
 
 /** Downloads everything TrackSpense holds about the signed-in user as one JSON file. */
 export async function downloadMyData(): Promise<void> {
-  const res = await fetchWithAuth('/api/v1/account/export');
-  if (!res.ok) await failWith(res, 'Could not export your data');
-  const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'trackspense_my_data.json';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
+  return confirmed(async () => {
+    const res = await fetchWithAuth('/api/v1/account/export');
+    if (!res.ok) await failWith(res, 'Could not export your data');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'trackspense_my_data.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }, 'data_export_completed', { export_type: 'account_json' });
 }

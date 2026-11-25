@@ -1,3 +1,4 @@
+import { ExpenseCapture } from '../analytics/operations';
 import { useQueryClient } from '@tanstack/react-query';
 import { addExpense, addExpenseWithItems, AddExpensePayload } from '../api/expenses';
 import { applyTagsToExpense } from '../api/tags';
@@ -17,6 +18,7 @@ import { isoToMMDDYYYY } from '../utils/date';
 import { todayIso } from '../utils/expenseDates';
 
 export interface QuickLogInput {
+  analyticsCapture?: ExpenseCapture;
   description: string;
   category: string;
   /** Total amount — for a group log, this is the whole expense; split equally among every
@@ -102,7 +104,7 @@ export function useLogExpense() {
       tag_names: input.tagNames?.length ? input.tagNames : undefined,
       card_id: input.cardId || undefined,
     };
-    const result = await addExpense(payload);
+    const result = await addExpense(payload, input.analyticsCapture);
     afterSave();
     return result;
   };
@@ -122,7 +124,7 @@ export function useLogExpense() {
       split: input.split ?? { type: 'equal', entries: group.members.map((m) => ({ member_id: m.member_id })) },
       card_id: input.cardId || undefined,
     };
-    const row = await createGroupExpense(groupId, payload);
+    const row = await createGroupExpense(groupId, payload, input.analyticsCapture);
     if (input.tagNames?.length) {
       await applyTagsToExpense(row.row_id, { tag_names: input.tagNames });
     }
@@ -166,7 +168,7 @@ export function useLogExpense() {
       user_email: user, header, items,
       tag_names: input.tagNames?.length ? input.tagNames : undefined,
       card_id: input.cardId || undefined,
-    });
+    }, input.analyticsCapture);
     afterSave();
     return result;
   };
@@ -209,7 +211,7 @@ export function useLogExpense() {
       items,
       card_id: input.cardId || undefined,
     };
-    const result = await createGroupExpenseWithItems(groupId, payload);
+    const result = await createGroupExpenseWithItems(groupId, payload, input.analyticsCapture);
     if (input.tagNames?.length) {
       await applyTagsToExpense(result.row_id, { tag_names: input.tagNames });
     }

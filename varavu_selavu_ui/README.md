@@ -266,3 +266,19 @@ npm test         # Interactive test runner (Jest + React Testing Library)
 ## License
 
 This project is licensed under the MIT License.
+
+
+### Optional GA4 collection (TS-GA4-001)
+
+The web adapter in `src/analytics` is off by default; development and automated tests cannot load real
+GA4. Existing consent choices use `vs_analytics_consent`; home footer and Account expose Analytics
+preferences. Page titles and normalized routes share a registry. Product-event schemas and web producers are wired. Native/MCP analytics is not implemented here.
+
+CRA consumes `REACT_APP_ANALYTICS_ENV`, `REACT_APP_ANALYTICS_ENABLED`,
+`REACT_APP_ANALYTICS_CONFIG_VERIFIED` and `REACT_APP_GA4_MEASUREMENT_ID` at **build** time (Docker ARGs,
+Cloud Build substitutions default off). `src/analytics/config.ts` also requires an exact approved
+origin/measurement ID pair. The registry includes the production TrackSpense host and stream ID. Collection remains off until
+the build enables it after the production stream settings are verified. Never reuse the
+marketing stream as a fallback. See [runbook](../docs/analytics/ga4-configuration.md) and
+[foundation status](../docs/analytics/foundation-status.md). Runtime Cloud Run environment changes
+cannot change compiled CRA values. No new dependency or backend analytics pipeline is used.

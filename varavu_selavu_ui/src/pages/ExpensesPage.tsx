@@ -1,3 +1,6 @@
+import { Operation } from '../analytics/client';
+import { analytics } from '../analytics/browser';
+import { confirmed } from '../analytics/operations';
 import React from 'react';
 import { useSearchParams, useLocation } from 'react-router-dom';
 import Box from '@mui/material/Box';
@@ -61,7 +64,10 @@ const ExpensesPage: React.FC = () => {
   }, { replace: true });
   const scopeParam = searchParams.get('scope');
   const scope: AnalysisScope = scopeParam === 'personal' || scopeParam === 'groups' ? scopeParam : 'combined';
-  const setScope = (value: AnalysisScope) => updateFilters({ scope: value === 'combined' ? '' : value });
+  const setScope = (value: AnalysisScope) => {
+    if (value !== scope) analytics.track('expense_filter_applied', { filter_type: 'scope' });
+    updateFilters({ scope: value === 'combined' ? '' : value });
+  };
   const tabParam = searchParams.get('tab');
   const tab: ExpensesTab = tabParam === 'recurring' ? 'recurring' : 'transactions';
   const handleTabChange = (next: ExpensesTab) => {
@@ -73,15 +79,30 @@ const ExpensesPage: React.FC = () => {
   // (rather than only client-side after the fact) keeps results correct across pagination —
   // client-side-only filtering would silently miss tagged expenses on pages not yet fetched.
   const tagFilterIds = React.useMemo(() => searchParams.get('tags')?.split(',').filter(Boolean) || [], [searchParams]);
-  const setTagFilterIds = (value: string[]) => updateFilters({ tags: value.join(',') });
+  const setTagFilterIds = (value: string[]) => {
+    if (value.join(',') !== tagFilterIds.join(',')) analytics.track('expense_filter_applied', { filter_type: 'tag' });
+    updateFilters({ tags: value.join(',') });
+  };
   // Design review (2026-09): neither control existed on this page before — search/date
   // navigation weren't just mis-ordered behind the tag filter, they were entirely absent.
   // Both filter client-side over the already-merged `feedExpenses` below (same scope as the
   // existing tag filter's group-row pass), not a new backend query.
   const searchQuery = searchParams.get('q') || '';
-  const setSearchQuery = (value: string) => updateFilters({ q: value });
+  const searchTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  React.useEffect(() => () => clearTimeout(searchTimer.current), [tab]);
+  const setSearchQuery = (value: string) => {
+    clearTimeout(searchTimer.current);
+    if (value !== searchQuery) {
+      const operation = analytics.beginOperation();
+      searchTimer.current = setTimeout(() => analytics.track('expense_filter_applied', { filter_type: 'search' }, operation), 400);
+    }
+    updateFilters({ q: value });
+  };
   const monthFilter = searchParams.get('month') || '';
-  const setMonthFilter = (value: string) => updateFilters({ month: value }); // 'YYYY-MM', '' = all time
+  const setMonthFilter = (value: string) => {
+    if (value !== monthFilter) analytics.track('expense_filter_applied', { filter_type: 'period' });
+    updateFilters({ month: value });
+  };
 
   const {
     data,
@@ -414,7 +435,7 @@ const ExpensesPage: React.FC = () => {
     }
   };
 
-  const handleDetailSave = async (expense: FeedExpense, patch: ExpenseDetailForm) => {
+  const handleDetailSave = async (expense: FeedExpense, patch: ExpenseDetailForm, operation?: Operation) => {
     setDetailSaving(true);
     try {
       const amount = parseFloat(patch.amount) || 0;
@@ -430,7 +451,7 @@ const ExpensesPage: React.FC = () => {
       // an omitted `notes` means "leave unchanged" server-side.
       const notes = patch.notes.trim() || null;
       if (expense.kind === 'personal') {
-        await updateExpense(expense.id as number, {
+        await confirmed(() => updateExpense(expense.id as number, {
           user_id: user,
           date,
           description: patch.description.trim() || expense.description,
@@ -443,12 +464,13 @@ const ExpensesPage: React.FC = () => {
           // TS-CARD-114 — always-replace, same reasoning as tag_names above.
           card_id: patch.cardId,
           notes,
-        });
+        }), 'expense_updated', { expense_scope: 'personal' }, result => result?.success === true, operation);
       } else if (expense.groupId) {
         // This sheet has no split editor, so payers/split are deliberately omitted: the server
         // keeps the stored split (rescaled if the amount changed). Rebuilding it here from the
         // payer list used to drop every non-payer member from the split.
-        await updateGroupExpense(expense.groupId, String(expense.id), {
+        const groupId = expense.groupId;
+        await confirmed(() => updateGroupExpense(groupId, String(expense.id), {
           date,
           description: patch.description.trim() || expense.description,
           category: patch.category,
@@ -459,7 +481,7 @@ const ExpensesPage: React.FC = () => {
           // so this is always-replace with no diff-and-sync step required.
           card_id: patch.cardId,
           notes,
-        });
+        }), 'group_expense_updated', { expense_scope: 'group' }, result => !!result?.row_id, operation);
         if (patch.tagNames) {
           // Group expenses have no tag_names write-through field (TS-TAG-104 is personal-only
           // by design) — sync via the association endpoints instead, applying/removing just

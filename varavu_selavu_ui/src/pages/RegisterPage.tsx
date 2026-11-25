@@ -1,3 +1,4 @@
+import { analytics } from '../analytics/browser';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '@mui/material/Card';
@@ -30,7 +31,18 @@ const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
 
 
+  const submissionLock = React.useRef(false);
+  const started = React.useRef(false);
+  const startSignup = (method: 'google' | 'password') => {
+    if (started.current) return;
+    started.current = true;
+    analytics.track('signup_started', { authentication_method: method });
+  };
+
   const handleGoogleCredential = async (credential: string) => {
+    if (submissionLock.current) return;
+    submissionLock.current = true;
+    startSignup('google');
     try {
       setGoogleLoading(true);
       const data = await loginWithGoogle(credential);
@@ -41,6 +53,7 @@ const RegisterPage: React.FC = () => {
     } catch {
       setError('Google signup failed');
     } finally {
+      submissionLock.current = false;
       setGoogleLoading(false);
     }
   };
@@ -59,7 +72,9 @@ const RegisterPage: React.FC = () => {
     e.preventDefault();
     const errs = validate();
     setFieldErrors(errs);
-    if (Object.keys(errs).length) return;
+    if (Object.keys(errs).length || submissionLock.current) return;
+    submissionLock.current = true;
+    startSignup('password');
     setLoading(true);
     setError(null);
     try {
@@ -87,6 +102,7 @@ const RegisterPage: React.FC = () => {
         setError("Can't reach the server — check your connection and try again.");
       }
     } finally {
+      submissionLock.current = false;
       setLoading(false);
     }
   };

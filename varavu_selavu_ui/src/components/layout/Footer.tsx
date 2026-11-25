@@ -1,4 +1,5 @@
 import React from 'react';
+import { AnalyticsPreferencesButton } from '../common/AnalyticsPreferences';
 import { Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -13,15 +14,15 @@ import { FOOTER_HEIGHT } from './layoutConstants';
  * Help is a real client route (/contact — logged-in users get a faster feedback path via the
  * avatar menu's FeedbackDialog instead, so no "Submit an idea" link here anymore).
  */
-const Footer: React.FC = () => (
+const Footer: React.FC<{ publicPage?: boolean }> = ({ publicPage = false }) => (
   <Box
     component="footer"
     sx={{
-      height: FOOTER_HEIGHT,
+      minHeight: FOOTER_HEIGHT,
       flexShrink: 0,
       // Hidden below `md`: BottomNav (TrackSpense v3 Mobile) now owns the bottom of the
       // mobile viewport — a website-style link footer under a fixed tab bar is redundant.
-      display: { xs: 'none', md: 'flex' },
+      display: { xs: publicPage ? 'flex' : 'none', md: 'flex' },
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 2,
@@ -35,7 +36,8 @@ const Footer: React.FC = () => (
     <Typography variant="caption" color="text.secondary">
       © {new Date().getFullYear()} TrackSpense
     </Typography>
-    <Box sx={{ display: 'flex', gap: 2.5 }}>
+    <Box sx={{ display: 'flex', gap: 2.5, flexWrap: 'wrap', alignItems: 'center' }}>
+      <AnalyticsPreferencesButton />
       <Link
         href={`${process.env.REACT_APP_API_BASE_URL || ''}/privacy-policy`}
         target="_blank"

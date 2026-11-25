@@ -46,6 +46,8 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import ConsentBanner from './components/common/ConsentBanner';
 import AiConsentHost from './components/common/AiConsentHost';
 import RouteA11y from './components/common/RouteA11y';
+import RouteAnalytics from './analytics/RouteAnalytics';
+import AnalyticsPreferences from './components/common/AnalyticsPreferences';
 import { initAnalyticsFromStoredConsent } from './utils/analyticsConsent';
 import Box from '@mui/material/Box';
 import { HEADER_HEIGHT } from './components/layout/layoutConstants';
@@ -190,6 +192,8 @@ const AppContent: React.FC = () => {
   return (
     <>
       <RouteA11y />
+      <RouteAnalytics />
+      <AnalyticsPreferences />
       {/* Early in the DOM (it's position:fixed, so visually unchanged) so keyboard users reach
           the consent choice right after the skip link instead of after the whole page. */}
       {!window.location.pathname.startsWith('/ai/') && <ConsentBanner />}

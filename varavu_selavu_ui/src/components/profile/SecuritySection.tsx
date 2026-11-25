@@ -1,3 +1,4 @@
+import { analytics } from '../../analytics/browser';
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Box, Button, Card, CardContent, Chip, Stack, Typography } from '@mui/material';
@@ -56,7 +57,9 @@ const SecuritySection: React.FC<{ onSignedOut: () => void; children?: React.Reac
   const everywhere = async () => {
     setBusy(true);
     try {
+      const operation = analytics.beginOperation();
       await signOutEverywhere();
+      analytics.track('logout', {}, operation);
       onSignedOut();
     } catch (err) {
       setMsg({ kind: 'error', text: err instanceof Error ? err.message : 'Could not sign you out everywhere' });

@@ -634,7 +634,7 @@ const HomePage: React.FC = () => {
         </ScrollReveal>
       </PageContainer>
 
-      <Footer />
+      <Footer publicPage />
     </Box>
   );
 };

@@ -1,3 +1,5 @@
+import { analytics } from '../../analytics/browser';
+import { confirmed } from '../../analytics/operations';
 import React, { useEffect, useState } from 'react';
 import { expenseDateBounds, expenseDateProblem } from '../../utils/expenseDates';
 import { useQueryClient } from '@tanstack/react-query';
@@ -227,7 +229,11 @@ const ExpenseDetailDialog: React.FC<Props> = ({
     setEditPayers((prev) => (prev.length === 1 ? [{ ...prev[0], amount_paid: editAmount }] : prev));
   }, [editAmount]);
 
+  const editLock = React.useRef(false);
   const handleSaveEdit = async () => {
+    if (editLock.current) return;
+    editLock.current = true;
+    const operation = analytics.beginOperation();
     setEditError(null);
     setSavingEdit(true);
     try {
@@ -246,7 +252,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
           discount: itemsDiscount,
         });
       }
-      await updateGroupExpense(groupId, expense.row_id, {
+      await confirmed(() => updateGroupExpense(groupId, expense.row_id, {
         date: isoToMMDDYYYY(editDate),
         description: editDescription,
         category: editCategory,
@@ -255,7 +261,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         split: { type: editSplitValue.type, entries: editSplitValue.entries },
         currency: expense.currency || groupCurrency || undefined,
         card_id: editCardId,
-      });
+      }), 'group_expense_updated', { expense_scope: 'group' }, result => !!result?.row_id, operation);
       if (tagsEnabled) {
         // Group expenses don't get the tag_names write-through field (TS-TAG-104 is
         // personal-only by design — the group-expense update endpoint has no such field) — sync
@@ -276,6 +282,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
     } catch (e) {
       setEditError(e instanceof ApiError ? e.message : 'Failed to update expense');
     } finally {
+      editLock.current = false;
       setSavingEdit(false);
     }
   };

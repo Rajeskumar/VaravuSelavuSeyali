@@ -1,3 +1,4 @@
+import { analytics } from '../analytics/browser';
 import React from 'react';
 import { useSessionIdentity } from '../hooks/useSessionIdentity';
 import AskOverlay from '../components/ask/AskOverlay';
@@ -29,10 +30,11 @@ export const AskProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   React.useEffect(() => { setOpen(false); setInitialQuery(undefined); }, [user]);
 
   const openAsk = React.useCallback((query?: string) => {
+    if (user && !open) analytics.track('ai_analyst_opened', {});
     setInitialQuery(query);
     setInitialQueryId((value) => value + 1);
     setOpen(true);
-  }, []);
+  }, [open, user]);
 
   return (
     <AskContext.Provider value={{ openAsk }}>

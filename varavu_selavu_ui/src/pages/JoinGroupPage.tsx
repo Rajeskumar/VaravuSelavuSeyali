@@ -1,3 +1,4 @@
+import { analytics, deferInviteOutcome } from '../analytics/browser';
 import React from 'react';
 import Box from '@mui/material/Box';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -31,6 +32,7 @@ const JoinGroupPage: React.FC = () => {
   const [needsVerify, setNeedsVerify] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
 
+  const acceptingToken = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (!token) return;
     // Auth tokens are HttpOnly cookies; vs_user is the readable session marker.
@@ -41,11 +43,15 @@ const JoinGroupPage: React.FC = () => {
       return;
     }
 
+    if (acceptingToken.current === token) return;
+    acceptingToken.current = token;
+    const operation = analytics.beginOperation();
     setState('accepting');
     acceptInvite(token)
       .then((res) => {
         sessionStorage.removeItem(PENDING_INVITE_KEY);
         setState('success');
+        if (res.group_id) deferInviteOutcome(operation);
         navigate(`/groups/${res.group_id}`, { replace: true });
       })
       .catch((e) => {

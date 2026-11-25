@@ -1,3 +1,4 @@
+import { confirmed, expenseCreation, ExpenseCapture } from '../analytics/operations';
 import { fetchWithAuth } from './api';
 import { TagRefDTO } from './tags';
 import { CardRefDTO } from './cards';
@@ -82,9 +83,11 @@ export interface CreateGroupPayload {
 }
 
 export async function createGroup(payload: CreateGroupPayload): Promise<GroupSummary> {
-  const res = await fetchWithAuth('/api/v1/groups', { method: 'POST', body: JSON.stringify(payload) });
-  if (!res.ok) await throwApiError(res, 'Failed to create group');
-  return res.json();
+  return confirmed(async () => {
+    const res = await fetchWithAuth('/api/v1/groups', { method: 'POST', body: JSON.stringify(payload) });
+    if (!res.ok) await throwApiError(res, 'Failed to create group');
+    return res.json();
+  }, 'group_created', {});
 }
 
 export async function listGroups(includeArchived = false, includeDeleted = false): Promise<GroupSummary[]> {
@@ -195,12 +198,14 @@ export interface CreateInviteResponse {
 /** Mints a join link for a pending placeholder seat. With `email`, the backend also emails
  * the link to that address and pins the seat to it (only that address can redeem it). */
 export async function createInvite(groupId: string, memberId: string, email?: string): Promise<CreateInviteResponse> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/invites`, {
-    method: 'POST',
-    body: JSON.stringify(email ? { member_id: memberId, email } : { member_id: memberId }),
-  });
-  if (!res.ok) await throwApiError(res, 'Failed to create invite');
-  return res.json();
+  return confirmed(async () => {
+    const res = await fetchWithAuth(`/api/v1/groups/${groupId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify(email ? { member_id: memberId, email } : { member_id: memberId }),
+    });
+    if (!res.ok) await throwApiError(res, 'Failed to create invite');
+    return res.json();
+  }, 'group_member_invited', {});
 }
 
 export interface AcceptInviteResponse {
@@ -364,32 +369,38 @@ export interface GroupExpenseListResponse {
 
 export async function createGroupExpense(
   groupId: string,
-  payload: GroupExpensePayload
+  payload: GroupExpensePayload,
+  capture?: ExpenseCapture
 ): Promise<GroupExpenseRow> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) await throwApiError(res, 'Failed to add group expense');
-  const body = await res.json();
-  return body.expense;
+  return (await expenseCreation(async () => {
+    const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) await throwApiError(res, 'Failed to add group expense');
+    const body = await res.json();
+    return body;
+  }, capture, 'group', body => body?.success === true && !!body.expense)).expense;
 }
 
 export async function createGroupExpenseWithItems(
   groupId: string,
-  payload: GroupExpenseWithItemsPayload
+  payload: GroupExpenseWithItemsPayload,
+  capture?: ExpenseCapture
 ): Promise<GroupExpenseWithItemsResponse> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/itemized`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) await throwApiError(res, 'Failed to add itemized group expense');
-  // Mirrors createGroupExpense's response shape ({success, expense: GroupExpenseRow}) — the
-  // itemized route returns the same GroupExpenseCreatedResponse, not the item_ids/my_share
-  // shape this used to (incorrectly) declare, which went unnoticed because nothing called
-  // this endpoint until QuickCaptureSheet's scanned-items save path did.
-  const body = await res.json();
-  return body.expense;
+  return (await expenseCreation(async () => {
+    const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/itemized`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) await throwApiError(res, 'Failed to add itemized group expense');
+    // Mirrors createGroupExpense's response shape ({success, expense: GroupExpenseRow}) — the
+    // itemized route returns the same GroupExpenseCreatedResponse, not the item_ids/my_share
+    // shape this used to (incorrectly) declare, which went unnoticed because nothing called
+    // this endpoint until QuickCaptureSheet's scanned-items save path did.
+    const body = await res.json();
+    return body;
+  }, capture, 'group', body => body?.success === true && !!body.expense)).expense;
 }
 
 export async function listGroupExpenses(
@@ -445,8 +456,10 @@ export async function updateGroupExpense(
 }
 
 export async function deleteGroupExpense(groupId: string, expenseId: string): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' });
-  if (!res.ok) await throwApiError(res, 'Failed to delete group expense');
+  return confirmed(async () => {
+    const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}`, { method: 'DELETE' });
+    if (!res.ok) await throwApiError(res, 'Failed to delete group expense');
+  }, 'expense_deleted', { expense_scope: 'group' });
 }
 
 export interface MoveToGroupPayload {
@@ -527,12 +540,14 @@ export async function createSettlement(
   groupId: string,
   payload: RecordSettlementPayload
 ): Promise<SettlementDTO> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/settlements`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) await throwApiError(res, 'Failed to record settlement');
-  return res.json();
+  return confirmed(async () => {
+    const res = await fetchWithAuth(`/api/v1/groups/${groupId}/settlements`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) await throwApiError(res, 'Failed to record settlement');
+    return res.json();
+  }, 'settlement_completed', {});
 }
 
 export async function listSettlements(groupId: string): Promise<SettlementDTO[]> {
@@ -551,12 +566,14 @@ export async function settleExpenseShare(
   expenseId: string,
   payload: { member_id: string; payer_member_id?: string; method?: string; notes?: string }
 ): Promise<SettlementDTO> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}/settle_share`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) await throwApiError(res, 'Failed to settle share');
-  return res.json();
+  return confirmed(async () => {
+    const res = await fetchWithAuth(`/api/v1/groups/${groupId}/expenses/${expenseId}/settle_share`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) await throwApiError(res, 'Failed to settle share');
+    return res.json();
+  }, 'settlement_completed', {});
 }
 
 // ---------------------------------------------------------------------------
@@ -685,15 +702,17 @@ export async function suggestItemAssignment(groupId: string, itemName: string): 
 // ---------------------------------------------------------------------------
 
 export async function exportGroupCsv(groupId: string, groupName: string): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/export.csv`);
-  if (!res.ok) await throwApiError(res, 'Failed to export group');
-  const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${groupName.replace(/\s+/g, '_')}_export.csv`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
+  return confirmed(async () => {
+    const res = await fetchWithAuth(`/api/v1/groups/${groupId}/export.csv`);
+    if (!res.ok) await throwApiError(res, 'Failed to export group');
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${groupName.replace(/\s+/g, '_')}_export.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  }, 'data_export_completed', { export_type: 'group_csv' });
 }

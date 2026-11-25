@@ -1023,7 +1023,7 @@ A React 19 single-page app (Create React App, TypeScript) built to static files 
 - **Cross-page refresh:** a `window` `CustomEvent` (`vs:expense-changed`, `utils/expenseEvents.ts`) lets any mounted page refetch after an expense changes, including pages that fetch outside TanStack Query.
 - **Client storage:** `localStorage` `vs_user` (display identity), `vs_analytics_consent`; `sessionStorage` for the recurring-prompt "shown this session" flag and a pending group-invite token (`vs_pending_invite_token`, so an invite survives the login round-trip). Legacy `vs_token`/`vs_refresh` keys are only ever *removed*.
 - **Resilience:** an `ErrorBoundary` wraps the routes; Plotly is lazy-loaded through a custom bundle (`LazyPlot`, `plotlyBundle`).
-- **Consent:** `ConsentBanner` + `utils/analyticsConsent.ts` inject GA4 only after an explicit accept (§9.8).
+- **Optional behavioral analytics (TS-GA4-001, foundation implemented; not activated):** `src/analytics` owns GA4, closed schemas, environment/consent gates and normalized page context. No real tag loads in development/tests or without an approved destination and explicit build enablement. `ConsentBanner` retains existing choices; Analytics preferences in the home footer and Account supports withdrawal. Shared static route titles/templates exclude searches, hashes and resource IDs; sensitive invite/reset/verify/assistant routes collect nothing. Logout/account switching resets owned analytics identity; no account User-ID is sent. Product-event producers use closed schemas and report confirmed operation outcomes or explicit interaction intent. See `docs/analytics/product-events-status.md`. See `docs/analytics/foundation-status.md` for tests and remaining real-provider/Admin evidence.
 
 ### 12.2 Design system — "CerebroOS"
 
@@ -1256,7 +1256,7 @@ Secrets are bound at `latest` and read **at container start** — rotate, then r
 | Gmail SMTP | Verification, reset, invite and feedback email | `MAIL_*` (`smtp.gmail.com:587`) |
 | Expo Push Service | Push notifications | `EXPO_PUSH_URL`, `EXPO_ACCESS_TOKEN` |
 | open.er-api.com | FX rates | `FX_RATE_API_URL` (no key) |
-| Google Analytics 4 | Web analytics, after consent only | measurement id in `analyticsConsent.ts` |
+| Google Analytics 4 | Optional behavioral web analytics; foundation implemented, collection disabled pending approval/verification | `src/analytics/config.ts` destination registry + explicit build-time configuration |
 
 ### 15.9 Mobile distribution
 

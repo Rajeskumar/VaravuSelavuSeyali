@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { getConfig } from '../api/config';
 import PageContainer from '../components/layout/PageContainer';
 import ProfilePage from './ProfilePage';
+import { AnalyticsPreferencesButton } from '../components/common/AnalyticsPreferences';
 
 /**
  * TS-DES-202 — hosts the old standalone `/profile` page at `/account`. Used to also host a
@@ -16,6 +17,7 @@ const AccountPage: React.FC = () => {
   return (
   <PageContainer sx={{ mt: 4 }}>
     <ProfilePage />
+    <AnalyticsPreferencesButton />
     {enabled && <Button component={Link} to="/account/assistants">Connected assistants</Button>}
   </PageContainer>
 );

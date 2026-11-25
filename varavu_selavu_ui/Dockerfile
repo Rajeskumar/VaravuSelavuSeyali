@@ -12,6 +12,17 @@ RUN npm ci
 # Copy rest of the app (source, public, config, etc.)
 COPY . ./
 
+# Analytics is compiled by CRA; deployment runtime variables cannot enable it.
+# IDs/hosts must also be approved in src/analytics/config.ts before any tag can load.
+ARG REACT_APP_ANALYTICS_ENV=disabled
+ARG REACT_APP_ANALYTICS_ENABLED=false
+ARG REACT_APP_ANALYTICS_CONFIG_VERIFIED=false
+ARG REACT_APP_GA4_MEASUREMENT_ID=
+ENV REACT_APP_ANALYTICS_ENV=$REACT_APP_ANALYTICS_ENV \
+    REACT_APP_ANALYTICS_ENABLED=$REACT_APP_ANALYTICS_ENABLED \
+    REACT_APP_ANALYTICS_CONFIG_VERIFIED=$REACT_APP_ANALYTICS_CONFIG_VERIFIED \
+    REACT_APP_GA4_MEASUREMENT_ID=$REACT_APP_GA4_MEASUREMENT_ID
+
 # Build the React app with increased memory limit
 RUN npm run build
 

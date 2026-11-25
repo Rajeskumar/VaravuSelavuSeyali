@@ -271,7 +271,7 @@ const GroupsPage: React.FC = () => {
         payers: row.payer_summary.map((p) => ({ member_id: p.member_id, amount_paid: p.amount_paid })),
         split: { type: 'exact', entries: row.splits.map((s) => ({ member_id: s.member_id, value: s.share })) },
         currency: row.currency || undefined,
-      });
+      }, { method: 'undo' });
       queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
       queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
       queryClient.invalidateQueries({ queryKey: ['groups'] });

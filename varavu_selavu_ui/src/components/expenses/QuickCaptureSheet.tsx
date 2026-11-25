@@ -1,3 +1,5 @@
+import { analytics } from '../../analytics/browser';
+import { categoryDisposition, ExpenseCapture } from '../../analytics/operations';
 import React from 'react';
 import { expenseDateBounds, expenseDateProblem, todayIso } from '../../utils/expenseDates';
 import Drawer from '@mui/material/Drawer';
@@ -21,7 +23,7 @@ import { typeScale, tabularNums, heroButtonSx } from '../../theme';
 import { CATEGORY_GROUPS, findMainCategory } from './AddExpenseForm';
 import { formatMoney } from './ExpenseFeed';
 import { currencySymbol } from '../../utils/money';
-import { suggestCategory } from '../../api/expenses';
+import { useTrackedCategory } from '../../hooks/useTrackedCategory';
 import { listGroups, getGroup, GroupSummary, GroupDetailResponse, PayerSummaryItem } from '../../api/groups';
 import { suggestMerchants } from '../../api/entityResolution';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
@@ -107,6 +109,9 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const [amount, setAmount] = React.useState('');
   const [amountHint, setAmountHint] = React.useState<string | null>(null);
   const [description, setDescription] = React.useState('');
+  const requestCategory = useTrackedCategory(description.trim(), open);
+  const suggested = React.useRef<{ description: string; category: string } | undefined>(undefined);
+  const receiptApplied = React.useRef(false);
   const [expenseDate, setExpenseDate] = React.useState(() => todayIso());
   const [who, setWho] = React.useState(initialGroupId || 'me');
   const [groups, setGroups] = React.useState<GroupSummary[]>([]);
@@ -143,6 +148,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
 
   const scan = useReceiptScan({
     onAutoParse: (res) => {
+      receiptApplied.current = true;
+      suggested.current = undefined;
       const hdr = res.header || {};
       if (hdr.amount) setAmount(String(Number(hdr.amount)));
       const merchant = hdr.merchant_name || hdr.merchant || '';
@@ -187,6 +194,8 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     setUnknownOutcome(false);
     setStage('entry');
     setAmount('');
+    suggested.current = undefined;
+    receiptApplied.current = false;
     setDescription('');
     setExpenseDate(todayIso());
     setWho(initialGroupId || 'me');
@@ -266,9 +275,11 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
     const desc = description.trim();
     if (desc.length < 3) return;
     const timer = setTimeout(() => {
-      suggestCategory(desc)
+      requestCategory(res => !!CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory))
         .then((res) => {
+          if (!res) return;
           if (!userPickedCategory && res.subcategory && CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) {
+            suggested.current = { description: desc, category: res.subcategory };
             setScannedCategory(res.subcategory);
           }
           if (!userPickedMerchant && res.merchant_name) {
@@ -280,7 +291,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         });
     }, 800);
     return () => clearTimeout(timer);
-  }, [open, owner, description, userPickedCategory, userPickedMerchant, scan.parsing, scan.converting]);
+  }, [open, owner, description, userPickedCategory, userPickedMerchant, scan.parsing, scan.converting, requestCategory]);
 
   React.useEffect(() => {
     if (!open || !groupsEnabled) return;
@@ -366,8 +377,11 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const resolveCategory = async (): Promise<string> => {
     if (scannedCategory) return scannedCategory;
     try {
-      const res = await suggestCategory(description.trim());
-      if (CATEGORY_GROUPS[res.main_category]?.includes(res.subcategory)) return res.subcategory;
+      const res = await requestCategory(value => !!CATEGORY_GROUPS[value.main_category]?.includes(value.subcategory));
+      if (res) {
+        suggested.current = { description: description.trim(), category: res.subcategory };
+        return res.subcategory;
+      }
     } catch {
       /* fall through to default */
     }
@@ -381,15 +395,22 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
   const handleSave = async () => {
     if (!ready || saveLock.current || localStorage.getItem('vs_user') !== owner) return;
     saveLock.current = true;
+    const operation = analytics.beginOperation();
     setSaving(true);
     writeExpenseDraft(owner, { ...draft, unknownOutcome: true });
     setError(null);
     try {
       const category = await resolveCategory();
       if (localStorage.getItem('vs_user') !== owner) throw new Error('Your session ended. Sign in again to resume your draft.');
+      const analyticsCapture: ExpenseCapture = {
+        operation,
+        method: receiptApplied.current || scannedFingerprint || itemsToSave.length > 0 ? 'receipt' : 'manual',
+        categoryDisposition: categoryDisposition(suggested.current?.description === description.trim() ? suggested.current.category : undefined, category),
+      };
       if (selectedGroup) {
         const { myShare } = itemsToSave.length > 0
           ? await logToGroupWithItems(selectedGroup.group_id, {
+              analyticsCapture,
               description: description.trim(),
               category,
               amount: amountNum,
@@ -404,6 +425,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
               cardId,
             })
           : await logToGroup(selectedGroup.group_id, {
+              analyticsCapture,
               description: description.trim(),
               category,
               amount: amountNum,
@@ -417,6 +439,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         setSavedLine(`Logged to ${selectedGroup.name} — your share ${formatMoney(myShare, activeCurrency)} joins your personal total automatically.`);
       } else if (itemsToSave.length > 0) {
         await logPersonalWithItems({
+          analyticsCapture,
           description: description.trim(),
           category,
           amount: amountNum,
@@ -433,6 +456,7 @@ const QuickCaptureSheet: React.FC<QuickCaptureSheetProps> = ({ open, onClose, in
         setSavedLine('Logged to your personal ledger.');
       } else {
         await logPersonal({
+          analyticsCapture,
           description: description.trim(),
           category,
           amount: amountNum,

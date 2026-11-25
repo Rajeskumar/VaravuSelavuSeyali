@@ -2,7 +2,7 @@ import React from 'react';
 import { todayIso } from '../../utils/expenseDates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listRecurringTemplates, upsertRecurringTemplate, deleteRecurringTemplate, executeRecurringNow, RecurringTemplateDTO } from '../../api/recurring';
-import { suggestCategory } from '../../api/expenses';
+import { useTrackedCategory } from '../../hooks/useTrackedCategory';
 import { Box, Typography, Button, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid, FormControlLabel, Switch, CircularProgress } from '@mui/material';
 import AddIcon from '@mui/icons-material/AddRounded';
 import FormSheet from '../common/FormSheet';
@@ -43,12 +43,16 @@ const RecurringTab: React.FC = () => {
   const [editing, setEditing] = React.useState<boolean>(false);
   const typingRef = React.useRef<NodeJS.Timeout | null>(null);
 
+  const requestCategory = useTrackedCategory(form.description.trim(), formOpen);
+  React.useEffect(() => () => { if (typingRef.current) clearTimeout(typingRef.current); }, []);
+
   const scheduleFetch = (desc: string) => {
     if (typingRef.current) clearTimeout(typingRef.current);
     typingRef.current = setTimeout(async () => {
       if (!desc.trim()) return;
       try {
-        const res = await suggestCategory(desc.trim());
+        const res = await requestCategory();
+        if (!res) return;
         setForm(f => ({
           ...f,
           category: f.category || res.subcategory,
@@ -77,7 +81,7 @@ const RecurringTab: React.FC = () => {
   });
 
   const toggleMut = useMutation({
-    mutationFn: (payload: any) => upsertRecurringTemplate(payload),
+    mutationFn: (payload: any) => upsertRecurringTemplate(payload, payload.status === 'Paused' ? 'paused' : 'resumed'),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['recurring-templates'] });
     },

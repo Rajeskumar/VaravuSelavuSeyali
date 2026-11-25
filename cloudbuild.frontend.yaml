@@ -39,6 +39,14 @@ steps:
     id: 'build-frontend'
     args:
       - 'build'
+      - '--build-arg'
+      - 'REACT_APP_ANALYTICS_ENV=${_ANALYTICS_ENV}'
+      - '--build-arg'
+      - 'REACT_APP_ANALYTICS_ENABLED=${_ANALYTICS_ENABLED}'
+      - '--build-arg'
+      - 'REACT_APP_ANALYTICS_CONFIG_VERIFIED=${_ANALYTICS_CONFIG_VERIFIED}'
+      - '--build-arg'
+      - 'REACT_APP_GA4_MEASUREMENT_ID=${_GA4_MEASUREMENT_ID}'
       - '-t'
       - 'gcr.io/${_PROJECT_ID}/varavu-selavu-frontend:${_IMAGE_TAG}'
       - '-t'
@@ -79,6 +87,10 @@ options:
   dynamicSubstitutions: true
 
 substitutions:
+  _ANALYTICS_ENV: production
+  _ANALYTICS_ENABLED: 'false'
+  _ANALYTICS_CONFIG_VERIFIED: 'false'
+  _GA4_MEASUREMENT_ID: 'G-X3QFP5HNK2'
   _REGION: 'us-central1'
   _PROJECT_ID: 'gold-circlet-424313-r7'
   _FRONTEND_SERVICE: 'varavu-selavu-frontend'
