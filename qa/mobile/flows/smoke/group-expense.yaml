@@ -1,0 +1,33 @@
+# SCENARIO T-012 (JM-04) smoke
+# LOGINS: 1
+# Preconditions: fresh verified user + a group "<RUN_LABEL>_trip" with a name-only guest (group-expense.seed.py).
+# Native interactions: sign in; open Add; enter 30 and a labelled description; choose the group in "Who was this for?";
+#   Save & split (equal).
+# Assertions (UI): the saved confirmation shows. Persisted (group-expense.verify.py): exactly ONE group expense with
+#   the label, cost 30.00, the viewer's stored share 15.00, and the guest owing the viewer 15.00 (balance transfers).
+# Reset/cleanup: none (own user and group, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - smoke
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "fab.add"
+- tapOn:
+    id: "addExpense.key.3"
+- tapOn:
+    id: "addExpense.key.0"
+- tapOn:
+    id: "addExpense.description"
+- inputText: "${RUN_LABEL} dinner"
+- pressKey: Enter
+- tapOn: "Just me"
+# The row label carries a group emoji and wraps, so match around the name.
+- tapOn: ".*${GROUP_NAME}.*"
+- tapOn:
+    id: "addExpense.save"
+- extendedWaitUntil:
+    visible:
+      id: "addExpense.saved"
+    timeout: 20000

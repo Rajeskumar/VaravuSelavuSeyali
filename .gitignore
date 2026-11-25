@@ -23,3 +23,9 @@ docs/product_review&testing_report/performance-review-2026-10-06/*
 # verify.sh / release / eval logs (summaries print to the terminal)
 .sdlc-logs/
 mcp_private.pem
+
+# Native mobile E2E (qa/mobile): downloaded tools, build copies, reports
+qa/mobile/.tools/
+qa/mobile/.build/
+qa/mobile/reports/
+qa/mobile/.build-*.out

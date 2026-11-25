@@ -1,0 +1,24 @@
+# Picks the photo added with `addMedia` in the system photo picker, as a user would.
+# iOS: the simulator's stock photos carry a year in their label ("Photo, March 30, 2018, 2:14 PM"); a photo from the current
+#   year does not ("Photo, November 24, 6:22 PM"), so a day followed directly by a time selects the one we added.
+# Android: the system photo picker (Android 13+). The emulator image holds no other photos, so the first thumbnail is ours.
+appId: com.cerebroos.trackspense
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: "Photos"
+          timeout: 15000
+      - tapOn: "Photo, [A-Za-z]+ [0-9]+, [0-9]+:[0-9]+.*"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: "com.google.android.providers.media.module:id/icon_thumbnail"
+          timeout: 20000
+      - tapOn:
+          id: "com.google.android.providers.media.module:id/icon_thumbnail"

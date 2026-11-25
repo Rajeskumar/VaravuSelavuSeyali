@@ -1,0 +1,10 @@
+==> Verifying build evidence
+==> Postgres cluster for trackspense_e2e_ios_iosre2 on 127.0.0.1:54523
+==> Bootstrapping schema
+==> Starting API on 127.0.0.1:18081, fault proxy on 18080 (control 18082)
+==> regression/receipt-import (attempt 1)
+    PASS in 73.3s
+
+Results:
+  PASSED  regression/receipt-import
+==> Reports: /Users/rajeshkumarganesan/Documents/workspaces/VaravuSelavuSeyali/qa/mobile/reports/ios-iosre2

@@ -70,7 +70,7 @@ Never commit `.env` (it's gitignored) or real credentials.
 
 1. **Database + backend** — from `qa/`:
    ```bash
-   npm run qa:db:bootstrap    # docker Postgres + schema + alembic upgrade head
+   npm run qa:db:bootstrap    # docker Postgres + schema (bootstrap_schema.py: create_all + alembic stamp head + card seed)
    ```
    Then start the backend (from `varavu_selavu_app/`) with the env the script prints —
    **`AUTH_COOKIE_SECURE=false` is required**, not optional: the backend's default
@@ -210,7 +210,7 @@ files run in parallel. This means:
 dispatch — **one job**, on purpose (see the rate-limit note above: splitting into
 separate jobs would re-provision QA users on fresh runners and blow the register budget).
 
-Pipeline: spin up a `postgres:15-alpine` service container → `alembic upgrade head` →
+Pipeline: spin up a `postgres:15-alpine` service container → `qa/scripts/bootstrap_schema.py` (not `alembic upgrade head`, which fails on an empty database) →
 start the real backend and a production build of the frontend → `qa:smoke` (fails fast) →
 `qa:regression` (Chromium; PRs get Chromium only for speed, `push`/`workflow_dispatch`
 additionally run the full Firefox/WebKit/mobile-viewport matrix) → `qa:api` → upload the

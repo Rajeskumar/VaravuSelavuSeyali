@@ -1,0 +1,23 @@
+# SCENARIO F-002 (JM-06) regression: the Insights "Analyse" scope picker (SimpleSelect) must expose its options
+# LOGINS: 1
+# Preconditions: fresh verified user with one expense and one group "<RUN_LABEL>_scope" (insights-scope-select.seed.py).
+# Native interactions: sign in; open Insights; open the "Analyse" picker; choose the group.
+# Assertions: the option rows can be tapped (the picker's backdrop used to be an accessible TouchableOpacity wrapping
+#   the whole sheet, which iOS collapses into one element) and the choice is shown in the field.
+# Reset/cleanup: none (own user and group, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "tabs.Analysis"
+- scrollUntilVisible:
+    element: ".*Analyse.*"
+# The field shows its current value ("My spending"); the small "Analyse" text above it is only a label.
+- tapOn: "My spending.*"
+- tapOn: ".*${GROUP_NAME}.*"
+- assertVisible: ".*${GROUP_NAME}.*"
+# The scope changed and the picker closed: the "My spending" option/value is no longer on screen.
+- assertNotVisible: "My spending.*"

@@ -1,4 +1,4 @@
-.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check release-check-full typecheck-web typecheck-mobile test-web test-mobile lint-web unit-check precommit-check install-hooks
+.PHONY: start-backend start-web start-mobile-android start-mobile-ios install-backend install-web install-mobile install-all test-backend lint-backend format-backend install-qa qa-db-bootstrap qa-smoke qa-regression qa-regression-full qa-api qa-mobile qa-prod-smoke mobile-e2e-tools mobile-e2e-build-ios mobile-e2e-build-android mobile-e2e-ios mobile-e2e-android qa-report qa-all audit-backend audit-web audit-mobile audit-qa audit-all release-check release-check-full typecheck-web typecheck-mobile test-web test-mobile lint-web unit-check precommit-check install-hooks
 
 # Backend
 install-backend:
@@ -54,6 +54,20 @@ qa-mobile:
 
 qa-prod-smoke:
 	cd qa && npm run qa:prod-smoke
+
+# Native mobile E2E (Maestro on a real iOS Simulator / Android Emulator; qa/mobile/README.md). Not the same as
+# qa-mobile above, which runs the *web* app in a phone-sized browser. Needs a build first; SUITE=smoke|regression|all.
+SUITE ?= smoke
+mobile-e2e-tools:
+	qa/mobile/scripts/install-tools.sh
+mobile-e2e-build-ios:
+	qa/mobile/scripts/build-ios.sh
+mobile-e2e-build-android:
+	qa/mobile/scripts/build-android.sh
+mobile-e2e-ios:
+	qa/mobile/scripts/run.sh --platform ios --suite $(SUITE) $(if $(FLOW),--flow $(FLOW),) $(if $(RETRIES),--retries $(RETRIES),)
+mobile-e2e-android:
+	qa/mobile/scripts/run.sh --platform android --suite $(SUITE) $(if $(FLOW),--flow $(FLOW),) $(if $(RETRIES),--retries $(RETRIES),)
 
 qa-report:
 	cd qa && npm run qa:report

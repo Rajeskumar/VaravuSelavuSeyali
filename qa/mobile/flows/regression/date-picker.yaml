@@ -1,0 +1,30 @@
+# SCENARIO F-002 (JM-02) regression: the date-picker sheet's Done button must be individually reachable
+# LOGINS: 1
+# Preconditions: fresh verified user; env USER_EMAIL, USER_PASSWORD.
+# Native interactions: sign in; open Add; open the date sheet from the "Today" chip; tap Done.
+# Assertions: Done can be tapped (when the sheet was one collapsed accessibility element it could not be) and the
+#   sheet closes, leaving the Add form (Save) in view.
+# Reset/cleanup: none (own user, disposable DB). Platforms: iOS and Android (Android confirms its native date dialog with OK).
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "fab.add"
+- tapOn: "Today"
+# iOS: the app's own date sheet, whose Done button must be individually reachable (F-002). Android: the native date dialog,
+# confirmed with OK.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: "Done"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "OK"
+- assertVisible:
+    id: "addExpense.save"

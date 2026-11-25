@@ -1,0 +1,14 @@
+# Types credentials into the sign-in form. The keyboard stays OPEN on purpose: the form scrolls itself into view when
+# the keyboard opens (useScrollToEndOnKeyboard), so the password field and Sign in button must be reachable without
+# dismissing it. (Before that fix they sat behind the keyboard, and this flow had to hide it between fields.)
+# Needs env LOGIN_EMAIL, LOGIN_PASSWORD.
+appId: com.cerebroos.trackspense
+---
+- tapOn:
+    id: "login.email"
+- eraseText: 80
+- inputText: ${LOGIN_EMAIL}
+- tapOn:
+    id: "login.password"
+- eraseText: 80
+- inputText: ${LOGIN_PASSWORD}

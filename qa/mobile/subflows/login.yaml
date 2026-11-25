@@ -1,0 +1,12 @@
+# Real sign-in through the UI (the login rate limit is real: 5/min; each flow signs in at most twice).
+# Needs env USER_EMAIL, USER_PASSWORD. Ends on the Home tab.
+appId: com.cerebroos.trackspense
+---
+- runFlow:
+    file: fill-login.yaml
+    env:
+      LOGIN_EMAIL: ${USER_EMAIL}
+      LOGIN_PASSWORD: ${USER_PASSWORD}
+- tapOn:
+    id: "login.submit"
+- runFlow: reach-home.yaml

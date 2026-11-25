@@ -1,0 +1,23 @@
+# After tapping Sign in: end on the Home tab.
+# iOS raises a system "Save Password?" sheet a moment AFTER Home is already visible. It hides the app from the
+# accessibility tree and swallows the next tap, so checking for it once races (Home is visible before it appears).
+# On iOS, wait for the sheet to appear (bounded) and dismiss it as a user would ("Not Now"); Android shows none.
+appId: com.cerebroos.trackspense
+---
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: "Not Now"
+          timeout: 12000
+          optional: true
+      - runFlow:
+          when:
+            visible: "Not Now"
+          commands:
+            - tapOn: "Not Now"
+- extendedWaitUntil:
+    visible:
+      id: "tabs.Dashboard"
+    timeout: 20000

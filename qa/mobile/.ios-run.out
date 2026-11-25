@@ -1,0 +1,48 @@
+==> Verifying build evidence
+==> Postgres cluster for trackspense_e2e_ios_ios10 on 127.0.0.1:59587
+==> Bootstrapping schema
+==> Starting API on 127.0.0.1:18081, fault proxy on 18080 (control 18082)
+==> regression/receipt-ocr-native-android: SKIPPED (not declared for ios); not counted as coverage
+==> regression/account-switch (attempt 1)
+    PASS in 107.3s
+==> regression/deep-link-join (attempt 1)
+    PASS in 43.1s
+==> regression/lost-save-response (attempt 1)
+    PASS in 52.9s
+==> smoke/tabs-render (attempt 1)
+    PASS in 45.1s
+==> regression/deep-link-signed-out (attempt 1)
+    PASS in 47.7s
+==> regression/receipt-import (attempt 1)
+    PASS in 50.0s
+==> smoke/group-expense (attempt 1)
+    PASS in 52.8s
+==> smoke/login-relaunch (attempt 1)
+    PASS in 67.5s
+==> smoke/draft-recovery (attempt 1)
+    PASS in 61.8s
+==> regression/insights-scope-select (attempt 1)
+    PASS in 43.5s
+==> regression/date-picker (attempt 1)
+    PASS in 43.5s
+==> smoke/expense-create (attempt 1)
+    PASS in 50.8s
+==> regression/category-picker (attempt 1)
+    PASS in 46.4s
+
+Results:
+  SKIPPED regression/receipt-ocr-native-android
+  PASSED  regression/account-switch
+  PASSED  regression/deep-link-join
+  PASSED  regression/lost-save-response
+  PASSED  smoke/tabs-render
+  PASSED  regression/deep-link-signed-out
+  PASSED  regression/receipt-import
+  PASSED  smoke/group-expense
+  PASSED  smoke/login-relaunch
+  PASSED  smoke/draft-recovery
+  PASSED  regression/insights-scope-select
+  PASSED  regression/date-picker
+  PASSED  smoke/expense-create
+  PASSED  regression/category-picker
+==> Reports: /Users/rajeshkumarganesan/Documents/workspaces/VaravuSelavuSeyali/qa/mobile/reports/ios-ios10

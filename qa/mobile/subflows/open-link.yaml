@@ -1,0 +1,19 @@
+# Opens a deep link as a user following it would. iOS asks "Open in TrackSpense?" before handing a custom-scheme link to
+# the app (a system dialog that hides the app tree); the dialog's timing varies, so wait for it (bounded) and confirm.
+# Android opens the app directly. Needs env LINK.
+appId: com.cerebroos.trackspense
+---
+- openLink: ${LINK}
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - extendedWaitUntil:
+          visible: "Open in .*"
+          timeout: 8000
+          optional: true
+      - runFlow:
+          when:
+            visible: "Open in .*"
+          commands:
+            - tapOn: "Open"

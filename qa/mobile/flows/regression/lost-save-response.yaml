@@ -1,0 +1,37 @@
+# SCENARIO AC-005 (JM-02) regression: the server commits a save but the app never gets the response
+# LOGINS: 1
+# Preconditions: fresh verified user; env USER_EMAIL, USER_PASSWORD, RUN_LABEL, PROXY_CONTROL_URL.
+# Native interactions: sign in; enter 12.50 and a labelled description; arm a fault in the proxy so the NEXT
+#   POST /api/v1/expenses is forwarded and committed by the backend but its response is dropped (connection reset); Save.
+# Assertions (UI): the app says the outcome is unknown and does not show the saved confirmation.
+#   Persisted (lost-save-response.verify.py): exactly ONE expense (12.50) exists AND the proxy saw exactly ONE
+#   POST /api/v1/expenses, one of them faulted: the app did not blindly resubmit (that would be a duplicate charge).
+# Reset/cleanup: none (own user, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "fab.add"
+- tapOn:
+    id: "addExpense.key.1"
+- tapOn:
+    id: "addExpense.key.2"
+- tapOn:
+    id: "addExpense.key.dot"
+- tapOn:
+    id: "addExpense.key.5"
+- tapOn:
+    id: "addExpense.description"
+- inputText: "${RUN_LABEL} coffee"
+- pressKey: Enter
+- runScript: ../../subflows/arm-save-fault.js
+- tapOn:
+    id: "addExpense.save"
+- extendedWaitUntil:
+    visible: ".*save outcome is unknown.*"
+    timeout: 30000
+- assertNotVisible:
+    id: "addExpense.saved"

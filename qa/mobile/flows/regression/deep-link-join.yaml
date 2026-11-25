@@ -1,0 +1,21 @@
+# SCENARIO AC-005 (JM-04) regression: a signed-in user opens an invite link (trackspense://join/<token>) and joins the group
+# LOGINS: 1
+# Preconditions: the runner's user is the invitee; an owner's group with a name-only seat and an invite token for it (seed).
+# Native interactions: sign in; open the deep link; confirm "Join group".
+# Assertions (UI): the invite screen, then "You're in."; Persisted (verify): the invitee is now a member of the owner's group.
+# Reset/cleanup: none (own users/group, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- runFlow:
+    file: ../../subflows/open-link.yaml
+    env:
+      LINK: "trackspense://join/${INVITE_TOKEN}"
+- assertVisible: ".*invited.*"
+- tapOn: "Join group"
+- extendedWaitUntil:
+    visible: ".*You're in.*"
+    timeout: 20000
