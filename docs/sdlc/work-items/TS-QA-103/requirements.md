@@ -12,10 +12,12 @@ on-device OCR module, deep links, scene lifecycle) is never exercised automatica
 (`.ai-sdlc/verification.md`); `docs/qa/06` B-19 and ROADMAP line 19 are open. Users: maintainers/CI.
 
 ## Outcome and scope
-Black-box E2E (Maestro) on the real compiled app on **iOS Simulator and Android Emulator**, runnable locally
-and in GitHub Actions, with isolated scenarios, a safe test backend, honest failures and a release gate that
-checks suite scope and both platforms. Decisions (owner, 2026-11-23): iOS + Android; phased, evidence-based
-promotion to required; no device farm.
+Black-box E2E (Maestro) on the real compiled app on **iOS Simulator and Android Emulator**, runnable locally,
+with isolated scenarios, a safe test backend, honest failures and a release check that requires both platforms when mobile
+code changed. Decisions (owner, 2026-11-23): iOS + Android; no device farm. Amended (owner, 2026-11-25): the native E2E
+runs **locally at release time, only when mobile code changed since the previous release**; the GitHub Actions workflow
+stays dormant (manual dispatch only) after the first CI runs showed hosted-runner limits (iOS build ~35 min, flows 3-7x
+slower, an emulator launcher hang).
 Included: AC-001..AC-008. Excluded (stay manual, tracked separately): real camera capture, real push delivery
 and permissions, physical-device performance, signed install/upgrade, VoiceOver/TalkBack. The result is
 "native simulator/emulator coverage", not complete mobile release coverage.

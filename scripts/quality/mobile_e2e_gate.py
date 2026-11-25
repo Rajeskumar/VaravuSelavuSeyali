@@ -4,11 +4,11 @@
     mobile_e2e_gate.py scope   --base SHA --head SHA --event NAME [--input-suite S]   -> writes relevant=/suite= to $GITHUB_OUTPUT
     mobile_e2e_gate.py verdict --changes R --relevant true|false --android R --ios R  -> exit 0 pass / 1 fail
 
-The workflow starts on every pull request and every push to main (a workflow-level path filter would leave a required
-check pending), so "not applicable" is decided here: the device jobs run only when the change can affect the native
-app or the suite itself (MOBILE_AFFECTING_*). Web, backend and documentation changes do not start an emulator. When the
-changed files cannot be determined (no diff, a new branch, a forced push) the jobs run: never skip silently. Nightly and
-manual runs always run. The gate passes only for a classified not-applicable change or when BOTH platform jobs
+Since 2026-11-25 the workflow is dormant (manual dispatch only) and the native E2E is local, release-time evidence;
+MOBILE_AFFECTING_* is also what release_tools.py uses to decide whether a release needs it. If the workflow's PR/push
+triggers are re-enabled, "not applicable" is decided here: the device jobs run only when the change can affect the native
+app or the suite itself. When the changed files cannot be determined (no diff, a new branch, a forced push) the jobs run:
+never skip silently. Manual runs always run. The gate passes only for a classified not-applicable change or when BOTH platform jobs
 succeeded; failed, cancelled and unexpectedly skipped platform jobs, or a failed classification, all fail it.
 Keep MOBILE_AFFECTING_* identical to MOBILE_E2E_* in routing.py (a test pins them together). Stdlib only.
 """
@@ -20,8 +20,9 @@ import subprocess
 import sys
 
 # What can change the native app or the suite: the app, the suite, this workflow and gate, and the two backend launchers the
-# suite runs (qa/scripts/*). The backend itself is NOT listed: API changes are covered by the backend/QA workflows, and the
-# nightly run exercises the mobile app against the current backend. To also run on backend changes, add "varavu_selavu_app/".
+# suite runs (qa/scripts/*). The backend itself is NOT listed (owner decision: native E2E only when mobile code changed), so a
+# backend-only release never runs the app on a simulator (open finding C-16). To include it, add "varavu_selavu_app/" here and
+# in routing.py (a test keeps both lists identical).
 MOBILE_AFFECTING_PREFIXES = ("varavu_selavu_mobile/", "qa/mobile/")
 MOBILE_AFFECTING_FILES = (".github/workflows/mobile-e2e.yml", "scripts/quality/mobile_e2e_gate.py",
                           "qa/scripts/bootstrap_schema.py", "qa/scripts/provision_qa_session_user.py")

@@ -5,7 +5,8 @@
     release_tools.py verify 1.3.0 [--wait 900] [--smoke]       # after the tag push; fills observed results
 
 prepare: exact-candidate CI (release-gate), previous serving images, Alembic revisions since the last
-release tag (+ migrations.yml result), linked work-item gates, and a pre-filled
+release tag (+ migrations.yml result), linked work-item gates, whether the local native mobile E2E is required (mobile
+code changed since the last release), and a pre-filled
 docs/sdlc/releases/v<version>/release.json + release.md. Manual checks it cannot prove stay "skipped".
 verify: Cloud Build status by release tag, the traffic-serving revision/image of each Cloud Run service,
 optional read-only prod smoke (make qa-prod-smoke) and an error-log window. Updates the record status.
@@ -42,6 +43,39 @@ def sh(command, check=True):
     if check and result.returncode:
         raise RuntimeError(f"{command[0]} failed ({result.returncode})")
     return result.stdout
+
+
+def load_mobile_gate():
+    spec = importlib.util.spec_from_file_location("mobile_e2e_gate", ROOT / "scripts/quality/mobile_e2e_gate.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def mobile_changes_since(tag, sha, run=sh):
+    """Mobile-affecting files changed since the previous release (same paths the CI classifier and routing use), or None
+    when there is no previous release to compare with (then the native E2E is required)."""
+    if not tag:
+        return None
+    out = run(["git", "diff", "-z", "--name-only", "--no-renames", f"{tag}..{sha}"])
+    gate = load_mobile_gate()
+    return [f for f in out.split("\0") if f and gate.is_mobile_affecting(f)]
+
+
+def native_mobile_check(sha, tag, files):
+    """Owner decision 2026-11-25: the native E2E (qa/mobile, iOS Simulator + Android Emulator) runs LOCALLY at release time,
+    and only when mobile code changed since the previous release. Required -> "skipped" (the gate reports it missing until
+    the release owner records passed with both platform reports); nothing mobile changed -> not applicable."""
+    how = ("run the native E2E regression locally on BOTH platforms against this commit: make mobile-e2e-build-ios && "
+           "make mobile-e2e-ios SUITE=regression; make mobile-e2e-build-android && make mobile-e2e-android SUITE=regression; "
+           "then record passed with both reports (qa/mobile/reports/<platform>-<runId>/summary.json)")
+    if files is None:
+        return check("native-mobile-e2e", "skipped", sha, f"No previous release tag: {how}")
+    if files:
+        sample = ", ".join(files[:5]) + (", ..." if len(files) > 5 else "")
+        return check("native-mobile-e2e", "skipped", sha, f"{len(files)} mobile-affecting file(s) changed since {tag} ({sample}): {how}")
+    return check("native-mobile-e2e", "passed", sha,
+                 f"Not applicable: no mobile-affecting change since {tag} (paths: MOBILE_AFFECTING_* in scripts/quality/mobile_e2e_gate.py)")
 
 
 def load_release_gate():
@@ -306,7 +340,7 @@ def gate_verdicts(items):
     return verdicts
 
 
-def build_record(version, sha, ci, migration, components, items, verdicts, unlinked, tag):
+def build_record(version, sha, ci, migration, components, items, verdicts, unlinked, tag, native=None):
     all_pass = items and all(v in ("PASS", "PASS_WITH_APPROVED_WAIVERS") for v in verdicts.values())
     gates = ", ".join(f"{k} {v}" for k, v in verdicts.items()) or "no linked work items"
     checks = [ci["unit-ci"], ci["qa-ci"], ci["framework-ci"], ci["security"], migration]
@@ -318,6 +352,8 @@ def build_record(version, sha, ci, migration, components, items, verdicts, unlin
         + (", ".join(h for h, _ in unlinked[:12]) or "none")
         + (" — review them or record an approved waiver" if unlinked else ""),
     ))
+    if native is not None:
+        checks.append(native)
     checks.append(check("configuration", "skipped", sha,
                         "Confirm secrets, flags and env for this release (manual; see release-checklist.md)"))
     previous_known = all(not c["previous_image"].startswith("unknown") for c in components)
@@ -390,7 +426,8 @@ def prepare(args):
         except (RuntimeError, ValueError, OSError):
             previous = []
         components.append(component(name, sha, previous))
-    record = build_record(args.version, sha, ci, migration, components, items, gate_verdicts(items), unlinked, tag)
+    native = native_mobile_check(sha, tag, mobile_changes_since(tag, sha))
+    record = build_record(args.version, sha, ci, migration, components, items, gate_verdicts(items), unlinked, tag, native=native)
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "release.json").write_text(json.dumps(record, indent=2) + "\n")
     (folder / "release.md").write_text(render_md(record))

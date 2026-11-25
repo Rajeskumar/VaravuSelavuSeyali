@@ -49,7 +49,7 @@ Record Pass/Fail with evidence (screenshot/trace/run id). Automated where a test
 - Known issues carried forward must be listed in the release notes and in `docs/qa/07-qa-gap-analysis.md`.
 
 ## 5. Mobile app (only when a mobile build ships)
-- [ ] Build via `make start-mobile-*` smoke on iOS and Android **devices** (simulator/emulator smoke is automated by `qa/mobile` / `mobile-e2e.yml` once it is promoted, and runs only for mobile-affecting changes: dispatch a regression run if the candidate has none; real-device checks stay manual).
+- [ ] Build via `make start-mobile-*` smoke on iOS and Android **devices** (simulator/emulator regression runs locally with `qa/mobile` when mobile code changed since the previous release: the release record's `native-mobile-e2e` check; real-device checks stay manual).
 - [ ] Manual JM-01..JM-07 from `03-user-journeys.md` (login, add expense + recovery, receipt OCR, groups/deep link, push if enabled with `TRACKSPENSE_ENABLE_PUSH=1`).
 - [ ] Store identifiers unchanged (`com.cerebroos.trackspense`); minimum iOS 17.0; Xcode ≥ 26.4.
 - [ ] Web/mobile parity gaps reviewed against D-05.

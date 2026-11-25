@@ -39,13 +39,18 @@ EVIDENCE="${ART}/build-evidence-${PLATFORM}.json"
 echo "==> Verifying build evidence" >&2
 python3 "${HERE}/artifact_evidence.py" verify --artifact "${ARTIFACT}" --evidence "${EVIDENCE}" --platform "${PLATFORM}" >"${OUT}/build-evidence.json"
 
-STATE=""; UDID=""; OWN_SIM=0; OWN_EMU=0
+STATE=""; UDID=""; OWN_SIM=0; OWN_EMU=0; PREV_HIDE_ERRORS=""
 cleanup() {
   set +e
   [ "${KEEP}" = 1 ] && { echo "kept: state=${STATE} device=${UDID}" >&2; return; }
   [ -n "${STATE}" ] && "${HERE}/stop-test-backend.sh" "${STATE}"
   [ "${OWN_SIM}" = 1 ] && "${HERE}/ios-sim.sh" delete "${UDID}" >/dev/null 2>&1
   [ "${OWN_EMU}" = 1 ] && "${HERE}/android-emu.sh" stop "${RUN_ID}" >/dev/null 2>&1
+  # An emulator we did not start (E2E_REUSE_EMULATOR=1, CI): give back its hide_error_dialogs setting.
+  if [ "${OWN_EMU}" != 1 ] && [ -n "${PREV_HIDE_ERRORS:-}" ] && [ -n "${UDID}" ]; then
+    if [ "${PREV_HIDE_ERRORS}" = null ]; then adb -s "${UDID}" shell settings delete global hide_error_dialogs >/dev/null 2>&1
+    else adb -s "${UDID}" shell settings put global hide_error_dialogs "${PREV_HIDE_ERRORS}" >/dev/null 2>&1; fi
+  fi
 }
 trap cleanup EXIT
 
@@ -78,6 +83,11 @@ else
       exit "${rc}"
     fi
   fi
+  # Also on an emulator we did not start (CI's, or E2E_REUSE_EMULATOR=1): a system "isn't responding" dialog stays on top
+  # until dismissed and fails every later flow, so never show one (android-emu.sh does the same for its own emulators).
+  # (restored by cleanup on an emulator we did not start).
+  [ "${OWN_EMU}" = 1 ] || PREV_HIDE_ERRORS="$(adb -s "${UDID}" shell settings get global hide_error_dialogs 2>/dev/null | tr -d '\r' || true)"
+  adb -s "${UDID}" shell settings put global hide_error_dialogs 1 >/dev/null 2>&1 || true
   adb -s "${UDID}" install -r "${ARTIFACT}" >/dev/null
 fi
 

@@ -18,8 +18,9 @@ files within that version's release directory. A record already tracked with edi
 an appropriate documentation commit and the candidate/evidence refreshed before another release.
 
 Checks: unit-ci, qa-ci, framework-ci, security, acceptance, reviews, migration-compatibility,
-configuration, recovery. Manual checks (acceptance, reviews, configuration, recovery,
-migration-compatibility) may be `waived` with owner/reason/expiry/reference; CI, security and
+configuration, recovery, and native-mobile-e2e when mobile code changed since the previous release (local iOS +
+Android regression reports; otherwise prepare records it not applicable). Manual checks (acceptance, reviews, configuration, recovery,
+migration-compatibility, native-mobile-e2e) may be `waived` with owner/reason/expiry/reference; CI, security and
 production checks can never be waived. A not-applicable manual check is passed only after an explicit applicability
 assessment with a source/reason. Skipped/missing is incomplete. Include web/backend components, previous
 images and expected new images. Review linked work-item gates and any waivers; JSON is not authenticated

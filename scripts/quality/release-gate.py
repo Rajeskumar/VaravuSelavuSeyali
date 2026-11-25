@@ -23,8 +23,9 @@ WORKFLOWS = ("unit.yml", "qa.yml", "framework.yml")
 # without one has no run: main() then tells the operator to dispatch a regression run for it.
 MOBILE_E2E_WORKFLOW = "mobile-e2e.yml"
 MOBILE_E2E_REQUIRED_JOBS = ("ios (regression)", "android (regression)")
-# Promotion switch. The workflow is advisory until its promotion criteria (work item TS-QA-103) are met; flip this
-# in that change (and update the test that pins it). `--require-mobile-e2e` enforces it for a single run.
+# Off: since 2026-11-25 the native E2E is local, release-time evidence (release_tools.py adds a `native-mobile-e2e` check when
+# mobile code changed) and the CI workflow is dormant. Turn this on only together with re-enabling the workflow's triggers.
+# `--require-mobile-e2e` enforces it for a single run.
 ENFORCE_MOBILE_E2E = False
 
 
@@ -144,11 +145,11 @@ def main():
                 )
                 detail = f"{detail}; {jobs_detail}"
             if not ok and workflow == MOBILE_E2E_WORKFLOW:
-                # The workflow starts on every push to main but only runs the device jobs for mobile-affecting changes, so
-                # a candidate has either no run or a run whose device jobs were skipped.
-                detail += ("; mobile-e2e.yml only runs device jobs for mobile-affecting changes: to produce the evidence run "
-                           "`gh workflow run mobile-e2e.yml --ref main -f suite=regression` (the candidate must be the "
-                           "tip of that ref) and re-run this gate")
+                # Only consulted with --require-mobile-e2e: the workflow is dormant (manual dispatch) and the native E2E is
+                # normally local release-time evidence (the `native-mobile-e2e` check in the release record).
+                detail += ("; mobile-e2e.yml is dormant (manual dispatch only); native E2E evidence is normally the local "
+                           "`native-mobile-e2e` release check. For CI evidence run `gh workflow run mobile-e2e.yml --ref main "
+                           "-f suite=regression` (the candidate must be the tip of that ref) and re-run this gate")
         except (OSError, ValueError, KeyError) as exc:
             # Never print HTTP response bodies or credentials.
             ok, detail = (

@@ -275,8 +275,8 @@ def classify(files, risk=None, product=False):
             checks.add("qa-typecheck")
             manual.add("local-integration")
         if p.startswith(MOBILE_E2E_PREFIXES) or p in MOBILE_E2E_FILES:
-            # Native device evidence is the mobile-e2e CI job (TS-QA-103); report it instead of leaving it implicit.
-            # Only for changes that can affect the native app or the suite, exactly when CI runs the device jobs.
+            # Native device evidence (TS-QA-103): the local qa/mobile run, collected at release time when mobile code changed
+            # (release_tools.py native-mobile-e2e check); listed here so the reminder appears for exactly those paths.
             manual.add("native-e2e")
         if p.startswith("qa/mobile/scripts/"):
             checks.add("framework")  # their unit tests live in scripts/quality/tests

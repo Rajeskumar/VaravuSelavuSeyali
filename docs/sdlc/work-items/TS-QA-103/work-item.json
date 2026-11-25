@@ -22,7 +22,7 @@
     },
     {
       "id": "AC-004",
-      "outcome": "On the Android Emulator in CI, the same smoke flows pass against the compiled app."
+      "outcome": "On the Android Emulator (run locally), the same smoke flows pass against the compiled app."
     },
     {
       "id": "AC-005",
@@ -30,11 +30,11 @@
     },
     {
       "id": "AC-006",
-      "outcome": "A mobile-e2e workflow runs on every PR with change detection, Android and iOS jobs, uploaded diagnostics, and a final Native mobile gate that passes only for a classified not-applicable change or when both platforms pass, and fails on classification failure or any failed, cancelled or unexpectedly skipped platform job."
+      "outcome": "The native E2E runs locally on both platforms (make mobile-e2e-*); the mobile-e2e workflow is kept dormant (manual dispatch only) with Android and iOS jobs, uploaded diagnostics and a final Native mobile gate that passes only for a classified not-applicable change or when both platforms pass, and fails (as a job, not just in its log) on classification failure or any failed, cancelled or unexpectedly skipped platform job."
     },
     {
       "id": "AC-007",
-      "outcome": "The release gate accepts a candidate only when the exact main commit has successful ios and android regression jobs from the mobile-e2e workflow; smoke-only, single-platform, cancelled and schedule-only runs are rejected."
+      "outcome": "At release time the native E2E is required only when mobile code changed: make release-prepare adds a native-mobile-e2e check when any mobile-affecting file changed since the previous release tag (or there is no previous tag); the release gate reports it missing until passed is recorded with local regression reports for both platforms on the candidate; with no mobile change it is recorded as not applicable."
     },
     {
       "id": "AC-008",
@@ -47,8 +47,7 @@
     "configuration-checks",
     "safety-negatives",
     "ios-smoke-local",
-    "android-smoke-ci",
-    "ci-gate-negative",
+    "android-smoke-local",
     "release-gate-tests",
     "secret-scan",
     "dependency-audit",
@@ -59,8 +58,8 @@
   ],
   "implementation_approval": {
     "actor": "Repository owner",
-    "reference": "This conversation, 2026-11-24: \"Lets continue with Android flow, pardon me. I approve #1 and continue #4. After all this is done commit the branch and push and create PR\" (re-approval of the plan with ui-review added to required_evidence; Android and the AC-005 regression flows stay in scope; commit, push and PR authorized once done)",
-    "fingerprint": "184b9395e4f0e973f948413356659274d87d07ce9e068f5646e5f395cb2c51c1"
+    "reference": "This conversation, 2026-11-25: \"Lets keep both Android and iOS test local only for the relesae phase and only when there is changes to mobile code. Fix those android fix, gate fix but make it local only for now.\" (amends AC-004, AC-006, AC-007 and required_evidence: native E2E local and release-time only when mobile code changed; CI workflow dormant; Android and gate fixes kept) Interpretation notes by Claude Code: 'required when there is no previous release tag' is a fail-safe reading, not stated by the owner; the kept gate fix is verified by framework-tests (the gate step executed with GitHub's shell rules) instead of the dropped ci-gate-negative CI evidence.",
+    "fingerprint": "5b333fb60c8a977b1e0a8a7a3a8f96703c0ee0eb2e98a9bbf5dbf3e005a28d51"
   },
   "links": [
     "docs/qa/06-automation-strategy.md (B-19)",
@@ -68,5 +67,5 @@
     "plan: ~/.claude/plans/i-need-to-comeup-hazy-willow-of-2c5fd456-1d5c-4ee8-961a-2772a2dccd74.md (local only)",
     "github-issue:#49"
   ],
-  "notes": "Simulator/emulator automation only; physical-device validation tracked separately. Working branch mobile-qa-implementation (created from main after PR #48 by the user/another session); all changes uncommitted. Promotion to required check and ruleset activation are owner actions. STATE 2026-11-24: Phases 0-2 built; iOS smoke green locally; gate BLOCKED by design until (1) owner decides F-002 (5 more sheets), (2) Android + first CI runs exist (AC-004, ci-gate-negative), (3) regression flows are built (AC-005), then acceptance-verification."
+  "notes": "Simulator/emulator automation only; physical-device validation tracked separately. Built on branch mobile-qa-implementation, merged in PR #50 (2026-11-25). STATE 2026-11-25: 13 flows pass locally on iOS; Android 13/13 then 12/13 (A-3). Owner decision 2026-11-25: native E2E is local, release-time evidence, required only when mobile code changed since the previous release (release_tools.py native-mobile-e2e check, always present in RELEASE_CHECKS); the CI workflow is dormant (manual dispatch). Device evidence recorded earlier belongs to older snapshots; the next mobile release supplies fresh local reports."
 }

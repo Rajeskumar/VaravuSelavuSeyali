@@ -2,6 +2,8 @@
 # iOS: the simulator's stock photos carry a year in their label ("Photo, March 30, 2018, 2:14 PM"); a photo from the current
 #   year does not ("Photo, November 24, 6:22 PM"), so a day followed directly by a time selects the one we added.
 # Android: the system photo picker (Android 13+). The emulator image holds no other photos, so the first thumbnail is ours.
+#   The picker's package differs by system image (Google APIs image: com.google.android.providers.media.module; plain
+#   image: com.android.providers.media.module), so the id is matched as a pattern that covers both.
 appId: com.cerebroos.trackspense
 ---
 - runFlow:
@@ -18,7 +20,7 @@ appId: com.cerebroos.trackspense
     commands:
       - extendedWaitUntil:
           visible:
-            id: "com.google.android.providers.media.module:id/icon_thumbnail"
+            id: ".*providers\\.media\\.module:id/icon_thumbnail"
           timeout: 20000
       - tapOn:
-          id: "com.google.android.providers.media.module:id/icon_thumbnail"
+          id: ".*providers\\.media\\.module:id/icon_thumbnail"

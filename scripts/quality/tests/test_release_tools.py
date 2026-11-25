@@ -89,6 +89,62 @@ class ReleaseToolsTests(unittest.TestCase):
         sdlc.validate_document(record, "release")
         self.assertEqual(sdlc.release_gate(record)["verdict"], "INCOMPLETE_EVIDENCE")
 
+    def test_native_mobile_check_is_required_only_when_mobile_code_changed_since_the_last_release(self):
+        # Owner decision 2026-11-25: native E2E runs locally, at release time, only when mobile code changed.
+        need = rt.native_mobile_check(SHA, "release-v1.2.0", ["varavu_selavu_mobile/src/App.tsx", "qa/mobile/flows/smoke/x.yaml"])
+        self.assertEqual((need["id"], need["status"]), ("native-mobile-e2e", "skipped"))  # skipped = still to do: the gate reports it missing
+        self.assertIn("2 mobile-affecting file(s) changed since release-v1.2.0", need["source"])
+        self.assertIn("make mobile-e2e-ios SUITE=regression", need["source"])
+        self.assertIn("make mobile-e2e-android SUITE=regression", need["source"])
+        none = rt.native_mobile_check(SHA, "release-v1.2.0", [])
+        self.assertEqual(none["status"], "passed")
+        self.assertIn("Not applicable", none["source"])
+        first = rt.native_mobile_check(SHA, None, None)
+        self.assertEqual(first["status"], "skipped")
+        self.assertIn("No previous release tag", first["source"])
+
+    def test_mobile_changes_are_read_from_the_diff_since_the_tag_with_the_ci_classifier_paths(self):
+        calls = []
+
+        def run(cmd):
+            calls.append(cmd)
+            return "varavu_selavu_mobile/src/caf\u00e9.ts\0varavu_selavu_ui/src/App.tsx\0qa/mobile/README.md\0docs/a.md\0"
+
+        files = rt.mobile_changes_since("release-v1.2.0", SHA, run=run)
+        self.assertEqual(files, ["varavu_selavu_mobile/src/caf\u00e9.ts", "qa/mobile/README.md"])
+        self.assertIn("-z", calls[0])
+        self.assertIn("--no-renames", calls[0])  # a file moved out of the mobile app must still count as a mobile change
+        self.assertIn(f"release-v1.2.0..{SHA}", calls[0])
+        self.assertIsNone(rt.mobile_changes_since(None, SHA, run=run))  # no previous release: unknown, so required
+
+    def test_a_required_native_check_keeps_the_release_open_until_recorded(self):
+        ci = rt.ci_checks(SHA, gate=FakeGate(True), fetch=lambda wf: [], has_security=lambda s: True)
+        migration = rt.migration_check(SHA, "release-v1.2.0", [])
+        prev = [{"image": "img:old", "digest": "sha256:1", "revision": "r1", "percent": 100}]
+        comps = [rt.component(n, SHA, prev) for n in rt.SERVICES]
+        native = rt.native_mobile_check(SHA, "release-v1.2.0", ["varavu_selavu_mobile/src/App.tsx"])
+        record = rt.build_record("1.3.0", SHA, ci, migration, comps, ["TS-1"], {"TS-1": "PASS"}, [], "release-v1.2.0", native=native)
+        self.assertIn("native-mobile-e2e", {c["id"] for c in record["checks"]})
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        import sdlc
+
+        sdlc.validate_document(record, "release")
+        self.assertIn("native-mobile-e2e: missing, stale or skipped", sdlc.release_gate(record)["missing"])
+
+    def test_a_record_that_lost_its_native_check_is_still_incomplete(self):
+        # Review finding: the gate only enforced the check if the record contained it, so deleting the entry from release.json
+        # (or a hand-written record) let a release with untested mobile changes through.
+        ci = rt.ci_checks(SHA, gate=FakeGate(True), fetch=lambda wf: [], has_security=lambda s: True)
+        migration = rt.migration_check(SHA, "release-v1.2.0", [])
+        prev = [{"image": "img:old", "digest": "sha256:1", "revision": "r1", "percent": 100}]
+        comps = [rt.component(n, SHA, prev) for n in rt.SERVICES]
+        record = rt.build_record("1.3.0", SHA, ci, migration, comps, ["TS-1"], {"TS-1": "PASS"}, [], "release-v1.2.0")  # no native check
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        import sdlc
+
+        self.assertIn("native-mobile-e2e", sdlc.RELEASE_CHECKS)
+        self.assertIn("native-mobile-e2e: missing, stale or skipped", sdlc.release_gate(record)["missing"])
+
     def test_component_evaluation(self):
         comp = rt.component("backend", SHA, [])
         expected = comp["expected_image"]
