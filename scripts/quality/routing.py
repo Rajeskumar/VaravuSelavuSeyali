@@ -17,6 +17,8 @@ import subprocess
 
 # Keep identical to MOBILE_AFFECTING_* in mobile_e2e_gate.py (test_routing pins them together): the SDLC asks for native-E2E
 # evidence exactly when CI runs the device jobs.
+# Machine-readable contracts whose drift is caught by the web and mobile Jest suites, so they map to both checks.
+CONTRACT_FILES = ("docs/analytics/catalog.v1.json",)
 MOBILE_E2E_PREFIXES = ("varavu_selavu_mobile/", "qa/mobile/")
 MOBILE_E2E_FILES = (".github/workflows/mobile-e2e.yml", "scripts/quality/mobile_e2e_gate.py",
                     "qa/scripts/bootstrap_schema.py", "qa/scripts/provision_qa_session_user.py")
@@ -49,6 +51,18 @@ HIGH_PREFIXES = (
     "varavu_selavu_ui/src/api/apiconfig.ts",
     "varavu_selavu_mobile/src/core/auth/",
     "varavu_selavu_mobile/src/core/api/",
+    # The analytics privacy boundary (TS-GA4-002): validators, sanitizers, consent, native config and the
+    # shared event contract decide what leaves the device for a third party. Personal-data work is high risk.
+    "varavu_selavu_mobile/src/core/analytics/",
+    "varavu_selavu_mobile/src/features/shared/analytics/",
+    "varavu_selavu_mobile/src/app/analytics",
+    "varavu_selavu_mobile/firebase",
+    "varavu_selavu_mobile/withFirebasePrivacy",
+    "varavu_selavu_mobile/withSceneLifecycle",  # must keep the SDK's generated FirebaseApp.configure() block
+    "varavu_selavu_mobile/app.config.js",
+    "varavu_selavu_ui/src/analytics/",
+    "docs/analytics/catalog.v1.json",
+    "varavu_selavu_app/privacy_policy.html",
     ".github/workflows/",
     ".github/rulesets/",
     ".cloudbuild/",
@@ -271,6 +285,8 @@ def classify(files, risk=None, product=False):
             checks.add("web")
         if p.startswith("varavu_selavu_mobile/"):
             checks.add("mobile")
+        if p in CONTRACT_FILES:
+            checks.update(("web", "mobile"))
         if p.startswith("qa/"):
             checks.add("qa-typecheck")
             manual.add("local-integration")
@@ -297,6 +313,7 @@ def classify(files, risk=None, product=False):
             or infra
             or ci_config
             or records
+            or p in CONTRACT_FILES
             or p.startswith(
                 ("varavu_selavu_app/", "varavu_selavu_ui/", "varavu_selavu_mobile/", "qa/")
             )

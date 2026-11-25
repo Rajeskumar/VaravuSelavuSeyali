@@ -1,0 +1,822 @@
+{
+  "catalog_version": 1,
+  "description": "Machine-readable contract for the TrackSpense analytics events. Human semantics: docs/analytics/event-catalog.md. Web (varavu_selavu_ui/src/analytics/events.ts) and mobile (varavu_selavu_mobile/src/features/shared/analytics/events.test.ts) tests fail when their tables differ from this file.",
+  "context": {
+    "product": [
+      "trackspense"
+    ],
+    "platform": [
+      "web",
+      "ios",
+      "android"
+    ]
+  },
+  "features": [
+    "navigation",
+    "auth",
+    "expenses",
+    "categorization",
+    "receipts",
+    "groups",
+    "ai_analyst",
+    "recurring",
+    "analysis",
+    "settings",
+    "onboarding",
+    "acquisition",
+    "device"
+  ],
+  "events": {
+    "signup_started": {
+      "feature": "auth",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "authentication_method": {
+          "values": [
+            "password",
+            "google"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "sign_up": {
+      "feature": "auth",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "authentication_method": {
+          "values": [
+            "password"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "signup_failed": {
+      "feature": "auth",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "authentication_method": {
+          "values": [
+            "password"
+          ],
+          "optional": false
+        },
+        "outcome": {
+          "values": [
+            "failure",
+            "unknown",
+            "cancelled"
+          ],
+          "optional": false
+        },
+        "error_code": {
+          "values": [
+            "validation",
+            "unauthorized",
+            "forbidden",
+            "rate_limited",
+            "quota",
+            "network",
+            "timeout",
+            "server",
+            "conflict",
+            "cancelled",
+            "outcome_unknown",
+            "unknown"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "login": {
+      "feature": "auth",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "authentication_method": {
+          "values": [
+            "password",
+            "google"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "login_failed": {
+      "feature": "auth",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "authentication_method": {
+          "values": [
+            "password",
+            "google"
+          ],
+          "optional": false
+        },
+        "outcome": {
+          "values": [
+            "failure",
+            "unknown",
+            "cancelled"
+          ],
+          "optional": false
+        },
+        "error_code": {
+          "values": [
+            "validation",
+            "unauthorized",
+            "forbidden",
+            "rate_limited",
+            "quota",
+            "network",
+            "timeout",
+            "server",
+            "conflict",
+            "cancelled",
+            "outcome_unknown",
+            "unknown"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "logout": {
+      "feature": "auth",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "expense_creation_started": {
+      "feature": "expenses",
+      "platforms": [
+        "web"
+      ],
+      "properties": {
+        "entry_method": {
+          "values": [
+            "manual",
+            "quick_log",
+            "receipt",
+            "recurring",
+            "undo"
+          ],
+          "optional": false
+        },
+        "expense_scope": {
+          "values": [
+            "personal",
+            "group"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "expense_created": {
+      "feature": "expenses",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "entry_method": {
+          "values": [
+            "manual",
+            "quick_log",
+            "receipt",
+            "recurring",
+            "undo"
+          ],
+          "optional": false
+        },
+        "expense_scope": {
+          "values": [
+            "personal"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "expense_creation_failed": {
+      "feature": "expenses",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "entry_method": {
+          "values": [
+            "manual",
+            "quick_log",
+            "receipt",
+            "recurring",
+            "undo"
+          ],
+          "optional": false
+        },
+        "expense_scope": {
+          "values": [
+            "personal",
+            "group"
+          ],
+          "optional": false
+        },
+        "outcome": {
+          "values": [
+            "failure",
+            "unknown",
+            "cancelled"
+          ],
+          "optional": false
+        },
+        "error_code": {
+          "values": [
+            "validation",
+            "unauthorized",
+            "forbidden",
+            "rate_limited",
+            "quota",
+            "network",
+            "timeout",
+            "server",
+            "conflict",
+            "cancelled",
+            "outcome_unknown",
+            "unknown"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "expense_updated": {
+      "feature": "expenses",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "expense_scope": {
+          "values": [
+            "personal"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "expense_deleted": {
+      "feature": "expenses",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "expense_scope": {
+          "values": [
+            "personal",
+            "group"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "category_suggestion_completed": {
+      "feature": "categorization",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "duration_bucket": {
+          "values": [
+            "under_1s",
+            "1_to_5s",
+            "5_to_15s",
+            "15_to_60s",
+            "over_60s"
+          ],
+          "optional": true
+        }
+      }
+    },
+    "category_suggestion_failed": {
+      "feature": "categorization",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "outcome": {
+          "values": [
+            "failure",
+            "unknown",
+            "cancelled"
+          ],
+          "optional": false
+        },
+        "error_code": {
+          "values": [
+            "validation",
+            "unauthorized",
+            "forbidden",
+            "rate_limited",
+            "quota",
+            "network",
+            "timeout",
+            "server",
+            "conflict",
+            "cancelled",
+            "outcome_unknown",
+            "unknown"
+          ],
+          "optional": false
+        },
+        "duration_bucket": {
+          "values": [
+            "under_1s",
+            "1_to_5s",
+            "5_to_15s",
+            "15_to_60s",
+            "over_60s"
+          ],
+          "optional": true
+        }
+      }
+    },
+    "category_suggestion_accepted": {
+      "feature": "categorization",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "category_suggestion_overridden": {
+      "feature": "categorization",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "receipt_parse_started": {
+      "feature": "receipts",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "receipt_parse_completed": {
+      "feature": "receipts",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "duration_bucket": {
+          "values": [
+            "under_1s",
+            "1_to_5s",
+            "5_to_15s",
+            "15_to_60s",
+            "over_60s"
+          ],
+          "optional": true
+        }
+      }
+    },
+    "receipt_parse_failed": {
+      "feature": "receipts",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "outcome": {
+          "values": [
+            "failure",
+            "unknown",
+            "cancelled"
+          ],
+          "optional": false
+        },
+        "error_code": {
+          "values": [
+            "validation",
+            "unauthorized",
+            "forbidden",
+            "rate_limited",
+            "quota",
+            "network",
+            "timeout",
+            "server",
+            "conflict",
+            "cancelled",
+            "outcome_unknown",
+            "unknown"
+          ],
+          "optional": false
+        },
+        "duration_bucket": {
+          "values": [
+            "under_1s",
+            "1_to_5s",
+            "5_to_15s",
+            "15_to_60s",
+            "over_60s"
+          ],
+          "optional": true
+        }
+      }
+    },
+    "group_created": {
+      "feature": "groups",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "group_member_invited": {
+      "feature": "groups",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "group_invitation_accepted": {
+      "feature": "groups",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "group_expense_created": {
+      "feature": "groups",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "entry_method": {
+          "values": [
+            "manual",
+            "quick_log",
+            "receipt",
+            "recurring",
+            "undo"
+          ],
+          "optional": false
+        },
+        "expense_scope": {
+          "values": [
+            "group"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "group_expense_updated": {
+      "feature": "groups",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "expense_scope": {
+          "values": [
+            "group"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "settlement_completed": {
+      "feature": "groups",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "ai_analyst_opened": {
+      "feature": "ai_analyst",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "ai_query_started": {
+      "feature": "ai_analyst",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {}
+    },
+    "ai_query_completed": {
+      "feature": "ai_analyst",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "duration_bucket": {
+          "values": [
+            "under_1s",
+            "1_to_5s",
+            "5_to_15s",
+            "15_to_60s",
+            "over_60s"
+          ],
+          "optional": true
+        }
+      }
+    },
+    "ai_query_failed": {
+      "feature": "ai_analyst",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "outcome": {
+          "values": [
+            "failure",
+            "unknown",
+            "cancelled"
+          ],
+          "optional": false
+        },
+        "error_code": {
+          "values": [
+            "validation",
+            "unauthorized",
+            "forbidden",
+            "rate_limited",
+            "quota",
+            "network",
+            "timeout",
+            "server",
+            "conflict",
+            "cancelled",
+            "outcome_unknown",
+            "unknown"
+          ],
+          "optional": false
+        },
+        "duration_bucket": {
+          "values": [
+            "under_1s",
+            "1_to_5s",
+            "5_to_15s",
+            "15_to_60s",
+            "over_60s"
+          ],
+          "optional": true
+        }
+      }
+    },
+    "recurring_template_changed": {
+      "feature": "recurring",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "action": {
+          "values": [
+            "saved",
+            "paused",
+            "resumed",
+            "deleted"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "recurring_run_completed": {
+      "feature": "recurring",
+      "platforms": [
+        "web",
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "action": {
+          "values": [
+            "executed",
+            "confirmed"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "analysis_viewed": {
+      "feature": "analysis",
+      "platforms": [
+        "web"
+      ],
+      "properties": {
+        "view": {
+          "values": [
+            "overview",
+            "items",
+            "merchants",
+            "budgets",
+            "cards"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "expense_filter_applied": {
+      "feature": "expenses",
+      "platforms": [
+        "web"
+      ],
+      "properties": {
+        "filter_type": {
+          "values": [
+            "search",
+            "period",
+            "scope",
+            "tag"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "data_export_completed": {
+      "feature": "settings",
+      "platforms": [
+        "web"
+      ],
+      "properties": {
+        "export_type": {
+          "values": [
+            "expenses_csv",
+            "account_json",
+            "group_csv"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "screen_view": {
+      "feature": "navigation",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "screen_name": {
+          "values": [
+            "login",
+            "register",
+            "forgot_password",
+            "home",
+            "expenses",
+            "groups",
+            "group_detail",
+            "join_group",
+            "insights",
+            "ask",
+            "activity",
+            "profile",
+            "recurring",
+            "item_detail",
+            "merchant_detail",
+            "cards",
+            "tags",
+            "about",
+            "feedback",
+            "security",
+            "delete_account",
+            "privacy"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "receipt_image_selected": {
+      "feature": "receipts",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "source": {
+          "values": [
+            "camera",
+            "library"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "permission_result": {
+      "feature": "device",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "permission": {
+          "values": [
+            "camera",
+            "photos",
+            "notifications"
+          ],
+          "optional": false
+        },
+        "result": {
+          "values": [
+            "granted",
+            "denied",
+            "limited"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "deep_link_opened": {
+      "feature": "navigation",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "link_type": {
+          "values": [
+            "group_invite",
+            "group"
+          ],
+          "optional": false
+        }
+      }
+    },
+    "notification_opened": {
+      "feature": "navigation",
+      "platforms": [
+        "ios",
+        "android"
+      ],
+      "properties": {
+        "notification_type": {
+          "values": [
+            "group_activity"
+          ],
+          "optional": false
+        }
+      }
+    }
+  }
+}
