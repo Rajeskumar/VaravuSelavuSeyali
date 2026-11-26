@@ -92,8 +92,8 @@ describe('SplitEditor preview helpers — §3.3 invariant', () => {
 
   test('previewAdjustmentSplit adjusts correctly', () => {
     const entries = [
-      { member_id: 'a', value: -10 },
-      { member_id: 'b', value: 10 }
+      { member_id: 'a', value: 0 },
+      { member_id: 'b', value: 20 }
     ];
     const amount = 100;
     const shares = previewAdjustmentSplit(entries, amount);

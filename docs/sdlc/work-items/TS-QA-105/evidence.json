@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "checks",
+      "status": "passed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 cluster and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server; synthetic users",
+      "command_or_method": "Final code: make check 7/7; backend 1072 passed, 15 skipped; group specs 130/130 on chromium, firefox, webkit, mobile-iphone; chromium @regression 136 passed, 17 skipped; api 58 passed. Local isolated stack; not run in GitHub Actions; no native device or simulator.",
+      "source": ".sdlc-logs (latest fast-sdlc run)",
+      "recorded_at": "2026-11-26T21:39:15.701254+00:00",
+      "acceptance_criteria": [
+        "AC-004"
+      ]
+    },
+    {
+      "id": "local-integration",
+      "status": "passed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 cluster and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server; synthetic users",
+      "command_or_method": "Final code: make check 7/7; backend 1072 passed, 15 skipped; group specs 130/130 on chromium, firefox, webkit, mobile-iphone; chromium @regression 136 passed, 17 skipped; api 58 passed. Local isolated stack; not run in GitHub Actions; no native device or simulator.",
+      "source": "qa/e2e/tests/groups/group-expense-*.spec.ts",
+      "recorded_at": "2026-11-26T21:39:15.701254+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    },
+    {
+      "id": "code-review",
+      "status": "passed",
+      "snapshot": "97cef93a903c2a50d9341ef587ebf2de761c36e01af85fe008135c5d189df34d",
+      "environment": "Local macOS; throwaway PostgreSQL 16 cluster and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server; synthetic users",
+      "command_or_method": "code-reviewer agent, one pass: no P0/P1 in tests; P2 and confirmed P3 gaps fixed afterwards, not re-reviewed",
+      "source": "findings.json",
+      "recorded_at": "2026-11-26T21:06:21.862862+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    }
+  ]
+}

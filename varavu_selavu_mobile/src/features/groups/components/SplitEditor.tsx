@@ -11,6 +11,7 @@ import { AppTheme, inkOnPastel } from '../../../core/theme/theme';
 import { MemberDTO } from '../api/groups';
 import { memberColor } from './BalanceRow';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
+import { addsUpTo, amountText, distributeCents, TWO_DECIMALS } from '../utils/splitAmounts';
 
 export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
 
@@ -51,30 +52,7 @@ export function computeEqualShares(
 }
 
 export function previewPercentageSplit(entries: SplitEntry[], amount: number): number[] {
-  const result = entries.map(() => 0);
-  if (entries.length === 0) return result;
-  
-  let exactTotal = 0;
-  const exactShares = entries.map((e) => {
-    const s = amount * ((e.value || 0) / 100.0);
-    exactTotal += s;
-    return s;
-  });
-  
-  // Distribute based on largest remainder
-  let remaining = Math.round((amount - exactTotal) * 100); // working in cents
-  const floored = exactShares.map((s) => Math.floor(s * 100) / 100);
-  const diffs = exactShares.map((s, i) => ({ i, diff: s - floored[i] })).sort((a, b) => b.diff - a.diff);
-  
-  const finalCents = floored.map((s) => Math.round(s * 100));
-  
-  let diffSum = Math.round(amount * 100) - finalCents.reduce((a, b) => a + b, 0);
-  
-  for (let idx = 0; idx < diffSum && idx < diffs.length; idx++) {
-    finalCents[diffs[idx].i] += 1;
-  }
-  
-  return finalCents.map((c) => c / 100);
+  return distributeCents(amount, entries.map((e) => ({ id: e.member_id, raw: amount * ((e.value || 0) / 100) })));
 }
 
 export function previewExactSplit(entries: SplitEntry[], amount: number): number[] {
@@ -82,36 +60,15 @@ export function previewExactSplit(entries: SplitEntry[], amount: number): number
 }
 
 export function previewSharesSplit(entries: SplitEntry[], amount: number): number[] {
-  const result = entries.map(() => 0);
-  if (entries.length === 0) return result;
-
   const totalShares = entries.reduce((sum, e) => sum + (e.value || 0), 0);
-  if (totalShares <= 0) return result;
-
-  const exactShares = entries.map((e) => amount * ((e.value || 0) / totalShares));
-  
-  const floored = exactShares.map((s) => Math.floor(s * 100) / 100);
-  const diffs = exactShares.map((s, i) => ({ i, diff: s - floored[i] })).sort((a, b) => b.diff - a.diff);
-  
-  const finalCents = floored.map((s) => Math.round(s * 100));
-  let diffSum = Math.round(amount * 100) - finalCents.reduce((a, b) => a + b, 0);
-  
-  for (let idx = 0; idx < diffSum && idx < diffs.length; idx++) {
-    finalCents[diffs[idx].i] += 1;
-  }
-  
-  return finalCents.map((c) => c / 100);
+  if (totalShares <= 0) return entries.map(() => 0);
+  return distributeCents(amount, entries.map((e) => ({ id: e.member_id, raw: amount * ((e.value || 0) / totalShares) })));
 }
 
 export function previewAdjustmentSplit(entries: SplitEntry[], amount: number): number[] {
-  const result = entries.map(() => 0);
-  if (entries.length === 0) return result;
-
-  const totalAdjustments = entries.reduce((sum, e) => sum + (e.value || 0), 0);
-  const baseAmount = amount - totalAdjustments;
-  
-  const equalShares = computeEqualShares(entries.map(() => ({} as any)), baseAmount);
-  return equalShares.map((base, i) => Math.round((base + (entries[i].value || 0)) * 100) / 100);
+  if (entries.length === 0) return [];
+  const base = (amount - entries.reduce((sum, e) => sum + (e.value || 0), 0)) / entries.length;
+  return distributeCents(amount, entries.map((e) => ({ id: e.member_id, raw: base + (e.value || 0) })));
 }
 
 /**
@@ -123,6 +80,8 @@ export function previewAdjustmentSplit(entries: SplitEntry[], amount: number): n
  * PayerPicker/SplitEditor.tsx computeSplitValid convention of actually gating on that).
  */
 export function computeSplitValid(value: SplitEditorValue, totalAmount: number): boolean {
+  // No minus values in any split type, including ones restored from a draft or saved settings.
+  if (value.entries.some((e) => (e.value || 0) < 0)) return false;
   if (
     (value.type === 'equal' || value.type === 'shares' || value.type === 'adjustment') &&
     value.entries.length === 0
@@ -130,10 +89,11 @@ export function computeSplitValid(value: SplitEditorValue, totalAmount: number):
     return false;
   }
   const sum = value.entries.reduce((acc, e) => acc + (e.value || 0), 0);
-  if (value.type === 'percentage') return Math.abs(sum - 100) <= 0.01;
-  if (value.type === 'exact') return Math.abs(sum - totalAmount) <= 0.01;
+  if (value.type === 'percentage') return addsUpTo(sum, 100);
+  if (value.type === 'exact') return addsUpTo(sum, totalAmount);
   if (value.type === 'shares') return sum > 0;
-  if (value.type === 'adjustment') return Math.abs(sum) <= 0.01;
+  // With no minus values and no more than the total, nobody's share can go below zero.
+  if (value.type === 'adjustment') return sum <= totalAmount + 1e-9;
   return true; // equal
 }
 
@@ -179,7 +139,12 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
     }
   };
 
+  const [typed, setTyped] = React.useState<Record<string, string>>({});
+
   const updateEntryValue = (memberId: string, valStr: string) => {
+    // No minus sign, adjustments included, until the server refuses negative shares (ROADMAP).
+    if (!TWO_DECIMALS.test(valStr)) return;
+    setTyped((prev) => ({ ...prev, [memberId]: valStr }));
     const num = parseFloat(valStr);
     onChange({
       ...value,
@@ -200,14 +165,14 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
   } else if (value.type === 'percentage') {
     preview = previewPercentageSplit(value.entries, totalAmount);
     const sum = value.entries.reduce((acc, e) => acc + (e.value || 0), 0);
-    if (Math.abs(sum - 100) > 0.01) {
+    if (!addsUpTo(sum, 100)) {
       isValid = false;
       validationMessage = `Percentages must total 100 (currently ${sum.toFixed(2)})`;
     }
   } else if (value.type === 'exact') {
     preview = previewExactSplit(value.entries, totalAmount);
     const sum = value.entries.reduce((acc, e) => acc + (e.value || 0), 0);
-    if (Math.abs(sum - totalAmount) > 0.01) {
+    if (!addsUpTo(sum, totalAmount)) {
       isValid = false;
       validationMessage = `Exact amounts must total ${formatCurrency(totalAmount)} (currently ${formatCurrency(sum)})`;
     }
@@ -221,9 +186,9 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
   } else if (value.type === 'adjustment') {
     preview = previewAdjustmentSplit(value.entries, totalAmount);
     const sum = value.entries.reduce((acc, e) => acc + (e.value || 0), 0);
-    if (Math.abs(sum) > 0.01) {
+    if (!computeSplitValid(value, totalAmount) && value.entries.length > 0) {
       isValid = false;
-      validationMessage = `Adjustments must sum to 0 (currently ${sum > 0 ? '+' : ''}${sum.toFixed(2)})`;
+      validationMessage = `Adjustments can't add up to more than ${formatCurrency(totalAmount)}, or be negative`;
     }
   }
 
@@ -231,7 +196,17 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
   // percentage/shares total that doesn't reconcile) — the "$X left" figure under the rows.
   const allocated = Math.round(preview.reduce((acc, n) => acc + n, 0) * 100) / 100;
   const left = Math.round((totalAmount - allocated) * 100) / 100;
-  const balanced = Math.abs(left) < 0.005;
+  // Exact and percentage report what was *entered*, by the same rule that decides validity. The preview
+  // hands out leftover cents, so it can total correctly while the entered values don't.
+  const entered = value.entries.reduce((acc, e) => acc + (e.value || 0), 0);
+  const typedTotals = value.type === 'exact' || value.type === 'percentage';
+  const target = value.type === 'percentage' ? 100 : totalAmount;
+  const gap = typedTotals ? Math.round((target - entered) * 100) / 100 : left;
+  const balanced = typedTotals ? addsUpTo(entered, target) : Math.abs(left) < 0.005;
+  const sign = gap < 0 ? '−' : '';
+  const gapText = value.type === 'percentage'
+    ? `${sign}${balanced ? 0 : Math.abs(gap)}% left`
+    : `${balanced ? '$0.00' : `${sign}${formatCurrency(Math.abs(gap))}`} left`;
 
   return (
     <View style={styles.container}>
@@ -273,8 +248,9 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
             {isSelected && value.type !== 'equal' && (
               <TextInput
                 style={styles.numberInput}
+                accessibilityLabel={`${value.type} for ${member.display_name}`}
                 keyboardType="numeric"
-                value={entry?.value?.toString() ?? ''}
+                value={amountText(typed[member.member_id], entry?.value)}
                 onChangeText={(text) => updateEntryValue(member.member_id, text)}
                 placeholder="0"
                 placeholderTextColor={theme.colors.textQuaternary}
@@ -297,11 +273,11 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
           </View>
         );
       })}
-      {selectedMembers.length > 0 && totalAmount > 0 && (
+      {selectedMembers.length > 0 && totalAmount > 0 && (isValid || value.type !== 'adjustment') && (
         <View style={styles.footerRow}>
-          <Text style={styles.footerText}>Rounding cents are balanced automatically</Text>
+          <Text style={styles.footerText}>{typedTotals ? 'Must add up exactly' : 'Rounding cents are balanced automatically'}</Text>
           <Text style={[styles.footerLeft, { color: balanced ? theme.colors.success : theme.colors.error }]}>
-            {balanced ? '$0.00' : `${left < 0 ? '−' : ''}${formatCurrency(Math.abs(left))}`} left
+            {gapText}
           </Text>
         </View>
       )}

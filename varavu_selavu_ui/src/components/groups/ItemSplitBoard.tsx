@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -165,7 +166,7 @@ const ItemSplitBoard: React.FC<ItemSplitBoardProps> = ({
                           size="small"
                           type="number"
                           value={item.member_ratios[id] || 0}
-                          onChange={(e) => updateRatioForItem(item.line_no, id, parseFloat(e.target.value) || 0)}
+                          {...noMinusProps((e) => updateRatioForItem(item.line_no, id, parseFloat(e.target.value) || 0))}
                           sx={{ width: 70 }}
                           inputProps={{ min: 0, step: 1 }}
                         />

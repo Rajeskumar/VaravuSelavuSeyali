@@ -4,6 +4,7 @@
  * The settlement amount field is pre-populated with the absolute value of
  * the "from" member's net debt to the "to" member, but the user can override.
  */
+import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -340,7 +341,7 @@ export default function SettleUpSheet({
                   placeholder="0.00"
                   placeholderTextColor={theme.colors.textTertiary}
                   value={amount}
-                  onChangeText={setAmount}
+                  onChangeText={noMinus(setAmount)}
                   editable={stage === 'review'}
                   autoFocus
                 />

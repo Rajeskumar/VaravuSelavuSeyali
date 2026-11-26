@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import { todayIso } from '../../utils/expenseDates';
 import { Drawer, Box, Typography, TextField, Checkbox, IconButton, Button, Alert, useTheme } from '@mui/material';
@@ -171,7 +172,7 @@ const RecurringPrompt: React.FC = () => {
                   <TextField
                     type="number"
                     value={st?.cost ?? d.suggested_cost}
-                    onChange={(e) => setItems(s => ({ ...s, [key]: { ...s[key], cost: parseFloat(e.target.value) || 0 } }))}
+                    {...noMinusProps((e) => setItems(s => ({ ...s, [key]: { ...s[key], cost: parseFloat(e.target.value) || 0 } })))}
                     size="small"
                     sx={{ width: 90, '& .MuiInputBase-input': { p: 1, ...typeScale.amount, fontSize: 14 } }}
                   />

@@ -111,6 +111,16 @@ export class AuthedApi {
     return match.row_id;
   }
 
+  /** Every personal expense, page by page, so a "no such row" check can't pass because of the page limit. */
+  async findAllExpenses(description: string): Promise<any[]> {
+    const found: any[] = [];
+    for (let offset = 0; ; offset += 200) {
+      const { items = [] } = await this.listExpenses({ offset: String(offset) });
+      found.push(...items.filter((e: any) => e.description === description));
+      if (items.length < 200) return found;
+    }
+  }
+
   async updateExpense(rowId: string, data: Record<string, unknown>): Promise<APIResponse> {
     return this.put(`/api/v1/expenses/${rowId}`, { data });
   }
@@ -177,6 +187,24 @@ export class AuthedApi {
     const res = await this.get(`/api/v1/groups/${groupId}/balances`);
     if (!res.ok()) throw new Error(`getGroupBalances failed: ${res.status()} ${await res.text()}`);
     return res.json();
+  }
+
+  async listGroupExpenses(groupId: string): Promise<any[]> {
+    const res = await this.get(`/api/v1/groups/${groupId}/expenses`, { params: { offset: '0', limit: '100' } });
+    if (!res.ok()) throw new Error(`listGroupExpenses failed: ${res.status()} ${await res.text()}`);
+    return (await res.json()).items || [];
+  }
+
+  async listSettlements(groupId: string): Promise<any[]> {
+    const res = await this.get(`/api/v1/groups/${groupId}/settlements`);
+    if (!res.ok()) throw new Error(`listSettlements failed: ${res.status()} ${await res.text()}`);
+    return res.json();
+  }
+
+  async listExpenseComments(groupId: string, expenseId: string): Promise<any[]> {
+    const res = await this.get(`/api/v1/groups/${groupId}/expenses/${expenseId}/comments`);
+    if (!res.ok()) throw new Error(`listExpenseComments failed: ${res.status()} ${await res.text()}`);
+    return (await res.json()).items;
   }
 
   async createBudget(overrides: {

@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
@@ -420,7 +421,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                 fullWidth
                 disabled={saving}
                 value={amount}
-                onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+                {...noMinusProps((e) => setAmount(parseFloat(e.target.value) || 0))}
                 InputProps={{ startAdornment: <InputAdornment position="start">{currencySymbol(currency)}</InputAdornment> }}
                 inputProps={{ min: 0, step: 0.01 }}
               />

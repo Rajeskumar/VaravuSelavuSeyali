@@ -15,6 +15,11 @@ class SplitResult(BaseModel):
     basis_type: str
     basis_value: Optional[Decimal]
 
+def has_negative_value(entries: List[Dict[str, Any]]) -> bool:
+    """Whether any split entry carries a minus value. Minus values are never accepted, in any split type."""
+    return any(e.get('value') is not None and Decimal(str(e['value'])) < 0 for e in entries or [])
+
+
 def validate_payers(amount: Decimal, payers: List[Dict[str, Any]]) -> None:
     """
     Validates that the sum of amount_paid across all payers equals the expense amount.
@@ -57,6 +62,10 @@ def resolve_split(amount: Decimal, split_type: str, entries: List[Dict[str, Any]
     raw_shares = []
     
     if split_type == "equal":
+        # The values are ignored here, but a minus value is still refused.
+        if has_negative_value(entries):
+            raise SplitError("Split values cannot be negative")
+
         # For equal split, we can use member_ids directly if provided, or extract from entries
         participants = member_ids if member_ids is not None else [e.get('member_id') for e in entries]
         
@@ -178,6 +187,11 @@ def resolve_split(amount: Decimal, split_type: str, entries: List[Dict[str, Any]
                 raise SplitError("Entry missing member_id")
             val_raw = e.get('value', 0)
             val = Decimal(str(val_raw))
+            # A large enough minus value made a share negative, which was then silently dropped, so the
+            # stored shares no longer added up to the expense. With none, and the sum capped at the
+            # total below, no share can go under zero.
+            if val < Decimal('0.00'):
+                raise SplitError("Adjustments cannot be negative")
             total_adj += val
             valid_entries.append((member_id, val))
             

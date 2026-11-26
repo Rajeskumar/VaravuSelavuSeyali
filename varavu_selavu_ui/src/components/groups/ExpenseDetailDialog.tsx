@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import { analytics } from '../../analytics/browser';
 import { confirmed } from '../../analytics/operations';
 import React, { useEffect, useState } from 'react';
@@ -422,7 +423,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               type="number"
               fullWidth
               value={editAmount}
-              onChange={(e) => setEditAmount(parseFloat(e.target.value) || 0)}
+              {...noMinusProps((e) => setEditAmount(parseFloat(e.target.value) || 0))}
               inputProps={{ min: 0, step: 0.01, style: tabularNums }}
             />
           </Box>

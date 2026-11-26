@@ -1,3 +1,4 @@
+import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useEffect, useMemo, useState } from 'react';
 import { todayIso } from '../../expenses/utils/expenseDates';
 import {
@@ -135,7 +136,7 @@ export default function RecurringPrompt() {
                                         style={styles.costInput}
                                         keyboardType="numeric"
                                         value={st?.cost?.toString()}
-                                        onChangeText={(val) => updateCost(key, val)}
+                                        onChangeText={noMinus((val) => updateCost(key, val))}
                                     />
                                 </View>
                             );

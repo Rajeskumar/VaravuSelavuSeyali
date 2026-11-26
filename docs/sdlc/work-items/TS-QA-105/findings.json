@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "C-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Exact and Percentage cases were indistinguishable on a total of 100; split_type unasserted",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "C-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "No UI-created group expense typed cents",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "C-3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Invalid-split test missed the one-cent boundary (covered by product finding B-1; no committed test yet) Fixed by TS-FIX-101.",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "C-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Rename test would pass if edit created a copy",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "C-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Stale-split test could pass for the wrong reason",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "C-6",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Undo and delete-cancel checks could read too early",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "C-7",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Settle-my-share used equal shares and no two-payer case",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "B-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Product bug, pre-existing: web Percentage/Exact pre-fill (33.33 x3 on 100) is accepted by the form and refused by the server with 400. Reproduced for both tabs. Outside this tests-only item; ROADMAP. Fixed by TS-FIX-101.",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    }
+  ]
+}

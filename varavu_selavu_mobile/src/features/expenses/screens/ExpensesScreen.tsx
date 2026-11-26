@@ -9,6 +9,7 @@
  * action-sheet instead of always-visible icon buttons (group-expense rows are read-only here —
  * editing those happens in GroupDetailScreen; tapping one navigates there instead).
  */
+import { noMinus } from '../utils/noMinus';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -663,7 +664,7 @@ export default function ExpensesScreen() {
                                                             <Text style={styles.pickerLabel}>AMOUNT</Text>
                                                             <CustomInput
                                                                 value={recEdit!.default_cost}
-                                                                onChangeText={(v) => setRecEdit((s) => (s ? { ...s, default_cost: v } : s))}
+                                                                onChangeText={noMinus((v) => setRecEdit((s) => (s ? { ...s, default_cost: v } : s)))}
                                                                 keyboardType="decimal-pad"
                                                                 containerStyle={{ marginBottom: 10 }}
                                                             />
@@ -672,7 +673,7 @@ export default function ExpensesScreen() {
                                                             <Text style={styles.pickerLabel}>DAY</Text>
                                                             <CustomInput
                                                                 value={recEdit!.day_of_month}
-                                                                onChangeText={(v) => setRecEdit((s) => (s ? { ...s, day_of_month: v } : s))}
+                                                                onChangeText={noMinus((v) => setRecEdit((s) => (s ? { ...s, day_of_month: v } : s)))}
                                                                 keyboardType="number-pad"
                                                                 containerStyle={{ marginBottom: 10 }}
                                                             />
@@ -777,7 +778,7 @@ export default function ExpensesScreen() {
                             label="Amount"
                             icon="💰"
                             value={editAmount}
-                            onChangeText={setEditAmount}
+                            onChangeText={noMinus(setEditAmount)}
                             keyboardType="numeric"
                         />
                         <CustomInput

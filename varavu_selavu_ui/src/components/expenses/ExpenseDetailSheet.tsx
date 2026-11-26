@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import { Operation } from '../../analytics/client';
 import { analytics } from '../../analytics/browser';
 import React from 'react';
@@ -285,7 +286,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
             type="number"
             fullWidth
             value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            {...noMinusProps((e) => setForm({ ...form, amount: e.target.value }))}
             inputProps={{ min: 0.01, step: 0.01, style: tabularNums }}
             error={!amountValid}
             helperText={amountValid ? undefined : 'Enter an amount greater than 0'}

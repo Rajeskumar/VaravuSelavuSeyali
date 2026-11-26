@@ -1,3 +1,4 @@
+import { noMinus } from '../../expenses/utils/noMinus';
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
@@ -154,7 +155,7 @@ export default function ItemSplitBoard({
                           style={styles.ratioInput}
                           keyboardType="numeric"
                           value={item.member_ratios[id]?.toString() || '0'}
-                          onChangeText={(text) => updateRatioForItem(item.line_no, id, text)}
+                          onChangeText={noMinus((text) => updateRatioForItem(item.line_no, id, text))}
                         />
                       </View>
                     );

@@ -59,6 +59,25 @@ export class QuickCapturePanel extends BasePage {
     }
   }
 
+  /** Works at both widths: types into the desktop field, or taps the phone keypad. */
+  async enterAmount(amount: string): Promise<void> {
+    if (this.isPhone()) await this.enterAmountViaKeypad(amount);
+    else await this.fillAmount(amount);
+  }
+
+  /** Replaces an amount already entered (the phone keypad can only delete one key at a time). */
+  async replaceAmount(previous: string, next: string): Promise<void> {
+    if (this.isPhone()) {
+      for (let i = 0; i < previous.length; i += 1) await this.keypadKey('⌫').click();
+    }
+    await this.enterAmount(next);
+  }
+
+  /** Matches the app's own switch to the bottom-sheet keypad (below MUI's `md` breakpoint). */
+  private isPhone(): boolean {
+    return (this.page.viewportSize()?.width ?? 1280) < 900;
+  }
+
   async fillDescription(description: string): Promise<void> {
     await this.descriptionField.fill(description);
   }

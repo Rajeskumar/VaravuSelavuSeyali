@@ -111,7 +111,7 @@ class ExpenseItem(BaseModel):
     item_name: DescriptionStr
     normalized_name: OptionalNameStr = None
     category_id: str | None = None
-    quantity: float | None = None
+    quantity: float | None = Field(None, ge=0)
     unit: str | None = None
     unit_price: OptionalNonNegativeMoney = None
     line_total: NonNegativeMoney
@@ -683,12 +683,13 @@ class GroupExpenseItemEntry(BaseModel):
     item_name: str
     normalized_name: str | None = None
     category_id: str | None = None
-    quantity: float | None = None
+    quantity: float | None = Field(None, ge=0)
     unit: str | None = None
+    # Scanned receipts record coupons as negative lines, so these two keep their sign (ROADMAP).
     unit_price: float | None = None
     line_total: float
-    tax: float | None = 0
-    discount: float | None = 0
+    tax: float | None = Field(0, ge=0)
+    discount: float | None = Field(0, ge=0)
     attributes_json: str | None = None
     member_ratios: Dict[str, float]
 

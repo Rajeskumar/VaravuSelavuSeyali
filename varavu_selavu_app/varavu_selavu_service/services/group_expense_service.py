@@ -23,6 +23,17 @@ def _to_uuid(value) -> Optional[uuid.UUID]:
         return None
 
 
+def _absorb_rounding(cents: List[int], total_cents: int) -> None:
+    """Makes `cents` add up to `total_cents` after proportional rounding, largest value first. A shortfall
+    to remove is taken one cent at a time: taking it all from one value could push that value below zero
+    (four payers of 1.00 rescaled to 0.02 stored -0.01)."""
+    difference = total_cents - sum(cents)
+    if difference > 0:
+        cents[max(range(len(cents)), key=lambda i: cents[i])] += difference
+    for _ in range(-difference):
+        cents[max(range(len(cents)), key=lambda i: cents[i])] -= 1
+
+
 class GroupExpenseService:
     def __init__(self, db: Session):
         self.db = db
@@ -630,8 +641,7 @@ class GroupExpenseService:
         else:
             raw = [(s, new_amount / len(existing_splits)) for s in existing_splits]
         cents = [int((amt * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) for _, amt in raw]
-        biggest = max(range(len(cents)), key=lambda i: cents[i])
-        cents[biggest] += total_cents - sum(cents)
+        _absorb_rounding(cents, total_cents)
         results = [
             SplitResult(member_id=str(s.member_id), amount_owed=Decimal(c) / 100,
                         basis_type="exact", basis_value=Decimal(c) / 100)
@@ -656,14 +666,10 @@ class GroupExpenseService:
             share = new_amount / len(existing_payers)
             raw = [(p, share) for p in existing_payers]
 
-        rounded = [(p, int((amt * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))) for p, amt in raw]
-        residual = total_cents - sum(c for _, c in rounded)
-        if rounded:
-            idx = max(range(len(rounded)), key=lambda i: rounded[i][1])
-            p, c = rounded[idx]
-            rounded[idx] = (p, c + residual)
+        cents = [int((amt * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)) for _, amt in raw]
+        _absorb_rounding(cents, total_cents)
 
-        return [{"member_id": str(p.member_id), "amount_paid": Decimal(c) / 100} for p, c in rounded]
+        return [{"member_id": str(p.member_id), "amount_paid": Decimal(c) / 100} for (p, _), c in zip(raw, cents)]
 
     def update_items(
         self,

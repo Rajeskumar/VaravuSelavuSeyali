@@ -3,6 +3,7 @@
  * restricted to the app's real taxonomy (CategoryPickerField, same component every expense form
  * uses) plus the "All Purchases" flat-rate sentinel — never free text.
  */
+import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -67,7 +68,7 @@ export default function CustomCardForm({ onDone, onCancel }: Props) {
       <TextInput style={styles.input} placeholder="Card name" placeholderTextColor={theme.colors.textTertiary} value={cardName} onChangeText={setCardName} autoFocus />
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
         <TextInput style={[styles.input, { flex: 1 }]} placeholder="Issuer (optional)" placeholderTextColor={theme.colors.textTertiary} value={issuer} onChangeText={setIssuer} />
-        <TextInput style={[styles.input, { width: 100 }]} placeholder="$ Annual fee" placeholderTextColor={theme.colors.textTertiary} value={annualFee} onChangeText={setAnnualFee} keyboardType="decimal-pad" />
+        <TextInput style={[styles.input, { width: 100 }]} placeholder="$ Annual fee" placeholderTextColor={theme.colors.textTertiary} value={annualFee} onChangeText={noMinus(setAnnualFee)} keyboardType="decimal-pad" />
       </View>
 
       <Text style={styles.sectionLabel}>Cash back rates</Text>
@@ -90,7 +91,7 @@ export default function CustomCardForm({ onDone, onCancel }: Props) {
           <TextInput
             style={[styles.input, { width: 70, textAlign: 'center' }]}
             placeholder="%" placeholderTextColor={theme.colors.textTertiary}
-            value={rule.multiplier} onChangeText={(v) => updateRule(idx, { multiplier: v })}
+            value={rule.multiplier} onChangeText={noMinus((v) => updateRule(idx, { multiplier: v }))}
             keyboardType="decimal-pad"
           />
           <TouchableOpacity onPress={() => removeRule(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>

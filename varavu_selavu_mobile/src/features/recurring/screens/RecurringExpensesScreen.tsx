@@ -1,3 +1,4 @@
+import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { todayIso } from '../../expenses/utils/expenseDates';
 import {
@@ -364,10 +365,10 @@ export default function RecurringExpensesScreen() {
                                     <TextInput
                                         style={styles.input}
                                         value={String(form.day_of_month)}
-                                        onChangeText={(v) => {
+                                        onChangeText={noMinus((v) => {
                                             const num = Math.max(1, Math.min(31, parseInt(v) || 1));
                                             setForm((f) => ({ ...f, day_of_month: num }));
-                                        }}
+                                        })}
                                         keyboardType="number-pad"
                                         placeholder="1-31"
                                         placeholderTextColor={theme.colors.textTertiary}
@@ -378,7 +379,7 @@ export default function RecurringExpensesScreen() {
                                     <TextInput
                                         style={styles.input}
                                         value={form.default_cost > 0 ? String(form.default_cost) : ''}
-                                        onChangeText={(v) => setForm((f) => ({ ...f, default_cost: parseFloat(v) || 0 }))}
+                                        onChangeText={noMinus((v) => setForm((f) => ({ ...f, default_cost: parseFloat(v) || 0 })))}
                                         keyboardType="decimal-pad"
                                         placeholder="0.00"
                                         placeholderTextColor={theme.colors.textTertiary}
@@ -438,7 +439,7 @@ export default function RecurringExpensesScreen() {
                         <TextInput
                             style={styles.input}
                             value={execAmount}
-                            onChangeText={setExecAmount}
+                            onChangeText={noMinus(setExecAmount)}
                             keyboardType="decimal-pad"
                             placeholder="0.00"
                             placeholderTextColor={theme.colors.textTertiary}

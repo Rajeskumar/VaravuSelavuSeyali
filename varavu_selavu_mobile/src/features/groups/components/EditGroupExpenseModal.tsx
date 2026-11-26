@@ -1,3 +1,4 @@
+import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Pressable, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -204,7 +205,7 @@ export default function EditGroupExpenseModal({
                 of being one more thing you have to scroll to find. */}
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
               <CustomInput label="Description" value={description} onChangeText={setDescription} icon="📝" />
-              <CustomInput label="Amount" value={amount} onChangeText={setAmount} icon="💰" keyboardType="numeric" />
+              <CustomInput label="Amount" value={amount} onChangeText={noMinus(setAmount)} icon="💰" keyboardType="numeric" />
               <CustomInput label="Merchant / Store Name" value={merchantName} onChangeText={setMerchantName} icon="🏪" />
               <CustomInput label="Date (MM/DD/YYYY)" value={date} onChangeText={setDate} icon="📅" />
 

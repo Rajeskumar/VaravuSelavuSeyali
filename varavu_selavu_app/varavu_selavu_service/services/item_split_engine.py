@@ -57,6 +57,8 @@ def resolve_itemized_split(items: List[Dict], tax: float, tip: float, discount: 
         member_discount = discount_d * proportion
         
         raw_total = subtotal + member_tax + member_tip - member_discount
+        if raw_total < Decimal('0.00'):
+            raise SplitError("Resolved shares cannot be negative", {"member_id": mid})
         
         rounded = raw_total.quantize(Decimal('0.01'), rounding=decimal.ROUND_DOWN)
         remainder = raw_total - rounded
