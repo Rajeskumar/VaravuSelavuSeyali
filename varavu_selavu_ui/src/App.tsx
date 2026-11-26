@@ -1,6 +1,6 @@
 import AssistantAccessPage from './pages/AssistantAccessPage';
 import React, { JSX } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import SessionQueryProvider from './context/SessionQueryProvider';
 import { BrowserRouter as Router, Route, Routes, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -426,18 +426,8 @@ const AppContent: React.FC = () => {
   );
 };
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000, // 1 minute
-      gcTime: 5 * 60_000, // 5 minutes
-      refetchOnWindowFocus: false,
-    },
-  },
-});
-
 const App: React.FC = () => (
-  <QueryClientProvider client={queryClient}>
+  <SessionQueryProvider>
     <ThemeModeProvider>
       <Router>
         <AskProvider>
@@ -447,7 +437,7 @@ const App: React.FC = () => (
         </AskProvider>
       </Router>
     </ThemeModeProvider>
-  </QueryClientProvider>
+  </SessionQueryProvider>
 );
 
 export default App;

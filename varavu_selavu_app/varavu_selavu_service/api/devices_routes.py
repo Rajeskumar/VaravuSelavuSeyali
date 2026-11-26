@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 
 from varavu_selavu_service.api.groups_routes import require_groups_enabled
 from varavu_selavu_service.auth.security import auth_required
+from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.db.session import get_db
 from varavu_selavu_service.models.api_models import RegisterDeviceRequest, RegisterDeviceResponse
 from varavu_selavu_service.services.notification_service import NotificationService
@@ -19,7 +20,9 @@ router = APIRouter(prefix="/devices", tags=["Devices"], dependencies=[Depends(re
 
 
 @router.post("/register", response_model=RegisterDeviceResponse, summary="Register (or refresh) an Expo push token")
+@limiter.limit("60/hour")  # an app registers once per start/sign-in; registering also takes the token from other accounts
 def register_device(
+    request: Request,
     data: RegisterDeviceRequest,
     svc: NotificationService = Depends(get_notification_service),
     user_email: str = Depends(auth_required),

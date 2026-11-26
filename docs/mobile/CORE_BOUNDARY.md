@@ -22,6 +22,7 @@ core/       → imports only core and npm packages — never features/ or app/
 - `navigation/` `CoreApp` (the app root), `RootNavigator`, `MainTabs`.
 - `notifications/` push registration, device API.
 - `config/` the `AppConfig` type, `defaultAppConfig`, `getAppConfig`/`setAppConfig`.
+- `analytics/` consent-gated, fail-safe analytics and crash reporting: client, whole-event validator, providers (`firebase`, `noop`, `recording`), sanitizers, consent store/UI, screen tracker. It takes the app's event table and screen registry as data (`configureAnalytics`, `AppConfig.analytics.screens`) and names only the cross-app events (`screen_view`, `permission_result`). Auth outcomes reach the app through `core/auth/authObserver`. TrackSpense's table and producers are in `features/shared/analytics/`.
 - `logger.ts` — silent in production; never prints URLs, tokens or response bodies. Use it instead of `console.*` in core.
 - `utils/` generic helpers (`identity`).
 
@@ -50,6 +51,14 @@ route name to `FAB_TABS` if the floating action should show there. Keep existing
 **Add a sign-out cleanup.** In `app/registrations.ts`: `registerSignOutCleanup(() => clearMyState(), 'before' | 'after')`.
 `'before'` runs while the token is still valid; `'after'` once tokens are gone. They run on an explicit sign-out only,
 never on a forced 401 sign-out (drafts must stay recoverable).
+
+**Account isolation (TS-SEC-101).** Server data lives in one `QueryClient` per signed-in session
+(`core/auth/SessionQueryProvider`, mounted by `CoreApp` inside `AuthProvider`); it is replaced on explicit and forced
+sign-out, so query keys need not carry the user and a late mutation cannot write into the next account's cache. A request
+that can outlive the session (password change, export, share) captures `sessionGuard()` from `core/auth/session` when it
+starts and checks it before writing tokens or showing data; token writes go through `runTokenWrite`/`writeTokensIfSession`
+so a sign-out cannot land between two SecureStore writes. A session ends when sign-out starts (explicit or 401) and a new
+sign-in is a new session; a token refresh is not. Only `AuthProvider` calls `advanceSession()`.
 
 **Add a sign-in method.** Add its id to `AuthMethodId` (`core/config/appConfig.ts`), create `core/auth/methods/<id>.tsx`
 exporting an `AuthMethod` (`{ id, Form }`, where `Form` returns a fragment of controls and calls `useAuth()`), register it in

@@ -55,7 +55,7 @@ below the server's fallback bar, finding F-015, so it makes no claim about parse
 
 ## Regression flows (AC-005)
 `flows/regression/`: `lost-save-response` (the server commits an expense but the response is lost: the app must report an unknown
-outcome, never resubmit, and leave exactly one expense), `account-switch` (A's expense and unsaved draft never reach B),
+outcome, never resubmit, and leave exactly one expense), `account-switch` (A's expense, unsaved draft and cached group list never reach B),
 `deep-link-join` / `deep-link-signed-out` (invite links), `receipt-import` (iOS) and `receipt-ocr-native-android` (on-device OCR ran:
 `parse_ocr` posted, image never uploaded), plus `category-picker`, `date-picker`, `insights-scope-select` (sheet accessibility, F-002).
 

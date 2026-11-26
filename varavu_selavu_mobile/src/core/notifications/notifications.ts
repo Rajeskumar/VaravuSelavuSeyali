@@ -5,6 +5,7 @@
  * (simulator) is a silent no-op, never a crash — push notifications are a nice-to-have
  * on top of the core features, not a requirement to use the app.
  */
+import { reportPermission } from '../analytics/permissions';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -52,6 +53,7 @@ export async function registerForPushNotifications(): Promise<void> {
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
+      reportPermission('notifications', { granted: status === 'granted' });
     }
     if (finalStatus !== 'granted') {
       return; // Permission denied — no-op, not an error.

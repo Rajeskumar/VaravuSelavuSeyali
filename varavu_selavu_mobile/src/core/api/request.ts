@@ -7,6 +7,16 @@ export class RequestError extends Error {
     this.name = 'RequestError';
   }
 }
+/**
+ * A plain error that also remembers the HTTP status the server answered with. Deliberately NOT a
+ * RequestError: callers branch on `instanceof RequestError` for "outcome unknown" handling, and a status
+ * is carried only so analytics can classify the failure without reading the message.
+ */
+export class HttpStatusError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
 const DEFAULT_TIMEOUT_MS = 30_000;
 /** Budget for a request path: the first matching `AppConfig.api.timeoutOverrides` entry, else 30 s. */
 export function requestTimeout(path: string) {

@@ -8,4 +8,7 @@ export const STORAGE_KEYS = {
   refreshToken: 'refresh_token',
   userEmail: 'user_email',
   themePreference: 'vs_theme_preference',
+  /** Device-level opt-ins (granted | denied). Absent = never asked. */
+  analyticsConsent: 'analytics_consent_v1',
+  crashConsent: 'crash_consent_v1',
 } as const;

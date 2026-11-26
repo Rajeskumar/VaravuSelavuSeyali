@@ -1,5 +1,23 @@
 # Changelog
 
+- 2026-11-25: Regenerated the local iOS production Firebase project without the push entitlement for Personal Team signing after the first device install failed; store builds still require push-capable signing (Codex).
+
+- 2026-11-25: Validated production Firebase files and compiled an unsigned iOS Release device app against trackspense-prod-191ae; clarified Crashlytics console activation (Codex). No app release.
+
+- 2026-11-25: Disabled the iOS QA test-crash button in Debug builds and documented the Release test path after RNFirebase's native Debug gate rejected a consented crash (Codex).
+
+- 2026-11-25: Fixed mobile Firebase Analytics and Crashlytics adapters for React Native Firebase 27's modular API after an empty iOS DebugView report (Codex); native delivery still requires device verification.
+
+- 2026-11-25: Expanded the mobile Firebase runbook with console registration/linking, local and EAS configuration, isolated QA verification and troubleshooting (Codex). No console settings changed.
+
+- 2026-11-25: TS-SEC-101 hardening (Claude Code): a stalled SecureStore call can no longer freeze later sign-in/sign-out token writes (10 s budget per queued task), a 401 that returns after the session ended cannot force-sign-out the next session, and the group invite-email and mute handlers no longer show results after sign-out; iOS `account-switch` E2E re-run on the final build.
+
+- 2026-11-25: Closed the review findings of TS-SEC-101 (Claude Code): the web app now uses one query client per signed-in account (`SessionQueryProvider`, same bug as mobile); AI consent is stored per account on mobile, so the next account after a forced (401) sign-out is asked (an older build's bare consent is asked once more); registering a push token on the backend takes the device over from any other account that still held it (the token format and platform are now validated and the route is limited to 60/hour per client).
+
+- 2026-11-25: Fixed three account-isolation bugs in the mobile app (TS-SEC-101, Claude Code): one query client per signed-in session, replaced on explicit and forced sign-out, so the next account never sees the previous account's cached data or a late save; a late password change can no longer restore a signed-out account's tokens (shared `core/auth/session.ts` guard and serialised token writes, also used by the token refresh); late exports and the group invite share are dropped when the session changed; `account-switch` E2E flow extended. No key or API change.
+
+- 2026-11-25: Added consent-gated Firebase Analytics and Crashlytics to the iOS and Android app (TS-GA4-002, Claude Code): shared closed event catalog (`docs/analytics/catalog.v1.json`) with web, two separate opt-ins, sanitized crash reports, consent asked once at first launch (before sign-in), one `screen_view` per navigation, confirmed-write producers, no advertising ID, environment-gated native config and `eas.json` qa/production profiles; mobile paragraph added to the draft privacy policy; analytics privacy boundary routed as high risk. Implemented locally and unreleased; Firebase projects, DebugView and test-crash verification are owner actions (`docs/analytics/mobile.md`).
+
 - 2026-11-25: Enabled consent-gated GA4 collection for the next TrackSpense frontend release after owner confirmation of the production stream settings (TS-GA4-001, Codex).
 
 - 2026-11-25: Configured the dedicated TrackSpense production GA4 destination, with both activation gates off pending Admin verification and rollout (TS-GA4-001, Codex).

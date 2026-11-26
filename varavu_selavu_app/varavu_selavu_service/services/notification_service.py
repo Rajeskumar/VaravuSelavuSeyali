@@ -33,6 +33,12 @@ class NotificationService:
     # ------------------------------------------------------------------
 
     def register_device(self, user_email: str, expo_push_token: str, platform: str) -> DeviceToken:
+        # An Expo push token identifies one physical install, which has one signed-in account at a time. If an earlier
+        # account left without a clean unregister (forced sign-out, offline, lost reply), its row would keep delivering
+        # that account's group and expense notifications to whoever signs in next, so registering takes the device over.
+        self.db.query(DeviceToken).filter(
+            DeviceToken.expo_push_token == expo_push_token, DeviceToken.user_email != user_email
+        ).delete(synchronize_session=False)
         existing = (
             self.db.query(DeviceToken)
             .filter(DeviceToken.user_email == user_email, DeviceToken.expo_push_token == expo_push_token)

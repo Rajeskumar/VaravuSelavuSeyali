@@ -35,6 +35,13 @@ export interface AppConfig {
   notifications: {
     androidChannelName: string;
   };
+  analytics: {
+    /**
+     * Navigation route name → the stable screen id reported to analytics. A route missing here is never
+     * reported, so a new screen is invisible until it is registered (and its id is in the event catalog).
+     */
+    screens: Record<string, string>;
+  };
 }
 
 /** Neutral defaults so core modules (and their tests) work before an app configures them. */
@@ -47,6 +54,7 @@ export const defaultAppConfig: AppConfig = {
     deleteAccountSummary: { deleted: '', retained: '' },
   },
   notifications: { androidChannelName: 'Notifications' },
+  analytics: { screens: {} },
 };
 
 let current: AppConfig = defaultAppConfig;

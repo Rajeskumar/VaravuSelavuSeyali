@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "version": "v1.3.0",
+  "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+  "work_items": [
+    "TS-GA4-001",
+    "TS-QA-103",
+    "TS-SDLC-002"
+  ],
+  "status": "verified",
+  "authorization": {
+    "actor": "Rajeshkumar Ganesan",
+    "reference": "2026-11-25 user requested release tag 1.3.0 after PR merge, which triggers deployment through the configured release pipelines.",
+    "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88"
+  },
+  "checks": [
+    {
+      "id": "unit-ci",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "unit.yml: completed/success https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45625626207 (release-gate)"
+    },
+    {
+      "id": "qa-ci",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "qa.yml: completed/success https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45625626200 (release-gate)"
+    },
+    {
+      "id": "framework-ci",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "framework.yml: completed/success https://github.com/Rajeskumar/VaravuSelavuSeyali/actions/runs/45625626475 (release-gate)"
+    },
+    {
+      "id": "security",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "unit.yml security job on the candidate: secret scan + dependency audits; Cloud Build re-audits"
+    },
+    {
+      "id": "migration-compatibility",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "No new Alembic revisions since release-v1.2.0"
+    },
+    {
+      "id": "acceptance",
+      "status": "waived",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "Candidate Validate gates: TS-GA4-001, TS-QA-103 and TS-SDLC-002 all INCOMPLETE_EVIDENCE. docs/analytics/verification-report.md confirms test-stream ingestion and production-build consent gates, with broader GA4 reporting and real-SDK scenario evidence open. Native regression reports are being collected separately.",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Validate evidence for TS-GA4-001, TS-QA-103 and TS-SDLC-002 went stale after later merges. The owner accepts this for v1.3.0. Compensating evidence on a12ebcf: unit, QA, framework CI and security passed, and native E2E passed 13/13 on iOS and Android.",
+        "expires": "2026-12-25",
+        "reference": "2026-11-25 owner instruction in Claude Code session: 'waive those and push the new tag'; work items TS-GA4-001, TS-QA-103, TS-SDLC-002 set Done on the board the same day"
+      }
+    },
+    {
+      "id": "reviews",
+      "status": "waived",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "Final candidate routed review evidence is incomplete for TS-GA4-001, TS-QA-103 and TS-SDLC-002; the backend date handling change 5de8ca3 has no linked work item or current review record.",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Routed review evidence is incomplete for TS-GA4-001, TS-QA-103 and TS-SDLC-002, and backend commit 5de8ca3 has no linked work item or review record. The owner accepts this for v1.3.0.",
+        "expires": "2026-12-25",
+        "reference": "2026-11-25 owner instruction in Claude Code session: 'waive those and push the new tag'; work items TS-GA4-001, TS-QA-103, TS-SDLC-002 set Done on the board the same day"
+      }
+    },
+    {
+      "id": "native-mobile-e2e",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "2026-11-25: local native regression + smoke on candidate a12ebcf, 13/13 flows passed on each platform (receipt-import iOS-only, receipt-ocr-native-android Android-only skipped by design, no retries). Reports: qa/mobile/reports/ios-v130a12ebcf/summary.json, qa/mobile/reports/android-v130a12ebcf/summary.json; build-evidence commit a12ebcf."
+    },
+    {
+      "id": "configuration",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "2026-11-25: owner confirmed the production GA4 privacy settings and requested activation in PR #53. Candidate matches G-X3QFP5HNK2 to expense.cerebroos.com with consent required. Read-only GCP inspection confirmed frontend/backend release tag triggers, an enabled GITHUB_ACTIONS_READ_TOKEN version and Secret Manager access for the configured build identity. No new backend runtime settings in this candidate."
+    },
+    {
+      "id": "recovery",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "Previous serving images recorded; rollback = redeploy them"
+    },
+    {
+      "id": "production-smoke",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "make qa-prod-smoke at 2026-11-25T14:22:58Z (read-only); log .sdlc-logs/prod-smoke-1795616576.log"
+    },
+    {
+      "id": "production-errors",
+      "status": "passed",
+      "candidate": "a12ebcf5b11fe4d2e8352960723ccf54da1ccd88",
+      "source": "0 error/5xx entries since 2026-11-25T14:12:46Z (max 0); query: resource.type=\"cloud_run_revision\" AND resource.labels.revision_name=(\"varavu-selavu-backend-00129-7bd\" OR \"varavu-selavu-frontend-00105-rsj\") AND (severity>=ERROR OR httpRequest.status>=500) AND timestamp>=\"2026-11-25T14:12:46Z\""
+    }
+  ],
+  "components": [
+    {
+      "name": "backend",
+      "status": "deployed",
+      "expected_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-backend:a12ebcf",
+      "observed_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-backend:a12ebcf",
+      "revision": "varavu-selavu-backend-00129-7bd (sha256:b5e971dc82505e1661deda444da2e678e80f36e6e21f39ccb86efb04cba1956c)",
+      "build_url": "https://console.cloud.google.com/cloud-build/builds/7441f7a1-c5f8-4435-a065-73713e49d9f9?project=952416556244",
+      "previous_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-backend@sha256:95ca659e5210ac60b67c3ee658633804f4dfef896acef1cf0bc635a7fc37cc31 gcr.io/gold-circlet-424313-r7/varavu-selavu-backend@sha256:95ca659e5210ac60b67c3ee658633804f4dfef896acef1cf0bc635a7fc37cc31 (revision varavu-selavu-backend-00128-4rj, 100%)"
+    },
+    {
+      "name": "frontend",
+      "status": "deployed",
+      "expected_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-frontend:a12ebcf",
+      "observed_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-frontend:a12ebcf",
+      "revision": "varavu-selavu-frontend-00105-rsj (sha256:b259104cd218876d5906ed06a9d330271c71413d6280a796038797e2cccb3e44)",
+      "build_url": "https://console.cloud.google.com/cloud-build/builds/55ac2367-fb77-44be-8d57-7c05717dff6a?project=952416556244",
+      "previous_image": "gcr.io/gold-circlet-424313-r7/varavu-selavu-frontend@sha256:148f3c943de2f44b05097ed781b736a843616bdfa638a07e1ccb2208ee2ce3cc gcr.io/gold-circlet-424313-r7/varavu-selavu-frontend@sha256:148f3c943de2f44b05097ed781b736a843616bdfa638a07e1ccb2208ee2ce3cc (revision varavu-selavu-frontend-00104-cmg, 100%)"
+    }
+  ],
+  "recovery_plan": "Redeploy the previous images listed per component; schema compatibility per the migration check.",
+  "notes": "Prepared by release_tools.py at 2026-11-25T13:39:05Z; previous release release-v1.2.0."
+}

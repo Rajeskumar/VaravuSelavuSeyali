@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { NavigationContainer, useNavigation, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, useNavigation, useNavigationContainerRef, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as Notifications from 'expo-notifications';
 import { useAuth } from '../auth/AuthContext';
@@ -11,6 +11,12 @@ import RegisterScreen from '../auth/RegisterScreen';
 import ForgotPasswordScreen from '../auth/ForgotPasswordScreen';
 import SecurityScreen from '../auth/SecurityScreen';
 import DeleteAccountScreen from '../auth/DeleteAccountScreen';
+import PrivacyScreen from '../analytics/PrivacyScreen';
+import { analytics } from '../analytics';
+import { createScreenTracker } from '../analytics/screenTracker';
+import { useConsent } from '../analytics/useConsent';
+import { getAppConfig } from '../config/appConfig';
+import ConsentPrompt from '../analytics/ConsentPrompt';
 import MainTabs from './MainTabs';
 import { CoreAppProps } from './types';
 
@@ -59,6 +65,7 @@ function AppShell({ tabs, renderTabIcon, floatingAction, stackScreens, onNotific
       {stackScreens.map((s) => <Stack.Screen key={s.name} name={s.name} component={s.component} />)}
       <Stack.Screen name="Security" component={SecurityScreen} />
       <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <Stack.Screen name="Privacy" component={PrivacyScreen} />
     </Stack.Navigator>
   );
 }
@@ -66,6 +73,18 @@ function AppShell({ tabs, renderTabIcon, floatingAction, stackScreens, onNotific
 export default function RootNavigator(props: CoreAppProps) {
   const { accessToken, isLoading } = useAuth();
   const { theme, isDark } = useAppTheme();
+  const navigationRef = useNavigationContainerRef<any>();
+  const consent = useConsent();
+  // One analytics screen event per change of the focused route NAME; params are never read.
+  const screenTracker = useMemo(
+    () => createScreenTracker(getAppConfig().analytics.screens, (id) => { analytics.trackScreen(id); }),
+    [],
+  );
+  // Consent usually loads after the first screen was shown (cold start) or arrives mid-session: report the
+  // screen the person is on now. The analytics client ignores a screen it already reported.
+  useEffect(() => {
+    if (consent.analytics === 'granted' && navigationRef.isReady()) screenTracker.replay(navigationRef.getCurrentRoute()?.name);
+  }, [consent.analytics, navigationRef, screenTracker]);
 
   if (isLoading) {
     return (
@@ -92,6 +111,9 @@ export default function RootNavigator(props: CoreAppProps) {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
+      onReady={() => screenTracker.onReady(navigationRef.getCurrentRoute()?.name)}
+      onStateChange={() => screenTracker.onStateChange(navigationRef.getCurrentRoute()?.name)}
       linking={props.linking}
       theme={{
         dark: isDark,
@@ -108,6 +130,8 @@ export default function RootNavigator(props: CoreAppProps) {
       }}
     >
       {accessToken ? signedIn : <AuthStack />}
+      {/* First launch, before sign-in: so registration and sign-in outcomes can be measured once allowed. */}
+      <ConsentPrompt />
       <ToastProvider />
     </NavigationContainer>
   );

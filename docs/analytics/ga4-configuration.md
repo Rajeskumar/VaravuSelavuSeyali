@@ -2,6 +2,8 @@
 
 2026-11-24 · TS-GA4-001. **No settings have been changed.** Production configuration, filters, deletion and releases need explicit approval. Record screenshots/settings summaries with restricted access; keep personal identifiers and raw sensitive URLs out of repository artifacts.
 
+> **Mobile (TS-GA4-002):** the iOS and Android apps use Firebase Analytics/Crashlytics linked to the same TrackSpense Production property as separate data streams. Firebase projects, streams, retention and DebugView steps are in [`mobile.md`](mobile.md) §6. Nothing in it has been applied.
+
 ## Inventory and change sheet
 
 | Item | Current evidence | Proposed / verification |
