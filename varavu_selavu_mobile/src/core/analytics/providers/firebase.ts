@@ -7,8 +7,8 @@ import { AnalyticsProvider } from '../types';
  */
 export function createFirebaseProvider(): AnalyticsProvider {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const analytics = require('@react-native-firebase/analytics').default;
-  const instance = () => analytics();
+  const { getAnalytics } = require('@react-native-firebase/analytics');
+  const instance = () => getAnalytics();
   return {
     setCollectionEnabled: (enabled) => instance().setAnalyticsCollectionEnabled(enabled),
     logEvent: (name, params) => instance().logEvent(name, params),

@@ -6,8 +6,8 @@ import { CrashProvider } from '../crash';
  */
 export function createFirebaseCrashProvider(): CrashProvider {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const crashlytics = require('@react-native-firebase/crashlytics').default;
-  const instance = () => crashlytics();
+  const { getCrashlytics } = require('@react-native-firebase/crashlytics');
+  const instance = () => getCrashlytics();
   // Constructing the module installs the SDK's own JS error and promise-rejection handlers, so do it now:
   // the sanitizing wrappers (crash.ts) must be installed afterwards to sit in front of them.
   instance();
