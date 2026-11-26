@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AppTheme } from '../theme/theme';
 import ScreenWrapper from '../ui/ScreenWrapper';
@@ -19,6 +19,7 @@ export default function PrivacyScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const consent = useConsent();
   const copy = consentCopy();
+  const debugCrashUnavailable = Platform.OS === 'ios' && __DEV__;
   const save = async (category: 'analytics' | 'crash', next: boolean) => {
     if (!(await setConsentChoice(category, next))) showToast({ message: "Couldn't save your choice. It applies until you close the app.", type: 'warning' });
   };
@@ -58,8 +59,10 @@ export default function PrivacyScreen() {
       {getAnalyticsEnvironment() === 'qa' ? (
         // QA builds only: proves crash delivery and symbolication end to end. Needs crash reports switched on.
         <View style={styles.qa}>
-          <Text style={styles.rowBody}>QA build · force a native crash to verify Crashlytics. Turn on Crash reports first.</Text>
-          <CustomButton title="Send test crash" variant="outline" onPress={() => { crashReporter.testCrash(); }} fullWidth />
+          <Text style={styles.rowBody}>{debugCrashUnavailable
+            ? 'Test crashes require a QA Release build on iOS. Crash reports remain controlled by your choice above.'
+            : 'QA build · force a native crash to verify Crashlytics. Turn on Crash reports first.'}</Text>
+          <CustomButton title="Send test crash" variant="outline" disabled={debugCrashUnavailable || consent.crash !== 'granted'} onPress={() => { crashReporter.testCrash(); }} fullWidth />
         </View>
       ) : null}
     </ScreenWrapper>
