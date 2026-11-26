@@ -1,5 +1,7 @@
 # Changelog
 
+- 2026-11-25: Exposed `mcp_enabled` and `mcp_management_url` on `FeatureFlagsResponse` so `/api/v1/config` no longer strips them and web `McpGate` (`/ai/connect/*`, `/ai/approve/*`, `/account/assistants`) and mobile Profile work when MCP is enabled (Antigravity).
+
 - 2026-11-25: Enabled consent-gated GA4 collection for the next TrackSpense frontend release after owner confirmation of the production stream settings (TS-GA4-001, Codex).
 
 - 2026-11-25: Configured the dedicated TrackSpense production GA4 destination, with both activation gates off pending Admin verification and rollout (TS-GA4-001, Codex).

@@ -230,6 +230,11 @@ class FeatureFlagsResponse(BaseModel):
     # AI cost gating kill switch (Settings.AI_ENABLED) — lets clients hide AI entry points
     # instead of letting users hit a 503.
     ai_enabled: bool = True
+    # MCP assistant access surface (Settings.MCP_ENABLED / Settings.PUBLIC_APP_URL) — lets web
+    # McpGate/AccountPage and mobile ProfileScreen gate /ai/* and Connected assistants without
+    # stripping the fields returned by get_config().
+    mcp_enabled: bool = False
+    mcp_management_url: str = ""
 
 
 class AiFeatureUsage(BaseModel):
