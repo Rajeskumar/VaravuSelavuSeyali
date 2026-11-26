@@ -1,5 +1,7 @@
 # 05 — Test Coverage Matrix
 
+> Historical. For current coverage see [`10-coverage-map.md`](10-coverage-map.md); some "automated" scenarios here and in `04` are covered only below the UI.
+
 What is *validated by an existing automated test* vs. what is only *specified* (`04-uat-test-cases.md`). "Existing" names files found in the repo on 2026-11-22; test bodies were not re-run in this audit (CI status was not queried). **Coverage here means "a test exists that asserts the behaviour", not that it passes today, and not that the behaviour is correct.**
 
 ## 0. Update 2026-11-22 — after the automation backlog

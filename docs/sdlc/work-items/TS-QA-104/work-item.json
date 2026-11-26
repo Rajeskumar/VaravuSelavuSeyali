@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "TS-QA-104",
+  "title": "Release test coverage map and release test sheet",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "build",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "A coverage map lists web routes and flows and mobile screens and flows with UI-level automation status, gaps and priority, and states its method limits."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "A release test sheet gives automated checks, the every-release manual smoke test with expected results for web, iOS and Android, real-service checks and read-only production checks, with pass rules."
+    }
+  ],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "docs/qa/10-coverage-map.md",
+    "docs/qa/11-release-test-sheet.md"
+  ],
+  "notes": ""
+}

@@ -4,6 +4,8 @@ Use for every production release. It **adds QA/UAT evidence and sign-off** on to
 
 **Release:** ______ · **Commit/tag:** ______ · **Date:** ______ · **Release manager:** ______ · **QA owner:** ______
 
+The per-release run sheet (automated suites, the every-release manual smoke test, real-device checks) is [`11-release-test-sheet.md`](11-release-test-sheet.md); current coverage and gaps are in [`10-coverage-map.md`](10-coverage-map.md).
+
 ## 1. Entry criteria (before testing starts)
 - [ ] Release candidate commit identified; `main` frozen except for release fixes.
 - [ ] `unit.yml`, `qa.yml` and `framework.yml` green on the exact commit (web lint/tsc/Jest, mobile tsc/Jest, backend pytest).

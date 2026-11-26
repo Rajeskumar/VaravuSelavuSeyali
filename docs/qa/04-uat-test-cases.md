@@ -1,5 +1,7 @@
 # 04 — UAT Test Cases
 
+> "Automated" below can mean an API or unit test only (for example, no browser test saves a new group expense). UI coverage per flow is in [`10-coverage-map.md`](10-coverage-map.md); the release run sheet is [`11-release-test-sheet.md`](11-release-test-sheet.md).
+
 Executable acceptance scenarios derived from `03-user-journeys.md`. **Status semantics:** *Not Run* = specified, no formal execution recorded; *Passed/Failed/Blocked* only after a recorded run. During this audit some steps were walked exploratorily (see **Audit evidence**); that is **not** a formal pass. The two **Failed** entries are defects observed directly at runtime (F-01, F-02).
 
 **Test data convention:** users `qa.primary.<runId>@trackspense.qa` / `qa.secondary…` created by `qa/e2e/setup/global.setup.ts`; deterministic ledger `qa/e2e/test-data/deterministic-expenses.json`; every created record tagged `QA_E2E_<runId>_`; password from `QA_USER_PASSWORD`. Never run state-changing cases against production (`prod-readonly.spec.ts` is the only prod-safe suite).
