@@ -137,6 +137,26 @@ def terms_of_service():
     return FileResponse(path)
 
 
+# Serve TrackSpense's own icons on trackspense-api.cerebroos.com so MCP connectors and favicon
+# resolvers don't get a 404 here and walk up to the parent cerebroos.com marketing domain's icon.
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon_ico():
+    path = Path(__file__).resolve().parents[1] / "favicon.ico"
+    return FileResponse(path, media_type="image/x-icon")
+
+
+@app.get("/favicon.png", include_in_schema=False)
+def favicon_png():
+    path = Path(__file__).resolve().parents[1] / "favicon.png"
+    return FileResponse(path, media_type="image/png")
+
+
+@app.get("/apple-touch-icon.png", include_in_schema=False)
+def apple_touch_icon():
+    path = Path(__file__).resolve().parents[1] / "apple-touch-icon.png"
+    return FileResponse(path, media_type="image/png")
+
+
 # Default-off integration. The SDK owns MCP wire-format/version negotiation.
 if settings.MCP_ENABLED:
     from contextlib import asynccontextmanager

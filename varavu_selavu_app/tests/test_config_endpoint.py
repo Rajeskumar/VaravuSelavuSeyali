@@ -123,3 +123,18 @@ def test_config_reflects_mcp_enabled_and_management_url(test_client, monkeypatch
     body = res.json()
     assert body["mcp_enabled"] is True
     assert body["mcp_management_url"] == "https://expense.cerebroos.com/account/assistants"
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_type"),
+    [
+        ("/favicon.ico", "image/x-icon"),
+        ("/favicon.png", "image/png"),
+        ("/apple-touch-icon.png", "image/png"),
+    ],
+)
+def test_backend_serves_trackspense_icons(test_client, path, expected_type):
+    res = test_client.get(path)
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith(expected_type)
+    assert len(res.content) > 100

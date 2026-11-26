@@ -384,6 +384,12 @@ def build_app():
             "MCP requires a canonical HTTPS issuer origin and its /mcp resource"
         )
     signing_keys()  # fail startup before mounting an unusable resource
+    issuer_origin = settings.MCP_ISSUER.rstrip("/")
+    server.website_url = settings.PUBLIC_APP_URL.rstrip("/")
+    server.icons = [
+        types.Icon(src=f"{issuer_origin}/favicon.png", mime_type="image/png"),
+        types.Icon(src=f"{issuer_origin}/apple-touch-icon.png", mime_type="image/png"),
+    ]
     app = server.streamable_http_app(
         stateless_http=True,
         json_response=True,
