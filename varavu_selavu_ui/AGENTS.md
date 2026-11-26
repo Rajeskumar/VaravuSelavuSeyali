@@ -4,6 +4,7 @@ Root `AGENTS.md` rules apply. Commands: `make lint-web typecheck-web test-web`, 
 `scripts/quality/accessibility.sh [--axe]`.
 
 ## Key Decisions
+- **One query client per signed-in account** (`context/SessionQueryProvider`, mounted by `App`; never a module-level `QueryClient`): query keys carry no user, so it is replaced on logout, forced (401) logout and an account switch from another tab. Mobile has the same rule (`core/auth/SessionQueryProvider`).
 - **Accessibility conventions** (one h1 per page, titles in `RouteA11y.tsx`, named dialogs, announced errors, no nested interactives) are the rules in `.ai-sdlc/standards/accessibility.md` — follow them for any UI change.
 - **Browser requests send `X-TrackSpense-Client: web`** and receive no tokens in JSON bodies (cookie session + CSRF).
 - **Ask conversation state lives above the responsive Drawer** (`useChatConversation`): keep pending work on close/breakpoint changes, clear on account change/logout, mount API-fetching UI lazily.

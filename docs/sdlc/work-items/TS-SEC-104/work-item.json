@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "TS-SEC-104",
+  "title": "Account-isolation polish and parity (from TS-SEC-101)",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "docs/sdlc/work-items/TS-SEC-101/findings.json",
+    "github-issue:#60"
+  ],
+  "notes": "Backlog card created 2026-11-25 with the owner's approval; no plan yet. Findings S-9, S-10, S-15, S-17 of TS-SEC-101."
+}

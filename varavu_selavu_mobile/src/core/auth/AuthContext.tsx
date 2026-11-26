@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from './storageKeys';
 import { logger } from '../logger';
 import { getAppConfig } from '../config/appConfig';
 import { runSignOutCleanups } from './signOutRegistry';
+import { advanceSession, runTokenWrite } from './session';
 import { notifyAuth } from './authObserver';
 import { login as apiLogin, LoginPayload, register as apiRegister, RegisterPayload, logout as apiLogout } from './authApi';
 import { setLogoutCallback } from '../api/apiFetch';
@@ -24,6 +25,14 @@ interface AuthContextType extends AuthState {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Token deletes go through the shared write queue so a password change or refresh still holding two writes
+// cannot put tokens back after they are gone.
+const clearStoredSession = () => runTokenWrite(async () => {
+  await SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
+  await SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
+  await SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
+});
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<AuthState>({
     accessToken: null,
@@ -32,6 +41,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   });
 
   const signOut = async () => {
+    // The session ends now, not when the tokens are deleted: anything still in flight from it (a password
+    // change, an export) is dropped from here on, including while the cleanups below are running.
+    advanceSession();
     await runSignOutCleanups('before');
     // Unregister the push token while the access token is still valid — apiFetch
     // needs it to authenticate the DELETE call.
@@ -46,9 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       logger.warn('Logout API call failed', e);
     }
 
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
-    await SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
+    await clearStoredSession();
     await runSignOutCleanups('after');
     // Before the state change that resets the analytics identity, so the event is not orphaned.
     notifyAuth({ type: 'signed_out' });
@@ -63,10 +73,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // Register the logout callback so apiFetch can force-logout on 401
     setLogoutCallback(() => {
-      // Clear state synchronously to trigger navigation reset
-      SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
-      SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
-      SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
+      // Clear state synchronously to trigger navigation reset. A forced sign-out deliberately skips the
+      // sign-out cleanups (drafts survive); it still ends the session.
+      advanceSession();
+      clearStoredSession().catch((e) => logger.warn('Clearing the stored session failed', e));
       setState({
         accessToken: null,
         isLoading: false,
@@ -99,11 +109,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signIn = async (payload: LoginPayload) => {
     try {
       const response = await apiLogin(payload);
-      await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, response.access_token);
-      await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, response.refresh_token);
-
       const email = payload.username;
-      await SecureStore.setItemAsync(STORAGE_KEYS.userEmail, email);
+      // A new sign-in is a new session, even for the same user signing back in.
+      advanceSession();
+      await runTokenWrite(async () => {
+        await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, response.access_token);
+        await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, response.refresh_token);
+        await SecureStore.setItemAsync(STORAGE_KEYS.userEmail, email);
+      });
 
       setState({
         accessToken: response.access_token,

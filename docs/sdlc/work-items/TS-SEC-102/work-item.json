@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "TS-SEC-102",
+  "title": "Push registration residual and unique device-token index (from TS-SEC-101)",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "docs/sdlc/work-items/TS-SEC-101/findings.json",
+    "github-issue:#58"
+  ],
+  "notes": "Backlog card created 2026-11-25 with the owner's approval; no plan yet. Findings S-13 and S-14 of TS-SEC-101. Risk: high (migration, personal data)."
+}

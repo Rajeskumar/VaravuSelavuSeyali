@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "id": "TS-SEC-101",
+  "title": "Mobile account isolation: session-scoped query cache, guarded token writes and late exports",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "plan",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "The mobile app uses one QueryClient per signed-in session, replaced on explicit and forced (401) sign-out; a mutation in flight at sign-out cannot write old data into the next account's cache, and CoreApp mounts the provider."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Password-change and token-refresh token writes happen only if the sign-in session that started the request is still current (same user signing out and back in is a new session; a normal refresh is not), and a sign-out between the check and the two writes leaves no tokens."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "Account export, full-data download, group export and group invite share drop a result that arrives after the session changed, without opening the share sheet."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "A native account-switch E2E flow covers cached data across accounts, other module-level or persisted user-data caches are reviewed, SecureStore keys are unchanged, and a forced sign-out still skips sign-out cleanups."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "The web app uses one QueryClient per signed-in account, replaced on logout, forced logout and an account switch, so a late save or the next login never sees the previous account's cache, and App mounts it."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "AI consent is stored per account (granted:<email>): after a forced sign-out the next account is asked, a prompt left open by the previous account cannot consent the next, and an older bare consent is asked again."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "Registering an Expo push token removes other accounts' rows for the same token, so a device signed out without a clean unregister stops receiving the previous account's notifications."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "session-query-cache",
+    "token-write-guard",
+    "late-export-guard",
+    "native-e2e",
+    "docs",
+    "code-review",
+    "security-review",
+    "acceptance",
+    "web-session-cache",
+    "ai-consent-owner",
+    "push-device-takeover",
+    "ui-review"
+  ],
+  "implementation_approval": {
+    "actor": "Rajeshkumar Ganesan",
+    "reference": "User messages 2026-11-25: 'Go with this' (original three fixes, base branch mobile-app-analytics, changes uncommitted, no push, template untouched) and, after the review report listing the web QueryClient P1, the AI-consent P2 and the push-registration P2: 'Fix those P1 and P2 findings'. Design choices for those three fixes are recorded in requirements.md and are open to review. Plan text was later extended (implementation.md) with review-driven hardening of the same fixes (token validation and a rate limit on /devices/register, web subtree remount); the fingerprint was re-recorded for that text under the same instruction and is disclosed to the owner for confirmation.",
+    "fingerprint": "317633de7c3f434abc5cef08b634dbcc53ba50e93c9575e03808008377b9aac6"
+  },
+  "links": [
+    "docs/sdlc/work-items/TS-GA4-002/work-item.json"
+  ],
+  "notes": "Built on branch mobile-app-analytics together with TS-GA4-002 (owner decision 2026-11-25); changes uncommitted, no push. Template (cerebroos-mobile-app-template) is not edited; the core files it should take back are listed at the end of Build. Scope widened 2026-11-25 by owner instruction to fix review findings S-1 (web cache), S-2 (AI consent) and S-3 (push registration)."
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fixture for account-switch: user A (the runner's USER_*) gets one saved expense; a second verified user B is provisioned."""
+"""Fixture for account-switch: user A (the runner's USER_*) gets one saved expense and one group; a second verified user B is provisioned."""
 import json
 import os
 import subprocess
@@ -18,5 +18,7 @@ def run(*args):
 
 
 run("expense", "--email", email, "--description", f"{label} private-A", "--cost", "7.25")
+# A's group list is cached by a query key that has no user in it (['groups', ...]); it must not reach B.
+group = json.loads(run("group", "--email", email, "--name", f"{label}_groupA"))
 b = json.loads(run("provision", "--name", "userb"))
-print(json.dumps({"B_EMAIL": b["email"], "B_PASSWORD": b["password"]}))
+print(json.dumps({"B_EMAIL": b["email"], "B_PASSWORD": b["password"], "GROUP_NAME": group["name"]}))

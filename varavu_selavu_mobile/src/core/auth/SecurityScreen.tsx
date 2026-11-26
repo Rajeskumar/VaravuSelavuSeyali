@@ -10,8 +10,7 @@ import SectionLabel from '../ui/SectionLabel';
 import { showToast } from '../ui/Toast';
 import { useAuth } from './AuthContext';
 import { SignInSession, changePassword, endSession, getSecurityInfo, listSessions, signOutEverywhere } from './accountApi';
-import * as SecureStore from 'expo-secure-store';
-import { STORAGE_KEYS } from './storageKeys';
+import { sessionGuard, writeTokensIfSession } from './session';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'unknown');
 
@@ -47,19 +46,22 @@ export default function SecurityScreen() {
   const submit = async () => {
     if (!canSubmit) return;
     setBusy(true);
+    // The sign-in session that started this request. If the user signs out, is signed out, or someone else signs in
+    // before it finishes, the re-issued tokens belong to a session that no longer exists on this device.
+    const stillSignedIn = sessionGuard();
     try {
       const fresh = await changePassword({ current_password: hasPassword ? current : undefined, new_password: next });
       // The server ended every other session and re-issued this one; keep this device signed in.
       if (fresh.access_token && fresh.refresh_token) {
-        await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, fresh.access_token);
-        await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, fresh.refresh_token);
+        await writeTokensIfSession(stillSignedIn, { accessToken: fresh.access_token, refreshToken: fresh.refresh_token });
       }
+      if (!stillSignedIn()) return;
       setCurrent(''); setNext(''); setConfirm('');
       setHasPassword(true);
       showToast({ message: 'Password changed. Your other devices were signed out.', type: 'success' });
       load();
     } catch (e: any) {
-      showToast({ message: e?.message ?? 'Could not change your password', type: 'error' });
+      if (stillSignedIn()) showToast({ message: e?.message ?? 'Could not change your password', type: 'error' });
     } finally {
       setBusy(false);
     }

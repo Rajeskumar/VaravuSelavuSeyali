@@ -5,6 +5,7 @@ Root `AGENTS.md` rules apply. This file holds backend decisions. Commands: `make
 `auth/`, `oauth/`, `mcp/`, `core/`, `db/`, `alembic/`, money/LLM/export services (`scripts/quality/routing.py`).
 
 ## Key Decisions
+- **A push token belongs to one account at a time**: `NotificationService.register_device` deletes other users' rows for the same Expo token, so a device that was signed out without a clean unregister (401, offline) stops receiving the previous account's notifications once someone registers on it. The token must match Expo's format and the route is rate limited, because registering also de-registers other accounts.
 - **Auth: an `Authorization: Bearer` header wins over the `vs_token` cookie, and Bearer requests are exempt from CSRF** (`auth/security.py`, `core/csrf.py`). Native HTTP stacks resend the login cookie, which made every mobile POST 403; mobile also sends `credentials: 'omit'` — keep both.
 - **Access tokens are revocable**: `auth_required` checks `users.token_valid_after` against the token's `iat_ms`. Call `AuthService.end_access_tokens` / `end_all_sessions` on logout, password reset/change and sign-out-everywhere. Browser clients send `X-TrackSpense-Client: web` and get no tokens in JSON bodies; native clients still do.
 - **Non-members get 404 "Group not found"** (same as a missing group) — never a distinct 403, which lets group ids be probed.

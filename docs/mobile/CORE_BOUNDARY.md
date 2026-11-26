@@ -52,6 +52,14 @@ route name to `FAB_TABS` if the floating action should show there. Keep existing
 `'before'` runs while the token is still valid; `'after'` once tokens are gone. They run on an explicit sign-out only,
 never on a forced 401 sign-out (drafts must stay recoverable).
 
+**Account isolation (TS-SEC-101).** Server data lives in one `QueryClient` per signed-in session
+(`core/auth/SessionQueryProvider`, mounted by `CoreApp` inside `AuthProvider`); it is replaced on explicit and forced
+sign-out, so query keys need not carry the user and a late mutation cannot write into the next account's cache. A request
+that can outlive the session (password change, export, share) captures `sessionGuard()` from `core/auth/session` when it
+starts and checks it before writing tokens or showing data; token writes go through `runTokenWrite`/`writeTokensIfSession`
+so a sign-out cannot land between two SecureStore writes. A session ends when sign-out starts (explicit or 401) and a new
+sign-in is a new session; a token refresh is not. Only `AuthProvider` calls `advanceSession()`.
+
 **Add a sign-in method.** Add its id to `AuthMethodId` (`core/config/appConfig.ts`), create `core/auth/methods/<id>.tsx`
 exporting an `AuthMethod` (`{ id, Form }`, where `Form` returns a fragment of controls and calls `useAuth()`), register it in
 `core/auth/methods/index.ts`, and list the id in `AppConfig.auth.methods`. Only `password` exists today.
