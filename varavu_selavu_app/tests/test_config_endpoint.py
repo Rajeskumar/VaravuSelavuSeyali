@@ -46,18 +46,44 @@ def _pin_tags_flag():
             os.environ.pop("TAGS_ENABLED", None)
 
 
+@pytest.fixture(autouse=True)
+def _pin_mcp_flags(monkeypatch):
+    # Same reason as _pin_card_coach_flag — a local dev .env can set MCP_ENABLED=true or a custom
+    # PUBLIC_APP_URL, and exact-dict assertions must not depend on ambient .env state.
+    monkeypatch.setenv("MCP_ENABLED", "false")
+    monkeypatch.setenv("PUBLIC_APP_URL", "http://localhost:3000")
+
+
 def test_config_reflects_groups_enabled_true(test_client):
     os.environ["GROUPS_ENABLED"] = "true"
     res = test_client.get("/api/v1/config")
     assert res.status_code == 200
-    assert res.json() == {"groups_enabled": True, "entity_resolution_enabled": False, "budgets_enabled": True, "card_coach_enabled": False, "tags_enabled": False, "ai_enabled": True}
+    assert res.json() == {
+        "groups_enabled": True,
+        "entity_resolution_enabled": False,
+        "budgets_enabled": True,
+        "card_coach_enabled": False,
+        "tags_enabled": False,
+        "ai_enabled": True,
+        "mcp_enabled": False,
+        "mcp_management_url": "http://localhost:3000/account/assistants",
+    }
 
 
 def test_config_reflects_groups_enabled_false(test_client):
     os.environ["GROUPS_ENABLED"] = "false"
     res = test_client.get("/api/v1/config")
     assert res.status_code == 200
-    assert res.json() == {"groups_enabled": False, "entity_resolution_enabled": False, "budgets_enabled": True, "card_coach_enabled": False, "tags_enabled": False, "ai_enabled": True}
+    assert res.json() == {
+        "groups_enabled": False,
+        "entity_resolution_enabled": False,
+        "budgets_enabled": True,
+        "card_coach_enabled": False,
+        "tags_enabled": False,
+        "ai_enabled": True,
+        "mcp_enabled": False,
+        "mcp_management_url": "http://localhost:3000/account/assistants",
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -77,4 +103,23 @@ def test_config_reflects_entity_resolution_enabled_true(test_client):
     os.environ["ENTITY_RESOLUTION_ENABLED"] = "true"
     res = test_client.get("/api/v1/config")
     assert res.status_code == 200
-    assert res.json() == {"groups_enabled": False, "entity_resolution_enabled": True, "budgets_enabled": True, "card_coach_enabled": False, "tags_enabled": False, "ai_enabled": True}
+    assert res.json() == {
+        "groups_enabled": False,
+        "entity_resolution_enabled": True,
+        "budgets_enabled": True,
+        "card_coach_enabled": False,
+        "tags_enabled": False,
+        "ai_enabled": True,
+        "mcp_enabled": False,
+        "mcp_management_url": "http://localhost:3000/account/assistants",
+    }
+
+
+def test_config_reflects_mcp_enabled_and_management_url(test_client, monkeypatch):
+    monkeypatch.setenv("MCP_ENABLED", "true")
+    monkeypatch.setenv("PUBLIC_APP_URL", "https://expense.cerebroos.com/")
+    res = test_client.get("/api/v1/config")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["mcp_enabled"] is True
+    assert body["mcp_management_url"] == "https://expense.cerebroos.com/account/assistants"

@@ -1,5 +1,6 @@
 # Changelog
 
+- 2026-11-25: Exposed `mcp_enabled` and `mcp_management_url` on `FeatureFlagsResponse` so `/api/v1/config` no longer strips them and web `McpGate` (`/ai/connect/*`, `/ai/approve/*`, `/account/assistants`) and mobile Profile work when MCP is enabled (Antigravity).
 - 2026-11-25: Regenerated the local iOS production Firebase project without the push entitlement for Personal Team signing after the first device install failed; store builds still require push-capable signing (Codex).
 
 - 2026-11-25: Validated production Firebase files and compiled an unsigned iOS Release device app against trackspense-prod-191ae; clarified Crashlytics console activation (Codex). No app release.
