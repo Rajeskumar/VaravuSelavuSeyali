@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "TS-SEC-103",
+  "title": "Sign-out and token-refresh robustness (from TS-SEC-101)",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "docs/sdlc/work-items/TS-SEC-101/findings.json",
+    "github-issue:#59"
+  ],
+  "notes": "Backlog card created 2026-11-25 with the owner's approval; no plan yet. Findings S-4, S-6, S-16 and the draft part of S-8 of TS-SEC-101. Risk shown is a placeholder: auth/token handling is high at Plan."
+}

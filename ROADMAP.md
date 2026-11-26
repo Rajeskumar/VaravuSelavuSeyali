@@ -1,6 +1,7 @@
 # Roadmap / Planned Enhancements
 
 ## GA4 web and product analytics (2026-11-24)
+- [ ] TS-GA4-002 (mobile): implemented locally (Firebase Analytics + Crashlytics, iOS and Android, one shared layer). Owner steps remain: create the Dev and Prod Firebase projects, link Prod to TrackSpense Production, supply the config files as EAS secrets, run DebugView and the test crash on a real iOS and Android build, then complete the store privacy disclosures and mobile privacy-policy review — `docs/analytics/mobile.md` §6–9. Follow-ups (Backlog cards, not yet planned): TS-GA4-003 (#55) port `core/analytics` + plugins into `cerebroos-mobile-app-template`; TS-RET-101 (#57) backend lifecycle/nudge emails from first-party data (no User-ID in analytics); TS-GA4-004 (#56) Performance Monitoring evaluation. Re-review (security + UI + product) after the Firebase/device testing.
 - [ ] TS-GA4-001: Phases 2 and 3 implemented locally. Local DebugView confirmed a synthetic save. The production release build enables consent-gated collection. Release checks, deployment and a live smoke check remain. See [foundation status](docs/analytics/foundation-status.md).
 
 Format: `- [ ] [enhancement] — context: [why/when this came up]`

@@ -1,10 +1,10 @@
-# GA4 event catalog and reporting contract — proposed v1
+# GA4 event catalog and reporting contract — v1
 
-2026-11-24 · TS-GA4-001 · **No product events below are implemented yet.** `P` = proposed for Phase 3; `R` = reserved/deferred with a stated prerequisite. Existing product functionality is distinguished from analytics support.
+2026-11-25 · TS-GA4-001 (web) · TS-GA4-002 (iOS/Android). The `P` events below are implemented on web; `R` = reserved/deferred with a stated prerequisite. The machine-readable contract is [`catalog.v1.json`](catalog.v1.json): event names, features, closed property values and the platforms (`web`, `ios`, `android`) each event applies to. Web and mobile tests fail when their tables drift from it; this file holds the meaning, dedup rules and reporting formulas. Existing product functionality is distinguished from analytics support.
 
 ## Contract and vocabulary
 
-Common context (`C`, adapter-owned, mandatory): `product=trackspense`, `platform=web`, `feature` from the event's fixed mapping below, `route_template` from the approved router registry. `app_version` is optional and only a build-supplied release version matching the release configuration, never arbitrary user input. `route_id` is adapter-owned from the same registry; it is optional on product events and required on page views. Future definitions may admit fixed `ios`, `android`, `mcp` platforms and registered CerebroOS products; none is enabled now.
+Common context (`C`, adapter-owned, mandatory): `product=trackspense`, `platform=web`, `feature` from the event's fixed mapping below, `route_template` from the approved router registry. `app_version` is optional and only a build-supplied release version matching the release configuration, never arbitrary user input. `route_id` is adapter-owned from the same registry; it is optional on product events and required on page views. Future definitions may admit fixed `ios`, `android`, `mcp` platforms and registered CerebroOS products; none is enabled now. **Mobile (TS-GA4-002) differs:** `platform` is `ios` or `android`, and instead of `route_template`/`route_id` it sends the stable `screen_name` on `screen_view` only; other mobile events carry just `product`, `platform`, `feature` and `app_version`.
 
 Per-event schemas are **C plus only the named property sets in that event's row**. Optional fields are explicitly marked; no arbitrary strings, URL values, numbers, counts, money or nested objects. Context and values are validated at runtime even if TypeScript accepts the call. Cross-field invariants enforce the row's feature/outcome. Unknown event/key/value rejects the whole event without throwing. `page_location`, `page_title`, `page_referrer` are private provider fields derived from the route registry, never caller-supplied properties.
 
@@ -22,9 +22,25 @@ Per-event schemas are **C plus only the named property sets in that event's row*
 
 Success events have inherent success semantics and no redundant `outcome=success`. The feature set is `navigation`, `auth`, `expenses`, `categorization`, `receipts`, `groups`, `ai_analyst`, `recurring`, `analysis`, `settings`, `onboarding`, `acquisition`. Do not send `campaign_source` or user properties in v1. Approved campaign support can later map a finite registry to GA campaign fields; no raw UTM pass-through.
 
+## Mobile (iOS and Android) — TS-GA4-002
+
+`platform` also takes `ios` and `android`. The catalog JSON marks which events apply to which platform; mobile carries 29 of the web events plus five mobile-only ones (34). `expense_creation_started` is web-only: mobile has no separate intent step. Producer inventory, consent, environments and the Firebase runbook: [`mobile.md`](mobile.md).
+
+| Mobile-only event | Properties | Meaning |
+|---|---|---|
+| `screen_view` | `screen_name` (closed list of stable ids) | The focused route **name** changed; never params, titles or URLs. Firebase's automatic reporting is off, so this is the only screen event |
+| `receipt_image_selected` | `source`: `camera`, `library` | A receipt image was chosen; not an upload or a parse |
+| `permission_result` | `permission`: `camera`, `photos`, `notifications`; `result`: `granted`, `denied`, `limited` | OS permission outcome, once per outcome per session |
+| `deep_link_opened` | `link_type`: `group_invite`, `group` | A `trackspense://` link was parsed; the path, token and ids are discarded |
+| `notification_opened` | `notification_type`: `group_activity` | A push notification was tapped (inactive until push ships) |
+
+**Reporting: mobile is reported separately.** Every formula in "Reporting definitions" below is a **web** definition (production web stream + hostname filter). Do not add mobile events into the web E, M, DAU/WAU/MAU, capture-mix, receipt-funnel, activation or retention numbers; report mobile with a `platform` (or iOS/Android stream) filter and the caveats here. Known mobile limits: (1) consent is asked at **first launch, before sign-in**, so signup and login events are collected only for people who allowed analytics, and the coverage (the share who allowed it) is unknown: state it next to any mobile signup or activation figure, and do not compare it with web's; (2) identity is reset on sign-out and account change, so each sign-in cycle looks like a new app instance (inflates new/total users; user-based cohorts are unreliable); (3) `analysis_viewed` is web-only, so a mobile `M` (meaningful activity) is not comparable to web's; (4) mobile `timeout` is reported as `network`, and `signup_started` is emitted per attempt, not per form lifetime; (5) pausing/resuming a template through the edit form is reported as `saved`.
+
+Mobile dedup differs from web in one way: one operation token per save attempt, held in memory only (no persistence or replay, so a process kill loses the event rather than duplicating it). Web-only today: `analysis_viewed`, `expense_filter_applied`, `data_export_completed`.
+
 ## Producer and dedup rules
 
-All P events have **web as the sole authoritative analytics producer**. Backend remains the ledger authority. No backend emits the same event. Domain API methods receive optional explicit analytics context from the initiating operation; passive fetches, background refreshes and unrelated callers do not generate events.
+Each platform is the sole authoritative producer of its own events (web for web events, the app for iOS/Android); the same event is never emitted twice for one action. Backend remains the ledger authority. No backend emits the same event. Domain API methods receive optional explicit analytics context from the initiating operation; passive fetches, background refreshes and unrelated callers do not generate events.
 
 - **I (intent/visit):** one false→true visible opening or first interaction in a new form instance; rerenders and Strict Mode effect replays do not count. Closing then reopening is a new intent. Restoring a draft is not a new creation intent.
 - **O (operation):** allocate an opaque in-memory attempt token after validation and the synchronous submit lock, before a request. Reuse through transport/auth retry. Only one terminal outcome per operation; subsequent retries explicitly initiated after definitive failure are new operations. IDs/tokens never enter GA. Old-account callbacks are discarded.

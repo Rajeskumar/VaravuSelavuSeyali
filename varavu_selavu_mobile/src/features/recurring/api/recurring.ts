@@ -1,3 +1,4 @@
+import { confirmed } from '../../shared/analytics/operations';
 import { apiFetch } from '../../../core/api/apiFetch';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -48,22 +49,30 @@ export async function listRecurringTemplates(): Promise<RecurringTemplateDTO[]> 
     return res.json();
 }
 
-export async function upsertRecurringTemplate(payload: UpsertRecurringPayload): Promise<RecurringTemplateDTO> {
-    const res = await apiFetch('/api/v1/recurring/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error('Failed to save recurring template');
-    return res.json();
+/** `action` says what the user did (an upsert alone can't tell a save from a pause or resume). */
+export function upsertRecurringTemplate(
+    payload: UpsertRecurringPayload,
+    action: 'saved' | 'paused' | 'resumed' = 'saved',
+): Promise<RecurringTemplateDTO> {
+    return confirmed(async () => {
+        const res = await apiFetch('/api/v1/recurring/upsert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('Failed to save recurring template');
+        return res.json();
+    }, 'recurring_template_changed', { action });
 }
 
-export async function deleteRecurringTemplate(templateId: string): Promise<{ success: boolean }> {
-    const res = await apiFetch(`/api/v1/recurring/templates/${templateId}`, {
-        method: 'DELETE',
-    });
-    if (!res.ok) throw new Error('Failed to delete recurring template');
-    return res.json();
+export function deleteRecurringTemplate(templateId: string): Promise<{ success: boolean }> {
+    return confirmed(async () => {
+        const res = await apiFetch(`/api/v1/recurring/templates/${templateId}`, {
+            method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete recurring template');
+        return res.json();
+    }, 'recurring_template_changed', { action: 'deleted' });
 }
 
 export async function getRecurringDue(asOfISO?: string): Promise<DueOccurrenceDTO[]> {
@@ -73,26 +82,33 @@ export async function getRecurringDue(asOfISO?: string): Promise<DueOccurrenceDT
     return res.json();
 }
 
-export async function confirmRecurring(items: { template_id: string; date_iso: string; cost: number }[]): Promise<{ success: boolean }> {
-    const res = await apiFetch('/api/v1/recurring/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-    });
-    if (!res.ok) throw new Error('Failed to confirm recurring expenses');
-    return res.json();
+/** One acknowledged command; the response does not prove how many rows were created, so no count is sent. */
+export function confirmRecurring(items: { template_id: string; date_iso: string; cost: number }[]): Promise<{ success: boolean }> {
+    return confirmed(async () => {
+        const res = await apiFetch('/api/v1/recurring/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items }),
+        });
+        if (!res.ok) throw new Error('Failed to confirm recurring expenses');
+        return res.json();
+    }, 'recurring_run_completed', { action: 'confirmed' }, (r) => r?.success !== false);
 }
 
 
-export async function executeRecurringNow(
+export function executeRecurringNow(
     templateId: string,
     cost?: number,
 ): Promise<{ success: boolean; created?: boolean; already_added?: boolean; error?: string }> {
-    const res = await apiFetch('/api/v1/recurring/execute_now', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ template_id: templateId, cost }),
-    });
-    if (!res.ok) throw new Error('Failed to execute template');
-    return res.json();
+    type Result = { success: boolean; created?: boolean; already_added?: boolean; error?: string };
+    // Only a created row counts: success with `already_added` or without `created` is a no-op run.
+    return confirmed<Result, 'recurring_run_completed'>(async () => {
+        const res = await apiFetch('/api/v1/recurring/execute_now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ template_id: templateId, cost }),
+        });
+        if (!res.ok) throw new Error('Failed to execute template');
+        return res.json();
+    }, 'recurring_run_completed', { action: 'executed' }, (r) => r.success !== false && r.created === true && !r.already_added);
 }

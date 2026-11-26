@@ -58,7 +58,7 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
 
     if (!response.ok) {
         logger.error('Login failed', response.status);
-        throw new Error(`Login failed: ${response.status}`);
+        throw Object.assign(new Error(`Login failed: ${response.status}`), { status: response.status });
     }
 
     return response.json();

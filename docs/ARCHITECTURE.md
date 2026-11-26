@@ -71,3 +71,7 @@ static descriptors with `RouteA11y`. No backend pipeline or financial/identity d
 this boundary. The actual SDK is loaded only after consent and exact environment/destination
 approval. The production release build enables consented collection on the dedicated TrackSpense property. The local real-tag test confirmed receipt in DebugView. See [foundation status](analytics/foundation-status.md), [privacy](analytics/privacy.md) and
 [runbook](analytics/ga4-configuration.md). This layer is distinct from financial `/analytics` APIs.
+
+## Mobile analytics and crash reporting (TS-GA4-002)
+
+`varavu_selavu_mobile/src/core/analytics` is a product-agnostic, consent-gated layer (client, whole-event validator, `firebase`/`noop`/`recording` providers, crash reporter with sanitizers, consent store and UI, screen tracker) shared by iOS and Android. The app supplies its event table (`features/shared/analytics`, checked against `docs/analytics/catalog.v1.json`) and screen registry; features call `track` and confirmed-write wrappers, never Firebase. Firebase is native-linked only for explicit `qa`/`production` builds (`app.config.js`, `firebase.json`, `withFirebasePrivacy.js`). Details: [mobile analytics](analytics/mobile.md).

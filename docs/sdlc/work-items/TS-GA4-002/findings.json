@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "S-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Fatal-error sanitizer followed the JS consent flag while the SDK follows a persisted native flag, so a pre-consent or failed-consent-read JS fatal could reach Crashlytics with its raw message. Fixed: release builds always sanitize, it fails closed (frozen/non-Error values replaced), installed whenever analytics is on.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "security-review pass 1, re-verified pass 2",
+      "status": "fixed",
+      "verification_evidence": "crash-reporting",
+      "waiver": null
+    },
+    {
+      "id": "S-2",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Native collection state was never reconciled at launch and a failed withdrawal was silent. Fixed: the first consent answer, even a denial, is pushed to both SDKs at every launch.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "security-review pass 1",
+      "status": "fixed",
+      "verification_evidence": "consent-identity",
+      "waiver": null
+    },
+    {
+      "id": "S-3",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Crash reports written while consent was off could upload after a later grant. Fixed: deleteUnsentReports on every non-granted answer. The SDK's behavior itself is unverified on a device.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "security-review pass 1",
+      "status": "fixed",
+      "verification_evidence": "crash-reporting",
+      "waiver": null
+    },
+    {
+      "id": "S-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Nothing tied the build environment to the Firebase project or kept qa builds out of stores. Fixed: plist/JSON must agree, bundle id/package must match, FIREBASE_EXPECTED_PROJECT_ID is required, qa is refused for the production EAS profile or push builds. Open residual: an OTA update could pair a JS environment with a differently built binary (expo-updates use not checked).",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "security-review pass 1+2",
+      "status": "fixed",
+      "verification_evidence": "environment-isolation",
+      "waiver": null
+    },
+    {
+      "id": "S-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "The analytics privacy boundary was not routed to security review. Fixed: HIGH_PREFIXES and a routing test.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "security-review pass 1",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "S-6",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Errors thrown before setupAnalytics() (module init) reach RN's handler unsanitized; low impact (no user data at module init). Hardening: install the sanitizer at the top of index.js. Fixed: src/app/fatalGuard.ts is imported first by index.js (release builds sanitize errors thrown during module init; setupAnalytics re-installs it as the outermost wrapper).",
+      "owner": "Repository owner",
+      "source": "security-review pass 2",
+      "status": "fixed",
+      "verification_evidence": "crash-reporting",
+      "waiver": null
+    },
+    {
+      "id": "S-7",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "withSceneLifecycle.js and the Firebase entries in package.json/app.json are not routed as high risk. Fixed: withSceneLifecycle.js is now routed as high risk; Firebase entries in package.json/app.json are still path-routed only.",
+      "owner": "Repository owner",
+      "source": "security-review pass 2",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "S-8",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "The SDK's own app_exception event for JS fatals is not in the catalog (fatal flag and timestamp only, no private data). Documented in docs/analytics/mobile.md section 7; needs an owner decision: catalog it, or disable JS error generation.",
+      "owner": "Repository owner",
+      "source": "security-review pass 1",
+      "status": "accepted",
+      "verification_evidence": "",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Owner accepted for this work item; revisit if it matters in practice.",
+        "expires": "2027-02-25",
+        "reference": "User message 2026-11-25: 'All good' for the 6 open findings"
+      }
+    },
+    {
+      "id": "S-9",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "No capture yet proves zero network traffic before consent, after withdrawal and after a forced crash on either platform, and the SDK's pre-consent behavior (Installations at configure, Android init provider) is unverified. Requires a Dev Firebase project and real builds.",
+      "owner": "Repository owner",
+      "source": "security-review pass 1",
+      "status": "accepted",
+      "verification_evidence": "",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Owner accepted. To be verified during the Firebase/device testing phase before release.",
+        "expires": "2026-12-31",
+        "reference": "User message 2026-11-25: 'All good' for the 6 open findings"
+      }
+    },
+    {
+      "id": "P-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Consent is asked after sign-in (owner decision), so mobile signup_started, sign_up, signup_failed, login_failed, a device's first login and Login/Register screen views are never collected on a fresh install; mobile acquisition and activation are not measurable in v1. Documented in docs/analytics/mobile.md and event-catalog.md. Needs an owner decision: accept this limit, or ask for consent at first launch before sign-in. Owner decision 2026-11-25: ask for consent at first launch, before sign-in. Implemented (the sheet is mounted at the app root; src/core/navigation/consentPlacement.test.ts); signup/login events are now collected for people who allow analytics. Remaining limit: people who decline are invisible, so coverage must be stated beside any mobile funnel figure.",
+      "owner": "Repository owner",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "consent-identity",
+      "waiver": null
+    },
+    {
+      "id": "P-2",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Receipt-parse and category-suggestion failures were classed unknown/unknown (no status on those errors), silently dropping them from the receipt-funnel formula; AI quota not mapped on the receipt path. Fixed: status carried (HttpStatusError / assigned status), AiLimitError maps to quota; tests added.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "business-events",
+      "waiver": null
+    },
+    {
+      "id": "P-3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "event-catalog.md contradicted a multi-platform catalog and had no mobile reporting rules. Fixed: mobile reported separately, limits listed.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "docs",
+      "waiver": null
+    },
+    {
+      "id": "P-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Identity reset makes each sign-in cycle a new app instance (inflates new/total users) and the logout event may be lost to resetAnalyticsData. Documented; logout loss needs DebugView.",
+      "owner": "Repository owner",
+      "source": "product-review",
+      "status": "accepted",
+      "verification_evidence": "",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Owner accepted. To be verified during the Firebase/device testing phase before release.",
+        "expires": "2026-12-31",
+        "reference": "User message 2026-11-25: 'All good' for the 6 open findings"
+      }
+    },
+    {
+      "id": "P-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Mobile M is not comparable to web's (analysis_viewed is web-only). Documented: mobile reported separately.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "docs",
+      "waiver": null
+    },
+    {
+      "id": "P-6",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "UAT cases and native E2E evidence were missing. UAT-ANA-001..007 added (Not Run); native E2E not re-run since this change, it is release-time evidence per make release-prepare.",
+      "owner": "Repository owner",
+      "source": "product-review",
+      "status": "accepted",
+      "verification_evidence": "",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Owner accepted. To be verified during the Firebase/device testing phase before release.",
+        "expires": "2026-12-31",
+        "reference": "User message 2026-11-25: 'All good' for the 6 open findings"
+      }
+    },
+    {
+      "id": "P-7",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "expense_creation_started was marked for mobile with no producer. Fixed: web-only in the catalog.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "catalog-contract",
+      "waiver": null
+    },
+    {
+      "id": "C-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Producer call sites for chat, recurring, deep-link wiring, notification tap and the screen registry were untested. Fixed: tests added (apiEvents, screenRegistry, linking, notificationResponse). Not covered: the AddExpenseScreen capture path and RootNavigator tracker wiring in a component test.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "business-events",
+      "waiver": null
+    },
+    {
+      "id": "C-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Nothing pinned the screen registry to the catalog. Fixed: screenRegistry.test.ts.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "screen-tracking",
+      "waiver": null
+    },
+    {
+      "id": "C-3",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "useFrameworks=dynamic applies to every iOS build and its cold-start/binary-size cost is unmeasured; setupAnalytics constructs Crashlytics at start-up in qa/production builds.",
+      "owner": "Repository owner",
+      "source": "code-review",
+      "status": "accepted",
+      "verification_evidence": "",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Owner accepted for this work item; revisit if it matters in practice.",
+        "expires": "2027-02-25",
+        "reference": "User message 2026-11-25: 'All good' for the 6 open findings"
+      }
+    },
+    {
+      "id": "C-4",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "First screen/deep link lost on cold start; stale suggestion mislabel; one suggestion event per pause; beginOperation not no-throw; web test cwd-dependent. Fixed.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "screen-tracking",
+      "waiver": null
+    },
+    {
+      "id": "U-1",
+      "severity": "P1",
+      "certainty": "Suspected",
+      "summary": "Consent sheet had no scrolling; at large text sizes the buttons could be pushed off screen. Fixed: text scrolls, buttons fixed outside it. Layout reasoning only; device check pending.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "ui-review pass 1+2",
+      "status": "fixed",
+      "verification_evidence": "ui-review",
+      "waiver": null
+    },
+    {
+      "id": "U-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Consent copy omitted identifiers/non-deletability and had no policy link; switch off state was nearly invisible; disclosure not tied to switch; footer contrast; on-state contrast found in pass 2. Fixed.",
+      "owner": "Claude Code (TS-GA4-002)",
+      "source": "ui-review pass 1+2",
+      "status": "fixed",
+      "verification_evidence": "ui-review",
+      "waiver": null
+    },
+    {
+      "id": "U-3",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Consent sheet and RecurringPrompt are both modals opened after sign-in with no sequencing; they may collide on iOS/Android. Needs a device check; simplest fix is to gate one on the other. Fixed in code: a generic overlay gate (core/ui/overlayGate.ts) holds the consent sheet while RecurringPrompt is checking or open; tested. Still needs a device check of the modal behavior. Update 2026-11-25: with consent moved to first launch, the sheet no longer opens after sign-in alongside the recurring prompt in the normal flow; the overlay gate still covers a later unanswered case.",
+      "owner": "Repository owner",
+      "source": "ui-review pass 1+2",
+      "status": "fixed",
+      "verification_evidence": "consent-identity",
+      "waiver": null
+    },
+    {
+      "id": "U-4",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Switch touch target 60x42 pt, a storage failure when saving consent is silent, backdrop tap declines by design, disabled switch has no visual style, hint duplicates body text. Partly fixed: a failed consent save now shows a message, and disabled switches are dimmed; the touch target and the hint-duplicates-body items remain.",
+      "owner": "Repository owner",
+      "source": "ui-review pass 2",
+      "status": "accepted",
+      "verification_evidence": "",
+      "waiver": {
+        "owner": "Rajeshkumar Ganesan",
+        "reason": "Owner accepted for this work item; revisit if it matters in practice.",
+        "expires": "2027-02-25",
+        "reference": "User message 2026-11-25: 'All good' for the 6 open findings"
+      }
+    }
+  ]
+}

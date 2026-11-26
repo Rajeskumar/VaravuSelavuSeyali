@@ -84,6 +84,32 @@ class RoutingTests(unittest.TestCase):
         self.assertNotIn("web-accessibility", r["checks"])
         self.assertIn("native-device", r["manual"])
 
+    def test_analytics_privacy_boundary_is_high_risk_with_security_review(self):
+        for path in [
+            "varavu_selavu_mobile/src/core/analytics/crash.ts",
+            "varavu_selavu_mobile/src/features/shared/analytics/operations.ts",
+            "varavu_selavu_mobile/src/app/analytics.ts",
+            "varavu_selavu_mobile/firebaseConfig.js",
+            "varavu_selavu_mobile/firebase.json",
+            "varavu_selavu_mobile/withFirebasePrivacy.js",
+            "varavu_selavu_mobile/withSceneLifecycle.js",
+            "varavu_selavu_mobile/app.config.js",
+            "varavu_selavu_ui/src/analytics/client.ts",
+            "docs/analytics/catalog.v1.json",
+            "varavu_selavu_app/privacy_policy.html",
+        ]:
+            result = routing.classify([path])
+            self.assertEqual(result["risk"], "high", path)
+            self.assertIn("security-review", result["reviewers"], path)
+
+    def test_analytics_catalog_contract_maps_to_web_and_mobile_checks(self):
+        result = routing.classify(["docs/analytics/catalog.v1.json"])
+        self.assertTrue({"web", "mobile"} <= set(result["checks"]))
+        self.assertNotIn("unmapped-area-checks", result["manual"])
+        # a neighbouring unknown json is still unmapped
+        other = routing.classify(["docs/analytics/other.json"])
+        self.assertIn("unmapped-area-checks", other["manual"])
+
     def test_docs_are_trivial(self):
         for path in ["docs/features/example.md", "CHANGELOG.md", "README.md"]:
             r = routing.classify([path])

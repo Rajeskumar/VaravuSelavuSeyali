@@ -1,27 +1,19 @@
 import React from 'react';
 import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from 'react-error-boundary';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from '@expo-google-fonts/instrument-sans';
 import { AuthProvider } from '../auth/AuthContext';
+import SessionQueryProvider from '../auth/SessionQueryProvider';
 import { ThemeProvider, useAppTheme } from '../theme/ThemeContext';
 import { bootScreen, darkTheme } from '../theme/theme';
 import { fontMap } from '../theme/fonts';
 import { setAppConfig } from '../config/appConfig';
+import AnalyticsLifecycle from '../analytics/AnalyticsLifecycle';
+import { crashReporter } from '../analytics';
 import RootNavigator from './RootNavigator';
 import { CoreAppProps } from './types';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  },
-});
 
 function ErrorFallback({ error }: any) {
   return (
@@ -46,8 +38,8 @@ function ThemedStatusBarAndNav(props: CoreAppProps) {
 }
 
 /**
- * The reusable app root: error boundary, data client, safe area, theme, auth, status bar and the
- * navigator. Everything product-specific arrives through props (see CoreAppProps).
+ * The reusable app root: error boundary, safe area, theme, auth, the per-session data client, status bar and
+ * the navigator. Everything product-specific arrives through props (see CoreAppProps).
  */
 export default function CoreApp(props: CoreAppProps) {
   // Core reads the config lazily; it must be registered before anything below renders.
@@ -63,16 +55,18 @@ export default function CoreApp(props: CoreAppProps) {
   }
 
   return (
-    <ErrorBoundary FallbackComponent={ErrorFallback}>
-      <QueryClientProvider client={queryClient}>
-        <SafeAreaProvider>
-          <ThemeProvider>
-            <AuthProvider>
+    <ErrorBoundary FallbackComponent={ErrorFallback} onError={(error) => crashReporter.recordError(error)}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            {/* One data client per signed-in session; replaced on explicit and forced sign-out. */}
+            <SessionQueryProvider>
+              <AnalyticsLifecycle />
               <ThemedStatusBarAndNav {...props} />
-            </AuthProvider>
-          </ThemeProvider>
-        </SafeAreaProvider>
-      </QueryClientProvider>
+            </SessionQueryProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }

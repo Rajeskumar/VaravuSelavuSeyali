@@ -29,3 +29,7 @@ qa/mobile/.tools/
 qa/mobile/.build/
 qa/mobile/reports/
 qa/mobile/.build-*.out
+
+# Firebase config files are per-environment build inputs (EAS file secrets); never commit them
+GoogleService-Info.plist
+google-services.json

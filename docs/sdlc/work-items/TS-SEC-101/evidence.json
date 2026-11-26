@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "checks",
+      "status": "passed",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator (throwaway, run.sh); isolated local Postgres + API; synthetic users; Android not run",
+      "command_or_method": "make check (fast profile) 8/8 on the final tree; mobile Jest 620 tests; backend pytest; web Jest",
+      "source": ".sdlc-logs/fast-sdlc1795647891902212000",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006",
+        "AC-007"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "session-query-cache",
+      "status": "passed",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator (throwaway, run.sh); isolated local Postgres + API; synthetic users; Android not run",
+      "command_or_method": "jest SessionQueryProvider.test.tsx (copied from template) + CoreApp.test.tsx (real AuthProvider; explicit and forced 401 replace the client; failed before the fix: client never replaced)",
+      "source": "varavu_selavu_mobile/src/core/auth/SessionQueryProvider*.tsx, src/core/navigation/CoreApp.test.tsx",
+      "acceptance_criteria": [
+        "AC-001"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "token-write-guard",
+      "status": "passed",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator (throwaway, run.sh); isolated local Postgres + API; synthetic users; Android not run",
+      "command_or_method": "jest session.test.ts, SecurityScreen.test.tsx, apiFetch.test.ts, AuthContext.session.test.tsx: refresh is not a new session; same-user re-login is; sign-out between check and the two writes leaves no tokens; mutation-checked (removing the in-queue owner check or the signIn advance fails a test); forced sign-out still skips cleanups; storage keys unchanged; stalled-task budget (session.test.ts) and stale-401 force-logout guard (apiFetch.test.ts) added, both failed first",
+      "source": "varavu_selavu_mobile/src/core/auth/*.test.*, src/core/api/apiFetch.test.ts",
+      "acceptance_criteria": [
+        "AC-002",
+        "AC-004"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "late-export-guard",
+      "status": "passed",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator (throwaway, run.sh); isolated local Postgres + API; synthetic users; Android not run",
+      "command_or_method": "jest ProfileScreen.export.test.tsx, GroupSettingsSheet.export.test.tsx: CSV, JSON, group CSV and invite link dropped after the session changed; shared once when unchanged; failed before the fix; invite-email and mute handlers also guarded (failed first)",
+      "source": "varavu_selavu_mobile/src/features/{account,groups}",
+      "acceptance_criteria": [
+        "AC-003"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "native-e2e",
+      "status": "passed",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator (throwaway, run.sh); isolated local Postgres + API; synthetic users; Android not run",
+      "command_or_method": "make mobile-e2e-build-ios (rebuilt on the final tree, including aiConsent, push, web and queue changes); make mobile-e2e-ios SUITE=regression FLOW=account-switch: PASS attempt 1 in 128.9s. Not run on Android. The flow was not run against pre-fix code (no failing-first native run).",
+      "source": "qa/mobile/reports/ios-112517014939534/summary.json",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-004"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "docs",
+      "status": "passed",
+      "environment": "Doc review",
+      "command_or_method": "CHANGELOG, docs/mobile/CORE_BOUNDARY.md, varavu_selavu_mobile/AGENTS.md, qa/mobile/README.md updated; make check framework-check",
+      "source": "git diff",
+      "acceptance_criteria": [
+        "AC-004"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "code-review",
+      "status": "passed",
+      "environment": "Subagent code-reviewer, read-only, once",
+      "command_or_method": "Two read-only passes, one each per scope: mobile session guard (no P0/P2, web-parity P1 since fixed); then web provider, aiConsent and backend (P2: mounted screens kept the old client, fixed with a keyed remount plus test; P3s fixed or recorded)",
+      "source": "reviewer report 2026-11-25",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "environment": "Subagent security-reviewer, read-only, once",
+      "command_or_method": "Two read-only passes: mobile session guard (no P0/P1; two pre-existing P2s since fixed) and the S-1..S-3 fixes (P2: de-registration primitive without rate limit or token validation, fixed with validation + 60/hour + tests)",
+      "source": "reviewer report 2026-11-25",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-005",
+        "AC-006",
+        "AC-007"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "ui-review",
+      "status": "passed",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator for native E2E; isolated local Postgres + API; backend pytest on SQLite; synthetic users; Android not run",
+      "command_or_method": "Subagent ui-reviewer on the three mobile screens: PASS, no visual change, P3s recorded (not re-run: no UI change since)",
+      "source": "reviewer report 2026-11-25",
+      "acceptance_criteria": [
+        "AC-003"
+      ],
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00"
+    },
+    {
+      "id": "web-session-cache",
+      "status": "passed",
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator for native E2E; isolated local Postgres + API; backend pytest on SQLite; synthetic users; Android not run",
+      "command_or_method": "jest (react-scripts) src/context/SessionQueryProvider.test.tsx (6 tests) + src/App.session.test.tsx: new empty client on logout/forced logout/account switch, late save stays in the old client, signed-out to signed-in keeps it, a mounted useQuery screen remounts into the new client, StrictMode does not clear or double-fetch; mutation-checked (no remount, unmount-cleanup each fail a test)",
+      "source": "varavu_selavu_ui/src/context, src/App.tsx",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00",
+      "acceptance_criteria": [
+        "AC-005"
+      ]
+    },
+    {
+      "id": "ai-consent-owner",
+      "status": "passed",
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator for native E2E; isolated local Postgres + API; backend pytest on SQLite; synthetic users; Android not run",
+      "command_or_method": "jest src/features/ask/utils/aiConsent.test.ts (14 tests): another account asked after a forced sign-out, open prompt cannot consent the next account, legacy bare 'granted' asked again, no account means no prompt, decline does not delete another account's consent, clear vs in-flight read race (fails before the generation fix); mutation-checked",
+      "source": "varavu_selavu_mobile/src/features/ask/utils/aiConsent*.ts",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00",
+      "acceptance_criteria": [
+        "AC-006"
+      ]
+    },
+    {
+      "id": "push-device-takeover",
+      "status": "passed",
+      "snapshot": "34f67f547cec46a4f83aef9d935f2d6004dc5ee28e34b8f760bb831a310c4015",
+      "environment": "Local macOS (Darwin 25.6, Xcode 27); iOS 27.0 Simulator for native E2E; isolated local Postgres + API; backend pytest on SQLite; synthetic users; Android not run",
+      "command_or_method": "pytest tests/test_devices_api.py (20 tests): registering moves the token from the previous account, other tokens untouched, malformed tokens and unknown platforms 422, both Expo prefixes accepted, 429 after 60/hour; mutation-checked (takeover removed fails). No migration.",
+      "source": "varavu_selavu_app/varavu_selavu_service/services/notification_service.py, api/devices_routes.py, models/api_models.py",
+      "recorded_at": "2026-11-25T23:06:46.593474+00:00",
+      "acceptance_criteria": [
+        "AC-007"
+      ]
+    }
+  ]
+}

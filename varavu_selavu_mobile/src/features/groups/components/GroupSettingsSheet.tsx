@@ -24,6 +24,7 @@ import { SplitEditorValue } from './SplitEditor';
 import { showToast } from '../../../core/ui/Toast';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { sessionGuard } from '../../../core/auth/session';
 import { Ionicons } from '@expo/vector-icons';
 
 interface GroupSettingsSheetProps {
@@ -127,12 +128,14 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
 
   const shareInviteLink = async (member: MemberDTO) => {
     setMemberBusy(member.member_id);
+    const stillSignedIn = sessionGuard();
     try {
       const inv = await createInvite(group.group_id, member.member_id);
+      if (!stillSignedIn()) return; // signed out meanwhile: do not show this account's link to the next one
       refreshGroup();
       await Share.share({ message: inv.url });
     } catch (e) {
-      showToast({ message: e instanceof ApiError ? e.message : 'Failed to create invite link', type: 'error' });
+      if (stillSignedIn()) showToast({ message: e instanceof ApiError ? e.message : 'Failed to create invite link', type: 'error' });
     } finally {
       setMemberBusy(null);
     }
@@ -142,14 +145,16 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
     const email = inviteEmail.trim();
     if (!email) return;
     setMemberBusy(member.member_id);
+    const stillSignedIn = sessionGuard();
     try {
       await createInvite(group.group_id, member.member_id, email);
+      if (!stillSignedIn()) return;
       showToast({ message: `Invite emailed to ${email}`, type: 'success' });
       setInviteFor(null);
       setInviteEmail('');
       refreshGroup(); // the seat now shows "Invite sent"
     } catch (e) {
-      showToast({ message: e instanceof ApiError ? e.message : 'Failed to send invite', type: 'error' });
+      if (stillSignedIn()) showToast({ message: e instanceof ApiError ? e.message : 'Failed to send invite', type: 'error' });
     } finally {
       setMemberBusy(null);
     }
@@ -167,20 +172,24 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
 
   const handleToggleMuted = async (value: boolean) => {
     setMuted(value);
+    const stillSignedIn = sessionGuard();
     try {
       await updateNotificationPreferences(group.group_id, { muted: value });
     } catch (e) {
+      if (!stillSignedIn()) return;
       setMuted(!value);
       showToast({ message: 'Failed to update notification preference', type: 'error' });
     }
   };
 
   const handleExport = async () => {
+    const stillSignedIn = sessionGuard();
     try {
       const csv = await fetchGroupExportCsv(group.group_id);
+      if (!stillSignedIn()) return;
       await Share.share({ message: csv, title: `${group.name} export.csv` });
     } catch (e) {
-      showToast({ message: e instanceof ApiError ? e.message : 'Failed to export group', type: 'error' });
+      if (stillSignedIn()) showToast({ message: e instanceof ApiError ? e.message : 'Failed to export group', type: 'error' });
     }
   };
 

@@ -35,35 +35,47 @@ function withSceneManifest(config) {
   });
 }
 
+/**
+ * Pure AppDelegate.swift transform (exported for tests). Other plugins insert generated blocks just above
+ * `factory.startReactNative(` (for example @react-native-firebase/app adds `FirebaseApp.configure()`); those
+ * run before this one, so they are lifted out, the window/React Native start-up block is removed, and they
+ * are put back, otherwise the SDK would never be configured.
+ */
+function transformAppDelegate(source) {
+  let src = source;
+  if (!src.includes('ExpoReactNativeFactoryProvider')) {
+    const decl = 'class AppDelegate: ExpoAppDelegate';
+    if (!src.includes(decl + ' {')) {
+      throw new Error(`withSceneLifecycle: couldn't find "${decl} {" in AppDelegate.swift; Expo's template changed`);
+    }
+    src = src.replace(decl + ' {', decl + ', ExpoReactNativeFactoryProvider {');
+  }
+
+  // The template's window creation + startReactNative block. Under the scene life cycle the
+  // scene delegate creates the window, so leaving this in would start React Native twice.
+  const windowBlock = /\n#if os\(iOS\) \|\| os\(tvOS\)\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\n\s*factory\.startReactNative\([\s\S]*?\)\n#endif\n/;
+  const generated = /[ \t]*\/\/ @generated begin [^\n]*\n[\s\S]*?\/\/ @generated end [^\n]*\n/g;
+  const kept = [];
+  const withoutGenerated = src.replace(generated, (block) => { kept.push(block); return ''; });
+  if (windowBlock.test(withoutGenerated)) {
+    src = withoutGenerated.replace(
+      windowBlock,
+      '\n' + kept.join('') +
+        '    // The window is created and React Native is started by ExpoAppSceneDelegate under the\n' +
+        '    // scene-based life cycle (required by the iOS 27 SDK). See withSceneLifecycle.js.\n',
+    );
+  } else if (src.includes('factory.startReactNative(')) {
+    throw new Error("withSceneLifecycle: AppDelegate still starts React Native but the expected block wasn't found; Expo's template changed");
+  }
+  return src;
+}
+
 function withSceneAppDelegate(config) {
   return withAppDelegate(config, (config) => {
     if (config.modResults.language !== 'swift') {
       throw new Error('withSceneLifecycle: expected a Swift AppDelegate');
     }
-    let src = config.modResults.contents;
-
-    if (!src.includes('ExpoReactNativeFactoryProvider')) {
-      const decl = 'class AppDelegate: ExpoAppDelegate';
-      if (!src.includes(decl + ' {')) {
-        throw new Error(`withSceneLifecycle: couldn't find "${decl} {" in AppDelegate.swift; Expo's template changed`);
-      }
-      src = src.replace(decl + ' {', decl + ', ExpoReactNativeFactoryProvider {');
-    }
-
-    // The template's window creation + startReactNative block. Under the scene life cycle the
-    // scene delegate creates the window, so leaving this in would start React Native twice.
-    const windowBlock = /\n#if os\(iOS\) \|\| os\(tvOS\)\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\n\s*factory\.startReactNative\([\s\S]*?\)\n#endif\n/;
-    if (windowBlock.test(src)) {
-      src = src.replace(
-        windowBlock,
-        '\n    // The window is created and React Native is started by ExpoAppSceneDelegate under the\n' +
-          '    // scene-based life cycle (required by the iOS 27 SDK). See withSceneLifecycle.js.\n',
-      );
-    } else if (src.includes('factory.startReactNative(')) {
-      throw new Error("withSceneLifecycle: AppDelegate still starts React Native but the expected block wasn't found; Expo's template changed");
-    }
-
-    config.modResults.contents = src;
+    config.modResults.contents = transformAppDelegate(config.modResults.contents);
     return config;
   });
 }
@@ -71,3 +83,4 @@ function withSceneAppDelegate(config) {
 module.exports = function withSceneLifecycle(config) {
   return withSceneAppDelegate(withSceneManifest(config));
 };
+module.exports.transformAppDelegate = transformAppDelegate;

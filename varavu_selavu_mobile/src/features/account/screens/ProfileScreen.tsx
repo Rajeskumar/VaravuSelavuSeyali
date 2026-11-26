@@ -1,3 +1,4 @@
+import { isAnalyticsAvailable } from '../../../core/analytics';
 import { getConfig } from '../../shared/featureFlags';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Linking, Share } from 'react-native';
@@ -17,6 +18,7 @@ import { listBudgets } from '../../budgets/api/budgets';
 import { getProfile, updateProfile } from '../api/profile';
 import { fetchMyDataJson } from '../../../core/auth/accountApi';
 import { useAuth } from '../../../core/auth/AuthContext';
+import { sessionGuard } from '../../../core/auth/session';
 import * as Haptics from 'expo-haptics';
 import { apiFetch } from '../../../core/api/apiFetch';
 import { listMyCards } from '../../cards/api/cards';
@@ -55,13 +57,15 @@ export default function ProfileScreen({ navigation }: any) {
   const exportData = async () => {
     if (exporting) return;
     setExporting(true);
+    const stillSignedIn = sessionGuard();
     try {
       const res = await apiFetch('/api/v1/expenses/export.csv', { method: 'GET' });
       if (!res.ok) throw new Error('export failed');
       const csv = await res.text();
+      if (!stillSignedIn()) return; // signed out meanwhile: this is the previous account's data
       await Share.share({ title: 'trackspense_expenses.csv', message: csv });
     } catch (e) {
-      Alert.alert('Export failed', 'Could not export your expenses. Try again in a moment.');
+      if (stillSignedIn()) Alert.alert('Export failed', 'Could not export your expenses. Try again in a moment.');
     } finally {
       setExporting(false);
     }
@@ -72,11 +76,13 @@ export default function ProfileScreen({ navigation }: any) {
   const downloadAll = async () => {
     if (downloading) return;
     setDownloading(true);
+    const stillSignedIn = sessionGuard();
     try {
       const json = await fetchMyDataJson();
+      if (!stillSignedIn()) return;
       await Share.share({ title: 'trackspense_my_data.json', message: json });
     } catch (e: any) {
-      Alert.alert('Download failed', e?.message ?? 'Could not export your data. Try again in a moment.');
+      if (stillSignedIn()) Alert.alert('Download failed', e?.message ?? 'Could not export your data. Try again in a moment.');
     } finally {
       setDownloading(false);
     }
@@ -202,6 +208,7 @@ export default function ProfileScreen({ navigation }: any) {
     { name: 'Download all my data', hint: downloading ? 'Preparing…' : 'JSON', onPress: downloadAll },
     ...(featureFlags?.mcp_enabled && featureFlags.mcp_management_url ? [{ name: 'Connected assistants', hint: 'Opens browser', onPress: () => { void Linking.openURL(featureFlags.mcp_management_url!).catch(() => Alert.alert('Unable to open browser')); } }] : []),
     { name: 'Password & security', hint: 'Sign-ins', onPress: () => navigation.navigate('Security') },
+    ...(isAnalyticsAvailable() ? [{ name: 'Privacy', hint: 'Analytics · crash reports', onPress: () => navigation.navigate('Privacy') }] : []),
     { name: 'Feedback', onPress: () => navigation.navigate('Feedback') },
     { name: 'About', onPress: () => navigation.navigate('About') },
   ];

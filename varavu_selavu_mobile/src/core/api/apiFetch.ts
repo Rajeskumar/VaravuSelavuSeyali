@@ -13,6 +13,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { getApiBaseUrl } from './baseUrl';
 import { STORAGE_KEYS } from '../auth/storageKeys';
 import { refresh as refreshToken } from '../auth/authApi';
+import { runTokenWrite, sessionGuard } from '../auth/session';
 
 // Logout callback — registered by AuthContext on mount
 let _logoutCallback: (() => void) | null = null;
@@ -38,12 +39,16 @@ async function attemptRefresh(): Promise<string | null> {
                 return null;
             }
             const result = await refreshToken(storedRefreshToken);
-            if (await SecureStore.getItemAsync(STORAGE_KEYS.refreshToken) !== storedRefreshToken) throw new RequestError('Your account changed. Please try again.');
-            // Persist the new tokens
-            await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, result.access_token);
-            if (result.refresh_token) {
-                await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, result.refresh_token);
-            }
+            // Check and write inside the token-write queue: a sign-out or sign-in queued meanwhile runs before or
+            // after this, never between the check and the two writes.
+            await runTokenWrite(async () => {
+                if (await SecureStore.getItemAsync(STORAGE_KEYS.refreshToken) !== storedRefreshToken) throw new RequestError('Your account changed. Please try again.');
+                // Persist the new tokens
+                await SecureStore.setItemAsync(STORAGE_KEYS.accessToken, result.access_token);
+                if (result.refresh_token) {
+                    await SecureStore.setItemAsync(STORAGE_KEYS.refreshToken, result.refresh_token);
+                }
+            });
             return result.access_token;
         } catch (error) {
             if (error instanceof RequestError && [401, 403].includes(error.status || 0)) return null;
@@ -85,6 +90,8 @@ export async function apiFetch(
     options: RequestInit = {},
     timeoutMs = requestTimeout(path),
 ): Promise<Response> {
+    // The sign-in session this request belongs to; a 401 that arrives after it ended must not end the next one.
+    const sameSession = sessionGuard();
     const token = await SecureStore.getItemAsync(STORAGE_KEYS.accessToken);
     const owner = await SecureStore.getItemAsync(STORAGE_KEYS.userEmail);
 
@@ -118,7 +125,7 @@ export async function apiFetch(
 
         // If still 401 after refresh (or refresh failed), force logout
         if (response.status === 401 || !newToken) {
-            if (await SecureStore.getItemAsync(STORAGE_KEYS.userEmail) !== owner) throw new RequestError('Your account changed. Please try again.');
+            if (await SecureStore.getItemAsync(STORAGE_KEYS.userEmail) !== owner || !sameSession()) throw new RequestError('Your account changed. Please try again.');
             forceLogout();
             throw new RequestError('Your session ended. Sign in again to continue.', false, 401);
         }

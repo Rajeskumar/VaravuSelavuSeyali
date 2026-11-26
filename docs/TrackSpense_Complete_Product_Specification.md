@@ -725,7 +725,7 @@ Migrations are applied automatically before every backend deploy by the `migrate
 | GET | `/groups/{group_id}/notification_preferences` | Get my notification preferences for this group | Bearer / cookie | GROUPS | — |
 | PUT | `/groups/{group_id}/notification_preferences` | Update my notification preferences for this group | Bearer / cookie | GROUPS | — |
 | GET | `/groups/{group_id}/export.csv` | Export group expenses + settlements as CSV | Bearer / cookie | GROUPS | — |
-| POST | `/devices/register` | Register (or refresh) an Expo push token | Bearer / cookie | GROUPS | — |
+| POST | `/devices/register` | Register (or refresh) an Expo push token; the token moves to the caller (other accounts' rows for the same token are removed); token must match `Expo(nent)PushToken[...]`, platform `ios`/`android`, 60/hour per client | Bearer / cookie | GROUPS | — |
 | DELETE | `/devices/register` | Unregister an Expo push token (e.g. on logout) | Bearer / cookie | GROUPS | — |
 
 ### 8.9 Recurring

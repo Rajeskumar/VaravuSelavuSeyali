@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "S-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Web has the same cache bug: varavu_selavu_ui/src/App.tsx:429 holds a module-level QueryClient never cleared on logout or forced logout; keys like ['groups', false], ['cards-mine'], ['budgets', ...] carry no user. Outside the approved mobile scope, not changed. FIXED: web SessionQueryProvider.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "web-session-cache",
+      "waiver": null
+    },
+    {
+      "id": "S-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "AI consent (features/ask/utils/aiConsent.ts) survives a forced (401) sign-out because cleanups are skipped, so the next account on the device is not asked before data goes to the AI provider (chat has no server backstop). Reported, not fixed (owner rule: forced sign-out skips cleanups). Suggested fix: store the owning account with the consent. FIXED: consent stored per account (granted:<email>).",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "ai-consent-owner",
+      "waiver": null
+    },
+    {
+      "id": "S-3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Push registration of the old account survives a forced sign-out (unregister runs only on explicit sign-out), so A's notifications can reach the device while B is signed in. Pre-existing. Suggested: best-effort unregister on forced sign-out, or dedupe tokens across users server-side. FIXED server-side: registering a token removes other accounts' rows (see S-13 for the residual).",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "push-device-takeover",
+      "waiver": null
+    },
+    {
+      "id": "S-4",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Explicit signOut advances the session before its steps; an unwrapped SecureStore delete failure would leave the user signed in with guarded actions silently dropped. Narrow; authApi.logout also has no timeout (pre-existing).",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review, security-review, ui-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-5",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "A SecureStore call that never settles would block later queued token writes (sign-in/out). Needs an OS-level stall; consider a bounded wait. FIXED: each queued task waits for a stalled predecessor at most 10 s.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "token-write-guard",
+      "waiver": null
+    },
+    {
+      "id": "S-6",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Refresh single-flight is not session-aware (pre-existing): B can join A's in-flight refresh that resolves null and be force-signed-out right after login; a refresh racing a password change can do the same. Suggested: retry once when the stored refresh token changed.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-7",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "apiFetch forceLogout checks the stored email, not the session epoch; capturing sessionGuard() at the start of apiFetch would close a very unlikely same-user re-login race. FIXED: apiFetch skips the forced logout when the session changed.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "token-write-guard",
+      "waiver": null
+    },
+    {
+      "id": "S-8",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Other GroupSettingsSheet handlers (sendInviteEmail, handleToggleMuted) and expense-draft autosave are not session-guarded; they can toast or write in the window before unmount. FIXED for sendInviteEmail and handleToggleMuted; expense-draft autosave not guarded (left open).",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "ui-review, security-review",
+      "status": "fixed",
+      "verification_evidence": "late-export-guard",
+      "waiver": null
+    },
+    {
+      "id": "S-9",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "A password change that succeeded on the server but was dropped by the guard gives no hint on the login screen.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "ui-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-10",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "E2E flow risks: tapping A's group may dirty the draft before Close (passed on iOS); GROUP_NAME is used inside a regex; Android not run; flow not run against pre-fix code. UPDATE: re-run on the final build, iOS PASS; Android not run; not run against pre-fix code.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-11",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Tests did not catch removal of the signIn advanceSession or the in-queue refresh owner check. Added two tests, mutation-checked.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "token-write-guard",
+      "waiver": null
+    },
+    {
+      "id": "S-12",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Invite-link error toast was not guarded after the session changed. Fixed.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review, ui-review",
+      "status": "fixed",
+      "verification_evidence": "late-export-guard",
+      "waiver": null
+    },
+    {
+      "id": "S-13",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Residual of S-3: if the next user on the device never registers push (permission denied), the previous account's row stays until someone registers that token. No client unregister on forced sign-out (the token is already invalid).",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "security-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-14",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Registering takes the token from other accounts (needed for S-3). It needs the victim's Expo token (a bearer secret no endpoint returns); now validated and limited to 60/hour. device_tokens has no unique index on expo_push_token, so two concurrent registrations can leave both rows until the next register: follow-up migration with dedupe + unique index (needs owner approval; not done).",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "security-review, code-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-15",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Mobile core/auth/SessionQueryProvider (and the template's copy) has the same non-rebinding shape as the web one fixed here. Only reachable by a direct account swap; mobile always passes through signed-out, which unmounts the signed-in tree. Consider a keyed remount in both.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-16",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "AI consent: the check and the network call are not atomic across a concurrent account switch (milliseconds); signIn writes user_email last; two dialogs can stack if B asks while A's prompt is open; the declined message is misleading if the owner read fails; no owner cache (one Keychain read per check).",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "security-review, code-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-17",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Web: vs_user is set only when the login response has an email, so a cookie session without it keeps the client across logins; web utils/aiConsent keys per vs_user without lower-casing.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "open",
+      "verification_evidence": "pending: owner decision",
+      "waiver": null
+    },
+    {
+      "id": "S-18",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Registering a token de-registers other accounts, and the route had no rate limit or token validation. Fixed: token format and platform validated, 60/hour.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "push-device-takeover",
+      "waiver": null
+    },
+    {
+      "id": "S-19",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Web provider: screens mounted across a client swap kept the old client (useQuery never rebinds), so another-tab account switches stayed stale. Fixed with a keyed remount.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "web-session-cache",
+      "waiver": null
+    },
+    {
+      "id": "S-20",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Web provider cleared the client in an unmount cleanup, which StrictMode runs against the live first client (double fetch in development). Fixed: cleared at the swap site.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "web-session-cache",
+      "waiver": null
+    },
+    {
+      "id": "S-21",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "aiConsent: a read in flight when clearAiConsent ran could restore the cleared choice. Fixed with a generation counter.",
+      "owner": "Claude Code (TS-SEC-101)",
+      "source": "code-review",
+      "status": "fixed",
+      "verification_evidence": "ai-consent-owner",
+      "waiver": null
+    }
+  ]
+}

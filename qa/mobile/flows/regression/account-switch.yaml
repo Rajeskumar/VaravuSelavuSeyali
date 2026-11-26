@@ -1,9 +1,12 @@
 # SCENARIO AC-005 (JM-01/JM-07) regression: signing out and in as another user leaks nothing between accounts
 # LOGINS: 2
-# Preconditions: user A (USER_*) with one saved expense; second verified user B (B_EMAIL/B_PASSWORD) from account-switch.seed.py.
+# Preconditions: user A (USER_*) with one saved expense and one group (GROUP_NAME); second verified user B (B_EMAIL/B_PASSWORD)
+#   from account-switch.seed.py.
 # Native interactions: A signs in, starts an expense (an unsaved draft is persisted; a relaunch proves it), closes the
-#   sheet, signs out from Profile; B signs in.
-# Assertions (UI): B's Expenses list does not show A's expense and B's Add sheet shows no restored draft and no text of A's.
+#   sheet, signs out from Profile; B signs in. A also opens the "Who was this for?" picker so A's group list is cached by a
+#   query key that carries no user (TS-SEC-101: one query client per signed-in session).
+# Assertions (UI): B's Expenses list does not show A's expense, B's Add sheet shows no restored draft and no text of A's,
+#   and B's "Who was this for?" picker does not list A's group (cached data from the previous account).
 #   Persisted (account-switch.verify.py): A still has exactly one expense, nothing was saved from A's draft, B has none.
 # Reset/cleanup: none (own users, disposable DB). Platforms: iOS, Android.
 appId: com.cerebroos.trackspense
@@ -32,6 +35,10 @@ tags:
     visible: "Your unsaved expense was restored.*"
     timeout: 30000
 - assertVisible: ".*draftA.*"
+# The group list is fetched (and cached) when the picker opens; A's group must be there so B's check below means something.
+- tapOn: "Just me"
+- assertVisible: ".*${GROUP_NAME}.*"
+- tapOn: ".*${GROUP_NAME}.*"
 - tapOn: "Close"
 # The Account avatar is in the Home header.
 - tapOn:
@@ -63,3 +70,8 @@ tags:
 - runFlow: ../../subflows/settle.yaml
 - assertNotVisible: "Your unsaved expense was restored.*"
 - assertNotVisible: ".*draftA.*"
+# B has no groups, so the picker may not offer "Just me" at all; either way A's group must not appear.
+- tapOn:
+    text: "Just me"
+    optional: true
+- assertNotVisible: ".*${GROUP_NAME}.*"

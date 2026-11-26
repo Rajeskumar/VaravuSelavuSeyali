@@ -787,8 +787,10 @@ class BalanceResponse(BaseModel):
 # ---------------------- Devices (TS-GRP-110) ---------------------- #
 
 class RegisterDeviceRequest(BaseModel):
-    expo_push_token: str
-    platform: str  # ios|android
+    # Expo's own format. Registering a token takes the device over from any other account that still holds it, so it
+    # must look like a real token (and fit the column) rather than any string.
+    expo_push_token: str = Field(pattern=r"^Expo(nent)?PushToken\[[A-Za-z0-9_-]{1,200}\]$", max_length=255)
+    platform: Literal["ios", "android"]
 
 
 class RegisterDeviceResponse(BaseModel):

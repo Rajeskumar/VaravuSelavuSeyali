@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "TS-GA4-004",
+  "title": "Evaluate Firebase Performance Monitoring for the mobile apps",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "github-issue:#56"
+  ],
+  "notes": "Backlog card created 2026-11-25 with the owner's approval; no plan yet. Risk shown is a placeholder: set it at Plan (expected high)."
+}

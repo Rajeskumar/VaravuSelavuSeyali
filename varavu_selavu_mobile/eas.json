@@ -1,0 +1,17 @@
+{
+  "build": {
+    "qa": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_ANALYTICS_ENV": "qa"
+      }
+    },
+    "production": {
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_ANALYTICS_ENV": "production"
+      }
+    }
+  }
+}
