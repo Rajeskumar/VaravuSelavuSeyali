@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "id": "TS-FIX-102",
+  "title": "Receipts split by total only; items track original and discounted price; totals must match",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "plan",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "A group receipt is split on its total by Equal (default), Exact or Shares; stored shares equal the amount exactly. Manual group expenses keep all split types."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Item assignments are gone from web, mobile and server; requests sending them are rejected with a clear update message."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "Each line records original, discount and paid price; discounts are never subtracted again; coupons and whole-receipt discounts are folded into paid prices; no negative lines."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "Paid lines plus tax plus tip must match the amount within 0.02 on every receipt save path; scanned tax and tip are kept."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "Older item-split and old-discount-format receipts keep their saved money unless the user changes it, and nothing is discounted twice."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "Returns and refund lines are flagged for review, and price history uses paid prices."
+    }
+  ],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [
+    "docs/sdlc/work-items/TS-FIX-101/work-item.json"
+  ],
+  "notes": ""
+}
