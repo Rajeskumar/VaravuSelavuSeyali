@@ -28,9 +28,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Token deletes go through the shared write queue so a password change or refresh still holding two writes
 // cannot put tokens back after they are gone.
 const clearStoredSession = () => runTokenWrite(async () => {
-  await SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
-  await SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
-  await SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
+  try {
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.accessToken);
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.refreshToken);
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.userEmail);
+  } finally {
+    // End the session again so work started while sign-out waited on cleanups/network ends with it,
+    // and any token write queued behind the deletes is refused.
+    advanceSession();
+  }
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {

@@ -56,6 +56,8 @@ describe('writeTokensIfSession', () => {
       await SecureStore.deleteItemAsync('access_token');
       await SecureStore.deleteItemAsync('refresh_token');
     });
+    // Give the deletes every chance to run while the write is held: only the queue may stop them.
+    await new Promise((r) => setTimeout(r, 0));
     release();
     await Promise.all([write, signOut]);
     expect(mockData.size).toBe(0);

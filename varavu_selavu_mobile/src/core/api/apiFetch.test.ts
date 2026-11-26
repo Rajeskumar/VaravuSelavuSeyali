@@ -82,6 +82,8 @@ test('sign-out between the refresh check and its token writes leaves no tokens b
     await SecureStore.deleteItemAsync('refresh_token');
     await SecureStore.deleteItemAsync('user_email');
   });
+  // Give the deletes every chance to run while the write is held: only the queue may stop them.
+  await new Promise((r) => setTimeout(r, 0));
   release(); mockGate = null;
   await Promise.all([call, signOut]);
   expect(await SecureStore.getItemAsync('access_token')).toBeNull();
