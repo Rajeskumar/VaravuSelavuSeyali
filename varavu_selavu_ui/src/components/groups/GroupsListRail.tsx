@@ -4,6 +4,7 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
+import ButtonBase from '@mui/material/ButtonBase';
 import AddIcon from '@mui/icons-material/Add';
 import { useTheme } from '@mui/material/styles';
 import GroupAvatar from './GroupAvatar';
@@ -111,10 +112,17 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
                 ? theme.palette.error.main
                 : theme.palette.text.secondary;
           return (
-            <Box
+            // A real button (not a clickable Box): keyboard users can reach and open each group,
+            // and the scrolling list then holds focusable content (axe scrollable-region-focusable).
+            <ButtonBase
               key={g.group_id}
               onClick={() => onSelect(g.group_id)}
+              aria-current={selected ? 'page' : undefined}
+              focusRipple
               sx={{
+                width: '100%',
+                justifyContent: 'flex-start',
+                textAlign: 'left',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.25,
@@ -124,6 +132,7 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
                 backgroundColor: selected ? theme.palette.action.selected : 'transparent',
                 borderLeft: `3px solid ${selected ? theme.palette.primary.main : 'transparent'}`,
                 '&:hover': { backgroundColor: selected ? theme.palette.action.selected : theme.palette.action.hover },
+                '&.Mui-focusVisible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
               }}
             >
               <GroupAvatar seed={g.group_id} groupType={g.group_type} size={36} />
@@ -140,7 +149,7 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
                   {balanceLabel}
                 </Typography>
               </Box>
-            </Box>
+            </ButtonBase>
           );
         })}
       </Box>

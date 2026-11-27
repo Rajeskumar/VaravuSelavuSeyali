@@ -120,7 +120,7 @@ test.describe('group expense changes and settlements (UI) @regression @critical'
       await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
       await expect.poll(async () => (await primaryApi.listGroupExpenses(group.id)).length).toBe(0);
 
-      await page.getByRole('button', { name: 'Undo' }).click();
+      await page.getByRole('button', { name: 'Undo', exact: true }).click();
       await expect(page.getByText('Expense restored')).toBeVisible({ timeout: 15_000 });
       const restored = await storedExpense(primaryApi, group.id, description);
       expect(await primaryApi.listGroupExpenses(group.id)).toHaveLength(1);
