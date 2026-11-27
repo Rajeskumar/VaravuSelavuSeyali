@@ -15,7 +15,7 @@ export default async function globalTeardown(): Promise<void> {
   const up = await healthz(env.API_BASE_URL);
   if (!up) return;
 
-  for (const persona of Object.values(QA_USERS)) {
+  for (const [label, persona] of Object.entries(QA_USERS)) {
     const storageStatePath = path.resolve(__dirname, '..', '..', persona.storageStatePath);
     if (!fs.existsSync(storageStatePath)) continue; // `setup` project never ran (e.g. api-only run)
     try {
@@ -23,7 +23,8 @@ export default async function globalTeardown(): Promise<void> {
       await sweepQaData(api);
       await api.dispose();
     } catch (e) {
-      console.warn(`[global.teardown] could not clean up for ${persona.email}: ${e}`);
+      const errType = e instanceof Error ? e.name : 'Error';
+      console.warn(`[global.teardown] could not clean up for persona=${label} (${errType})`);
     }
   }
 }

@@ -453,13 +453,20 @@ class InsightsAggregationService:
     def _dual_write_canonical_item(self, insight: ItemInsight, normalized_name: str, user_email: str) -> None:
         try:
             result = self._resolver.resolve(normalized_name, "item", user_email)
-        except Exception:
+        except Exception as exc:
             # Never let entity resolution break an insight write — the
             # string-keyed side (still the only side any read path uses) must
             # always succeed regardless of this best-effort FK population.
-            logger.exception(
-                "Entity resolution failed for item '%s' (user=%s); leaving canonical_item_id unset",
-                normalized_name, user_email,
+            from varavu_selavu_service.core.observability import log_event, safe_error_type
+            log_event(
+                logger,
+                logging.ERROR,
+                "entity_dual_write_failed",
+                exc_info=exc,
+                component="entity_resolution",
+                entity_type="item",
+                outcome="failed",
+                error_type=safe_error_type(exc),
             )
             return
         if result.canonical is not None:
@@ -468,10 +475,17 @@ class InsightsAggregationService:
     def _dual_write_canonical_merchant(self, insight: MerchantInsight, merchant_name: str, user_email: str) -> None:
         try:
             result = self._resolver.resolve(merchant_name, "merchant", user_email)
-        except Exception:
-            logger.exception(
-                "Entity resolution failed for merchant '%s' (user=%s); leaving canonical_merchant_id unset",
-                merchant_name, user_email,
+        except Exception as exc:
+            from varavu_selavu_service.core.observability import log_event, safe_error_type
+            log_event(
+                logger,
+                logging.ERROR,
+                "entity_dual_write_failed",
+                exc_info=exc,
+                component="entity_resolution",
+                entity_type="merchant",
+                outcome="failed",
+                error_type=safe_error_type(exc),
             )
             return
         if result.canonical is not None:

@@ -64,6 +64,13 @@ Claude Code and Codex; `migrations.yml` rehearses new Alembic revisions from the
 
 ## Optional web behavioral analytics (TS-GA4-001)
 
+Planned operational observability (TS-OBS-001, 2026-11-27): GCP-native safe request/component logs,
+selected log-based metrics and alerts, independently consented authenticated client diagnostics,
+and isolated k6 capacity qualification. This is separate from GA4 product events and is **not
+implemented**. See [proposed ADR 0002](decisions/0002-minimal-observability.md) and
+[implementation plan](sdlc/work-items/TS-OBS-001/implementation.md). No new database/service is
+required; the existing backend would host bounded diagnostic ingestion.
+
 `varavu_selavu_ui/src/analytics` is a small browser-neutral event/schema/client layer with a GA4
 provider and no-op/recording adapters. Browser consent, route/history containment and identity
 lifecycle live in `browser.ts`; `RouteAnalytics` observes committed React navigation and shares

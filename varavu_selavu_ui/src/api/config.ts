@@ -9,6 +9,7 @@ export interface FeatureFlags {
   ai_enabled?: boolean;
   mcp_enabled?: boolean;
   mcp_management_url?: string;
+  client_diagnostics_enabled?: boolean;
 }
 
 /** Client-visible feature flag surface (TS-GRP-111) — never requires auth and

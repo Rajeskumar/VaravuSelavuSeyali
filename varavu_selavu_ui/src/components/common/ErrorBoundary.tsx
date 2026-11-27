@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import ErrorOutlineRoundedIcon from '@mui/icons-material/ErrorOutlineRounded';
+import { webDiagnostics } from '../../analytics/diagnostics';
 
 interface Props {
   children: React.ReactNode;
@@ -22,9 +23,15 @@ class ErrorBoundary extends React.Component<Props, State> {
     return { hasError: true };
   }
 
-  componentDidCatch(error: unknown, info: React.ErrorInfo) {
-    // eslint-disable-next-line no-console
-    console.error('Unhandled render error', error, info.componentStack);
+  componentDidCatch(error: unknown) {
+    webDiagnostics.recordClientError('render', error);
+    const errorType = error instanceof Error && /^[A-Za-z_][A-Za-z0-9_]{0,31}$/.test(error.name)
+      ? error.name
+      : 'Error';
+    if (process.env.NODE_ENV !== 'production') {
+      // eslint-disable-next-line no-console
+      console.error('Unhandled render error:', errorType);
+    }
   }
 
   render() {

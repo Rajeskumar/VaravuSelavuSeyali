@@ -43,7 +43,7 @@ def main() -> None:
             text("UPDATE trackspense.users SET email_verified = true WHERE email = ANY(:emails)"),
             {"emails": emails},
         )
-        print(f"Marked {result.rowcount} user(s) as email-verified: {', '.join(emails)}")
+        print(f"Marked {result.rowcount} QA user(s) as email-verified")
 
 
 if __name__ == "__main__":

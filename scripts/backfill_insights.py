@@ -170,12 +170,10 @@ def run_validation(db):
     raw_m_val = float(raw_merchant_sum)
     agg_m_val = float(agg_merchant_sum)
     diff_m = abs(raw_m_val - agg_m_val)
-    print(f"  Source Total: ${raw_m_val:,.2f}")
-    print(f"  Agg    Total: ${agg_m_val:,.2f}")
     if diff_m < 0.05:
-        print("  ✅ Merchant totals match perfectly.")
+        print("  PASS: Merchant totals reconcile within tolerance.")
     else:
-        print(f"  ❌ Merchant mismatch detected. Diff: ${diff_m:,.2f}")
+        print("  FAIL: Merchant reconciliation mismatch detected.")
 
     print("\nValidating Item Insights...")
     raw_item_sum = db.query(func.sum(ExpenseItem.line_total)).filter(
@@ -185,10 +183,8 @@ def run_validation(db):
     raw_i_val = float(raw_item_sum)
     agg_i_val = float(agg_item_sum)
     diff_i = abs(raw_i_val - agg_i_val)
-    print(f"  Source Total: ${raw_i_val:,.2f}")
-    print(f"  Agg    Total: ${agg_i_val:,.2f}")
     if diff_i < 0.05:
-        print("  ✅ Item totals match perfectly.")
+        print("  PASS: Item totals reconcile within tolerance.")
     else:
-        print(f"  ❌ Item mismatch detected. Diff: ${diff_i:,.2f}")
+        print("  FAIL: Item reconciliation mismatch detected.")
 

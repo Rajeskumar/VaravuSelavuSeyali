@@ -43,8 +43,9 @@ def _send_verification_email(user_email: str, token: str) -> None:
             cta_label="Verify email",
             cta_url=f"{_settings.PUBLIC_APP_URL}/verify-email?token={token}",
         )
-    except Exception:
-        logger.exception("Failed to send verification email to %s", _mask_email(user_email))
+    except Exception as exc:
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(logger, logging.ERROR, "email_delivery_failed", exc_info=exc, component="email", action="verification", outcome="failed", error_type=safe_error_type(exc))
 
 
 def _send_password_reset_email(user_email: str, token: str) -> None:
@@ -57,8 +58,9 @@ def _send_password_reset_email(user_email: str, token: str) -> None:
             cta_label="Reset password",
             cta_url=f"{_settings.PUBLIC_APP_URL}/reset-password?token={token}",
         )
-    except Exception:
-        logger.exception("Failed to send password reset email to %s", _mask_email(user_email))
+    except Exception as exc:
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(logger, logging.ERROR, "email_delivery_failed", exc_info=exc, component="email", action="password_reset", outcome="failed", error_type=safe_error_type(exc))
 
 
 def get_auth_service(db: Session = Depends(get_db)) -> AuthService:

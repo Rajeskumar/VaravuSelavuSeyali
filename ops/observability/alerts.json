@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "work_item": "TS-OBS-001",
+  "slo": {
+    "core_availability_30d_target": 0.995,
+    "core_p95_ms_target": 1000,
+    "core_p99_ms_target": 3000,
+    "excluded_cohorts": ["probe", "telemetry", "ai", "receipt"]
+  },
+  "alerts": [
+    {
+      "id": "TS-ALT-01",
+      "displayName": "TrackSpense Readiness Probe Failure",
+      "severity": "CRITICAL",
+      "condition": "3 consecutive failed 5-minute /api/v1/readyz probes confirmed from >=2 regions",
+      "window_minutes": 15,
+      "min_regions": 2,
+      "runbook_section": "ops/observability/RUNBOOK.md#readiness-probe-failure"
+    },
+    {
+      "id": "TS-ALT-02",
+      "displayName": "TrackSpense Core Unexpected Error Rate High",
+      "severity": "CRITICAL",
+      "condition": ">=5 unexpected core failures (server_error/timeout/unexpected 429) AND >1% error ratio over 10 minutes",
+      "window_minutes": 10,
+      "min_failures": 5,
+      "error_ratio_threshold": 0.01,
+      "filter": "metric.type=\"logging.googleapis.com/user/trackspense_api_requests\" AND metric.label.operation_class=one_of(\"core_read\",\"core_write\") AND metric.label.outcome=\"server_error\"",
+      "runbook_section": "ops/observability/RUNBOOK.md#core-error-rate"
+    },
+    {
+      "id": "TS-ALT-03",
+      "displayName": "TrackSpense Core Latency p95 > 1s",
+      "severity": "WARNING",
+      "condition": "Core API body-complete p95 > 1000 ms over 15 minutes with >=100 observations",
+      "window_minutes": 15,
+      "p95_threshold_ms": 1000,
+      "min_observations": 100,
+      "filter": "metric.type=\"logging.googleapis.com/user/trackspense_api_duration_ms\" AND metric.label.operation_class=one_of(\"core_read\",\"core_write\")",
+      "runbook_section": "ops/observability/RUNBOOK.md#core-latency"
+    },
+    {
+      "id": "TS-ALT-04",
+      "displayName": "TrackSpense DB Acquisition Timeout or Background Aggregation Failure",
+      "severity": "WARNING",
+      "condition": ">=3 db_acquire timeouts OR >=3 insights_aggregation failures in 10 minutes",
+      "window_minutes": 10,
+      "min_failures": 3,
+      "runbook_section": "ops/observability/RUNBOOK.md#db-and-background-failures"
+    },
+    {
+      "id": "TS-ALT-05",
+      "displayName": "TrackSpense Backend Memory Utilization > 85%",
+      "severity": "WARNING",
+      "condition": "Cloud Run container memory utilization > 85% for 15 minutes (capacity warning)",
+      "window_minutes": 15,
+      "threshold_ratio": 0.85,
+      "runbook_section": "ops/observability/RUNBOOK.md#memory-capacity"
+    }
+  ]
+}

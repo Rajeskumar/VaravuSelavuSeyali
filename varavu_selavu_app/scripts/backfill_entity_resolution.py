@@ -40,8 +40,8 @@ def backfill_items(db, resolver: EntityResolutionService, batch_size: int) -> di
     for i, row in enumerate(rows, 1):
         try:
             result = resolver.resolve(row.normalized_name, "item", row.user_email, source_hint="backfill")
-        except Exception:
-            logger.exception("Failed to resolve item_insight %s ('%s')", row.id, row.normalized_name)
+        except Exception as exc:
+            logger.error("Failed to resolve item_insight row %d: %s", i, type(exc).__name__)
             errors += 1
             continue
         if result.canonical is not None:
@@ -62,8 +62,8 @@ def backfill_merchants(db, resolver: EntityResolutionService, batch_size: int) -
     for i, row in enumerate(rows, 1):
         try:
             result = resolver.resolve(row.merchant_name, "merchant", row.user_email, source_hint="backfill")
-        except Exception:
-            logger.exception("Failed to resolve merchant_insight %s ('%s')", row.id, row.merchant_name)
+        except Exception as exc:
+            logger.error("Failed to resolve merchant_insight row %d: %s", i, type(exc).__name__)
             errors += 1
             continue
         if result.canonical is not None:

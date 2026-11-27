@@ -64,12 +64,10 @@ def main() -> int:
     for src, n in by_source.most_common():
         print(f"  {src:8} {n:5} answers, {100 * right_by_source[src] / n:.1f}% correct")
     if args.misses:
-        print("\nwrong:")
-        for desc, want, got, src in wrong:
-            print(f"  {desc!r}: want {want}, got {got} ({src})")
-        print("\nunanswered:")
-        for desc in unanswered:
-            print(f"  {desc!r}")
+        print(f"\nwrong: {len(wrong)} row(s), unanswered: {len(unanswered)} row(s)")
+        by_mismatch = Counter((want, got, src) for _, want, got, src in wrong)
+        for (want, got, src), cnt in by_mismatch.most_common():
+            print(f"  {cnt:4}x want={want} got={got} ({src})")
     return 0
 
 

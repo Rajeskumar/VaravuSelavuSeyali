@@ -232,7 +232,7 @@ def main() -> None:
     api.call("POST", f"/groups/{trip}/settlements", {"from_member_id": t["Riley"], "to_member_id": t["me"],
                                                      "amount": "250.00", "method": "venmo"})
 
-    print(f"Seeded {me}")
+    print("Seeded demo account")
 
 
 if __name__ == "__main__":

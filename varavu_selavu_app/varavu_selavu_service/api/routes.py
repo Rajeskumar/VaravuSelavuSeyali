@@ -193,7 +193,18 @@ def health_check():
 
 @router.get("/readyz", response_model=HealthResponse, tags=["Health"], summary="Readiness probe")
 def readiness_check():
-    # Extend with checks to downstream services (e.g., Google Sheets) if needed
+    from varavu_selavu_service.core.observability.readiness import check_database_readiness
+    from varavu_selavu_service.db.session import db_url, engine
+
+    # Use the active engine directly for in-memory SQLite tests, and the dedicated bounded
+    # probe engine for real PostgreSQL / file DBs so readiness never competes with main pool.
+    engine_override = engine if db_url.startswith("sqlite") else None
+    ok, _duration_ms = check_database_readiness(db_url=db_url, engine_override=engine_override)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="unhealthy",
+        )
     return {"status": "healthy"}
 
 
@@ -212,6 +223,7 @@ def get_config():
         "ai_enabled": settings_now.AI_ENABLED,
         "mcp_enabled": settings_now.MCP_ENABLED,
         "mcp_management_url": settings_now.PUBLIC_APP_URL.rstrip("/") + "/account/assistants",
+        "client_diagnostics_enabled": settings_now.CLIENT_DIAGNOSTICS_ENABLED,
     }
 
 
@@ -323,13 +335,16 @@ def create_expense(
     # Invalidate analysis cache on writes
     analysis_service.invalidate_cache()
 
-    # Asynchronous insight aggregation
-    background_tasks.add_task(
+    # Asynchronous insight aggregation (tracked with originating request_id)
+    from varavu_selavu_service.core.observability.background import schedule_background_task
+    schedule_background_task(
+        background_tasks,
+        "insights_aggregation",
         aggregation_svc.on_simple_expense_created,
         user_email=user_id,
         merchant_name=data.merchant_name,
         purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y"),
-        amount=data.cost
+        amount=data.cost,
     )
 
     # TS-TAG-104 — no prior state on create, so a None/omitted vs. empty tag_names distinction
@@ -472,7 +487,10 @@ def update_expense(
     analysis_service.invalidate_cache()
 
     if old_data:
-        background_tasks.add_task(
+        from varavu_selavu_service.core.observability.background import schedule_background_task
+        schedule_background_task(
+            background_tasks,
+            "insights_aggregation",
             aggregation_svc.on_simple_expense_updated,
             user_email=user_id,
             old_merchant_name=old_data["merchant_name"],
@@ -480,7 +498,7 @@ def update_expense(
             old_purchased_at=old_data["purchased_at"],
             new_merchant_name=data.merchant_name,
             new_amount=data.cost,
-            new_purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y")
+            new_purchased_at=datetime.strptime(saved["date"], "%m/%d/%Y"),
         )
 
     # TS-TAG-104 — full-replace, but ONLY when the client explicitly sent the field (PRD §10.2:
@@ -531,13 +549,16 @@ def delete_expense(
         raise HTTPException(status_code=404, detail="Expense not found")
     analysis_service.invalidate_cache()
 
-    background_tasks.add_task(
+    from varavu_selavu_service.core.observability.background import schedule_background_task
+    schedule_background_task(
+        background_tasks,
+        "insights_aggregation",
         aggregation_svc.on_expense_deleted,
         user_email=deleted_data["user_email"],
         merchant_name=deleted_data["merchant_name"],
         amount=deleted_data["amount"],
         purchased_at=deleted_data["purchased_at"],
-        items=deleted_data.get("items", [])
+        items=deleted_data.get("items", []),
     )
 
     return {"success": True}
@@ -772,8 +793,17 @@ def analysis_chat(
         quota.refund(reservation)
         if isinstance(exc, HTTPException):
             raise
-        import logging
-        logging.getLogger("varavu_selavu.routes").exception("AI chat failed: %s", exc)
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(
+            "varavu_selavu.routes",
+            logging.ERROR,
+            "ai_chat_failed",
+            exc_info=exc,
+            component="llm",
+            feature="chat",
+            outcome="failed",
+            error_type=safe_error_type(exc),
+        )
         raise HTTPException(
             status_code=503,
             detail="The AI analyst is temporarily unavailable. Please try again later."
@@ -1338,8 +1368,15 @@ def confirm_recurring(
                     )
             except Exception as e:
                 # If group is archived/deleted or other validation fails, skip.
-                import logging
-                logging.warning(f"Failed to confirm group recurring expense for template {d['template_id']}: {e}")
+                from varavu_selavu_service.core.observability import log_event, safe_error_type
+                log_event(
+                    "varavu_selavu.routes",
+                    logging.WARNING,
+                    "recurring_group_confirm_failed",
+                    component="other",
+                    outcome="failed",
+                    error_type=safe_error_type(e),
+                )
                 continue
         else:
             expense_service.add_expense(
@@ -1499,8 +1536,15 @@ def execute_recurring_now(
                     )
                 created = True
             except Exception as e:
-                import logging
-                logging.warning(f"Failed to execute group recurring expense for template {template_id}: {e}")
+                from varavu_selavu_service.core.observability import log_event, safe_error_type
+                log_event(
+                    "varavu_selavu.routes",
+                    logging.WARNING,
+                    "recurring_group_execute_failed",
+                    component="other",
+                    outcome="failed",
+                    error_type=safe_error_type(e),
+                )
                 # Don't stamp the month as processed: nothing was added, so the user must be able
                 # to retry instead of silently losing this month's expense.
                 return {"success": False, "created": False, "error": "Could not add the group expense. Try again."}
@@ -1678,8 +1722,17 @@ def budget_ask_why(
         quota.refund(reservation)
         if isinstance(exc, HTTPException):
             raise
-        import logging
-        logging.getLogger("varavu_selavu.routes").exception("Budget ask-why failed: %s", exc)
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(
+            "varavu_selavu.routes",
+            logging.ERROR,
+            "budget_ask_why_failed",
+            exc_info=exc,
+            component="llm",
+            feature="budget_why",
+            outcome="failed",
+            error_type=safe_error_type(exc),
+        )
         raise HTTPException(
             status_code=503,
             detail="The AI analyst is temporarily unavailable. Please try again later."
@@ -2199,8 +2252,16 @@ def send_email_route(
         )
         return {"success": True, "message": "Email sent successfully"}
     except Exception as exc:
-        import logging
-        logging.getLogger("varavu_selavu_service.api.routes").error(f"Error in send_email_route: {exc}", exc_info=True)
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(
+            "varavu_selavu_service.api.routes",
+            logging.ERROR,
+            "email_route_failed",
+            exc_info=exc,
+            component="email",
+            outcome="failed",
+            error_type=safe_error_type(exc),
+        )
         # Fixed message: the exception text here is raw SMTP//transport detail (server names,
         # auth failures) and has no business reaching the caller.
         raise HTTPException(status_code=500, detail="Failed to send email")

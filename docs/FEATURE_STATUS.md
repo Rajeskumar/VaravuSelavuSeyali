@@ -1,5 +1,15 @@
 # TrackSpense — Feature Status & Build Backlog
 
+## Observability and capacity — implemented locally, not deployed (TS-OBS-001, 2026-11-27)
+
+🟡 Implemented locally (uncommitted, no cloud/staging activation yet). Runtime/client/nginx/tool log
+sanitization (`core/observability/`, `logging_guard.py`), pure ASGI timing, bounded `/api/v1/readyz`,
+feature-flagged `/api/v1/telemetry/batch` (`CLIENT_DIAGNOSTICS_ENABLED=false`), independent web/mobile
+Performance diagnostics consent, declarative `ops/observability/` configs, and fail-closed `qa/load/`
+harness are built and unit-tested locally. Cloud sink/metric apply, staging 20/50 RPS k6 qualification,
+and device verification require separate authorization. See
+[plan, logging inventory and tests](features/TS-OBS-001-observability.md).
+
 > **Purpose:** Single-glance status across every doc in `docs/` and `docs/features/`, verified directly against the current codebase (not just the spec docs). Use this to decide what to build next. Each item links to the full spec for detail.
 >
 > **Verified:** 2026-07-04, by full codebase audit (backend routes/services/db models, web pages/components, mobile screens).

@@ -1,4 +1,10 @@
-"""Drop OAuth query values from Uvicorn's access-log arguments."""
+"""Global Uvicorn access-log suppression & OAuth query redaction (TS-OBS-001 L11).
+
+Raw `uvicorn.access` records carry unnormalized paths, query strings, and client IPs.
+Installing this filter (done globally at boot via `configure_logging` as well as when
+MCP is enabled) suppresses raw access output while preserving normalized `ObservabilityMiddleware`
+events, and still redacts `/oauth/` query parameters if `RedactOAuthQuery` is invoked directly.
+"""
 
 import logging
 
@@ -14,4 +20,10 @@ class RedactOAuthQuery(logging.Filter):
 
 
 def install():
-    logging.getLogger("uvicorn.access").addFilter(RedactOAuthQuery())
+    from varavu_selavu_service.core.observability.sanitizer import _SuppressRawUvicornAccessFilter
+
+    uv_access = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, RedactOAuthQuery) for f in uv_access.filters):
+        uv_access.addFilter(RedactOAuthQuery())
+    if not any(isinstance(f, _SuppressRawUvicornAccessFilter) for f in uv_access.filters):
+        uv_access.addFilter(_SuppressRawUvicornAccessFilter())

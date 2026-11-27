@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "id": "TS-OBS-001",
+  "title": "Privacy-safe observability and backend capacity for 1,000 daily active users",
+  "owner": "Rajesh Kumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-01",
+      "outcome": "A repository-wide logging inventory covers backend, web, mobile, native/third-party handlers, scripts, access/platform logs and CI artifacts; each row has a verified disposition or an explicitly recorded external boundary."
+    },
+    {
+      "id": "AC-02",
+      "outcome": "Source logging and final output boundaries exclude synthetic secrets, identities, financial/receipt/chat data, raw URLs/SQL/exception messages in every supported environment, including DEBUG; safe events and bounded frames remain, and sanitizer failure cannot fail business requests."
+    },
+    {
+      "id": "AC-03",
+      "outcome": "All controlled platform log sinks/exports are inspected and verified to prevent retention/export of unsafe service request/access records; residual provider processing and historical retention are documented without claiming application sanitization controls them."
+    },
+    {
+      "id": "AC-04",
+      "outcome": "Every observable API completion emits one normalized body-complete duration/outcome with a server-generated request ID; errors, concurrency, cancellations and thread/background context isolation are verified without unbounded metric labels."
+    },
+    {
+      "id": "AC-05",
+      "outcome": "Bounded measurements distinguish DB acquisition/execution and selected OCR/AI/fallback work without SQL or payload capture and without altering auth, quota, write or response semantics."
+    },
+    {
+      "id": "AC-06",
+      "outcome": "Liveness remains dependency-independent, readiness returns generic DB health within one second, and background outcomes plus synthetic reconciliation demonstrate correct aggregates within 60 seconds under qualified load."
+    },
+    {
+      "id": "AC-07",
+      "outcome": "One GCP dashboard and tested actionable alerts expose route/core latency, failures, resources, pending/startup, DB/background/client outcomes, explicit SLO cohorts, sample coverage and revision context."
+    },
+    {
+      "id": "AC-08",
+      "outcome": "The authenticated feature-flagged diagnostic endpoint enforces existing auth/CSRF, strict event allowlists, 8 KiB/10-event limits and bounded rates, rejects malformed input without echo/logging, and cannot establish server/financial truth."
+    },
+    {
+      "id": "AC-09",
+      "outcome": "Web/iOS/Android independently gate performance diagnostics behind an explicit default-off consent; no prior permission expansion, pre-consent capture, replay, cross-account late events or business-operation blocking; existing GA4/Crashlytics semantics remain."
+    },
+    {
+      "id": "AC-10",
+      "outcome": "The load harness fails closed on production/unknown service, project, DB or redirect targets, requires isolated synthetic fixtures and authorized non-local execution, preserves real auth/permissions/limits, and emits credential-free reports."
+    },
+    {
+      "id": "AC-11",
+      "outcome": "At 20 and 50 offered HTTP RPS the qualified workload achieves zero dropped iterations, core p95 <=1 s, p99 <=3 s and unexpected errors <0.5%, with persisted acknowledged writes, exact group/itemized totals and no automatic ambiguous-write replay."
+    },
+    {
+      "id": "AC-12",
+      "outcome": "Bounded spike/stress/soak/startup/dependency experiments record capacity/recovery, pool/resource limits and stop conditions; baseline recovers within five minutes after the spike and one warm instance is not asserted to eliminate all cold starts."
+    },
+    {
+      "id": "AC-13",
+      "outcome": "Paired runs demonstrate <=5% and <=20 ms p95 telemetry overhead, finite labels and bounded payloads; measured volume/cardinality and incremental cost are reviewed against the proposed 5 GiB/month and 5,000-series envelopes before activation."
+    },
+    {
+      "id": "AC-14",
+      "outcome": "Rollout and rollback are rehearsed with old/new clients and optional instrumentation disabled while sanitization remains; current checks, privacy/capacity/device evidence, routed reviews and release-readiness are recorded before any separately authorized deployment."
+    }
+  ],
+  "required_evidence": [
+    "checks-fast",
+    "privacy-red-green",
+    "logging-inventory",
+    "platform-log-privacy",
+    "server-observability",
+    "postgres-integration",
+    "monitoring-acceptance",
+    "background-freshness",
+    "load-isolation",
+    "load-capacity",
+    "telemetry-overhead",
+    "client-privacy-parity",
+    "client-browser-native",
+    "review-code",
+    "review-security",
+    "review-ui",
+    "review-product",
+    "acceptance-verification",
+    "release-readiness"
+  ],
+  "implementation_approval": {
+    "actor": "Rajesh Kumar Ganesan",
+    "reference": "User message 2026-11-27: 'Implement TS-OBS-001 in this repo using the implementation plan, logging audit, and test specification. Sanitize all identified logging paths first, then build the minimal GCP observability and client diagnostics design, and create the isolated load-test harness for 1,000 daily users... Leave changes uncommitted. Do not deploy, change cloud settings, or run non-local load tests without separate authorization.'",
+    "fingerprint": "a66aff98bda161e8fac5d4e6065417328100f7b688e3479ca268eeaa5bd3d931"
+  },
+  "links": [
+    "docs/features/TS-OBS-001-observability.md",
+    "docs/decisions/0002-minimal-observability.md"
+  ],
+  "notes": "Owner authorized Build on 2026-11-27 (fingerprint a66aff98…). Implemented locally (uncommitted): sanitized all L01-L23 source/client/nginx/operator/QA logging paths, added core/observability/ (SafeJsonFormatter, pure ASGI timing, DB/background instrumentation, bounded /api/v1/readyz), feature-flagged /api/v1/telemetry/batch, independent web/mobile Performance diagnostics consent, declarative ops/observability/ configs, fail-closed qa/load/ harness, and scripts/quality/logging_guard.py. Local unit/type/lint/security/framework checks pass; cloud/staging sink apply, staging 20/50 RPS k6 qualification, and device verification remain pending separate authorization."
+}

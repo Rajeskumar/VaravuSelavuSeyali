@@ -1,5 +1,9 @@
 # Roadmap / Planned Enhancements
 
+## Observability and capacity (TS-OBS-001, implemented locally 2026-11-27; not deployed)
+- [x] Sanitize backend/web/mobile/nginx/operator/QA logging paths (L01–L23), add `core/observability/` JSON boundary, pure ASGI timing, DB/background instrumentation, bounded `/api/v1/readyz`, feature-flagged `/api/v1/telemetry/batch`, independent web/mobile Performance diagnostics consent, declarative `ops/observability/` configs, `qa/load/` harness, and `scripts/quality/logging_guard.py`.
+- [ ] Separately authorized cloud/staging activation: apply `ops/observability/` sinks/metrics/dashboard/alerts, run PostgreSQL integration & 20/50 RPS staging k6 qualification, and verify iOS/Android QA-build network privacy before production release. [Plan and audit](docs/features/TS-OBS-001-observability.md).
+
 ## Release test coverage (TS-QA-104)
 - [ ] **TS-FIX-102 built 2026-11-26, in validation** (not released): receipts split by total, items track original and paid price, totals must match. It resolves the coupon decision and the group-receipt reconciliation P0 below once released. Record in `docs/sdlc/work-items/TS-FIX-102/`.
 - [x] **Decision (owner, resolved by TS-FIX-102):** scanned receipts record coupons as negative lines. Keep them as the one exception to "no minus values", or convert them to a positive discount (changes who benefits)? Personal itemized saves and item edits already refused negative lines before TS-FIX-101, so coupons fail there today (from code).

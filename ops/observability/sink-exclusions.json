@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "work_item": "TS-OBS-001",
+  "scope_note": "Service-scoped exclusions for TrackSpense Cloud Run services ONLY. Never modifies unrelated services in the shared GCP project.",
+  "services": [
+    "varavu-selavu-backend",
+    "varavu-selavu-frontend"
+  ],
+  "exclusions": [
+    {
+      "name": "exclude-trackspense-raw-cloud-run-requests",
+      "description": "Exclude raw Cloud Run HTTP request logs (which carry raw URLs, queries, and client IPs) for TrackSpense services while retaining native Cloud Run metrics and normalized app JSON events.",
+      "filter": "resource.type=\"cloud_run_revision\" AND (resource.labels.service_name=\"varavu-selavu-backend\" OR resource.labels.service_name=\"varavu-selavu-frontend\") AND logName:\"run.googleapis.com%2Frequests\""
+    }
+  ],
+  "residual_boundaries": [
+    "Sink exclusions control destination retention/routing only; they do not prevent initial Google Cloud platform request processing or retroactively purge historical log buckets.",
+    "Cloudflare edge logs and any inherited organization-level sinks must be audited separately before claiming full end-to-end exclusion."
+  ]
+}

@@ -11,4 +11,5 @@ export const STORAGE_KEYS = {
   /** Device-level opt-ins (granted | denied). Absent = never asked. */
   analyticsConsent: 'analytics_consent_v1',
   crashConsent: 'crash_consent_v1',
+  diagnosticsConsent: 'diagnostics_consent_v1',
 } as const;
