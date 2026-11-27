@@ -126,11 +126,11 @@
       "id": "N-4",
       "severity": "P0",
       "certainty": "Confirmed",
-      "summary": "Pre-existing, not a minus value: group itemized create does not require items to reconcile with the amount, so shares may not total it and settle-ups can be misdirected. Reproduced at engine level by the security reviewer. ROADMAP; needs owner decision.",
+      "summary": "Pre-existing, not a minus value: group itemized create does not require items to reconcile with the amount, so shares may not total it and settle-ups can be misdirected. Reproduced at engine level by the security reviewer. ROADMAP; needs owner decision. Closed 2026-11-27: fixed by TS-FIX-102 (items must match the amount).",
       "owner": "Claude Code",
       "source": "second review pass",
-      "status": "open",
-      "verification_evidence": "",
+      "status": "fixed",
+      "verification_evidence": "n4-regression",
       "waiver": null
     },
     {

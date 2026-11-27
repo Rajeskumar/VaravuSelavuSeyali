@@ -2,14 +2,36 @@
   "schema_version": 1,
   "id": "TS-QA-106",
   "title": "Mobile money journeys: Maestro E2E (backlog A2)",
-  "owner": "Product owner",
-  "risk": "standard",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
   "mode": "normal",
-  "phase": "discover",
+  "phase": "validate",
   "status": "in_progress",
-  "acceptance_criteria": [],
-  "required_evidence": [],
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Native flows drive mobile personal expense edit and delete, move to group, group expense edit and delete, an exact group split, recurring run-now and edit, and settle-up on iOS and Android, each checking stored data through the API."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "A web test resets a password from a link and signs out all devices with an account of its own, keeping the account suite within 5 logins a minute."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "The reset-token helper refuses any database other than the local trackspense_qa database and any non-QA address."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "local-integration",
+    "native-e2e",
+    "code-review",
+    "security-review",
+    "acceptance-verification"
+  ],
   "implementation_approval": null,
-  "links": [],
-  "notes": ""
+  "links": [
+    "docs/sdlc/work-items/TS-FIX-103/work-item.json"
+  ],
+  "notes": "Record written after the build (2026-11-27). Raised from standard to high: it touches a CI workflow file (comment only) and a password-reset token script. The owner asked for the work ('Continue step 2 - 4') and approved the account approach and the single-browser skip, but has not seen these criteria or approved this plan, so implementation_approval is empty."
 }

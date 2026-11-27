@@ -18,6 +18,12 @@ Status: built 2026-11-27. Requirements: requirements.md; AC text: work-item.json
 - AC-004: edit sheet's KeyboardAvoidingView may shrink; Cancel/Save move to a fixed footer outside the ScrollView;
   the ScrollView uses `keyboardShouldPersistTaps="handled"`.
 
+- AC-007: `features/groups/utils/parseAmount.ts` returns null unless the text is digits with at most one decimal mark
+  (dot or comma) and two decimals. Settle up uses one parsed value for its label, payment links, summary and POST; group
+  edit uses it for the PUT, payer follow-up and pickers. Web uses number inputs and is unchanged.
+- Android keyboard: sheets use `KeyboardAvoidingView` padding (or `KeyboardLift`) and can shrink; Settle up scrolls with
+  its action below the scroll area; split fields select a filled value once on focus.
+
 ## Risks and safeguards
 Money: direction and amount come only from server transfers; the user still confirms. No schema, auth or API change.
 Omitting the split must not reset a custom split: covered by server carry-over (existing backend tests) and the native flow's stored-data check.

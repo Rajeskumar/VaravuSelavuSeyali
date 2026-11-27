@@ -17,3 +17,7 @@ Excluded: backend changes; repairing any already-stored settlement (needs approv
 button when only others owe the viewer; other web changes.
 Scope added by the owner 2026-11-27 (supersedes those two exclusions and "Mobile only"): web group edit (AC-005) and the
 "Settle up" button (AC-006).
+
+Added by the owner 2026-11-27 (later the same day): "option A" for typed amounts, AC-007: one mobile reader for Settle up
+and group expense edit. Other mobile money fields are excluded (option B, ROADMAP). Also in scope since the owner's
+"Fix android keyboard bug": modals with text fields stay above the Android keyboard, and split fields stay typeable there.

@@ -1,4 +1,69 @@
 {
   "schema_version": 1,
-  "results": []
+  "results": [
+    {
+      "id": "checks",
+      "status": "passed",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "framework-check (276), test-backend (1124 passed, 15 skipped; no rerun needed), web lint/typecheck/test (417), mobile typecheck/Jest (708), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip in account-recovery.spec.ts. All passed. Includes the reset-token guard tests.",
+      "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "acceptance_criteria": [
+        "AC-003"
+      ]
+    },
+    {
+      "id": "local-integration",
+      "status": "passed",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed after 65s. One 429 on the receipt-parse endpoint during the first part; none on login. Includes account-recovery.",
+      "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "acceptance_criteria": [
+        "AC-002"
+      ]
+    },
+    {
+      "id": "code-review",
+      "status": "passed",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "The web specs and native flows were in the first review passes; no open P0/P1. They have not changed since. Open P3: two flow waits can pass before a save ends.",
+      "source": "Reviewer reports in the 2026-11-27 session",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Reset-token script, guard and account spec reviewed; no P0/P1. Open: provisioning scripts have no database host guard.",
+      "source": "Reviewer reports in the 2026-11-27 session",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "native-e2e",
+      "status": "skipped",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "No native flow ran on this snapshot (see TS-FIX-103).",
+      "source": "TS-FIX-103 evidence",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "acceptance-verification",
+      "status": "skipped",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Incomplete until the native suites pass on this version.",
+      "source": "test-plan.md",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "acceptance_criteria": []
+    }
+  ]
 }

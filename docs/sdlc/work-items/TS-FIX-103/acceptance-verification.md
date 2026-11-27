@@ -23,3 +23,10 @@
 - Native, final code (targeted): Android Settle up and exact split (with a temporary probe: four typed-over values all replaced), iOS Settle up. Android and iOS Move to group passed before the final Settle up change (keyboard not opened).
 - Native, full suites before the review fixes: iOS 19/19 applicable; Android regression 14/14, smoke 2/5 finished (owner skipped the rest; **not passed**). No full run on the final code on either platform.
 - Not verified: small phones, large text, real devices, screen readers.
+
+## Amount reader and follow-up reviews, 2026-11-27 (later)
+
+- AC-007 failing first: 5 Jest cases on the earlier code (comma group edit; Settle up comma and three unclear amounts) and the missing reader. Mobile Jest 708/708, tsc.
+- AC-007 scope: the main amount field of Settle up and group edit. Split and payer fields inside group edit still drop a comma (ROADMAP); it is not claimed there. No device test with a comma keypad.
+- Follow-up reviews of everything after 6273a20: code PASS, security PASS, UI earlier P1 resolved (iOS screenshot and code; Android by code), no P0/P1. After them one line changed (`nestedScrollEnabled` on the Move to group list), not re-reviewed or device-tested. Older wrong-amount findings are in ROADMAP for an owner decision.
+- Not run on this version: native flows (full or targeted) and real devices. AC-004 rests on an iOS flow from before the review fixes.

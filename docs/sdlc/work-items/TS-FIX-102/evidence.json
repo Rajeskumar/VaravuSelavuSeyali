@@ -2,23 +2,6 @@
   "schema_version": 1,
   "results": [
     {
-      "id": "checks",
-      "status": "passed",
-      "snapshot": "c82ca3162340c61950a1a67a6c39151fdca8386069d580ddcf2531f19ec88bf6",
-      "environment": "Local macOS; SQLite test DB (backend), Jest/RTL (web, mobile); throwaway local PostgreSQL 16; isolated test backend (qa/mobile/scripts/start-test-backend.sh: no .env, mock OCR, AI/mail/push off) + CRA dev server; synthetic data. No native device or simulator.",
-      "command_or_method": "make check with owner-authorized TEST_INTEGRITY_ACK='TS-FIX-102 removes item-by-item receipt splitting (agreed requirement 2)' + clean make framework-check (274 passed, without TEST_INTEGRITY_ACK in env): 7/7 pass (framework 274, backend 1122 passed/15 skipped, web 414, mobile 653, qa typecheck, security --no-audit, test-integrity acknowledged).",
-      "source": ".sdlc-logs/fast-sdlc1795741269460720000",
-      "recorded_at": "2026-11-27T01:03:30+00:00",
-      "acceptance_criteria": [
-        "AC-001",
-        "AC-002",
-        "AC-003",
-        "AC-004",
-        "AC-005",
-        "AC-006"
-      ]
-    },
-    {
       "id": "red-green",
       "status": "passed",
       "snapshot": "c82ca3162340c61950a1a67a6c39151fdca8386069d580ddcf2531f19ec88bf6",
@@ -45,23 +28,6 @@
       "recorded_at": "2026-11-27T00:11:12.402812+00:00",
       "acceptance_criteria": [
         "AC-005"
-      ]
-    },
-    {
-      "id": "local-integration",
-      "status": "passed",
-      "snapshot": "c82ca3162340c61950a1a67a6c39151fdca8386069d580ddcf2531f19ec88bf6",
-      "environment": "Local macOS; SQLite test DB (backend), Jest/RTL (web, mobile); throwaway local PostgreSQL 16; isolated test backend (qa/mobile/scripts/start-test-backend.sh: no .env, mock OCR, AI/mail/push off) + CRA dev server; synthetic data. No native device or simulator.",
-      "command_or_method": "Playwright chromium on the isolated local stack: groups + expenses specs 73 passed after the final client fix (one manual-expense lifecycle failure found and fixed by limiting F3 to receipts); receipt-scan + groups 50 passed on a fresh backend including the new group receipt test (real mock scan, discount folded to 18/9, equal shares 9.00 x3). Not run in GitHub Actions; other browsers not run. Run before the last backend-only re-review fixes (N1 moved-receipt insights, N2 receipt marker, SEC-4 MCP subtotal, Decimal totals), which are covered by backend tests only.",
-      "source": ".sdlc-logs/ts-fix-102-playwright-1.txt..-3.txt; qa/e2e/tests/expenses/receipt-scan.spec.ts",
-      "recorded_at": "2026-11-27T00:11:12.402812+00:00",
-      "acceptance_criteria": [
-        "AC-001",
-        "AC-002",
-        "AC-003",
-        "AC-004",
-        "AC-005",
-        "AC-006"
       ]
     },
     {
@@ -174,6 +140,40 @@
       "command_or_method": "Each AC mapped to executed tests (backend, web, mobile, Playwright); see acceptance-verification.md. Native and real-device checks not included.",
       "source": "docs/sdlc/work-items/TS-FIX-102/acceptance-verification.md",
       "recorded_at": "2026-11-27T00:11:12.402812+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "checks",
+      "status": "passed",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Re-run on the later tree that includes TS-FIX-103: framework-check (276), test-backend (1124 passed, 15 skipped; no rerun needed), web lint/typecheck/test (417), mobile typecheck/Jest (708), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip in account-recovery.spec.ts. All passed.",
+      "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004",
+        "AC-005",
+        "AC-006"
+      ]
+    },
+    {
+      "id": "local-integration",
+      "status": "passed",
+      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
+      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Re-run on the later tree: Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed after 65s. One 429 on the receipt-parse endpoint during the first part; none on login. Includes the receipt specs; other browsers not run.",
+      "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
+      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": [
         "AC-001",
         "AC-002",

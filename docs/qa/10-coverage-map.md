@@ -1,6 +1,7 @@
 # 10 — Release Coverage Map
 
 TS-QA-104 · rows W-14, 21, 25..27, 29 updated by TS-QA-105 (those tests were run) · checked 2026-11-26 against `1c6b4f9` plus the uncommitted working tree.
+Rows W-06, 27, 43 and M-09, 10, 15, 17, 18, 25, 34 updated 2026-11-27 for TS-QA-106 and TS-FIX-103. Run results are in those work items; a row is not proof of a passing run on the release version.
 One row per web route, dialog or flow and per mobile screen or flow. This replaces `05` as the current view of coverage; `05` stays as the audit-time record.
 
 **Method and limits.** Routes come from `App.tsx`, mobile screens from `core/navigation` and `app/{routes,tabs}`. Automated status comes from reading Playwright test **titles** (and spec setup lines for group flows) and Maestro flow steps. **No test was run.** Lower-layer entries are matched by test **file name**; their bodies were not reviewed. So `UI` means "a UI test claims this", not "verified passing or complete". Dialog and sheet rows are grouped by the flow that opens them.
@@ -24,7 +25,7 @@ Gap priority: **P0** money, data loss, sign-in, privacy or isolation · **P1** m
 | W-03 | Google sign-in / sign-up | none | LOWER | `GoogleSignInButton.test` | P0 | R1 |
 | W-04 | `/register` | AUTH-007..009 | UI | `registration`, `auth-forms` | P0 | R2 |
 | W-05 | Logout, session restore, route guards, refresh failure | AUTH-005, 006, 013 | UI | `session`, `session-guards` (refresh stubbed) | P0 | W1, W12 |
-| W-06 | `/forgot-password`, `/reset-password` | AUTH-010, 011 | PART | uniform reply, bad token → **a successful reset** | P0 | R2 |
+| W-06 | `/forgot-password`, `/reset-password` | AUTH-010, 011 | UI | uniform reply, bad token; `account-recovery`: successful reset from a link, link reuse refused (token issued by a local QA script; no mail is sent) → real email delivery | P0 | R2 |
 | W-07 | `/verify-email`, verify banner and prompt | AUTH-012 | PART | invalid token → valid link, resend | P1 | R2 |
 | W-08 | `/dashboard` | none dedicated | PART | totals follow add/delete → scope toggle values, cards, links, checklist | P1 | W3 |
 | W-09 | Header type-to-log bar | none | LOWER | `quickLogParse.test` | P1 | W2 |
@@ -45,7 +46,7 @@ Gap priority: **P0** money, data loss, sign-in, privacy or isolation · **P1** m
 | W-24 | Create group | GRP-001 | UI | `group-splits` | P0 | W5 |
 | W-25 | Add member (registered or placeholder) | GRP-002, 003 | UI | `group-expense-create`: registered email, unregistered email invite, name only (no mail is sent) | P0 | W5 |
 | W-26 | **Add a group expense in the group page** | GRP-004..006 | UI | `group-expense-create`: five split methods, excluded member, invalid and stale split, other and multiple payers; pre-filled Exact and Percentage save as they are (TS-FIX-101) | P0 | W5 |
-| W-27 | Edit / delete group expense, comments, history, settle share | GRP-007 | PART | `group-expense-lifecycle`: rename, amount change, history, delete, delete and Undo, comments, settle share → date/category edit, itemized edit | P0 | W6 |
+| W-27 | Edit / delete group expense, comments, history, settle share | GRP-007 | PART | `group-expense-lifecycle`: rename, amount-only change keeps and rescales an equal split, a split the user set must be fixed, history, delete and Undo, comments, settle share → date/category edit, itemized edit | P0 | W6 |
 | W-28 | Balances and suggested, partial, over settle-up | GRP-008 | UI | `balances`, `settle-up` | P0 | W7 |
 | W-29 | Custom settlement, undo settlement | GRP-009 | UI | `group-expense-lifecycle`: custom settlement and same-person block. **No UI undoes a settlement** (API only), so there is nothing to drive | P0 | W7 |
 | W-30 | Group settings: members, roles, simplify, mute, export, leave, archive, delete | GRP-011, 013 | LOWER | component and API tests; one phone layout test | **P0** | W8 |
@@ -61,7 +62,7 @@ Gap priority: **P0** money, data loss, sign-in, privacy or isolation · **P1** m
 | W-40 | Ask side panel | none | LOWER | `AskOverlay.test` | P2 | R4 |
 | W-41 | Account: name | ACC-001 | PART | `profile-settings` → phone, payment handles | P1 | W11 |
 | W-42 | Account: tag management and bulk apply | none | LOWER | tag API tests | P1 | W11 |
-| W-43 | Change password, session list, export, delete account | ACC-002..005 | PART | `account-security` → sign out all devices | P0 | W11 |
+| W-43 | Change password, session list, export, delete account | ACC-002..005 | UI | `account-security`; `account-recovery`: sign out of all devices ends both sessions | P0 | W11 |
 | W-44 | Assistants: manage, approve | MCP-002 | STUB | `assistants-stubbed` | P0 | R5 |
 | W-45 | `/ai/connect/:id` consent and real OAuth | MCP-001 | LOWER | backend MCP/OAuth, `AssistantAccessPage.test` | P0 | R5 |
 | W-46 | `/contact` | none | PART | axe only → submitting the form | P2 | W11 |
@@ -84,23 +85,23 @@ Maestro runs are local and only at release when mobile code changed. A backend-o
 | M-06 | Tab navigation | UI | `tabs-render` (render only) | P1 | M2 |
 | M-07 | Add personal expense, keypad, category, date | UI | `expense-create`, `category-picker`, `date-picker` | P0 | M3 |
 | M-08 | Draft restore, lost save response | UI | `draft-recovery`, `lost-save-response` | P0 | — |
-| M-09 | Expense list, search, filters, detail, **edit, delete** | LOWER | utility Jest only | **P0** | M4 |
-| M-10 | Move to group | NONE | | P0 | M4 |
+| M-09 | Expense list, search, filters, detail, **edit, delete** | PART | `expense-edit-delete`: edit amount, delete with cancel, stored data → search, filters, detail | **P0** | M4 |
+| M-10 | Move to group | PART | `expense-move-group`: move with the default equal split, stored data → other splits, keyboard open in the pop-up | P0 | M4 |
 | M-11 | Merchant and Item detail | NONE | | P1 | M8 |
 | M-12 | Receipt scan from photo library | PART | iOS parses with mock backend; Android only proves OCR ran | P0 | R3 |
 | M-13 | Receipt camera capture, item split | LOWER | `ItemSplitBoard.test`; camera needs a device | P0 | R3 |
 | M-14 | Equal group expense from Add sheet | UI | `group-expense` | P0 | M5 |
-| M-15 | Other splits and multiple payers | LOWER | `PayerPicker.test`, API split maths | P0 | M5 |
+| M-15 | Other splits and multiple payers | PART | `group-split-exact`: exact split from the Add sheet, stored data; `PayerPicker.test` → percent, shares, adjust, several payers; typing over a filled value on Android was checked once by a temporary probe | P0 | M5 |
 | M-16 | Groups list, create group, add member, People tab | PART | tab renders → all actions | P0 | M5 |
-| M-17 | Group detail: edit/delete expense, balances, activity | LOWER | groups Jest | **P0** | M6 |
-| M-18 | Settle up and payment-app links | LOWER | `paymentDeepLinks.test` | **P0** | M6, R6 |
+| M-17 | Group detail: edit/delete expense, balances, activity | PART | `group-expense-edit-delete`: amount edit, delete, balances, stored data → activity, comments, itemized edit, typing a comma amount (Jest only) | **P0** | M6 |
+| M-18 | Settle up and payment-app links | PART | `settle-up`: partial payment from a balance row and "Settle up" for what I owe, stored direction and amount; Jest for amounts typed with a comma → payment-app links on a device | **P0** | M6, R6 |
 | M-19 | Group settings, export, archive, leave, delete | LOWER | export Jest | P0 | M6 |
 | M-20 | Invite link, signed in / signed out | PART | `deep-link-join`, `deep-link-signed-out`. Known gap F-014: signed-out invite is dropped | P1 | R2 |
 | M-21 | Insights overview and scope | PART | `insights-scope-select` → totals | P0 | M7 |
 | M-22 | Budgets (inside Insights) | NONE | | P1 | M8 |
 | M-23 | Cards | LOWER | backend only | P2 | M8 |
 | M-24 | Categories & tags | NONE | | P1 | M8 |
-| M-25 | Recurring screen and due prompt | LOWER | `RecurringPrompt.test` | **P0** | M8 |
+| M-25 | Recurring screen and due prompt | PART | `recurring-run-edit`: run now, edit amount, stored data; `RecurringPrompt.test` → add template, due prompt | **P0** | M8 |
 | M-26 | Ask | LOWER | consent and history Jest | P0 | R4 |
 | M-27 | Activity | LOWER | `activityFeed.test` | P2 | M9 |
 | M-28 | Account: edit profile, export | LOWER | `ProfileScreen` tests | P1 | M9 |
@@ -109,7 +110,7 @@ Maestro runs are local and only at release when mobile code changed. A backend-o
 | M-31 | Analytics/crash consent and Privacy (hidden in E2E builds) | LOWER | consent and analytics Jest; UAT-ANA-001..007 Not Run | P0 | M1, R9 |
 | M-32 | Feedback, About | NONE | | P2 | M9 |
 | M-33 | Push permission and notification tap | LOWER | notification Jest; needs a device | P1 | R6 |
-| M-34 | Dark mode, small screen, keyboard, Android Back, VoiceOver/TalkBack | PART | sheet accessibility flows → the rest | P1 | M10, R7 |
+| M-34 | Dark mode, small screen, keyboard, Android Back, VoiceOver/TalkBack | PART | sheet accessibility flows; keypad-open screenshots on large simulators for five money screens → small screen, large text, other pop-ups, real devices, screen readers | P1 | M10, R7 |
 | M-35 | Install over the previous release (stored session and draft) | NONE | needs a device or retained build | P0 | R10 |
 
 Google sign-in and connected-assistant management are web only.
@@ -127,8 +128,8 @@ Google sign-in and connected-assistant management are web only.
 | Order | Work | Rows |
 |---|---|---|
 | A1 | **Done 2026-11-26 (TS-QA-105)**, except the itemized receipt split inside a group (W-17): web group money journeys through the UI | W-14, 21, 25..27, 29 |
-| A2 | Mobile: expense edit/delete, settle up, group expense edit, other splits, recurring | M-09, 10, 15, 17, 18, 25 |
-| A3 | Account safety on both: password reset completion, delete account, security, sign out all, consent | W-06, 43, 48; M-03, 29..31 |
+| A2 | **Mostly done 2026-11-27 (TS-QA-106):** mobile expense edit/delete, move, settle up, group expense edit, exact split, recurring run/edit. Left: other splits, several payers | M-09, 10, 15, 17, 18, 25 |
+| A3 | Account safety on both. **Web password reset and sign out everywhere done 2026-11-27**; mobile account screens are tested by hand for this release | W-06, 43, 48; M-03, 29..31 |
 | A4 | Web group settings and invite resume; mobile group management | W-30..32; M-16, 19, 20 |
 | A5 | Remaining P1/P2 screens | the rest |
 

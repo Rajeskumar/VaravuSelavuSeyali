@@ -31,6 +31,10 @@
     {
       "id": "AC-006",
       "outcome": "Mobile Settle up (button and own row) never opens a sheet without a payer and payee: outgoing transfers are listed, a single incoming one is pre-filled, several incoming ones ask who paid, none says so."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "On mobile, Settle up and group expense edit read a comma or dot as the decimal mark (12,50 is 12.50) and record nothing for text that could be read as a different amount, such as 1,234.50, 1,234 or three decimals; the button, payment links and recorded value agree."
     }
   ],
   "required_evidence": [
@@ -46,8 +50,8 @@
   ],
   "implementation_approval": {
     "actor": "Rajeshkumar Ganesan",
-    "fingerprint": "b0fc114c4d5b50c06a1960324e510857d1cfcec742a8f704168f208d20b91866",
-    "reference": "User message 2026-11-27: 'Agreed and proceed on all those.', replying to a request to confirm the fix plan (then AC-001..AC-004 in implementation.md) and to also fix web group editing and the Settle up button. AC-005 and AC-006 were written after that message under that instruction; the owner has not read their text. No commit, push, production access or release authorized."
+    "fingerprint": "a23f25e4b26ed55c84dff694a3381aeaee8fb9daa70ebdab8b345b94c4eee3d3",
+    "reference": "User message 2026-11-27: 'Agreed and proceed on all those.', replying to a request to confirm the fix plan (then AC-001..AC-004 in implementation.md) and to also fix web group editing and the Settle up button. AC-005 and AC-006 were written after that message under that instruction; the owner has not read their text. No commit, push, production access or release authorized. Later on 2026-11-27 the owner asked to fix the Android keyboard bug ('Fix android keyboard bug'), then, after option A (shared amount reader for Settle up and group edit) was described, wrote 'create a work tree afor the branch we worked on before and fix that change and push to the branch. also do those record work as well. dont disturb observability branch'. AC-007 text was written after that message; the owner has not read the text of AC-005 to AC-007. Commit and push of qa-coverage-extend authorized; no merge, production access or release authorized."
   },
   "links": [
     "docs/sdlc/work-items/TS-QA-106/work-item.md"

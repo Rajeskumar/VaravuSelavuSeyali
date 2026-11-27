@@ -14,3 +14,4 @@ Requirements: requirements.md; acceptance-criterion text: work-item.json.
 | S8 | AC-004 | iOS number pad open | tap Save once | saved, sheet closes | flow expense-edit-delete (no keyboard workaround) + screenshot |
 | S9 | AC-005 | Web, equal expense | change amount, or only the description | Save enabled; PUT without payers/split | Jest ExpenseDetailDialog.save |
 | S10 | AC-006 | Owed by one / by several / nobody | button or own row | pre-filled / Balances + message / message | Jest GroupDetailScreen.settle |
+| S11 | AC-007 | Settle up and group edit open | type `12,50`; type `1,234.50`, `1,234`, `12.345` | 12.50 shown and sent; the others send nothing | Jest parseAmount, SettleUpSheet.amount, EditGroupExpenseModal.save |
