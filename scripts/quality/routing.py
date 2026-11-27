@@ -63,6 +63,7 @@ HIGH_PREFIXES = (
     "varavu_selavu_ui/src/analytics/",
     "docs/analytics/catalog.v1.json",
     "varavu_selavu_app/privacy_policy.html",
+    "ops/observability/",
     ".github/workflows/",
     ".github/rulesets/",
     ".cloudbuild/",
@@ -279,7 +280,7 @@ def classify(files, risk=None, product=False):
             checks.add("security")
         if name in DEPENDENCY_FILES:
             checks.update(("security", "dependency-audit"))
-        if p.startswith(APP):
+        if p.startswith(APP) or p.startswith("ops/observability/"):
             checks.add("backend")
         if p.startswith("varavu_selavu_ui/"):
             checks.add("web")
@@ -315,7 +316,7 @@ def classify(files, risk=None, product=False):
             or records
             or p in CONTRACT_FILES
             or p.startswith(
-                ("varavu_selavu_app/", "varavu_selavu_ui/", "varavu_selavu_mobile/", "qa/")
+                ("varavu_selavu_app/", "varavu_selavu_ui/", "varavu_selavu_mobile/", "qa/", "ops/observability/")
             )
         ):
             manual.add("unmapped-area-checks")

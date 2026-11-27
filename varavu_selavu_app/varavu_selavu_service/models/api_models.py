@@ -251,6 +251,8 @@ class FeatureFlagsResponse(BaseModel):
     # stripping the fields returned by get_config().
     mcp_enabled: bool = False
     mcp_management_url: str = ""
+    # TS-OBS-001: opt-in client performance diagnostics endpoint flag (default False).
+    client_diagnostics_enabled: bool = False
 
 
 class AiFeatureUsage(BaseModel):

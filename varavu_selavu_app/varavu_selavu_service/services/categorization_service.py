@@ -177,7 +177,16 @@ class CategorizationService:
                 return main, sub, merchant
             raise ValueError(f"Invalid category combination: {main} / {sub}")
         except Exception as exc:  # pragma: no cover - network or parsing errors
-            logger.warning("LLM classification failed: %s", exc)
+            from varavu_selavu_service.core.observability import log_event, safe_error_type
+            log_event(
+                logger,
+                logging.WARNING,
+                "categorize_llm_failed",
+                component="categorize_fallback",
+                feature="categorize",
+                outcome="failed",
+                error_type=safe_error_type(exc),
+            )
         return None
 
     def suggest_local(

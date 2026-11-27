@@ -58,7 +58,7 @@ def main() -> None:
             {"id": str(uuid.uuid4()), "email": email, "name": name, "password_hash": password_hash},
         )
         state = "created" if result.rowcount else "already present"
-        print(f"QA session user {state}: {email}")
+        print(f"QA session user {state}")
 
 
 if __name__ == "__main__":

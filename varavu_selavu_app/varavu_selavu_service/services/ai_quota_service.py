@@ -245,13 +245,30 @@ class AiQuotaService:
             if _spend_cache["day"] == reservation.day:
                 _spend_cache["value"] += cost
             total = _spend_cache["value"] if _spend_cache["day"] == reservation.day else None
-        logger.info(
-            "ai_usage user=%s feature=%s model=%s in_tok=%d out_tok=%d cost_usd=%.6f",
-            reservation.user_email, reservation.feature, model, input_tokens, output_tokens, cost,
+        from varavu_selavu_service.core.observability import log_event
+        log_event(
+            logger,
+            logging.INFO,
+            "ai_usage",
+            component="llm",
+            feature=reservation.feature if reservation.feature in ("chat", "receipt", "categorize", "budget_why") else "other",
+            model=model,
+            input_tokens=int(input_tokens),
+            output_tokens=int(output_tokens),
+            est_cost_usd=round(float(cost), 6),
+            outcome="completed",
         )
         budget = self.settings.AI_GLOBAL_DAILY_BUDGET_USD
         if total is not None and budget > 0 and total >= 0.8 * budget:
-            logger.warning("ai_spend_high day=%s est_total_usd=%.4f budget_usd=%.2f", reservation.day, total, budget)
+            log_event(
+                logger,
+                logging.WARNING,
+                "ai_spend_high",
+                component="llm",
+                est_total_usd=round(float(total), 4),
+                budget_usd=round(float(budget), 2),
+                outcome="degraded",
+            )
         return cost
 
     def refund(

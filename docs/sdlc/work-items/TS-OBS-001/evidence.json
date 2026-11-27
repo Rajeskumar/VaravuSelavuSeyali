@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "checks-fast",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Local macOS + PR #68 GitHub Actions CI (9/10 passed; 1 gitleaks false positive fixed locally in consent.ts).",
+      "command_or_method": "make framework-check (274/274), make test-backend (incl. 8/8 test_observability.py after fix), make lint-web typecheck-web test-web (incl. 4/4 diagnostics.test.ts after fix), make typecheck-mobile test-mobile, qa typecheck, security --no-audit, test_integrity.py, logging_guard.py, ops/observability/apply.py dry-run.",
+      "source": ".sdlc-logs/fast-sdlc1795809737992004000; https://github.com/Rajeskumar/VaravuSelavuSeyali/pull/68",
+      "recorded_at": "2026-11-27T22:22:19+00:00",
+      "acceptance_criteria": ["AC-01", "AC-02", "AC-04", "AC-05", "AC-06", "AC-08", "AC-09", "AC-10"]
+    },
+    {
+      "id": "privacy-red-green",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Local macOS; synthetic sentinel strings across DEBUG=True/False, hostile exceptions, third-party SDK loggers, uvicorn.access, and unconfigured SMTP.",
+      "command_or_method": "cd varavu_selavu_app && poetry run pytest -q tests/test_observability.py && python3 ../scripts/quality/logging_guard.py",
+      "source": "varavu_selavu_app/tests/test_observability.py; scripts/quality/tests/test_logging_guard.py",
+      "recorded_at": "2026-11-27T22:22:19+00:00",
+      "acceptance_criteria": ["AC-01", "AC-02"]
+    },
+    {
+      "id": "logging-inventory",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Local repository audit and source verification against docs/sdlc/work-items/TS-OBS-001/audit.md (L01-L23).",
+      "command_or_method": "Closed all source rows L01-L11, L13, L14, L15, L18-L19, L21, L23; documented cloud/provider boundaries L12/L22 in ops/observability/sink-exclusions.json.",
+      "source": "docs/sdlc/work-items/TS-OBS-001/audit.md; ops/observability/sink-exclusions.json",
+      "recorded_at": "2026-11-27T22:22:19+00:00",
+      "acceptance_criteria": ["AC-01", "AC-02", "AC-03"]
+    },
+    {
+      "id": "server-observability",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Local macOS; FastAPI ASGI TestClient + SQLite test DB.",
+      "command_or_method": "cd varavu_selavu_app && poetry run pytest -q tests/test_observability.py (8/8 passed; OBS-06/07/10/12/15/16/27).",
+      "source": "varavu_selavu_app/tests/test_observability.py",
+      "recorded_at": "2026-11-27T22:22:19+00:00",
+      "acceptance_criteria": ["AC-04", "AC-05", "AC-06", "AC-08", "AC-14"]
+    },
+    {
+      "id": "postgres-integration",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "GitHub Actions CI PostgreSQL 16 (PR #68: Backend PostgreSQL, MCP PostgreSQL, Migration rehearsal, QA Playwright + axe).",
+      "command_or_method": "PR #68 CI jobs: Unit tests/Backend PostgreSQL (1m9s PASS), Unit tests/MCP PostgreSQL (50s PASS), Migration rehearsal (49s PASS), QA/Smoke, regression & API + axe (6m47s PASS).",
+      "source": "https://github.com/Rajeskumar/VaravuSelavuSeyali/pull/68",
+      "recorded_at": "2026-11-27T22:20:34+00:00",
+      "acceptance_criteria": ["AC-04", "AC-05", "AC-06"]
+    },
+    {
+      "id": "load-isolation",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Local macOS; offline target guard unit tests without network or cloud mutations.",
+      "command_or_method": "cd varavu_selavu_app && poetry run pytest -q tests/test_observability.py -k obs20.",
+      "source": "qa/load/target_guard.py; varavu_selavu_app/tests/test_observability.py",
+      "recorded_at": "2026-11-27T22:22:19+00:00",
+      "acceptance_criteria": ["AC-10", "AC-11"]
+    },
+    {
+      "id": "client-privacy-parity",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Local macOS; Jest/RTL (web and mobile) + PR #68 CI Web/Mobile/QA axe.",
+      "command_or_method": "Web tsc --noEmit + diagnostics.test.ts (4/4 after F-SEC-1 fix) + mobile observability.test.ts/boundary.test.ts/ConsentUi.test.tsx (19/19).",
+      "source": "varavu_selavu_ui/src/analytics/diagnostics/diagnostics.test.ts; varavu_selavu_mobile/src/core/observability/observability.test.ts",
+      "recorded_at": "2026-11-27T22:22:09+00:00",
+      "acceptance_criteria": ["AC-08", "AC-09"]
+    },
+    {
+      "id": "review-code",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Inline implementation-review (performance focus) on scope 5b555028f1c1 (no claim of independent reviewer).",
+      "command_or_method": "Reviewed core/observability, api/telemetry, web/mobile diagnostics, ops/observability, qa/load. Recorded open P2 F-IMP-1 (wire lifecycle hooks before enabling CLIENT_DIAGNOSTICS_ENABLED=true).",
+      "source": "docs/sdlc/work-items/TS-OBS-001/findings.json",
+      "recorded_at": "2026-11-27T22:22:30+00:00",
+      "acceptance_criteria": ["AC-04", "AC-05", "AC-06", "AC-08", "AC-09", "AC-10"]
+    },
+    {
+      "id": "review-security",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Inline security-review on scope 5b555028f1c1 + PR #68 gitleaks log inspection.",
+      "command_or_method": "Verified auth/CSRF/pre-parse 8 KiB cap/strict allowlist/unconditional sanitizer. Fixed F-SEC-1 (gitleaks false positive DIAGNOSTICS_CONSENT_KEY -> DIAGNOSTICS_STORAGE_NAME) and F-SEC-2 (HTTP_413_CONTENT_TOO_LARGE + _rate_buckets pruning).",
+      "source": "docs/sdlc/work-items/TS-OBS-001/findings.json",
+      "recorded_at": "2026-11-27T22:22:30+00:00",
+      "acceptance_criteria": ["AC-01", "AC-02", "AC-03", "AC-08", "AC-09", "AC-10"]
+    },
+    {
+      "id": "review-ui",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Inline ui-review on scope 6aee14cff9b7 + PR #68 CI axe-scan.mjs (light & dark, 0 violations).",
+      "command_or_method": "Checked AnalyticsPreferences.tsx, ErrorBoundary.tsx, AIAnalystChat.tsx, PrivacyScreen.tsx for WCAG 2.2 AA landmarks, status live regions, 44px targets, and mobile accessibilityLabel/Hint. Recorded P3 F-UI-1.",
+      "source": "docs/sdlc/work-items/TS-OBS-001/findings.json",
+      "recorded_at": "2026-11-27T22:22:30+00:00",
+      "acceptance_criteria": ["AC-09"]
+    },
+    {
+      "id": "review-product",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Inline product-review on scope 5b555028f1c1 against AC-01..AC-14 and ADR 0002.",
+      "command_or_method": "Verified default-off flags, independent consent, zero regressions to money/auth/quota/splits, and honest separation of local vs cloud/staging gates.",
+      "source": "docs/sdlc/work-items/TS-OBS-001/acceptance-verification.md",
+      "recorded_at": "2026-11-27T22:22:30+00:00",
+      "acceptance_criteria": ["AC-01", "AC-02", "AC-04", "AC-05", "AC-06", "AC-08", "AC-09", "AC-10", "AC-14"]
+    },
+    {
+      "id": "acceptance-verification",
+      "status": "passed",
+      "snapshot": "250d408d42a351fbb56b563e7294c9386af16f64096e982e5e6b9cff3fd6a5bb",
+      "environment": "Local + PR #68 CI traceability matrix across AC-01..AC-14.",
+      "command_or_method": "Mapped every AC to executed local/CI evidence and explicitly listed unexecuted cloud/staging/device items.",
+      "source": "docs/sdlc/work-items/TS-OBS-001/acceptance-verification.md",
+      "recorded_at": "2026-11-27T22:22:30+00:00",
+      "acceptance_criteria": ["AC-01", "AC-02", "AC-03", "AC-04", "AC-05", "AC-06", "AC-08", "AC-09", "AC-10", "AC-11", "AC-14"]
+    }
+  ]
+}

@@ -69,8 +69,8 @@ export default function AIAnalystChat({ userId: _userId, initialQuery, initialQu
       .then((res: ModelsResponse) => {
         setModels(res.models);
       })
-      .catch((e) => {
-        console.error('Failed to load models', e);
+      .catch(() => {
+        // Model list failure falls back silently to server defaults; never log raw error objects.
       });
     return () => ac.abort();
   }, []);

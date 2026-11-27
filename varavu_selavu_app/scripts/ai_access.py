@@ -64,22 +64,23 @@ def cmd_usage(db, args) -> None:
     ):
         print(f"{feature:<12}{int(calls):>8}{int(tin):>12}{int(tout):>12}{float(cost):>12.4f}")
 
-    print(f"\nTop {args.top} users by estimated cost:")
-    print(f"{'email':<40}{'calls':>8}{'est_usd':>12}")
-    for email, calls, cost in (
+    print(f"\nTop {args.top} accounts by estimated cost (anonymized):")
+    print(f"{'rank':<12}{'calls':>8}{'est_usd':>12}")
+    for rank, (_email, calls, cost) in enumerate(
         db.query(AiUsageDaily.user_email, func.sum(AiUsageDaily.count), func.sum(AiUsageDaily.est_cost_usd))
         .filter(AiUsageDaily.day == day)
         .group_by(AiUsageDaily.user_email)
         .order_by(func.sum(AiUsageDaily.est_cost_usd).desc())
-        .limit(args.top)
+        .limit(args.top),
+        start=1,
     ):
-        print(f"{email:<40}{int(calls):>8}{float(cost):>12.4f}")
+        print(f"account#{rank:<4}{int(calls):>8}{float(cost):>12.4f}")
 
 
 def cmd_show(db, args) -> None:
     user = _user(db, args.email)
     usage = AiQuotaService(db).usage(user.email)
-    print(f"{user.email}: access={user.ai_access} overrides={user.ai_limits_override or {}} "
+    print(f"account: access={user.ai_access} overrides={user.ai_limits_override or {}} "
           f"verified={user.email_verified}")
     for feature, u in usage["features"].items():
         limit = "unlimited" if u["limit"] is None else u["limit"]
@@ -94,7 +95,7 @@ def cmd_set_limit(db, args) -> None:
     user.ai_limits_override = overrides
     flag_modified(user, "ai_limits_override")
     db.commit()
-    print(f"{user.email}: {args.feature} daily limit set to {args.limit}")
+    print(f"account: {args.feature} daily limit set to {args.limit}")
 
 
 def cmd_clear_limit(db, args) -> None:
@@ -107,14 +108,14 @@ def cmd_clear_limit(db, args) -> None:
     user.ai_limits_override = overrides or None
     flag_modified(user, "ai_limits_override")
     db.commit()
-    print(f"{user.email}: overrides now {overrides or {}}")
+    print(f"account: overrides now {overrides or {}}")
 
 
 def _set_access(db, email: str, access: str) -> None:
     user = _user(db, email)
     user.ai_access = access
     db.commit()
-    print(f"{user.email}: ai_access = {access}")
+    print(f"account: ai_access = {access}")
 
 
 def cmd_refund_today(db, args) -> None:
@@ -124,7 +125,7 @@ def cmd_refund_today(db, args) -> None:
         q = q.filter(AiUsageDaily.feature == args.feature)
     n = q.update({AiUsageDaily.count: 0}, synchronize_session=False)
     db.commit()
-    print(f"{user.email}: reset today's count on {n} feature row(s) (tokens/cost kept for the spend cap)")
+    print(f"account: reset today's count on {n} feature row(s) (tokens/cost kept for the spend cap)")
 
 
 def main() -> None:

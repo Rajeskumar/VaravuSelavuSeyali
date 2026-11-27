@@ -235,9 +235,14 @@ class EntityResolutionService:
             canonical = self.db.query(model).filter(model.id == alias.entity_id).first()
             if canonical is not None:
                 return ResolutionResult(status="linked", canonical=self._to_ref(canonical))
-            logger.warning(
-                "Dangling alias %s -> missing %s %s (canonical entity was deleted); "
-                "falling through to trigram search", alias.id, entity_type, alias.entity_id,
+            from varavu_selavu_service.core.observability import log_event
+            log_event(
+                logger,
+                logging.WARNING,
+                "entity_dangling_alias",
+                component="entity_resolution",
+                entity_type=entity_type if entity_type in ("item", "merchant") else "other",
+                outcome="fallback",
             )
 
         # Tiers 3-5 share one trigram fetch, isolated in its own method
@@ -288,9 +293,14 @@ class EntityResolutionService:
             # similarity() undefined (e.g. SQLite in tests/local dev without
             # pg_trgm) — degrade to "no fuzzy candidates" so resolve() still
             # falls through to tier 5 instead of hard-crashing every caller.
-            logger.warning(
-                "Trigram similarity() unavailable while resolving %s '%s'; treating as no candidates",
-                entity_type, raw_key,
+            from varavu_selavu_service.core.observability import log_event
+            log_event(
+                logger,
+                logging.WARNING,
+                "entity_trigram_unavailable",
+                component="entity_resolution",
+                entity_type=entity_type if entity_type in ("item", "merchant") else "other",
+                outcome="fallback",
             )
             return []
         return [

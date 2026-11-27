@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useAppTheme } from '../theme/ThemeContext';
 import { AppTheme } from '../theme/theme';
@@ -12,16 +12,37 @@ import { showToast } from '../ui/Toast';
 import PrivacyPolicyLink from './PrivacyPolicyLink';
 import { useConsent } from './useConsent';
 import { consentCopy } from './consentCopy';
+import {
+  DIAGNOSTICS_CONSENT_COPY,
+  DIAGNOSTICS_CONSENT_TITLE,
+  getDiagnosticsConsentState,
+  loadDiagnosticsConsent,
+  setDiagnosticsConsent,
+  subscribeDiagnosticsConsent,
+} from '../observability/consent';
 
-/** Account → Privacy: change either choice at any time; a change applies immediately. */
+/** Account → Privacy: change any choice at any time; a change applies immediately. */
 export default function PrivacyScreen() {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const consent = useConsent();
+  const [diagConsent, setDiagConsent] = useState(getDiagnosticsConsentState);
+  useEffect(() => {
+    const unsub = subscribeDiagnosticsConsent(setDiagConsent);
+    if (!getDiagnosticsConsentState().loaded) {
+      void loadDiagnosticsConsent();
+    }
+    return unsub;
+  }, []);
   const copy = consentCopy();
   const debugCrashUnavailable = Platform.OS === 'ios' && __DEV__;
   const save = async (category: 'analytics' | 'crash', next: boolean) => {
     if (!(await setConsentChoice(category, next))) showToast({ message: "Couldn't save your choice. It applies until you close the app.", type: 'warning' });
+  };
+  const saveDiagnostics = async (next: boolean) => {
+    if (!(await setDiagnosticsConsent(next))) {
+      showToast({ message: "Couldn't save your performance diagnostics choice.", type: 'warning' });
+    }
   };
 
   return (
@@ -51,6 +72,19 @@ export default function PrivacyScreen() {
           disabled={!consent.loaded}
           accessibilityLabel={copy.crashTitle}
           accessibilityHint={copy.crashBody}
+        />
+      </View>
+      <View style={styles.row}>
+        <View style={styles.rowText}>
+          <Text style={styles.rowTitle}>{DIAGNOSTICS_CONSENT_TITLE}</Text>
+          <Text style={styles.rowBody}>{DIAGNOSTICS_CONSENT_COPY}</Text>
+        </View>
+        <ToggleSwitch
+          value={diagConsent.choice === 'granted'}
+          onValueChange={(next) => { void saveDiagnostics(next); }}
+          disabled={!diagConsent.loaded}
+          accessibilityLabel={DIAGNOSTICS_CONSENT_TITLE}
+          accessibilityHint={DIAGNOSTICS_CONSENT_COPY}
         />
       </View>
       <Text style={styles.footer}>{copy.identifiers}</Text>

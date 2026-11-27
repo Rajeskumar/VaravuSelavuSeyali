@@ -67,6 +67,7 @@ Claude delegates routed reviews to `code-reviewer`, `ui-reviewer`, `security-rev
 `product-reviewer` (read-only). Codex applies the skills inline. See `.ai-sdlc/adapters.md`.
 
 ## Key Decisions (cross-cutting; area decisions live in the area AGENTS.md)
+- **Observability (TS-OBS-001)**: unconditional JSON log sanitization (`core/observability/`, `logging_guard.py`) across runtime, clients, nginx and tooling; `POST /api/v1/telemetry/batch` is default-off (`CLIENT_DIAGNOSTICS_ENABLED=false`) behind independent web/mobile Performance diagnostics consent; `ops/observability/` and `qa/load/` are implemented locally, pending separate authorization for cloud/staging activation ([plan](docs/features/TS-OBS-001-observability.md), [ADR](docs/decisions/0002-minimal-observability.md)).
 - **AI SDLC**: five phases, repo-local records, risk tiers; deterministic checks before AI review; release readiness never grants deploy authority (`.ai-sdlc/lifecycle.md`).
 - **Money is `Decimal`, never float** (`core/money.py`).
 - **"Today" is the local date: `todayIso()`** (`utils/expenseDates`, web + mobile), never `toISOString()` (UTC; CI won't catch it).

@@ -102,26 +102,33 @@ def send_email(
     msg.attach(html_part)
 
     if not _settings.MAIL_USERNAME or not _settings.MAIL_PASSWORD:
-        logger.warning("MAIL_USERNAME or MAIL_PASSWORD not configured. Skipping actual email send.")
-        if _settings.ENVIRONMENT == "local":
-            # Local development only: with no SMTP configured this is how a developer gets the
-            # verification/reset link. Anywhere else the message carries a live token and must
-            # not land in the logs.
-            logger.info("Mock Email Output:\n%s", msg.as_string())
-        else:
-            logger.info("Email not sent (SMTP not configured): subject=%r", msg["Subject"])
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        if _settings.ENVIRONMENT == "local" and _settings.MAIL_SERVER in ("localhost", "127.0.0.1", "::1"):
+            try:
+                with smtplib.SMTP(_settings.MAIL_SERVER, _settings.MAIL_PORT, timeout=5) as server:
+                    server.sendmail(sender, [recipient], msg.as_string())
+                log_event(logger, logging.INFO, "email_delivery", component="email", provider="smtp", action="contact", outcome="completed")
+                return True
+            except Exception as exc:
+                log_event(logger, logging.WARNING, "email_delivery", component="email", provider="smtp", action="contact", outcome="skipped", error_type=safe_error_type(exc))
+                return True
+        log_event(logger, logging.WARNING, "email_delivery", component="email", provider="smtp", action="contact", outcome="skipped")
         return True
 
     try:
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
         with smtplib.SMTP(_settings.MAIL_SERVER, _settings.MAIL_PORT) as server:
             server.starttls()
             server.login(_settings.MAIL_USERNAME, _settings.MAIL_PASSWORD)
             server.sendmail(sender, [recipient], msg.as_string())
+        log_event(logger, logging.INFO, "email_delivery", component="email", provider="smtp", action="contact", outcome="completed")
     except smtplib.SMTPAuthenticationError as e:
-        logger.error("SMTP Authentication failed. Check your MAIL_USERNAME and MAIL_PASSWORD (use an App Password for Gmail).", exc_info=True)
-        raise Exception(f"SMTP Authentication failed: {e}") from e
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(logger, logging.ERROR, "email_delivery", exc_info=e, component="email", provider="smtp", action="contact", outcome="failed", error_type=safe_error_type(e))
+        raise Exception("SMTP Authentication failed") from e
     except Exception as e:
-        logger.error("Failed to send email via SMTP.", exc_info=True)
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(logger, logging.ERROR, "email_delivery", exc_info=e, component="email", provider="smtp", action="contact", outcome="failed", error_type=safe_error_type(e))
         raise
 
     return True
@@ -165,23 +172,29 @@ def send_transactional_email(*, to_email: str, subject: str, heading: str, body_
     msg.attach(html_part)
 
     if not _settings.MAIL_USERNAME or not _settings.MAIL_PASSWORD:
-        logger.warning("MAIL_USERNAME or MAIL_PASSWORD not configured. Skipping actual email send.")
-        if _settings.ENVIRONMENT == "local":
-            # Local development only: with no SMTP configured this is how a developer gets the
-            # verification/reset link. Anywhere else the message carries a live token and must
-            # not land in the logs.
-            logger.info("Mock Email Output:\n%s", msg.as_string())
-        else:
-            logger.info("Email not sent (SMTP not configured): subject=%r", msg["Subject"])
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        if _settings.ENVIRONMENT == "local" and _settings.MAIL_SERVER in ("localhost", "127.0.0.1", "::1"):
+            try:
+                with smtplib.SMTP(_settings.MAIL_SERVER, _settings.MAIL_PORT, timeout=5) as server:
+                    server.sendmail(sender, [to_email], msg.as_string())
+                log_event(logger, logging.INFO, "email_delivery", component="email", provider="smtp", action="transactional", outcome="completed")
+                return True
+            except Exception as exc:
+                log_event(logger, logging.WARNING, "email_delivery", component="email", provider="smtp", action="transactional", outcome="skipped", error_type=safe_error_type(exc))
+                return True
+        log_event(logger, logging.WARNING, "email_delivery", component="email", provider="smtp", action="transactional", outcome="skipped")
         return True
 
     try:
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
         with smtplib.SMTP(_settings.MAIL_SERVER, _settings.MAIL_PORT) as server:
             server.starttls()
             server.login(_settings.MAIL_USERNAME, _settings.MAIL_PASSWORD)
             server.sendmail(sender, [to_email], msg.as_string())
-    except Exception:
-        logger.error("Failed to send transactional email via SMTP.", exc_info=True)
+        log_event(logger, logging.INFO, "email_delivery", component="email", provider="smtp", action="transactional", outcome="completed")
+    except Exception as exc:
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(logger, logging.ERROR, "email_delivery", exc_info=exc, component="email", provider="smtp", action="transactional", outcome="failed", error_type=safe_error_type(exc))
         raise
 
     return True

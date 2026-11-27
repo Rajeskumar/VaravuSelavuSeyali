@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "work_item": "TS-OBS-001",
+  "cardinality_envelope": {
+    "max_routes": 150,
+    "max_components": 8,
+    "max_client_operations": 20,
+    "max_active_custom_series": 5000,
+    "monthly_log_budget_gib": 5,
+    "retention_days": 30
+  },
+  "metrics": [
+    {
+      "name": "trackspense_api_requests",
+      "description": "Normalized backend API request outcomes (excludes raw platform request logs).",
+      "type": "COUNTER",
+      "filter": "jsonPayload.service=\"trackspense-backend\" AND jsonPayload.event=\"api_request_completed\"",
+      "labels": ["route", "method", "outcome", "operation_class"]
+    },
+    {
+      "name": "trackspense_api_duration_ms",
+      "description": "Body-complete backend API request duration in milliseconds.",
+      "type": "DISTRIBUTION",
+      "filter": "jsonPayload.service=\"trackspense-backend\" AND jsonPayload.event=\"api_request_completed\" AND jsonPayload.duration_ms>=0",
+      "value_extractor": "EXTRACT(jsonPayload.duration_ms)",
+      "unit": "ms",
+      "buckets": [50, 100, 250, 500, 1000, 3000, 10000, 30000],
+      "labels": ["route", "operation_class"]
+    },
+    {
+      "name": "trackspense_component_duration_ms",
+      "description": "Bounded DB acquisition/execution, OCR, AI and fallback component timings.",
+      "type": "DISTRIBUTION",
+      "filter": "jsonPayload.service=\"trackspense-backend\" AND jsonPayload.event=\"component_completed\" AND jsonPayload.duration_ms>=0",
+      "value_extractor": "EXTRACT(jsonPayload.duration_ms)",
+      "unit": "ms",
+      "buckets": [10, 50, 100, 250, 500, 1000, 3000, 10000, 30000],
+      "labels": ["component", "outcome"]
+    },
+    {
+      "name": "trackspense_background_outcomes",
+      "description": "Background task started/completed/failed counters.",
+      "type": "COUNTER",
+      "filter": "jsonPayload.service=\"trackspense-backend\" AND jsonPayload.event=\"background_task\"",
+      "labels": ["task_type", "outcome"]
+    },
+    {
+      "name": "trackspense_client_duration_ms",
+      "description": "Consent-gated, untrusted client operation and time Web Vital durations (ms only).",
+      "type": "DISTRIBUTION",
+      "filter": "jsonPayload.service=\"trackspense-backend\" AND jsonPayload.event=\"client_diagnostic\" AND jsonPayload.unit=\"ms\" AND jsonPayload.duration_ms>=0",
+      "value_extractor": "EXTRACT(jsonPayload.duration_ms)",
+      "unit": "ms",
+      "buckets": [100, 250, 500, 1000, 2500, 5000, 10000, 30000],
+      "labels": ["operation", "platform"]
+    },
+    {
+      "name": "trackspense_client_cls_score",
+      "description": "Consent-gated, untrusted web CLS scores (dimensionless score, separate from ms).",
+      "type": "DISTRIBUTION",
+      "filter": "jsonPayload.service=\"trackspense-backend\" AND jsonPayload.event=\"client_diagnostic\" AND jsonPayload.operation=\"cls\" AND jsonPayload.unit=\"score\"",
+      "value_extractor": "EXTRACT(jsonPayload.value)",
+      "unit": "1",
+      "buckets": [0.01, 0.05, 0.1, 0.25, 0.5, 1.0],
+      "labels": ["platform"]
+    },
+    {
+      "name": "trackspense_client_outcomes",
+      "description": "Consent-gated, untrusted client operation outcomes and error categories.",
+      "type": "COUNTER",
+      "filter": "jsonPayload.service=\"trackspense-backend\" AND jsonPayload.event=\"client_diagnostic\"",
+      "labels": ["operation", "platform", "outcome"]
+    }
+  ]
+}

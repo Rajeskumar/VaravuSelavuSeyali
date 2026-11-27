@@ -144,6 +144,13 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-3.1-flash-lite"
     AI_CHAT_ALLOWED_MODELS: str = "gemini:gemini-3.1-flash-lite"
 
+    # Observability & Client Diagnostics (TS-OBS-001)
+    CLIENT_DIAGNOSTICS_ENABLED: bool = False
+    OBSERVABILITY_DB_TIMING_ENABLED: bool = True
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
+    DB_POOL_TIMEOUT_SEC: int = 10
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
