@@ -4,11 +4,11 @@
     {
       "id": "checks",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "framework-check (276), test-backend (1124 passed, 15 skipped; no rerun needed), web lint/typecheck/test (417), mobile typecheck/Jest (708), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip in account-recovery.spec.ts. All passed. Includes the reset-token guard tests.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "framework-check (276), test-backend (1124 passed, 15 skipped; no rerun needed), web lint/typecheck/test (417), mobile typecheck/Jest (708), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip in account-recovery.spec.ts. All passed. Includes the reset-token guard tests. All rerun on the committed tree with the same results.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "recorded_at": "2026-11-27T20:33:42.737181+00:00",
       "acceptance_criteria": [
         "AC-003"
       ]
@@ -16,11 +16,11 @@
     {
       "id": "local-integration",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed after 65s. One 429 on the receipt-parse endpoint during the first part; none on login. Includes account-recovery.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed after 65s. One 429 on the receipt-parse endpoint during the first part; none on login. Includes account-recovery. All rerun on the committed tree with the same results.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "recorded_at": "2026-11-27T20:33:42.737181+00:00",
       "acceptance_criteria": [
         "AC-002"
       ]
@@ -28,9 +28,9 @@
     {
       "id": "code-review",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "The web specs and native flows were in the first review passes; no open P0/P1. They have not changed since. Open P3: two flow waits can pass before a save ends.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "The web specs and native flows were in the first review passes; no open P0/P1. They have not changed since. Open P3: two flow waits can pass before a save ends. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "Reviewer reports in the 2026-11-27 session",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -38,9 +38,9 @@
     {
       "id": "security-review",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Reset-token script, guard and account spec reviewed; no P0/P1. Open: provisioning scripts have no database host guard.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Reset-token script, guard and account spec reviewed; no P0/P1. Open: provisioning scripts have no database host guard. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "Reviewer reports in the 2026-11-27 session",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -48,9 +48,9 @@
     {
       "id": "native-e2e",
       "status": "skipped",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "No native flow ran on this snapshot (see TS-FIX-103).",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "No native flow ran on this snapshot (see TS-FIX-103). (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "TS-FIX-103 evidence",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -58,9 +58,9 @@
     {
       "id": "acceptance-verification",
       "status": "skipped",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Incomplete until the native suites pass on this version.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Incomplete until the native suites pass on this version. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "test-plan.md",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []

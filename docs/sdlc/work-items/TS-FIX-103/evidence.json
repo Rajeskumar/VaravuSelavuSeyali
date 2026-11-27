@@ -4,11 +4,11 @@
     {
       "id": "checks",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "framework-check (276), test-backend (1124 passed, 15 skipped; no rerun needed), web lint/typecheck/test (417), mobile typecheck/Jest (708), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip in account-recovery.spec.ts. All passed.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "framework-check (276), test-backend (1124 passed, 15 skipped; no rerun needed), web lint/typecheck/test (417), mobile typecheck/Jest (708), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip in account-recovery.spec.ts. All passed. All rerun on the committed tree with the same results.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "recorded_at": "2026-11-27T20:33:42.737181+00:00",
       "acceptance_criteria": [
         "AC-001",
         "AC-002",
@@ -21,11 +21,11 @@
     {
       "id": "red-green",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
       "command_or_method": "Behavioral failures seen before each fix (reversed settle-up, payers/split resent, stale list, web resend, unopenable sheet, editor warnings; later: four misread amounts and the uncovered Move modal; then five amount-reader cases for AC-007). AC-004 failed in the native flow before its fix. The same tests pass on this snapshot under 'checks' (native one excluded).",
       "source": "acceptance-verification.md; Jest output 2026-11-27",
-      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "recorded_at": "2026-11-27T20:33:42.737181+00:00",
       "acceptance_criteria": [
         "AC-001",
         "AC-002",
@@ -38,11 +38,11 @@
     {
       "id": "local-integration",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed after 65s. One 429 on the receipt-parse endpoint during the first part; none on login.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed after 65s. One 429 on the receipt-parse endpoint during the first part; none on login. All rerun on the committed tree with the same results.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T20:17:52.253598+00:00",
+      "recorded_at": "2026-11-27T20:33:42.737181+00:00",
       "acceptance_criteria": [
         "AC-005"
       ]
@@ -50,9 +50,9 @@
     {
       "id": "code-review",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Two passes over the whole change plus a follow-up on everything after 6273a20: no open P0/P1. Open P2/P3 are in findings.json and ROADMAP. One line (nestedScrollEnabled) changed after the follow-up pass and was checked by the code reviewer. Reviewers were read-only agents and ran no device.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Two passes over the whole change plus a follow-up on everything after 6273a20: no open P0/P1. Open P2/P3 are in findings.json and ROADMAP. One line (nestedScrollEnabled) changed after the follow-up pass and was checked by the code reviewer. Reviewers were read-only agents and ran no device. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "Reviewer reports in the 2026-11-27 session",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -60,9 +60,9 @@
     {
       "id": "security-review",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "First pass and follow-up on the money-write delta: PASS, no P0/P1. Dependency audits clean; secret scan lightweight only (gitleaks unavailable). Open P2s in findings.json. One line (nestedScrollEnabled) changed after the follow-up pass and was checked by the code reviewer. Reviewers were read-only agents and ran no device.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "First pass and follow-up on the money-write delta: PASS, no P0/P1. Dependency audits clean; secret scan lightweight only (gitleaks unavailable). Open P2s in findings.json. One line (nestedScrollEnabled) changed after the follow-up pass and was checked by the code reviewer. Reviewers were read-only agents and ran no device. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "Reviewer reports in the 2026-11-27 session",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -70,9 +70,9 @@
     {
       "id": "ui-review",
       "status": "passed",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "First pass found one P1 (Settle up could not scroll); fixed and confirmed resolved by the follow-up (iOS screenshot and code; Android by code). No open P0/P1. Small screens, large text and screen readers not reviewed on device. One line (nestedScrollEnabled) changed after the follow-up pass and was checked by the code reviewer. Reviewers were read-only agents and ran no device.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "First pass found one P1 (Settle up could not scroll); fixed and confirmed resolved by the follow-up (iOS screenshot and code; Android by code). No open P0/P1. Small screens, large text and screen readers not reviewed on device. One line (nestedScrollEnabled) changed after the follow-up pass and was checked by the code reviewer. Reviewers were read-only agents and ran no device. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "Reviewer reports in the 2026-11-27 session",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -80,9 +80,9 @@
     {
       "id": "native-e2e",
       "status": "skipped",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "No native flow ran on this snapshot. Earlier trees: iOS full suite 19/19 applicable; Android regression 14/14 with smoke 2 of 5 finished (owner skipped the rest); targeted Settle up, split and Move to group runs after the review fixes. A full run on both platforms is still required.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "No native flow ran on this snapshot. Earlier trees: iOS full suite 19/19 applicable; Android regression 14/14 with smoke 2 of 5 finished (owner skipped the rest); targeted Settle up, split and Move to group runs after the review fixes. A full run on both platforms is still required. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "acceptance-verification.md",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -90,9 +90,9 @@
     {
       "id": "native-device",
       "status": "skipped",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "No real-device check: comma keypad, small phone, large text, keyboard on the pop-ups no flow covers.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "No real-device check: comma keypad, small phone, large text, keyboard on the pop-ups no flow covers. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "test-plan.md; ROADMAP",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
@@ -100,9 +100,9 @@
     {
       "id": "acceptance-verification",
       "status": "skipped",
-      "snapshot": "7d6873cf111293a5cc87b92cf54424dc36228de9528113ec10a9ed1c2de99563",
-      "environment": "Local macOS, worktree on qa-coverage-extend (HEAD bde6d8b plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Incomplete: AC-001..003 and AC-005..007 have passing automated tests on this snapshot; AC-004 needs the iOS flow on this version. AC-007 covers the main amount field only.",
+      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
+      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Incomplete: AC-001..003 and AC-005..007 have passing automated tests on this snapshot; AC-004 needs the iOS flow on this version. AC-007 covers the main amount field only. (File contents equal those first recorded: that snapshot differed only by listing the removed TS-QA-106 template as deleted, checked by recomputing it.)",
       "source": "acceptance-verification.md",
       "recorded_at": "2026-11-27T20:17:52.253598+00:00",
       "acceptance_criteria": []
