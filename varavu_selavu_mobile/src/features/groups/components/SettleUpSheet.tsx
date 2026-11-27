@@ -226,7 +226,7 @@ export default function SettleUpSheet({
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.overlay}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} accessible={false} />
@@ -337,6 +337,7 @@ export default function SettleUpSheet({
                 <Text style={styles.currencySymbol}>$</Text>
                 <TextInput
                   style={styles.amountInput}
+                  testID="settle.amount"
                   keyboardType="decimal-pad"
                   placeholder="0.00"
                   placeholderTextColor={theme.colors.textTertiary}

@@ -13,6 +13,7 @@ import { noMinus } from '../utils/noMinus';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../core/auth/AuthContext';
@@ -84,6 +85,7 @@ export default function ExpensesScreen() {
     const { accessToken, userEmail } = useAuth();
     const navigation = useNavigation<any>();
     const isFocused = useIsFocused();
+    const insets = useSafeAreaInsets();
     const { theme } = useAppTheme();
     const { enabled: tagsEnabled } = useTagsEnabled();
     // useWindowDimensions (not Dimensions.get(), and not a module-level constant) — reading
@@ -292,7 +294,8 @@ export default function ExpensesScreen() {
             });
             setMoveModalVisible(false);
             showToast({ message: 'Expense moved to group', type: 'success' });
-            fetchExpenses(true);
+            // Group rows, balances and totals all change; this screen's own listener refetches personal rows.
+            refreshExpenseViews(qc);
         } catch (error) {
             showToast({
                 message: error instanceof ApiError ? error.message : 'Failed to move expense to group',
@@ -649,6 +652,7 @@ export default function ExpensesScreen() {
                                                         <View style={styles.halfField}>
                                                             <Text style={styles.pickerLabel}>AMOUNT</Text>
                                                             <CustomInput
+                                                                testID="recurring.editAmount"
                                                                 value={recEdit!.default_cost}
                                                                 onChangeText={noMinus((v) => setRecEdit((s) => (s ? { ...s, default_cost: v } : s)))}
                                                                 keyboardType="decimal-pad"
@@ -735,8 +739,9 @@ export default function ExpensesScreen() {
 
             {/* Edit Modal — bottom sheet, standardized with the group expense edit/view sheets */}
             <Modal visible={editModalVisible} animationType="slide" transparent onRequestClose={() => setEditModalVisible(false)}>
-                <Pressable style={styles.editSheetBackdrop} onPress={() => setEditModalVisible(false)} accessible={false} onAccessibilityEscape={() => setEditModalVisible(false)}>
-                    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                {/* The top inset keeps the header clear of the status bar when the keyboard squeezes the sheet. */}
+                <Pressable style={[styles.editSheetBackdrop, { paddingTop: insets.top }]} onPress={() => setEditModalVisible(false)} accessible={false} onAccessibilityEscape={() => setEditModalVisible(false)}>
+                    <KeyboardAvoidingView behavior="padding" style={styles.editSheetAvoider}>
                         <Pressable style={styles.editSheetContent} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
                             <View style={styles.editSheetPill} />
                             <View style={styles.editSheetHeader}>
@@ -758,11 +763,13 @@ export default function ExpensesScreen() {
                             <ScrollView
                                 contentContainerStyle={styles.editSheetScrollContent}
                                 showsVerticalScrollIndicator={false}
+                                keyboardShouldPersistTaps="handled"
                             >
 
                         <CustomInput
                             label="Amount"
                             icon="💰"
+                            testID="expenseEdit.amount"
                             value={editAmount}
                             onChangeText={noMinus(setEditAmount)}
                             keyboardType="numeric"
@@ -846,22 +853,6 @@ export default function ExpensesScreen() {
 
                         <CardPickerField value={editCardId} onChange={setEditCardId} />
 
-                        <View style={styles.modalButtons}>
-                            <CustomButton
-                                title="Cancel"
-                                variant="ghost"
-                                onPress={() => setEditModalVisible(false)}
-                                fullWidth={false}
-                                style={{ flex: 1, marginRight: 10 }}
-                            />
-                            <CustomButton
-                                title="Save Changes"
-                                onPress={saveEdit}
-                                disabled={editItemsLoaded && editItems.length > 0 && !receiptTotals(editItems, editItemsTax, editItemsTip, parseFloat(editAmount) || 0).reconciled}
-                                fullWidth={false}
-                                style={{ flex: 1 }}
-                            />
-                        </View>
                         {groupsEnabled && (
                             <CustomButton
                                 title="Move to Group…"
@@ -874,6 +865,23 @@ export default function ExpensesScreen() {
                             />
                         )}
                             </ScrollView>
+                            {/* Outside the ScrollView so Save stays in view above the keyboard. */}
+                            <View style={styles.editSheetFooter}>
+                                <CustomButton
+                                    title="Cancel"
+                                    variant="ghost"
+                                    onPress={() => setEditModalVisible(false)}
+                                    fullWidth={false}
+                                    style={{ flex: 1, marginRight: 10 }}
+                                />
+                                <CustomButton
+                                    title="Save Changes"
+                                    onPress={saveEdit}
+                                    disabled={editItemsLoaded && editItems.length > 0 && !receiptTotals(editItems, editItemsTax, editItemsTip, parseFloat(editAmount) || 0).reconciled}
+                                    fullWidth={false}
+                                    style={{ flex: 1 }}
+                                />
+                            </View>
                         </Pressable>
                     </KeyboardAvoidingView>
                 </Pressable>
@@ -1022,6 +1030,10 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
         backgroundColor: theme.colors.overlay,
         justifyContent: 'flex-end',
     },
+    // Lets the sheet shrink when the keyboard opens; without it the header is pushed off screen.
+    editSheetAvoider: {
+        flexShrink: 1,
+    },
     editSheetContent: {
         backgroundColor: theme.colors.surfaceElevated,
         borderTopLeftRadius: 24,
@@ -1033,7 +1045,14 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
         ...theme.shadows.lg,
     },
     editSheetScrollContent: {
+        paddingBottom: 16,
+    },
+    editSheetFooter: {
+        flexDirection: 'row',
+        paddingTop: 12,
         paddingBottom: 28,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: theme.colors.border,
     },
     editSheetPill: {
         width: 36,

@@ -1,0 +1,38 @@
+# Implementation plan
+
+Status: built 2026-11-27. Requirements: requirements.md; AC text: work-item.json.
+
+## Architecture and contracts
+- AC-001: pure helper `features/groups/utils/settleUp.ts` nets the transfers between viewer and counterparty in cents.
+  `GroupDetailScreen.handleSettleUp` uses it; another member's `net` no longer decides direction or amount (AGENTS rule).
+  The People tab shortcut waits for refetched balances.
+  No transfer between the two: an explanatory toast, no sheet. Own row: the viewer's outgoing transfers, else a toast.
+- AC-002: `EditGroupExpenseModal` sends `payers` and `split` only when a picker was touched (as web does for receipts, and for all expenses from AC-005).
+  The server has carried over and rescaled an omitted split since release-v1.2.0, so no backend change or deploy order.
+  A single payer's amount follows the amount field (web's effect).
+  While an amount change will be adjusted by the server, the editors hide their old previews and checks and say so.
+- AC-005: `ExpenseDetailDialog` drops `!isItemized` from `splitTouched` and shows the same adjustment note.
+- AC-006: one `openMySettleUp` serves the header button and the viewer's own row. Several incoming payments are never
+  bulk-recorded: it opens Balances and asks who paid.
+- AC-003: `ExpensesScreen.handleMove` calls `refreshExpenseViews`; the screen's own listener refetches personal rows.
+- AC-004: edit sheet's KeyboardAvoidingView may shrink; Cancel/Save move to a fixed footer outside the ScrollView;
+  the ScrollView uses `keyboardShouldPersistTaps="handled"`.
+
+## Risks and safeguards
+Money: direction and amount come only from server transfers; the user still confirms. No schema, auth or API change.
+Omitting the split must not reset a custom split: covered by server carry-over (existing backend tests) and the native flow's stored-data check.
+Already-wrong stored settlements are not repaired by this change.
+
+## Ordered tasks
+- [ ] T1: settle-up direction (AC-001; S1-S4)
+- [ ] T2: group amount edit (AC-002; S5-S6)
+- [ ] T3: refresh after move (AC-003; S7)
+- [ ] T4: iOS edit sheet (AC-004; S8)
+- [ ] T5: web group edit (AC-005; S9)
+- [ ] T6: Settle up button and own row (AC-006; S10)
+
+## Verification and documentation
+See test-plan.md and required_evidence. Docs: CHANGELOG, ROADMAP, spec if a documented rule changes.
+
+## Rollout and recovery
+Ships with the next mobile build; revert is a plain code revert. Installed older builds keep the bugs until updated.

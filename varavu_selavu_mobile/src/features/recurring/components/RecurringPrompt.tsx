@@ -13,6 +13,7 @@ import { showToast } from '../../../core/ui/Toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { refreshExpenseViews } from '../../expenses/utils/expenseEvents';
 import { setOverlayBusy } from '../../../core/ui/overlayGate';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
 
 interface ItemState {
     selected: boolean;
@@ -105,7 +106,7 @@ export default function RecurringPrompt() {
 
     return (
         <Modal transparent visible={open} animationType="fade">
-            <View style={styles.backdrop}>
+            <KeyboardLift style={styles.backdrop}>
                 <View style={styles.modalContent}>
                     <Text style={styles.title}>Recurring Expenses Due</Text>
                     <Text style={styles.subtitle}>
@@ -159,7 +160,7 @@ export default function RecurringPrompt() {
                         </TouchableOpacity>
                     </View>
                 </View>
-            </View>
+            </KeyboardLift>
         </Modal>
     );
 }

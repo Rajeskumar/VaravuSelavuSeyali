@@ -218,7 +218,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessible={false} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.keyboardView}
         onAccessibilityEscape={onClose}
       >

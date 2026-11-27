@@ -25,8 +25,8 @@ export default function Sheet({ visible, onClose, children, tall }: SheetProps) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} onAccessibilityEscape={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.kav}>
+      <Pressable style={[styles.backdrop, { paddingTop: insets.top }]} onPress={onClose} accessible={false} onAccessibilityEscape={onClose}>
+        <KeyboardAvoidingView behavior="padding" style={styles.kav}>
           <Pressable
             onPress={(e) => e.stopPropagation()}
             // accessible={false}: a Pressable is an accessibility element by default, which on iOS collapses the whole
@@ -51,8 +51,9 @@ export default function Sheet({ visible, onClose, children, tall }: SheetProps) 
 
 const createStyles = (theme: AppTheme) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: theme.colors.overlay, justifyContent: 'flex-end' },
-  kav: { justifyContent: 'flex-end' },
+  kav: { justifyContent: 'flex-end', flexShrink: 1 },
   panel: {
+    flexShrink: 1,
     backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,

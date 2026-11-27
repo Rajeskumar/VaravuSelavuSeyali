@@ -31,6 +31,8 @@ interface Props {
   value: SplitEditorValue;
   onChange: (val: SplitEditorValue) => void;
   allowedTypes?: SplitType[];
+  /** Hides previews and checks while the stored split will be adjusted by the server. */
+  quiet?: boolean;
 }
 
 /**
@@ -97,7 +99,7 @@ export function computeSplitValid(value: SplitEditorValue, totalAmount: number):
   return true; // equal
 }
 
-export default function SplitEditor({ members, value, onChange, totalAmount, allowedTypes }: Props) {
+export default function SplitEditor({ members, value, onChange, totalAmount, allowedTypes, quiet = false }: Props) {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
@@ -257,7 +259,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
                 selectTextOnFocus
               />
             )}
-            {isSelected && totalAmount > 0 && (
+            {!quiet && isSelected && totalAmount > 0 && (
               <Text style={styles.shareAmount}>{formatCurrency(memberPreview)}</Text>
             )}
             <TouchableOpacity
@@ -273,7 +275,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
           </View>
         );
       })}
-      {selectedMembers.length > 0 && totalAmount > 0 && (isValid || value.type !== 'adjustment') && (
+      {!quiet && selectedMembers.length > 0 && totalAmount > 0 && (isValid || value.type !== 'adjustment') && (
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>{typedTotals ? 'Must add up exactly' : 'Rounding cents are balanced automatically'}</Text>
           <Text style={[styles.footerLeft, { color: balanced ? theme.colors.success : theme.colors.error }]}>
@@ -281,7 +283,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
           </Text>
         </View>
       )}
-      {!isValid && (
+      {!quiet && !isValid && (
         <Text style={styles.warning}>{validationMessage}</Text>
       )}
       {selectedMembers.length === 0 && (

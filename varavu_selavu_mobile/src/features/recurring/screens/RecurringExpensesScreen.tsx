@@ -25,6 +25,7 @@ import { formatCurrency } from '../../expenses/utils/currencyMath';
 import { useQueryClient } from '@tanstack/react-query';
 import { refreshExpenseViews } from '../../expenses/utils/expenseEvents';
 import { logger } from '../../../core/logger';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -329,7 +330,7 @@ export default function RecurringExpensesScreen() {
 
             {/* Add/Edit Form Modal */}
             <Modal visible={formVisible} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
+                <KeyboardLift style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>
@@ -419,13 +420,13 @@ export default function RecurringExpensesScreen() {
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
-                </View>
+                </KeyboardLift>
             </Modal>
 
             {/* Execute Now Modal */}
             <Modal visible={!!execTemplate} animationType="fade" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { maxHeight: '40%' }]}>
+                <KeyboardLift style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Execute Now</Text>
                             <TouchableOpacity onPress={() => setExecTemplate(null)} activeOpacity={0.7}>
@@ -461,7 +462,7 @@ export default function RecurringExpensesScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </KeyboardLift>
             </Modal>
         </ScreenWrapper>
     );

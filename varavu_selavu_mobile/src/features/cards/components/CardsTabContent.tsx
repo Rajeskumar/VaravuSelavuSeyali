@@ -20,6 +20,7 @@ import { AppTheme } from '../../../core/theme/theme';
 import { ListSkeleton } from '../../../core/ui/SkeletonLoader';
 import CustomCardForm from './CustomCardForm';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
 
 function formatMoney(n: number): string {
   return `${formatCurrency(n)}`;
@@ -368,7 +369,7 @@ function CardDetailModal({ cardId, onClose, theme }: { cardId: string | null; on
 
   return (
     <Modal visible={!!cardId} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={styles.modalOverlay}>
+      <KeyboardLift style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle} numberOfLines={1}>{card ? `${card.issuer} ${card.card_name}` : 'Card detail'}</Text>
@@ -448,7 +449,7 @@ function CardDetailModal({ cardId, onClose, theme }: { cardId: string | null; on
             )}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardLift>
     </Modal>
   );
 }

@@ -13,6 +13,8 @@ interface Props {
   payers: PayerSummaryItem[];
   onChange: (payers: PayerSummaryItem[]) => void;
   onValidityChange?: (valid: boolean) => void;
+  /** Hides the totals check while the stored payments will be adjusted by the server. */
+  quiet?: boolean;
 }
 
 
@@ -30,6 +32,7 @@ export default function PayerPicker({
   payers,
   onChange,
   onValidityChange,
+  quiet = false,
 }: Props) {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
@@ -111,12 +114,12 @@ export default function PayerPicker({
         );
       })}
 
-      {!isValid && (
+      {!quiet && !isValid && (
         <Text style={styles.warning}>
           Amounts paid must equal total expense ({formatCurrency(amount)}). Currently: {formatCurrency(totalEntered)}.
         </Text>
       )}
-      {isValid && (
+      {!quiet && isValid && (
         <Text style={styles.success}>
           Payments reconcile ✓
         </Text>

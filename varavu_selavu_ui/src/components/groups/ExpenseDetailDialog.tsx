@@ -168,14 +168,16 @@ const ExpenseDetailDialog: React.FC<Props> = ({
   // Derived directly from editPayers/editSplitValue/editAmount rather than tracked via a
   // callback from the picker — see the matching fix in GroupsPage's Add Expense form for why
   // (Save must reflect the real current state even if the user never opens the popover).
-  // For a receipt, payers/split are sent only when the user changed them in the picker; otherwise the
-  // server keeps the stored split (an Equal/Shares receipt stays Equal/Shares and re-splits a new
-  // amount, TS-FIX-102 D8) instead of every edit being saved as this exact pre-fill. Manual expenses
-  // keep today's behavior: the split is always sent and must add up to the edited amount.
-  const [pickerTouched, setSplitTouched] = useState(false);
-  const splitTouched = !isItemized || pickerTouched;
+  // Payers and split are sent only when the user changed them in the picker; otherwise the server keeps
+  // the stored ones, rescaled to a new amount (TS-FIX-103; an Equal/Shares receipt stays so, TS-FIX-102
+  // D8), instead of every edit being saved as this exact pre-fill. Same as mobile.
+  const [splitTouched, setSplitTouched] = useState(false);
   const editPayersValid = !splitTouched || computePayersValid(editPayers, editAmount);
   const editSplitValid = !splitTouched || computeSplitValid(editSplitValue, editAmount);
+  // The summary still shows the old figures; say the server will adjust them. An Exact or old item-split
+  // receipt can't be adjusted (the server asks for a new split), so no promise is made there.
+  const needsNewSplit = isItemized && (expense.split_type === 'exact' || expense.split_type === 'itemized');
+  const adjustsStored = Math.round(editAmount * 100) !== Math.round(expense.cost * 100) && !splitTouched && !needsNewSplit;
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -460,6 +462,11 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               onCustomized={() => setSplitTouched(true)}
               currency={displayCurrency}
             />
+            {adjustsStored && (
+              <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 0.5 }}>
+                The saved split and payments will adjust to the new total unless you change them.
+              </Typography>
+            )}
           </Box>
 
           {itemsLoaded && items.length > 0 && (

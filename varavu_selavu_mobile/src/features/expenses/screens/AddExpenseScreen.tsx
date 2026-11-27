@@ -71,6 +71,7 @@ import { notifyExpenseChanged } from '../utils/expenseEvents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
@@ -713,338 +714,341 @@ export default function AddExpenseProvider({ children }: { children: React.React
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: backdropOpacity, backgroundColor: theme.colors.overlay }]} />
           </Pressable>
 
-          <Animated.View
-            style={[
-              styles.sheet,
-              { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY }] },
-            ]}
-          >
-            {/* accessible={false}: a Pressable is an accessibility element by default, and on iOS that collapses the whole
-                sheet (keypad, Save, chips) into one element, unreachable for VoiceOver. It only swallows backdrop taps. */}
-            <Pressable onPress={(e) => e.stopPropagation()} accessible={false} focusable={false} testID="addExpense.sheet">
-              <View style={styles.dragPillWrap}>
-                <View style={styles.dragPill} />
-              </View>
+          {/* box-none: taps beside the sheet still reach the backdrop underneath */}
+          <KeyboardLift style={styles.modalRoot} pointerEvents="box-none">
+            <Animated.View
+              style={[
+                styles.sheet,
+                { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY }] },
+              ]}
+            >
+              {/* accessible={false}: a Pressable is an accessibility element by default, and on iOS that collapses the whole
+                  sheet (keypad, Save, chips) into one element, unreachable for VoiceOver. It only swallows backdrop taps. */}
+              <Pressable onPress={(e) => e.stopPropagation()} accessible={false} focusable={false} testID="addExpense.sheet" style={styles.sheetBody}>
+                <View style={styles.dragPillWrap}>
+                  <View style={styles.dragPill} />
+                </View>
 
-              {stage === 'entry' ? (
-                <ScrollView
-                  contentContainerStyle={styles.body}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                  keyboardDismissMode="on-drag"
-                >
-                  {restored && <Text accessibilityRole="text" style={styles.savedLine}>Your unsaved expense was restored. Review it before saving.</Text>}
-                  {unknownOutcome && <>
-                    <Text accessibilityRole="alert" style={styles.savedLine}>The save outcome is unknown. Check Expenses before saving again to avoid a duplicate.</Text>
-                    <TouchableOpacity accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setUnknownOutcome(false)}><Text style={styles.savedLine}>I checked Expenses — allow another save</Text></TouchableOpacity>
-                  </>}
-                  <TouchableOpacity accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} disabled={!dirty || loading} onPress={() => Alert.alert('Discard this expense?', 'This removes your unsaved entry.', [
-                    { text: 'Keep draft', style: 'cancel' },
-                    { text: 'Discard', style: 'destructive', onPress: () => { resetForm('me'); closeAddExpense(); } },
-                  ])}><Text style={styles.savedLine}>Discard draft</Text></TouchableOpacity>
+                {stage === 'entry' ? (
+                  <ScrollView
+                    contentContainerStyle={styles.body}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                    keyboardDismissMode="on-drag"
+                  >
+                    {restored && <Text accessibilityRole="text" style={styles.savedLine}>Your unsaved expense was restored. Review it before saving.</Text>}
+                    {unknownOutcome && <>
+                      <Text accessibilityRole="alert" style={styles.savedLine}>The save outcome is unknown. Check Expenses before saving again to avoid a duplicate.</Text>
+                      <TouchableOpacity accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} onPress={() => setUnknownOutcome(false)}><Text style={styles.savedLine}>I checked Expenses — allow another save</Text></TouchableOpacity>
+                    </>}
+                    <TouchableOpacity accessibilityRole="button" style={{ minHeight: 44, justifyContent: 'center' }} disabled={!dirty || loading} onPress={() => Alert.alert('Discard this expense?', 'This removes your unsaved entry.', [
+                      { text: 'Keep draft', style: 'cancel' },
+                      { text: 'Discard', style: 'destructive', onPress: () => { resetForm('me'); closeAddExpense(); } },
+                    ])}><Text style={styles.savedLine}>Discard draft</Text></TouchableOpacity>
 
-                  <View style={styles.entryHeader}>
-                    <View style={styles.modeToggle}>
-                      <View style={[styles.modeBtn, styles.modeBtnActive]}>
-                        <Text style={[styles.modeBtnText, styles.modeBtnTextActive]}>Type</Text>
+                    <View style={styles.entryHeader}>
+                      <View style={styles.modeToggle}>
+                        <View style={[styles.modeBtn, styles.modeBtnActive]}>
+                          <Text style={[styles.modeBtnText, styles.modeBtnTextActive]}>Type</Text>
+                        </View>
+                        <TouchableOpacity style={styles.modeBtn} onPress={() => setScanVisible(true)} activeOpacity={0.7} disabled={scanning}>
+                          {scanning ? (
+                            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+                          ) : (
+                            <Text style={styles.modeBtnText}>Scan</Text>
+                          )}
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity style={styles.modeBtn} onPress={() => setScanVisible(true)} activeOpacity={0.7} disabled={scanning}>
-                        {scanning ? (
-                          <ActivityIndicator size="small" color={theme.colors.textSecondary} />
-                        ) : (
-                          <Text style={styles.modeBtnText}>Scan</Text>
-                        )}
+                      <TouchableOpacity
+                        style={styles.closeBtn}
+                        onPress={closeAddExpense}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Close"
+                      >
+                        <Text style={styles.closeX}>✕</Text>
                       </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                      style={styles.closeBtn}
-                      onPress={closeAddExpense}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Close"
-                    >
-                      <Text style={styles.closeX}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
 
-                  <View style={styles.amountDisplayWrap}>
-                    <Text style={styles.amountDisplay} testID="addExpense.amount">{amtDisplay}</Text>
-                  </View>
+                    <View style={styles.amountDisplayWrap}>
+                      <Text style={styles.amountDisplay} testID="addExpense.amount">{amtDisplay}</Text>
+                    </View>
 
-                  <RNTextInput
-                    style={styles.descInput}
-                    testID="addExpense.description"
-                    placeholder="What was it? (AI suggests the category)"
-                    placeholderTextColor={theme.colors.textQuaternary}
-                    value={desc}
-                    onChangeText={handleDescChange}
-                    selectionColor={theme.colors.primary}
-                  />
-
-                  {dateProblem ? (
-                    <Text accessibilityRole="alert" style={{ color: theme.colors.error, marginBottom: 8, fontSize: 13 }}>{dateProblem}</Text>
-                  ) : null}
-
-                  {/* Chips: category (auto-suggested), date, and "More" for the rest. */}
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-                    <Chip
-                      label={subcategory || mainCategory || 'Category'}
-                      variant={subcategory || mainCategory ? 'accent' : 'outline'}
-                      style={styles.captureChip}
-                      onPress={() => setDetailsOpen(true)}
+                    <RNTextInput
+                      style={styles.descInput}
+                      testID="addExpense.description"
+                      placeholder="What was it? (AI suggests the category)"
+                      placeholderTextColor={theme.colors.textQuaternary}
+                      value={desc}
+                      onChangeText={handleDescChange}
+                      selectionColor={theme.colors.primary}
                     />
-                    <Chip
-                      label={isSameDay(expenseDate, new Date()) ? 'Today' : formatShortDate(expenseDate)}
-                      style={styles.captureChip}
-                      onPress={() => setShowDatePicker(true)}
-                    />
-                    {groupsEnabled && myGroups.length > 0 && (
-                      <Chip
-                        label={who === 'me' ? 'Just me' : (selectedGroup?.name ?? 'Just me')}
-                        variant={who === 'me' ? 'outline' : 'accent'}
-                        style={styles.captureChip}
-                        onPress={() => setPickerSheet('who')}
-                      />
-                    )}
-                    {isGroup && groupDetail && (
-                      <Chip
-                        label={`${paidByName(payers, groupDetail.members, myMemberId)} paid · ${splitValue.type === 'equal' ? 'Equal' : 'Custom'}`}
-                        variant={customized ? 'accent' : 'outline'}
-                        style={styles.captureChip}
-                        onPress={() => setSplitVisible(true)}
-                      />
-                    )}
-                    {scannedItems.length > 0 && (
-                      <Chip
-                        label={`${scannedItems.length} item${scannedItems.length === 1 ? '' : 's'}`}
-                        variant="accent"
-                        style={styles.captureChip}
-                        onPress={() => setItemsVisible(true)}
-                      />
-                    )}
-                    {cardCoachEnabled && myCards.length > 0 && (
-                      <Chip
-                        label={myCards.find((c) => c.card_id === cardId)?.card_name ?? 'Card'}
-                        variant={cardId ? 'accent' : 'outline'}
-                        style={styles.captureChip}
-                        onPress={() => setPickerSheet('card')}
-                      />
-                    )}
-                    {tagsEnabled && (
-                      <Chip
-                        label={tagNames.length > 0 ? `Tags · ${tagNames.length}` : 'Tags'}
-                        variant={tagNames.length > 0 ? 'accent' : 'outline'}
-                        style={styles.captureChip}
-                        onPress={() => setTagPickerVisible(true)}
-                      />
-                    )}
-                    <Chip
-                      label={detailsOpen ? 'Less' : 'More'}
-                      style={styles.captureChip}
-                      onPress={() => setDetailsOpen((v) => !v)}
-                    />
-                  </ScrollView>
-                  <TagPickerModal
-                    visible={tagPickerVisible}
-                    value={tagNames}
-                    onChange={setTagNames}
-                    onClose={() => setTagPickerVisible(false)}
-                  />
-                  <SplitSheet
-                    visible={splitVisible}
-                    onClose={() => setSplitVisible(false)}
-                    amount={numAmount}
-                    members={groupDetail?.members ?? []}
-                    myMemberId={myMemberId}
-                    payers={payers}
-                    splitValue={splitValue}
-                    allowedTypes={itemsToSave.length > 0 ? [...RECEIPT_SPLIT_TYPES] : undefined}
-                    onDone={(nextPayers, nextSplit) => {
-                      setPayers(nextPayers);
-                      setSplitValue(nextSplit);
-                      setCustomized(true);
-                      setSplitVisible(false);
-                    }}
-                  />
-                  <ReceiptScanScreen
-                    visible={scanVisible}
-                    busy={scanning}
-                    onClose={() => setScanVisible(false)}
-                    onShutter={() => pickReceipt('camera')}
-                    onLibrary={() => pickReceipt('library')}
-                  />
-                  <ReceiptItemsSheet
-                    visible={itemsVisible}
-                    onClose={() => setItemsVisible(false)}
-                    merchant={merchantName}
-                    items={itemsToSave}
-                    tax={scannedTax}
-                    tip={scannedTip}
-                    amount={numAmount}
-                    grouped={isGroup}
-                    splitLabel={splitLabel}
-                    yourShare={itemsYourShare}
-                    saving={loading}
-                    canSave={capReady}
-                    onSave={handleSave}
-                    onEditItems={() => setItemsVisible(false)}
-                  />
-                  <OptionSheet
-                    visible={pickerSheet === 'who'}
-                    title="Who was this for?"
-                    options={[
-                      { value: 'me', label: 'Just me' },
-                      ...myGroups.map((g) => ({ value: g.group_id, label: `${GROUP_TYPE_EMOJI[g.group_type] ?? '👥'} ${g.name}`, hint: 'Split equally' })),
-                    ]}
-                    selected={who}
-                    onSelect={(v) => { setWho(v); setPickerSheet(null); }}
-                    onClose={() => setPickerSheet(null)}
-                  />
-                  <OptionSheet
-                    visible={pickerSheet === 'card'}
-                    title="Card used"
-                    options={[
-                      { value: '', label: 'Default card' },
-                      ...myCards.map((c) => ({ value: c.card_id, label: c.card_name, hint: c.issuer })),
-                    ]}
-                    selected={cardId ?? ''}
-                    onSelect={(v) => { setCardId(v || null); setPickerSheet(null); }}
-                    onClose={() => setPickerSheet(null)}
-                  />
-                  {showDatePicker && (
-                    Platform.OS === 'ios' ? (
-                      <Modal transparent animationType="slide" visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
-                        <Pressable style={styles.datePickerBackdrop} onPress={() => setShowDatePicker(false)} accessible={false} onAccessibilityEscape={() => setShowDatePicker(false)}>
-                          <Pressable style={styles.datePickerSheet} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
-                            <View style={styles.datePickerHeader}>
-                              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                                <Text style={styles.datePickerDone}>Done</Text>
-                              </TouchableOpacity>
-                            </View>
-                            <DateTimePicker
-                              value={expenseDate}
-                              mode="date"
-                              display="inline"
-                              maximumDate={new Date()}
-                              minimumDate={expenseDateMin()}
-                              onChange={(_event: DateTimePickerEvent, selected?: Date) => {
-                                if (selected) setExpenseDate(startOfDay(selected));
-                              }}
-                            />
-                          </Pressable>
-                        </Pressable>
-                      </Modal>
-                    ) : (
-                      <DateTimePicker
-                        value={expenseDate}
-                        mode="date"
-                        display="default"
-                        maximumDate={new Date()}
-                        minimumDate={expenseDateMin()}
-                        onChange={(event: DateTimePickerEvent, selected?: Date) => {
-                          setShowDatePicker(false);
-                          if (event.type === 'set' && selected) setExpenseDate(startOfDay(selected));
-                        }}
-                      />
-                    )
-                  )}
 
-                  {scannedItems.length > 0 && (
-                    <ScannedItemsCard
-                      theme={theme}
-                      items={scannedItems}
-                      onChange={setScannedItems}
+                    {dateProblem ? (
+                      <Text accessibilityRole="alert" style={{ color: theme.colors.error, marginBottom: 8, fontSize: 13 }}>{dateProblem}</Text>
+                    ) : null}
+
+                    {/* Chips: category (auto-suggested), date, and "More" for the rest. */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+                      <Chip
+                        label={subcategory || mainCategory || 'Category'}
+                        variant={subcategory || mainCategory ? 'accent' : 'outline'}
+                        style={styles.captureChip}
+                        onPress={() => setDetailsOpen(true)}
+                      />
+                      <Chip
+                        label={isSameDay(expenseDate, new Date()) ? 'Today' : formatShortDate(expenseDate)}
+                        style={styles.captureChip}
+                        onPress={() => setShowDatePicker(true)}
+                      />
+                      {groupsEnabled && myGroups.length > 0 && (
+                        <Chip
+                          label={who === 'me' ? 'Just me' : (selectedGroup?.name ?? 'Just me')}
+                          variant={who === 'me' ? 'outline' : 'accent'}
+                          style={styles.captureChip}
+                          onPress={() => setPickerSheet('who')}
+                        />
+                      )}
+                      {isGroup && groupDetail && (
+                        <Chip
+                          label={`${paidByName(payers, groupDetail.members, myMemberId)} paid · ${splitValue.type === 'equal' ? 'Equal' : 'Custom'}`}
+                          variant={customized ? 'accent' : 'outline'}
+                          style={styles.captureChip}
+                          onPress={() => setSplitVisible(true)}
+                        />
+                      )}
+                      {scannedItems.length > 0 && (
+                        <Chip
+                          label={`${scannedItems.length} item${scannedItems.length === 1 ? '' : 's'}`}
+                          variant="accent"
+                          style={styles.captureChip}
+                          onPress={() => setItemsVisible(true)}
+                        />
+                      )}
+                      {cardCoachEnabled && myCards.length > 0 && (
+                        <Chip
+                          label={myCards.find((c) => c.card_id === cardId)?.card_name ?? 'Card'}
+                          variant={cardId ? 'accent' : 'outline'}
+                          style={styles.captureChip}
+                          onPress={() => setPickerSheet('card')}
+                        />
+                      )}
+                      {tagsEnabled && (
+                        <Chip
+                          label={tagNames.length > 0 ? `Tags · ${tagNames.length}` : 'Tags'}
+                          variant={tagNames.length > 0 ? 'accent' : 'outline'}
+                          style={styles.captureChip}
+                          onPress={() => setTagPickerVisible(true)}
+                        />
+                      )}
+                      <Chip
+                        label={detailsOpen ? 'Less' : 'More'}
+                        style={styles.captureChip}
+                        onPress={() => setDetailsOpen((v) => !v)}
+                      />
+                    </ScrollView>
+                    <TagPickerModal
+                      visible={tagPickerVisible}
+                      value={tagNames}
+                      onChange={setTagNames}
+                      onClose={() => setTagPickerVisible(false)}
+                    />
+                    <SplitSheet
+                      visible={splitVisible}
+                      onClose={() => setSplitVisible(false)}
+                      amount={numAmount}
+                      members={groupDetail?.members ?? []}
+                      myMemberId={myMemberId}
+                      payers={payers}
+                      splitValue={splitValue}
+                      allowedTypes={itemsToSave.length > 0 ? [...RECEIPT_SPLIT_TYPES] : undefined}
+                      onDone={(nextPayers, nextSplit) => {
+                        setPayers(nextPayers);
+                        setSplitValue(nextSplit);
+                        setCustomized(true);
+                        setSplitVisible(false);
+                      }}
+                    />
+                    <ReceiptScanScreen
+                      visible={scanVisible}
+                      busy={scanning}
+                      onClose={() => setScanVisible(false)}
+                      onShutter={() => pickReceipt('camera')}
+                      onLibrary={() => pickReceipt('library')}
+                    />
+                    <ReceiptItemsSheet
+                      visible={itemsVisible}
+                      onClose={() => setItemsVisible(false)}
                       merchant={merchantName}
+                      items={itemsToSave}
                       tax={scannedTax}
                       tip={scannedTip}
-                      review={scannedReview}
-                      currentAmount={numAmount}
+                      amount={numAmount}
+                      grouped={isGroup}
+                      splitLabel={splitLabel}
+                      yourShare={itemsYourShare}
+                      saving={loading}
+                      canSave={capReady}
+                      onSave={handleSave}
+                      onEditItems={() => setItemsVisible(false)}
                     />
-                  )}
-
-                  {detailsOpen && (
-                    <>
-                      <TypeaheadInput
-                        theme={theme}
-                        value={merchantName}
-                        onChangeValue={(v) => {
-                          setMerchantName(v);
-                          setUserPickedMerchant(true);
-                        }}
-                        fetchSuggestions={fetchMerchantSuggestions}
-                        placeholder="Merchant (optional)"
-                        containerStyle={styles.merchantInputWrap}
-                        inputStyle={styles.merchantInput}
-                      />
-
-                      <CategoryPickerField
-                        theme={theme}
-                        mainCategory={mainCategory}
-                        subcategory={subcategory}
-                        onChange={(main, sub) => {
-                          setMainCategory(main);
-                          setSubcategory(sub);
-                          setUserPickedCategory(true);
-                        }}
-                        label="Category ✨"
-                        containerStyle={styles.categoryFieldWrap}
-                      />
-
-                      <View style={styles.recurringRow}>
-                        <Text style={styles.recurringRowText}>🔁 Repeat monthly on the {ordinal(new Date().getDate())}</Text>
-                        <ToggleSwitch value={recurring} onValueChange={setRecurring} accessibilityLabel="Repeat monthly" />
-                      </View>
-                    </>
-                  )}
-
-                  <View style={styles.keypad}>
-                    {KEYS.map((k) => (
-                      <TouchableOpacity key={k} style={styles.key} onPress={() => capPress(k)} activeOpacity={0.6} testID={`addExpense.key.${KEY_TEST_ID[k] ?? k}`} accessibilityRole="button" accessibilityLabel={KEY_A11Y_LABEL[k]}>
-                        <Text style={styles.keyLabel}>{k}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={handleSave}
-                    disabled={!capReady || loading}
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    testID="addExpense.save"
-                  >
-                    <LinearGradient
-                      colors={theme.gradients.primary}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[styles.saveBtn, !capReady && styles.saveBtnDisabled]}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color={inkOnPastel} />
+                    <OptionSheet
+                      visible={pickerSheet === 'who'}
+                      title="Who was this for?"
+                      options={[
+                        { value: 'me', label: 'Just me' },
+                        ...myGroups.map((g) => ({ value: g.group_id, label: `${GROUP_TYPE_EMOJI[g.group_type] ?? '👥'} ${g.name}`, hint: 'Split equally' })),
+                      ]}
+                      selected={who}
+                      onSelect={(v) => { setWho(v); setPickerSheet(null); }}
+                      onClose={() => setPickerSheet(null)}
+                    />
+                    <OptionSheet
+                      visible={pickerSheet === 'card'}
+                      title="Card used"
+                      options={[
+                        { value: '', label: 'Default card' },
+                        ...myCards.map((c) => ({ value: c.card_id, label: c.card_name, hint: c.issuer })),
+                      ]}
+                      selected={cardId ?? ''}
+                      onSelect={(v) => { setCardId(v || null); setPickerSheet(null); }}
+                      onClose={() => setPickerSheet(null)}
+                    />
+                    {showDatePicker && (
+                      Platform.OS === 'ios' ? (
+                        <Modal transparent animationType="slide" visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
+                          <Pressable style={styles.datePickerBackdrop} onPress={() => setShowDatePicker(false)} accessible={false} onAccessibilityEscape={() => setShowDatePicker(false)}>
+                            <Pressable style={styles.datePickerSheet} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
+                              <View style={styles.datePickerHeader}>
+                                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                                  <Text style={styles.datePickerDone}>Done</Text>
+                                </TouchableOpacity>
+                              </View>
+                              <DateTimePicker
+                                value={expenseDate}
+                                mode="date"
+                                display="inline"
+                                maximumDate={new Date()}
+                                minimumDate={expenseDateMin()}
+                                onChange={(_event: DateTimePickerEvent, selected?: Date) => {
+                                  if (selected) setExpenseDate(startOfDay(selected));
+                                }}
+                              />
+                            </Pressable>
+                          </Pressable>
+                        </Modal>
                       ) : (
-                        <Text style={styles.saveBtnText}>{isGroup ? 'Save & split' : 'Save'}</Text>
-                      )}
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </ScrollView>
-              ) : (
-                <View style={styles.savedWrap} testID="addExpense.saved">
-                  <View style={styles.savedCheck}>
-                    <Text style={styles.savedCheckText}>✓</Text>
-                  </View>
-                  <Text style={styles.savedAmount}>{fmt(savedAmt)}</Text>
-                  <Text style={styles.savedLine}>{savedLine}</Text>
-                  <View style={styles.savedActions}>
-                    <TouchableOpacity style={styles.savedSecondaryBtn} onPress={handleAgain} activeOpacity={0.8}>
-                      <Text style={styles.savedSecondaryText}>Log another</Text>
+                        <DateTimePicker
+                          value={expenseDate}
+                          mode="date"
+                          display="default"
+                          maximumDate={new Date()}
+                          minimumDate={expenseDateMin()}
+                          onChange={(event: DateTimePickerEvent, selected?: Date) => {
+                            setShowDatePicker(false);
+                            if (event.type === 'set' && selected) setExpenseDate(startOfDay(selected));
+                          }}
+                        />
+                      )
+                    )}
+
+                    {scannedItems.length > 0 && (
+                      <ScannedItemsCard
+                        theme={theme}
+                        items={scannedItems}
+                        onChange={setScannedItems}
+                        merchant={merchantName}
+                        tax={scannedTax}
+                        tip={scannedTip}
+                        review={scannedReview}
+                        currentAmount={numAmount}
+                      />
+                    )}
+
+                    {detailsOpen && (
+                      <>
+                        <TypeaheadInput
+                          theme={theme}
+                          value={merchantName}
+                          onChangeValue={(v) => {
+                            setMerchantName(v);
+                            setUserPickedMerchant(true);
+                          }}
+                          fetchSuggestions={fetchMerchantSuggestions}
+                          placeholder="Merchant (optional)"
+                          containerStyle={styles.merchantInputWrap}
+                          inputStyle={styles.merchantInput}
+                        />
+
+                        <CategoryPickerField
+                          theme={theme}
+                          mainCategory={mainCategory}
+                          subcategory={subcategory}
+                          onChange={(main, sub) => {
+                            setMainCategory(main);
+                            setSubcategory(sub);
+                            setUserPickedCategory(true);
+                          }}
+                          label="Category ✨"
+                          containerStyle={styles.categoryFieldWrap}
+                        />
+
+                        <View style={styles.recurringRow}>
+                          <Text style={styles.recurringRowText}>🔁 Repeat monthly on the {ordinal(new Date().getDate())}</Text>
+                          <ToggleSwitch value={recurring} onValueChange={setRecurring} accessibilityLabel="Repeat monthly" />
+                        </View>
+                      </>
+                    )}
+
+                    <View style={styles.keypad}>
+                      {KEYS.map((k) => (
+                        <TouchableOpacity key={k} style={styles.key} onPress={() => capPress(k)} activeOpacity={0.6} testID={`addExpense.key.${KEY_TEST_ID[k] ?? k}`} accessibilityRole="button" accessibilityLabel={KEY_A11Y_LABEL[k]}>
+                          <Text style={styles.keyLabel}>{k}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={handleSave}
+                      disabled={!capReady || loading}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      testID="addExpense.save"
+                    >
+                      <LinearGradient
+                        colors={theme.gradients.primary}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={[styles.saveBtn, !capReady && styles.saveBtnDisabled]}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color={inkOnPastel} />
+                        ) : (
+                          <Text style={styles.saveBtnText}>{isGroup ? 'Save & split' : 'Save'}</Text>
+                        )}
+                      </LinearGradient>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.savedPrimaryBtn} onPress={closeAddExpense} activeOpacity={0.8}>
-                      <Text style={styles.savedPrimaryText}>Done</Text>
-                    </TouchableOpacity>
+                  </ScrollView>
+                ) : (
+                  <View style={styles.savedWrap} testID="addExpense.saved">
+                    <View style={styles.savedCheck}>
+                      <Text style={styles.savedCheckText}>✓</Text>
+                    </View>
+                    <Text style={styles.savedAmount}>{fmt(savedAmt)}</Text>
+                    <Text style={styles.savedLine}>{savedLine}</Text>
+                    <View style={styles.savedActions}>
+                      <TouchableOpacity style={styles.savedSecondaryBtn} onPress={handleAgain} activeOpacity={0.8}>
+                        <Text style={styles.savedSecondaryText}>Log another</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.savedPrimaryBtn} onPress={closeAddExpense} activeOpacity={0.8}>
+                        <Text style={styles.savedPrimaryText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              )}
-            </Pressable>
-          </Animated.View>
+                )}
+              </Pressable>
+            </Animated.View>
+          </KeyboardLift>
         </View>
       </Modal>
     </AddExpenseContext.Provider>
@@ -1059,6 +1063,8 @@ const createStyles = (theme: AppTheme) =>
     // sits in normal flex flow, sized to its own content and anchored to the bottom purely via
     // `modalRoot`'s `justifyContent: 'flex-end'`. A fixed-height absolute box regardless of
     // content was the bug behind "opens from near the top with empty space at the bottom".
+    // lets the form scroll inside the sheet when the Android keyboard takes part of the screen
+    sheetBody: { flexShrink: 1 },
     sheet: {
       maxHeight: '92%',
       backgroundColor: theme.colors.surfaceElevated,

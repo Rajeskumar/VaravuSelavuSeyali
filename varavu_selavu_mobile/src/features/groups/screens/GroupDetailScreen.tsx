@@ -54,6 +54,7 @@ import SectionLabel from '../../../core/ui/SectionLabel';
 import ListRow from '../../../core/ui/ListRow';
 import { categoryTile } from '../../expenses/utils/categoryCode';
 import BalanceRow from '../components/BalanceRow';
+import { paymentBetween } from '../utils/settleUp';
 import SettleUpSheet from '../components/SettleUpSheet';
 import GroupSettingsSheet from '../components/GroupSettingsSheet';
 import ActivityList from '../../activity/components/ActivityList';
@@ -64,6 +65,7 @@ import { showToast } from '../../../core/ui/Toast';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
 import { memberColor, initialsFromName } from '../components/BalanceRow';
 import { AddExpenseContext } from '../../expenses/screens/AddExpenseScreen';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
 
 type Tab = 'expenses' | 'balances' | 'activity';
 
@@ -124,6 +126,8 @@ export default function GroupDetailScreen() {
   const {
     data: balanceData,
     isLoading: balancesLoading,
+    isFetching: balancesFetching,
+    isError: balancesFailed,
     isRefetching: balancesRefetching,
     refetch: refetchBalances,
   } = useQuery({
@@ -164,19 +168,54 @@ export default function GroupDetailScreen() {
   // Moved above the early-return loading/not-found guards below (was previously defined further
   // down, after those guards) so the new auto-open effect right below it — which must run
   // unconditionally on every render per the Rules of Hooks — can reference it.
+  const openSettleSheet = (payment: BalanceTransfer, list: BalanceTransfer[] | null) => {
+    setSettleTransfers(list);
+    setSettleFrom(payment.from_member_id);
+    setSettleTo(payment.to_member_id);
+    setSettleSuggested(payment.amount);
+    setSettleUpVisible(true);
+  };
+
+  // The header's "Settle up" and my own row. What I owe is listed; if one person owes me, that payment is
+  // pre-filled. With several, the user says who paid: one button must not record them all as received.
+  // The sheet is never opened without a payer and payee.
+  const openMySettleUp = () => {
+    if (!myMember) return;
+    const transfers = balanceData?.transfers ?? [];
+    const outgoing = transfers.filter((t) => t.from_member_id === myMember.member_id);
+    if (outgoing.length > 0) {
+      openSettleSheet(outgoing[0], outgoing);
+      return;
+    }
+    const incoming = transfers.filter((t) => t.to_member_id === myMember.member_id);
+    if (incoming.length === 1) {
+      openSettleSheet(incoming[0], null);
+    } else if (incoming.length > 1 && detail?.status === 'archived') {
+      // Rows can't be used in an archived group, so don't ask for a tap.
+      showToast({ message: 'Unarchive this group to record payments', type: 'info' });
+    } else if (incoming.length > 1) {
+      setActiveTab('balances');
+      showToast({ message: 'Tap the person who paid you', type: 'info' });
+    } else {
+      showToast({
+        message: balanceData ? 'You have nothing to settle in this group' : "Balances haven't loaded yet",
+        type: 'info',
+      });
+    }
+  };
+
   const handleSettleUp = (balance: MemberBalance) => {
     if (!myMember) return;
-    setSettleTransfers(null);
-    if (balance.net < 0 && balance.member_id !== myMember.member_id) {
-      setSettleFrom(myMember.member_id);
-      setSettleTo(balance.member_id);
-      setSettleSuggested(Math.abs(balance.net));
-    } else {
-      setSettleFrom(balance.member_id);
-      setSettleTo(myMember.member_id);
-      setSettleSuggested(Math.abs(balance.net));
+    if (balance.member_id === myMember.member_id) {
+      openMySettleUp();
+      return;
     }
-    setSettleUpVisible(true);
+    const payment = paymentBetween(balanceData?.transfers ?? [], myMember.member_id, balance.member_id);
+    if (!payment) {
+      showToast({ message: `Nothing to settle between you and ${balance.display_name}`, type: 'info' });
+      return;
+    }
+    openSettleSheet(payment, null);
   };
 
   // TrackSpense v3 People tab: `PeopleList` can't call `handleSettleUp` directly (it only has
@@ -193,7 +232,8 @@ export default function GroupDetailScreen() {
     const targetEmail = route.params?.settleCounterpartyEmail;
     const targetName = route.params?.settleCounterpartyName;
     if (!targetEmail && !targetName) return;
-    if (!members.length || !balances.length || !myMember) return;
+    // It pre-fills money, so never from balances that are still being refreshed.
+    if (balancesFetching || balancesFailed || !members.length || !balances.length || !myMember) return;
     const targetMember = members.find(
       (m) => (targetEmail && m.user_email === targetEmail) || (!targetEmail && m.display_name === targetName)
     );
@@ -202,7 +242,7 @@ export default function GroupDetailScreen() {
       hasAutoOpenedSettleRef.current = true;
       handleSettleUp(targetBalance);
     }
-  }, [members, balances, myMember, route.params?.settleCounterpartyEmail, route.params?.settleCounterpartyName]);
+  }, [members, balances, balancesFetching, balancesFailed, myMember, route.params?.settleCounterpartyEmail, route.params?.settleCounterpartyName]);
 
   const handleAddMember = async () => {
     setInviteLoading(true);
@@ -308,30 +348,23 @@ export default function GroupDetailScreen() {
     );
   };
 
-  // "Settle up" under the balance: pre-fill the sheet with the first suggested transfer where I'm
-  // the payer, otherwise open it blank so the user can pick who paid whom.
-  const handleSettleUpAction = () => {
-    const allMine = (balanceData?.transfers ?? []).filter((t) => t.from_member_id === myMember?.member_id);
-    const mine = allMine[0];
-    setSettleTransfers(allMine.length > 0 ? allMine : null);
-    setSettleFrom(mine ? mine.from_member_id : null);
-    setSettleTo(mine ? mine.to_member_id : null);
-    setSettleSuggested(mine ? mine.amount : 0);
-    setSettleUpVisible(true);
-  };
-
-  const renderBalance = ({ item }: { item: MemberBalance }) => (
+  const renderBalance = ({ item }: { item: MemberBalance }) => {
+    // With simplified debts off, someone can owe me while their net against the group is zero.
+    const tappable = !isArchived && (item.net !== 0
+      || (!!myMember && !!paymentBetween(balanceData?.transfers ?? [], myMember.member_id, item.member_id)));
+    return (
     <TouchableOpacity
       onPress={() => {
-        if (item.net !== 0 && !isArchived) {
+        if (tappable) {
           handleSettleUp(item);
         }
       }}
-      activeOpacity={item.net !== 0 && !isArchived ? 0.7 : 1}
+      activeOpacity={tappable ? 0.7 : 1}
     >
       <BalanceRow balance={item} isCurrentUser={item.member_id === myMember?.member_id} />
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={[styles.container, { paddingTop: 0 }]}>
@@ -393,9 +426,9 @@ export default function GroupDetailScreen() {
               <Text style={styles.addExpenseBtnText}>Add expense</Text>
             </LinearGradient>
           </TouchableOpacity>
-          {/* Opens the settle sheet pre-filled with the transfer I owe, if any; stays enabled when
+          {/* Opens the settle sheet pre-filled with what I owe or am owed; stays enabled when
               archived so browsing is never blocked — the sheet's own mutation is what's locked. */}
-          <TouchableOpacity style={styles.settleUpLinkBtn} onPress={handleSettleUpAction} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.settleUpLinkBtn} onPress={openMySettleUp} activeOpacity={0.85}>
             <Text style={styles.settleUpLinkText}>Settle up</Text>
           </TouchableOpacity>
         </View>
@@ -538,34 +571,36 @@ export default function GroupDetailScreen() {
       />
 
       <Modal visible={inviteVisible} transparent animationType="slide" onRequestClose={() => setInviteVisible(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setInviteVisible(false)} accessible={false} />
-        <View style={[styles.inviteSheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={() => setInviteVisible(false)}>
-          <View style={styles.modalPill} />
-          <Text style={styles.inviteTitle}>Add Member</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Email (links to registered account)"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={inviteEmail}
-            onChangeText={setInviteEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Display name (for placeholder members)"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={inviteName}
-            onChangeText={setInviteName}
-          />
-          <TouchableOpacity
-            style={[styles.createBtn, (!inviteEmail.trim() && !inviteName.trim()) && styles.createBtnDisabled]}
-            onPress={handleAddMember}
-            disabled={inviteLoading || (!inviteEmail.trim() && !inviteName.trim())}
-          >
-            {inviteLoading ? <ActivityIndicator color={theme.colors.textInverse} /> : <Text style={styles.createBtnText}>Add</Text>}
-          </TouchableOpacity>
-        </View>
+        <KeyboardLift style={{ flex: 1 }}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setInviteVisible(false)} accessible={false} />
+          <View style={[styles.inviteSheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={() => setInviteVisible(false)}>
+            <View style={styles.modalPill} />
+            <Text style={styles.inviteTitle}>Add Member</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Email (links to registered account)"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Display name (for placeholder members)"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={inviteName}
+              onChangeText={setInviteName}
+            />
+            <TouchableOpacity
+              style={[styles.createBtn, (!inviteEmail.trim() && !inviteName.trim()) && styles.createBtnDisabled]}
+              onPress={handleAddMember}
+              disabled={inviteLoading || (!inviteEmail.trim() && !inviteName.trim())}
+            >
+              {inviteLoading ? <ActivityIndicator color={theme.colors.textInverse} /> : <Text style={styles.createBtnText}>Add</Text>}
+            </TouchableOpacity>
+          </View>
+        </KeyboardLift>
       </Modal>
     </View>
   );
