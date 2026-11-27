@@ -18,7 +18,7 @@ import TagChipsDisplay from '../../tags/components/TagChipsDisplay';
 import TagPickerModal from '../../tags/components/TagPickerModal';
 import CardPickerField from '../../cards/components/CardPickerField';
 import { useCardCoachEnabled } from '../../cards/hooks/useCardCoachEnabled';
-import { TWO_DECIMALS } from '../utils/splitAmounts';
+import { parseAmount } from '../utils/parseAmount';
 import { showToast } from '../../../core/ui/Toast';
 import { RECEIPT_SPLIT_TYPES, fromServerLine, receiptTotals, toSaveLine } from '../../receipts/utils/receiptLines';
 
@@ -79,7 +79,8 @@ export default function EditGroupExpenseModal({
   const [itemsLoaded, setItemsLoaded] = useState(false);
   // The editors still show the old figures; when the server will adjust them, say so instead of flagging them.
   // An Exact or old item-split receipt can't be adjusted, so its checks stay.
-  const amountEdited = !!expense && Math.round((parseFloat(amount) || 0) * 100) !== Math.round(expense.cost * 100);
+  const typedAmount = parseAmount(amount) ?? 0;
+  const amountEdited = !!expense && Math.round(typedAmount * 100) !== Math.round(expense.cost * 100);
   const needsNewSplit = isReceipt && (expense?.split_type === 'exact' || expense?.split_type === 'itemized');
   const adjustsStored = amountEdited && !splitTouched && !needsNewSplit;
 
@@ -134,15 +135,15 @@ export default function EditGroupExpenseModal({
   // A single payer paid the whole total, so their amount follows it (web parity).
   const changeAmount = (text: string) => {
     setAmount(text);
-    setPayers((prev) => (prev.length === 1 ? [{ ...prev[0], amount_paid: parseFloat(text) || 0 }] : prev));
+    setPayers((prev) => (prev.length === 1 ? [{ ...prev[0], amount_paid: parseAmount(text) ?? 0 }] : prev));
   };
 
   const handleSave = async () => {
     if (!expense) return;
-    const amountValue = parseFloat(amount);
-    // parseFloat alone reads "1,234.50" as 1, and the server would rescale every share to it.
-    if (!TWO_DECIMALS.test(amount.trim()) || !(amountValue > 0)) {
-      showToast({ message: 'Enter an amount greater than 0, like 12.50 (use a dot for cents)', type: 'warning' });
+    const amountValue = parseAmount(amount);
+    // A misread amount would be saved, and the server would rescale every share to it.
+    if (amountValue === null || amountValue <= 0) {
+      showToast({ message: 'Enter an amount greater than 0, like 12.50, without thousands separators', type: 'warning' });
       return;
     }
     setLoading(true);
@@ -150,10 +151,10 @@ export default function EditGroupExpenseModal({
       if (itemsLoaded && items.length > 0) {
         // A changed amount carries the split chosen below (Equal/Exact/Shares), which the server
         // needs for Exact and old item-split receipts; ids keep edited lines in place.
-        const amountChanged = Math.round((parseFloat(amount) || 0) * 100) !== Math.round(expense.cost * 100);
+        const amountChanged = Math.round(typedAmount * 100) !== Math.round(expense.cost * 100);
         await updateGroupExpenseItems(groupId, expense.row_id, {
           items: items.map((it, idx) => toSaveLine(it, idx, true)),
-          amount: parseFloat(amount) || 0,
+          amount: typedAmount,
           tax: itemsTax,
           tip: itemsTip,
           ...(amountChanged && splitTouched
@@ -163,7 +164,7 @@ export default function EditGroupExpenseModal({
       }
       await updateGroupExpense(groupId, expense.row_id, {
         description,
-        amount: parseFloat(amount),
+        amount: amountValue,
         category: subcategory,
         date,
         merchant_name: merchantName || undefined,
@@ -264,7 +265,7 @@ export default function EditGroupExpenseModal({
 
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Who Paid?</Text>
-                <PayerPicker quiet={adjustsStored} members={members} amount={parseFloat(amount) || 0} payers={payers} onChange={(next) => { setPayers(next); setSplitTouched(true); }} />
+                <PayerPicker quiet={adjustsStored} members={members} amount={typedAmount} payers={payers} onChange={(next) => { setPayers(next); setSplitTouched(true); }} />
               </View>
 
               <View style={styles.section}>
@@ -272,7 +273,7 @@ export default function EditGroupExpenseModal({
                 <SplitEditor
                   quiet={adjustsStored}
                   members={members}
-                  totalAmount={parseFloat(amount) || 0}
+                  totalAmount={typedAmount}
                   value={{ type: splitType, entries: splitEntries }}
                   onChange={(val) => {
                     setSplitTouched(true);
@@ -292,7 +293,7 @@ export default function EditGroupExpenseModal({
                   tax={itemsTax}
                   tip={itemsTip}
                   legacyFormat={legacyFormat}
-                  currentAmount={parseFloat(amount) || 0}
+                  currentAmount={typedAmount}
                 />
               )}
 
@@ -316,7 +317,7 @@ export default function EditGroupExpenseModal({
               </View>
             </ScrollView>
             <View style={styles.footer}>
-              <CustomButton title={loading ? 'Saving...' : 'Save Changes'} onPress={handleSave} disabled={loading || (itemsLoaded && items.length > 0 && !receiptTotals(items, itemsTax, itemsTip, parseFloat(amount) || 0).reconciled)} />
+              <CustomButton title={loading ? 'Saving...' : 'Save Changes'} onPress={handleSave} disabled={loading || (itemsLoaded && items.length > 0 && !receiptTotals(items, itemsTax, itemsTip, typedAmount).reconciled)} />
             </View>
           </Pressable>
         </KeyboardAvoidingView>

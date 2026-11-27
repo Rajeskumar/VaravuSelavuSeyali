@@ -45,8 +45,14 @@ const sentBody = async () => {
 beforeEach(() => (updateGroupExpense as jest.Mock).mockClear());
 
 describe('editing a manual group expense (TS-FIX-103)', () => {
+  it('saves a comma decimal as typed, for keypads that offer only a comma', async () => {
+    mount();
+    fireEvent.changeText(screen.getByTestId('groupEdit.amount'), '41,25');
+    expect(await sentBody()).toMatchObject({ amount: 41.25 });
+  });
+
   // parseFloat reads "1,234.50" as 1 and "12,50" as 12, and the server would shrink every share to match.
-  it.each(['1,234.50', '12,50', '12.345', '1e3'])('does not save an amount it would misread: %s', async (typed) => {
+  it.each(['1,234.50', '1,234', '12.345', '1e3'])('does not save an amount it would misread: %s', async (typed) => {
     mount();
     fireEvent.changeText(screen.getByTestId('groupEdit.amount'), typed);
     fireEvent.press(screen.getByText('Save Changes'));

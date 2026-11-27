@@ -29,6 +29,7 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { memberColor, initialsFromName } from './BalanceRow';
 import { venmoLink, paypalMeLink, upiLink } from '../utils/paymentDeepLinks';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
+import { parseAmount } from '../utils/parseAmount';
 
 type Stage = 'review' | 'settling' | 'done';
 
@@ -97,6 +98,8 @@ export default function SettleUpSheet({
   const [amount, setAmount] = useState(
     suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '',
   );
+  // 0 while the text can't be read for certain, so nothing shows or records a guess.
+  const typedAmount = parseAmount(amount) ?? 0;
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<Stage>('review');
   const { displayValue, setDisplayValue, runFrom } = useCountDown();
@@ -115,7 +118,7 @@ export default function SettleUpSheet({
   const toIsMe = !!toMemberId && members.find((m) => m.member_id === toMemberId)?.user_email === userEmail;
   const fromName = fromIsMe ? 'You' : fromMember?.display_name ?? 'Someone';
   const toName = toIsMe ? 'you' : members.find((m) => m.member_id === toMemberId)?.display_name ?? 'someone';
-  const paidLine = `${fromName} paid ${toName} ${formatCurrency((parseFloat(amount) || 0))}.`;
+  const paidLine = `${fromName} paid ${toName} ${formatCurrency(typedAmount)}.`;
   const doneMessage =
     remaining === null
       ? `${paidLine} Balances updated.`
@@ -130,7 +133,7 @@ export default function SettleUpSheet({
   // TS-GRP-130: payment deep links — opens the user's own payment app with
   // the amount pre-filled; never auto-records the settlement.
   const paymentButtons: { label: string; url: string }[] = [];
-  const parsedAmountForLinks = parseFloat(amount) || 0;
+  const parsedAmountForLinks = typedAmount;
   if (parsedAmountForLinks > 0 && toBalance) {
     const note = 'TrackSpense settlement';
     if (toBalance.venmo_handle) paymentButtons.push({ label: 'Venmo', url: venmoLink(toBalance.venmo_handle, parsedAmountForLinks, note) });
@@ -150,17 +153,17 @@ export default function SettleUpSheet({
   }, [visible, suggestedAmount, setDisplayValue]);
 
   React.useEffect(() => {
-    if (stage === 'review') setDisplayValue(parseFloat(amount) || 0);
-  }, [amount, stage, setDisplayValue]);
+    if (stage === 'review') setDisplayValue(typedAmount);
+  }, [typedAmount, stage, setDisplayValue]);
 
   const handleSubmit = async () => {
-    const parsedAmount = parseFloat(amount);
+    const parsedAmount = typedAmount;
     if (!fromMemberId || !toMemberId) {
       showToast({ message: 'Please select payer and payee', type: 'warning' });
       return;
     }
     if (!parsedAmount || parsedAmount <= 0) {
-      showToast({ message: 'Please enter a valid amount', type: 'warning' });
+      showToast({ message: 'Enter an amount like 12.50, without thousands separators', type: 'warning' });
       return;
     }
     setLoading(true);
@@ -307,7 +310,7 @@ export default function SettleUpSheet({
                     <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />
                   )}
                   <Text style={[styles.heroAmount, { color: stage === 'done' ? theme.colors.gold : theme.colors.success }]}>
-                    {formatCurrency((stage === 'done' ? (remaining === null ? parseFloat(amount) || 0 : stillOwed ? remaining : 0) : displayValue))}
+                    {formatCurrency((stage === 'done' ? (remaining === null ? typedAmount : stillOwed ? remaining : 0) : displayValue))}
                   </Text>
                 </View>
               </View>

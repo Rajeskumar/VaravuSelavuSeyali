@@ -903,7 +903,7 @@ export default function ExpensesScreen() {
 
                         <ScrollView style={styles.moveBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                         <Text style={styles.pickerLabel}>👥  Group</Text>
-                        <ScrollView style={{ maxHeight: 160 }} showsVerticalScrollIndicator={false}>
+                        <ScrollView style={{ maxHeight: 160 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
                             {myGroups.map((g) => (
                                 <TouchableOpacity
                                     key={g.group_id}
