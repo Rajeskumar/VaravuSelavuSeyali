@@ -7,6 +7,7 @@
  * read-only list — the same size/complexity threshold RecurringExpensesScreen.tsx crossed as its
  * own screen file.
  */
+import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView,
@@ -280,7 +281,7 @@ export default function BudgetsTabContent({ period }: { period?: string }) {
               <TextInput
                 style={styles.input}
                 value={form.amount}
-                onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))}
+                onChangeText={noMinus((v) => setForm((f) => ({ ...f, amount: v })))}
                 keyboardType="decimal-pad"
                 placeholder="0.00"
                 placeholderTextColor={theme.colors.textTertiary}

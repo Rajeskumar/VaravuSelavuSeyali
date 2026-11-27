@@ -5,7 +5,7 @@ import { confirmed, expenseCreation, ExpenseCapture } from '../../shared/analyti
 import { aiErrorFromResponse } from '../../ask/api/aiUsage';
 import { TagRefDTO } from '../../tags/api/tags';
 import { CardRefDTO } from '../../cards/api/cards';
-import type { OcrResult } from '../../receipts/utils/onDeviceOcr';
+import type { OcrResult, UploadableImage } from '../../receipts/utils/onDeviceOcr';
 
 export interface ExpensePayload {
   description: string;
@@ -66,13 +66,37 @@ export function addExpense(payload: ExpensePayload, token: string, capture?: Exp
   }, capture, 'personal');
 }
 
-export async function listExpenses(token: string, userId: string, offset = 0, limit = 30, tagIds?: string[]): Promise<ExpenseListResponse> {
+export interface ExpenseDateRange {
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD
+}
+
+/** Converts a 'YYYY-MM' month key into an inclusive ISO date range; empty string -> undefined (all time). */
+export function monthToDateRange(month: string): ExpenseDateRange | undefined {
+  if (!/^\d{4}-\d{2}$/.test(month)) return undefined;
+  const [y, m] = month.split('-').map(Number);
+  if (!y || m < 1 || m > 12) return undefined;
+  const lastDay = new Date(y, m, 0).getDate();
+  const mm = String(m).padStart(2, '0');
+  return { startDate: `${y}-${mm}-01`, endDate: `${y}-${mm}-${String(lastDay).padStart(2, '0')}` };
+}
+
+export async function listExpenses(
+  token: string,
+  userId: string,
+  offset = 0,
+  limit = 30,
+  tagIds?: string[],
+  dateRange?: ExpenseDateRange,
+): Promise<ExpenseListResponse> {
   const params = new URLSearchParams({
     user_id: userId,
     offset: offset.toString(),
     limit: limit.toString(),
   });
   (tagIds || []).forEach((id) => params.append('tag_ids', id));
+  if (dateRange?.startDate) params.set('start_date', dateRange.startDate);
+  if (dateRange?.endDate) params.set('end_date', dateRange.endDate);
 
   const response = await apiFetch(`/api/v1/expenses?${params.toString()}`, {
     method: 'GET',
@@ -83,6 +107,38 @@ export async function listExpenses(token: string, userId: string, offset = 0, li
   }
 
   return response.json();
+}
+
+/**
+ * Fetches every page of personal expenses for the active month (or all time when `dateRange` is
+ * omitted). Bounded by `maxPages` so a runaway server cursor can never loop indefinitely.
+ */
+export async function listAllExpenses(
+  token: string,
+  userId: string,
+  tagIds?: string[],
+  pageSize = 500,
+  maxPages = 10,
+  dateRange?: ExpenseDateRange,
+): Promise<ExpenseRecord[]> {
+  const seen = new Set<number>();
+  const all: ExpenseRecord[] = [];
+  let offset: number | null = 0;
+  let pages = 0;
+
+  while (offset !== null && pages < maxPages) {
+    const data = await listExpenses(token, userId, offset, pageSize, tagIds, dateRange);
+    pages += 1;
+    for (const item of data.items || []) {
+      if (!seen.has(item.row_id)) {
+        seen.add(item.row_id);
+        all.push(item);
+      }
+    }
+    offset = data.next_offset != null && data.next_offset > offset ? data.next_offset : null;
+  }
+
+  return all;
 }
 
 export function deleteExpense(rowId: number, token: string): Promise<void> {
@@ -111,12 +167,23 @@ export function updateExpense(rowId: number, payload: ExpensePayload, token: str
   }, 'expense_updated', { expense_scope: 'personal' });
 }
 
-export async function uploadReceipt(uri: string, token: string): Promise<any> {
+export async function uploadReceipt(source: string | UploadableImage, token: string): Promise<any> {
+  const image: UploadableImage = typeof source === 'string' ? { uri: source } : source;
+  const name = image.name || 'receipt.jpg';
+  const type = image.type || 'image/jpeg';
   const formData = new FormData();
+  // Expo SDK 57's winter/fetch (`convertFormDataAsync`) rejects React Native's legacy `{ uri }`
+  // FormData parts unless the part exposes `.bytes(): Promise<Uint8Array>`. Keep `uri` too for
+  // legacy RN fetch compatibility, and fall back to fetching the local URI if bytes weren't supplied.
   const file = {
-    uri,
-    name: 'receipt.jpg',
-    type: 'image/jpeg',
+    uri: image.uri,
+    name,
+    type,
+    bytes: async () => {
+      if (image.bytes) return image.bytes;
+      const res = await fetch(image.uri);
+      return new Uint8Array(await res.arrayBuffer());
+    },
   } as any;
 
   formData.append('file', file);
@@ -185,13 +252,18 @@ export interface ExpenseItemDTO {
   line_total: number;
   tax?: number | null;
   discount?: number | null;
+  original_price?: number | null;
 }
 
 export interface ItemsResponse {
   items: ExpenseItemDTO[];
   amount: number;
   tax: number;
+  tip?: number;
+  /** Always 0 since TS-FIX-102: discounts are already in the line prices. */
   discount: number;
+  savings?: number;
+  legacy_discount_format?: boolean;
 }
 
 export interface ItemsUpdatePayload {
@@ -203,10 +275,20 @@ export interface ItemsUpdatePayload {
     quantity?: number | null;
     unit_price?: number | null;
     line_total: number;
+    discount?: number;
+    original_price?: number | null;
   }[];
   amount: number;
   tax?: number;
-  discount?: number;
+  tip?: number;
+}
+
+/** Receipt saves explain refusals (totals don't match, update the app): show the server's words. */
+async function receiptError(response: Response, fallback: string): Promise<HttpStatusError> {
+  const body = await response.json().catch(() => ({}));
+  const detail = (body as any)?.detail;
+  const message = typeof detail === 'string' ? detail : detail?.message || fallback;
+  return Object.assign(new HttpStatusError(message, response.status), { detail });
 }
 
 /** Fetches an already-saved itemized personal expense's line items. */
@@ -226,7 +308,7 @@ export async function updateExpenseItems(rowId: number | string, payload: ItemsU
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new Error('Failed to update expense items');
+    throw await receiptError(response, 'Failed to update expense items');
   }
   return response.json();
 }
@@ -252,8 +334,7 @@ export async function addExpenseWithItems(payload: {
     });
 
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new HttpStatusError((errData as any).detail || 'Failed to save expense with items', response.status);
+      throw await receiptError(response, 'Failed to save expense with items');
     }
 
     return response.json();

@@ -146,6 +146,10 @@ class PostgresRepo:
             line_total = to_decimal(item.get("line_total"))
             tax = to_decimal(item.get("tax"))
             discount = to_decimal(item.get("discount"))
+            # TS-FIX-102: always set on new lines; NULL marks the old format.
+            original_price = item.get("original_price")
+            if original_price is None:
+                original_price = line_total + discount
             attr_json = item.get("attributes_json")
                 
             db_item = ExpenseItem(
@@ -162,6 +166,7 @@ class PostgresRepo:
                 line_total=line_total,
                 tax=tax,
                 discount=discount,
+                original_price=to_decimal(original_price),
                 attributes_json=attr_json
             )
             db_items.append(db_item)
@@ -197,6 +202,7 @@ class PostgresRepo:
                 "line_total": float(item.line_total) if item.line_total is not None else 0.0,
                 "tax": float(item.tax) if item.tax is not None else 0.0,
                 "discount": float(item.discount) if item.discount is not None else 0.0,
+                "original_price": float(item.original_price) if item.original_price is not None else None,
             }
             for item in items
         ]

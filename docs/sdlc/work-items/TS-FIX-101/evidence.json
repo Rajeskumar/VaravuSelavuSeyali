@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "checks",
+      "status": "passed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server, Jest; synthetic data. No native device or simulator.",
+      "command_or_method": "make check 7/7 on the final tree",
+      "source": ".sdlc-logs/fast-sdlc1795731086019538000",
+      "recorded_at": "2026-11-26T22:18:09.789586+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    },
+    {
+      "id": "red-green",
+      "status": "passed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server, Jest; synthetic data. No native device or simulator.",
+      "command_or_method": "Before the fix: web 7 and mobile 2 unit tests failed; 5 browser tests (new, edit, move) failed on the old split/payer forms. Review fixes: 6 web and 4 mobile tests failed first, and the huge-amount pre-fill hung the run; typing 3.34 on mobile gave 334. The mobile preview case and the no-minus test were not shown failing first. AC-004: 14 server tests, then the legacy-resave test, and the web and mobile minus tests failed before their fixes; 5 more server tests failed before the final fixes.",
+      "source": "SplitEditor.test.tsx; splitTolerance.test.ts; SplitInputs.test.tsx",
+      "recorded_at": "2026-11-26T22:18:09.789586+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    },
+    {
+      "id": "local-integration",
+      "status": "passed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server, Jest; synthetic data. No native device or simulator.",
+      "command_or_method": "Final code: make check 7/7; backend 1072 passed, 15 skipped; group specs 130/130 on chromium, firefox, webkit, mobile-iphone; chromium @regression 136 passed, 17 skipped; api 58 passed. Local isolated stack; not run in GitHub Actions; no native device or simulator.",
+      "source": "qa/e2e/tests/groups",
+      "recorded_at": "2026-11-26T22:18:09.789586+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    },
+    {
+      "id": "code-review",
+      "status": "failed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server, Jest; synthetic data. No native device or simulator.",
+      "command_or_method": "Third pass (AC-004): BLOCKED on receipt coupon regressions, fixed afterwards. Not re-run: stopped after repeated blocked review cycles per lifecycle.",
+      "source": "findings.json",
+      "recorded_at": "2026-11-26T22:18:09.789586+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    },
+    {
+      "id": "security-review",
+      "status": "failed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server, Jest; synthetic data. No native device or simulator.",
+      "command_or_method": "Second pass (AC-004): BLOCKED on pre-existing itemized reconciliation (open) and rescale negatives (fixed afterwards). Not re-run: stopped after repeated blocked review cycles per lifecycle.",
+      "source": "findings.json",
+      "recorded_at": "2026-11-26T22:18:09.789586+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    },
+    {
+      "id": "ui-review",
+      "status": "passed",
+      "snapshot": "9bd104231e8c39b0d47cc78bd0df84db6ed61ba2474e69f884b438fd4344da0c",
+      "environment": "Local macOS; throwaway PostgreSQL 16 and backend under the e2e isolation guard (no .env; AI, mail, push off), CRA dev server, Jest; synthetic data. No native device or simulator.",
+      "command_or_method": "One pass before the review fixes: no P0/P1; P2-1 and P2-2 fixed, not re-reviewed; no rendered or native check. Not re-run for the AC-004 screen changes.",
+      "source": "findings.json",
+      "recorded_at": "2026-11-26T22:18:09.789586+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-004"
+      ]
+    }
+  ]
+}

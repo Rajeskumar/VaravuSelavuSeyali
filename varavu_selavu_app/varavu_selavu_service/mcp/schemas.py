@@ -68,8 +68,11 @@ class ReceiptItem(StrictInput):
     name: Description
     quantity: Quantity = Decimal("1")
     unit_price: Money | None = None
+    # TS-FIX-102: line_total is the paid price; discount is money saved on the line (a record, never
+    # subtracted again); original_price, if sent, must equal line_total + discount.
     line_total: Money
     discount: Money = Decimal("0")
+    original_price: Money | None = None
     category_id: str | None = None
 
     @field_validator("category_id")
@@ -136,6 +139,7 @@ class VerifyExpense(StrictInput):
     discount: Money = Decimal("0")
     payment_method: Literal["card", "cash", "other", "unknown"] = "unknown"
     items: list[ReceiptItem] = Field(default_factory=list, max_length=200)
+    # TS-FIX-102: receipts must match their total; true is refused. Kept so clients sending false still work.
     accept_unreconciled: bool = False
 
     @field_validator("date")

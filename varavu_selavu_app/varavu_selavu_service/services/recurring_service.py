@@ -4,8 +4,10 @@ from typing import List, Dict, Optional
 from datetime import date as date_type, datetime, timedelta
 import uuid
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from varavu_selavu_service.db.models import RecurringTemplate
+from varavu_selavu_service.services.split_engine import has_negative_value
 
 def _last_day_of_month(y: int, m0: int) -> int:
     next_month_year = y + 1 if m0 == 11 else y
@@ -52,6 +54,10 @@ class RecurringService:
         group_id: Optional[str] = None,
         split_config: Optional[Dict] = None,
     ) -> Dict:
+        # Checked on save only: templates stored before this rule still load.
+        if split_config and has_negative_value(split_config.get("entries")):
+            raise HTTPException(status_code=400, detail="Split values cannot be negative")
+
         start_val = start_date_iso or datetime.utcnow().strftime("%Y-%m-%d")
         start_date_parsed = datetime.strptime(start_val, "%Y-%m-%d").date()
         

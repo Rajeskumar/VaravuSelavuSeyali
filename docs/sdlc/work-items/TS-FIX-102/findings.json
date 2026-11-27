@@ -1,0 +1,313 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "B-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Every personal expense has a synthesized proxy line, so has_items treated a plain expense moved into a group as a receipt (Percentage/Adjustment and amount edits refused). Fixed: receipt = itemized, multi-line or any line with original_price.",
+      "owner": "Claude Code",
+      "source": "self (security hand-off)",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Group PUT re-checked receipt totals even when the amount was unchanged; old receipts whose stored figures do not add up (tax lost by the old items PUT, personal receipts moved to a group) were locked against every edit, and moved personal receipts were converted with the group arithmetic. Fixed: plain edits keep the stored amount exactly; legacy view replays per origin (assignment rows = group-made) and shows any shortfall as tax.",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Item insights derived from shares were not moved on a split/items edit, so delete backed out the wrong amounts. Fixed: both edit routes back out old item shares and add new ones (totals only, no duplicate price history).",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Web and mobile edit forms saved every receipt edit as an Exact split, losing Equal/Shares. Fixed for receipts: payers/split sent only when the picker changed (manual expenses unchanged).",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "SEC-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Personal PUT /expenses/{id} could change a receipt's amount without the totals rule and overwrote a one-line receipt's line. Fixed: amount change refused with totals_mismatch; receipt lines never overwritten there.",
+      "owner": "Claude Code",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F4",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Group PUT on a receipt could move the amount by up to 0.02 without an items edit. Fixed by the exact-amount rule (F1).",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F5",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Personal items PUT silently ignored split. Fixed: 400.",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F6",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "MCP get_expense mixed discount meanings. Fixed: item original_price exposed (null marks old format); tool spec updated.",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F7",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "MCP save rounded paid unit price half-even. Fixed: ROUND_HALF_UP.",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "F8",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Edit dialogs save items PUT then expense PUT; a failure of the second leaves a half-edit (pattern pre-existed). Not fixed: error is shown and the list refetches; single server call is a follow-up.",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "SEC-2",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Unparseable AI/OCR numbers could 500 a scan after quota is charged. Fixed: lines flagged with a warning and skipped.",
+      "owner": "Claude Code",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "SEC-3",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "reject_item_assignments ran before authentication. Fixed: depends on auth_required.",
+      "owner": "Claude Code",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "SEC-H1",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "MCP subtotal before a whole-receipt discount was refused after folding. Fixed: subtotal folded with the discount.",
+      "owner": "Claude Code",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "UI-1",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "% and remove buttons below target size; % had no visible hint. Fixed: 32px web targets + tooltip, 44pt mobile targets.",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "UI-2",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Warning/success caption contrast. Dismissed: project tokens measured 5.02:1 (#B45309, #15803D on white) and >11:1 in dark mode.",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "dismissed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "UI-3",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Blocking status announcement. Fixed: detail sheet Save aria-describedby the status; mobile status is alert only when mismatched, polite live region. Quick Capture Save not linked (status sits directly above it).",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "UI-4",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Focus after split_required. Fixed: focus moves to 'Split the new total'.",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "UI-5",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "Original-price row alignment at 320px / large text; mobile field lacks currency adornment.",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "UI-6",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "Read-only items sheet said 'before saving'. Fixed wording.",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "PR-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Spec/architecture still described the removed engine, board and suggestion DTOs. Fixed.",
+      "owner": "Claude Code",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "PR-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "MCP spec said 'net line total'. Fixed with original_price wording.",
+      "owner": "Claude Code",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "PR-3",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "Paid unit price stale after a manual price edit. Fixed in prepare_lines.",
+      "owner": "Claude Code",
+      "source": "product-review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "PR-4",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "AddExpenseForm group branch records the total only if a scan draft ever reaches it (judged unreachable, K8).",
+      "owner": "Claude Code",
+      "source": "product-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "PR-6",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "split_required has no handler on mobile edit (proactive split makes it unreachable today).",
+      "owner": "Claude Code",
+      "source": "product-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "N1",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Deleting a receipt moved in from personal backed out group item insights it never added. Fixed: on move, item totals move from the owner's full amount to each member's share.",
+      "owner": "Claude Code",
+      "source": "implementation-review (re-review)",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "N2",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "An old one-line item-split receipt stopped being a receipt after a re-split. Fixed: assignment rows also mark a receipt (single and list paths).",
+      "owner": "Claude Code",
+      "source": "implementation-review (re-review)",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "SEC-4",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "A whole-receipt discount larger than the lines lowered the MCP subtotal by the full discount. Fixed: only the absorbed amount comes off.",
+      "owner": "Claude Code",
+      "source": "security-review (re-check)",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "SEC-H2",
+      "severity": "P3",
+      "certainty": "Improvement",
+      "summary": "Item-insight totals were adjusted in float. Fixed: Decimal arithmetic.",
+      "owner": "Claude Code",
+      "source": "security-review (re-check hand-off)",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    }
+  ]
+}

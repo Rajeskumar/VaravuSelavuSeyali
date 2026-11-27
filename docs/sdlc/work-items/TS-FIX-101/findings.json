@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "R-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Auto-filled second payer carried float noise the API refuses",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "R-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Percentage/shares preview could show the spare cent on a different person from the stored one",
+      "owner": "Claude Code",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "R-3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Third decimals gave misleading totals and passed some client checks",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "R-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Mobile footer showed $0.00 left beside an invalid split",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "R-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Mobile split and payer fields dropped the decimal point while typing (pre-existing)",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "R-6",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Disabled Save/Done without an explanation after a payer gap or changed amount (pre-existing); ROADMAP",
+      "owner": "Claude Code",
+      "source": "ui-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "R-7",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Mobile Equal/Adjustment preview, web negative adjustment, shares validation (pre-existing); ROADMAP",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "X-1",
+      "severity": "P0",
+      "certainty": "Confirmed",
+      "summary": "Pre-existing server bug, unchanged here: a negative adjustment share is dropped; 10.00 with +20,-10,-10 stores one member owing 23.33. Reproduced offline. Needs owner decision to expand scope; ROADMAP",
+      "owner": "Claude Code",
+      "source": "implementation-review",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "N-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "AC-004 first version broke scanned coupon lines (group save 422; editor flipped -2 to 2). Restored previous behaviour, with a server test; not re-reviewed. Coupon policy is an owner decision.",
+      "owner": "Claude Code",
+      "source": "second review pass",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "N-2",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Rescaling after an amount change could store a negative payer or share. Fixed with failing tests first; not re-reviewed.",
+      "owner": "Claude Code",
+      "source": "second review pass",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "N-3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Negative item quantity accepted on item requests. Fixed; not re-reviewed.",
+      "owner": "Claude Code",
+      "source": "second review pass",
+      "status": "fixed",
+      "verification_evidence": "local-integration",
+      "waiver": null
+    },
+    {
+      "id": "N-4",
+      "severity": "P0",
+      "certainty": "Confirmed",
+      "summary": "Pre-existing, not a minus value: group itemized create does not require items to reconcile with the amount, so shares may not total it and settle-ups can be misdirected. Reproduced at engine level by the security reviewer. ROADMAP; needs owner decision.",
+      "owner": "Claude Code",
+      "source": "second review pass",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "N-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Recurring confirm/run-now accept NaN/Infinity/over-limit; old negative templates fail unhelpfully. ROADMAP.",
+      "owner": "Claude Code",
+      "source": "second review pass",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    }
+  ]
+}

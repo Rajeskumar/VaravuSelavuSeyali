@@ -4,6 +4,8 @@ Use for every production release. It **adds QA/UAT evidence and sign-off** on to
 
 **Release:** ______ · **Commit/tag:** ______ · **Date:** ______ · **Release manager:** ______ · **QA owner:** ______
 
+The per-release run sheet (automated suites, the every-release manual smoke test, real-device checks) is [`11-release-test-sheet.md`](11-release-test-sheet.md); current coverage and gaps are in [`10-coverage-map.md`](10-coverage-map.md).
+
 ## 1. Entry criteria (before testing starts)
 - [ ] Release candidate commit identified; `main` frozen except for release fixes.
 - [ ] `unit.yml`, `qa.yml` and `framework.yml` green on the exact commit (web lint/tsc/Jest, mobile tsc/Jest, backend pytest).
@@ -50,6 +52,7 @@ Record Pass/Fail with evidence (screenshot/trace/run id). Automated where a test
 
 ## 5. Mobile app (only when a mobile build ships)
 - [ ] **Mobile analytics (iOS and Android, each):** consent prompt shows once at first launch (before sign-in) with both switches off; Account → Privacy toggles apply at once; a `qa` build's DebugView run shows `screen_view` once per navigation and the login, expense, receipt, group, settlement, Ask and deep-link events with no private values; test crash arrives symbolicated in the **Dev** Firebase project; a `production`-configured build was not used for any of this; production receives nothing from `qa`/test builds; store privacy disclosures match `docs/analytics/mobile.md` §9 (TS-GA4-002, AN-15).
+  - Android production-configured analytics and consent-off smoke was reported complete by the owner on 2026-11-26. This is partial evidence; the non-production QA, Crashlytics, privacy and full event checks above remain open.
 - [ ] Build via `make start-mobile-*` smoke on iOS and Android **devices** (simulator/emulator regression runs locally with `qa/mobile` when mobile code changed since the previous release: the release record's `native-mobile-e2e` check; real-device checks stay manual).
 - [ ] Manual JM-01..JM-07 from `03-user-journeys.md` (login, add expense + recovery, receipt OCR, groups/deep link, push if enabled with `TRACKSPENSE_ENABLE_PUSH=1`).
 - [ ] Store identifiers unchanged (`com.cerebroos.trackspense`); minimum iOS 17.0; Xcode ≥ 26.4.

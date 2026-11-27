@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import { Operation } from '../../analytics/client';
 import { analytics } from '../../analytics/browser';
 import React from 'react';
@@ -19,8 +20,11 @@ import { formatMoney, dayLabel } from './ExpenseFeed';
 import type { FeedExpense } from './ExpenseFeed';
 import { parseAppDate, toISODate } from '../../utils/date';
 import { getExpenseItems, updateExpenseItems } from '../../api/expenses';
-import { getGroupExpenseItems, updateGroupExpenseItems } from '../../api/groups';
+import { getGroup, getGroupExpenseItems, updateGroupExpenseItems, MemberDTO } from '../../api/groups';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
+import SplitEditor, { SplitEditorValue, computeSplitValid } from '../groups/SplitEditor';
+import Alert from '@mui/material/Alert';
+import { RECEIPT_SPLIT_TYPES, fromServerLine, isSplitRequired, receiptTotals, toSaveLine } from '../../utils/receiptLines';
 import CategoryPickerField from './CategoryPickerField';
 import TagInput from './TagInput';
 import CardPickerField from './CardPickerField';
@@ -85,11 +89,20 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
   // same ScannedItemsCard the create flow uses. itemsLoaded distinguishes "no items to
   // show" from "haven't fetched yet" so the save handler knows whether to also call
   // updateExpenseItems.
-  const isItemized = !!expense && (expense.splitType === 'itemized' || (expense.itemCount || 0) > 1);
+  const isItemized = !!expense && (expense.splitType === 'itemized' || !!expense.hasItems || (expense.itemCount || 0) > 1);
   const [items, setItems] = React.useState<ScannedItem[]>([]);
   const [itemsTax, setItemsTax] = React.useState(0);
-  const [itemsDiscount, setItemsDiscount] = React.useState(0);
+  const [itemsTip, setItemsTip] = React.useState(0);
+  const [legacyFormat, setLegacyFormat] = React.useState(false);
   const [itemsLoaded, setItemsLoaded] = React.useState(false);
+  const [itemsError, setItemsError] = React.useState<string | null>(null);
+  // TS-FIX-102: when a group receipt's amount changes on an Exact or old item-split receipt, the
+  // server asks how to split the new total — Equal, Exact or Shares — before anything is saved.
+  const [splitMembers, setSplitMembers] = React.useState<MemberDTO[] | null>(null);
+  const [receiptSplit, setReceiptSplit] = React.useState<SplitEditorValue>({ type: 'equal', entries: [] });
+  const splitHeadingRef = React.useRef<HTMLElement | null>(null);
+  // When the server asks how to split a changed total, take keyboard/screen-reader users to it.
+  React.useEffect(() => { if (splitMembers) splitHeadingRef.current?.focus(); }, [splitMembers]);
 
   React.useEffect(() => {
     if (expense) {
@@ -115,6 +128,8 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
     }
     setItems([]);
     setItemsLoaded(false);
+    setItemsError(null);
+    setSplitMembers(null);
   }, [expense, tagsEnabled, cardCoachEnabled]);
 
   React.useEffect(() => {
@@ -130,16 +145,10 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
     fetchItems
       .then((res) => {
         if (!mounted) return;
-        setItems(res.items.map((it) => ({
-          line_no: it.line_no,
-          item_name: it.item_name,
-          line_total: it.line_total,
-          quantity: it.quantity,
-          unit_price: it.unit_price,
-          normalized_name: it.normalized_name || undefined,
-        })));
+        setItems(res.items.map(fromServerLine));
         setItemsTax(res.tax);
-        setItemsDiscount(res.discount);
+        setItemsTip(res.tip || 0);
+        setLegacyFormat(!!res.legacy_discount_format);
         setItemsLoaded(true);
       })
       .catch(() => { /* falls back to the flat amount field only */ });
@@ -154,23 +163,30 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
   const amountValid = Number.isFinite(parsedAmount) && parsedAmount > 0;
   const dateProblem = expenseDateProblem(form.date, undefined, toISODate(parseAppDate(expense.date)));
 
+  const hasItems = itemsLoaded && items.length > 0;
+  const itemsMatch = !hasItems || receiptTotals(items, itemsTax, itemsTip, parsedAmount || 0).reconciled;
+  const splitOk = !splitMembers || computeSplitValid(receiptSplit, parsedAmount || 0);
+
   const saveForm = async (operation: Operation) => {
-    if (itemsLoaded && items.length > 0) {
+    if (hasItems) {
       const itemsPayload = {
-        items: items.map((it) => ({
-          line_no: it.line_no,
-          item_name: it.item_name,
-          normalized_name: it.normalized_name,
-          quantity: it.quantity,
-          unit_price: it.unit_price,
-          line_total: it.line_total,
-        })),
-        amount: parseFloat(form.amount) || 0,
+        // Ids keep each edited line in place, so an old receipt keeps its records (TS-FIX-102).
+        items: items.map((it, idx) => toSaveLine(it, idx, true)),
+        amount: parsedAmount || 0,
         tax: itemsTax,
-        discount: itemsDiscount,
+        tip: itemsTip,
       };
       if (expense.kind === 'group' && expense.groupId) {
-        await updateGroupExpenseItems(expense.groupId, String(expense.id), itemsPayload);
+        const groupId = expense.groupId;
+        try {
+          await updateGroupExpenseItems(groupId, String(expense.id), splitMembers ? { ...itemsPayload, split: receiptSplit } : itemsPayload);
+        } catch (e) {
+          if (!isSplitRequired(e)) throw e;
+          const detail = await getGroup(groupId);
+          setSplitMembers(detail.members);
+          setReceiptSplit({ type: 'equal', entries: detail.members.map((m) => ({ member_id: m.member_id })) });
+          throw e;
+        }
       } else {
         await updateExpenseItems(expense.id, itemsPayload);
       }
@@ -180,7 +196,12 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
   const handleSave = async () => {
     if (saveLock.current) return;
     saveLock.current = true;
-    try { await saveForm(analytics.beginOperation()); } finally { saveLock.current = false; }
+    setItemsError(null);
+    try {
+      await saveForm(analytics.beginOperation());
+    } catch (e) {
+      setItemsError(e instanceof Error && e.message ? e.message : 'Could not save the receipt.');
+    } finally { saveLock.current = false; }
   };
 
   return (
@@ -285,7 +306,7 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
             type="number"
             fullWidth
             value={form.amount}
-            onChange={(e) => setForm({ ...form, amount: e.target.value })}
+            {...noMinusProps((e) => setForm({ ...form, amount: e.target.value }))}
             inputProps={{ min: 0.01, step: 0.01, style: tabularNums }}
             error={!amountValid}
             helperText={amountValid ? undefined : 'Enter an amount greater than 0'}
@@ -307,14 +328,32 @@ const ExpenseDetailSheet: React.FC<ExpenseDetailSheetProps> = ({
             onChange={setItems}
             merchant={form.merchantName}
             tax={itemsTax}
-            discount={itemsDiscount}
+            tip={itemsTip}
+            legacyFormat={legacyFormat}
+            statusId="expense-detail-items-status"
             currentAmount={parseFloat(form.amount) || 0}
           />
         )}
+
+        {splitMembers && (
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }} tabIndex={-1} ref={splitHeadingRef}>Split the new total</Typography>
+            <SplitEditor
+              amount={parsedAmount || 0}
+              members={splitMembers}
+              value={receiptSplit}
+              onChange={setReceiptSplit}
+              allowedTypes={[...RECEIPT_SPLIT_TYPES]}
+            />
+          </Box>
+        )}
+
+        {itemsError && <Alert severity="error" role="alert">{itemsError}</Alert>}
       </Box>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 3 }}>
-        <Button variant="contained" size="large" onClick={handleSave} disabled={saving || deleting || !amountValid || !!dateProblem}>
+        <Button variant="contained" size="large" onClick={handleSave} disabled={saving || deleting || !amountValid || !!dateProblem || !itemsMatch || !splitOk}
+          aria-describedby={!itemsMatch ? 'expense-detail-items-status' : undefined}>
           {saving ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : 'Save changes'}
         </Button>
         {expense.kind === 'personal' && onMoveToGroup && (

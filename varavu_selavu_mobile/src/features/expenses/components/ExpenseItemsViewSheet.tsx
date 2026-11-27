@@ -24,20 +24,27 @@ export default function ExpenseItemsViewSheet({ visible, expense, onClose }: Pro
 
   const [items, setItems] = useState<ExpenseItemDTO[]>([]);
   const [tax, setTax] = useState(0);
-  const [discount, setDiscount] = useState(0);
+  const [tip, setTip] = useState(0);
+  const [savings, setSavings] = useState(0);
+  const [legacy, setLegacy] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!visible || !expense) return;
     setItems([]);
     setTax(0);
-    setDiscount(0);
+    setTip(0);
+    setSavings(0);
+    setLegacy(false);
     setLoading(true);
     getExpenseItems(expense.row_id)
       .then((res) => {
+        // Lines come back as paid prices (old-format receipts are converted by the server, TS-FIX-102).
         setItems(res.items);
         setTax(res.tax);
-        setDiscount(res.discount);
+        setTip(res.tip || 0);
+        setSavings(res.savings || 0);
+        setLegacy(!!res.legacy_discount_format);
       })
       .catch(() => { /* leaves items empty — shown as "no itemized details" below */ })
       .finally(() => setLoading(false));
@@ -81,7 +88,12 @@ export default function ExpenseItemsViewSheet({ visible, expense, onClose }: Pro
                         </Text>
                       )}
                     </View>
-                    <Text style={styles.itemTotal}>{formatCurrency(it.line_total)}</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.itemTotal}>{formatCurrency(it.line_total)}</Text>
+                      {(it.discount || 0) > 0 && (
+                        <Text style={[styles.itemQty, { color: theme.colors.success }]}>saved {formatCurrency(it.discount || 0)}</Text>
+                      )}
+                    </View>
                   </View>
                 ))}
 
@@ -97,11 +109,22 @@ export default function ExpenseItemsViewSheet({ visible, expense, onClose }: Pro
                     <Text style={styles.summaryValue}>{formatCurrency(tax)}</Text>
                   </View>
                 )}
-                {discount > 0 && (
+                {tip > 0 && (
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Discount</Text>
-                    <Text style={styles.summaryValue}>-{formatCurrency(discount)}</Text>
+                    <Text style={styles.summaryLabel}>Tip</Text>
+                    <Text style={styles.summaryValue}>{formatCurrency(tip)}</Text>
                   </View>
+                )}
+                {savings > 0 && (
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>You saved (already in prices)</Text>
+                    <Text style={styles.summaryValue}>{formatCurrency(savings)}</Text>
+                  </View>
+                )}
+                {legacy && (
+                  <Text style={[styles.summaryLabel, { color: theme.colors.warning }]}>
+                    Prices were adjusted for discounts saved in an older format.
+                  </Text>
                 )}
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryTotalLabel}>Total</Text>

@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from varavu_selavu_service.core.config import Settings
+from varavu_selavu_service.services.split_engine import has_negative_value
 from varavu_selavu_service.db.models import (
     Group,
     GroupInvitation,
@@ -280,6 +281,10 @@ class GroupService:
             split_type = default_split.get("type")
             if split_type not in ["equal", "exact", "percentage", "shares", "adjustment"]:
                 raise HTTPException(status_code=400, detail=f"Invalid default_split type: {split_type}")
+            # Clients send the stored value back with every settings save, so one saved before minus
+            # values were refused must not block unrelated edits. Only a new or changed one is checked.
+            if default_split != group.default_split_json and has_negative_value(default_split.get("entries")):
+                raise HTTPException(status_code=400, detail="Split values cannot be negative")
 
         if currency is not None and (len(currency) != 3 or not currency.isalpha()):
             raise HTTPException(status_code=400, detail="currency must be a 3-letter code")

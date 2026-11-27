@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import { todayIso } from '../../utils/expenseDates';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -254,7 +255,7 @@ const RecurringTab: React.FC = () => {
               <TextField label="Day of month" type="number" fullWidth value={form.day_of_month} onChange={e => setForm(f => ({ ...f, day_of_month: Math.max(1, Math.min(31, parseInt(e.target.value || '1', 10))) }))} />
             </Grid>
             <Grid size={{ xs: 6, sm: 3 }}>
-              <TextField label="Monthly amount" type="number" fullWidth value={form.default_cost || ''} placeholder="0.00" onChange={e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 }))} />
+              <TextField label="Monthly amount" type="number" fullWidth value={form.default_cost || ''} placeholder="0.00" {...noMinusProps(e => setForm(f => ({ ...f, default_cost: parseFloat(e.target.value) || 0 })))} />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField label="Start date" type="date" fullWidth value={form.start_date_iso} onChange={e => setForm(f => ({ ...f, start_date_iso: e.target.value }))} InputLabelProps={{ shrink: true }} />

@@ -1,4 +1,5 @@
 import { ExpenseCapture } from '../analytics/operations';
+import { ReceiptLine, toSaveLine } from '../utils/receiptLines';
 import { useQueryClient } from '@tanstack/react-query';
 import { addExpense, addExpenseWithItems, AddExpensePayload } from '../api/expenses';
 import { applyTagsToExpense } from '../api/tags';
@@ -43,29 +44,19 @@ export interface QuickLogInput {
   cardId?: string | null;
 }
 
-export interface QuickLogItemInput {
-  item_name: string;
-  line_total: number;
-  quantity?: number | null;
-  unit_price?: number | null;
-  normalized_name?: string;
-}
+/** A receipt line: `line_total` is the paid price; discount/original price are a record (TS-FIX-102). */
+export type QuickLogItemInput = ReceiptLine;
 
 export interface QuickLogWithItemsInput extends QuickLogInput {
   items: QuickLogItemInput[];
   tax?: number;
-  discount?: number;
+  tip?: number;
   /** ISO 8601 timestamp from the scan header, e.g. "2026-07-16T10:30:00". Only consumed
    * by the personal path — postgres_repo.append_expense parses header.purchased_at with
    * datetime.fromisoformat, unlike the group path's `date` (MM/DD/YYYY via strptime). */
   purchasedAtIso?: string;
   /** Dedupes against a previously-saved receipt with the same fingerprint. */
   fingerprint?: string;
-  /** The itemized endpoint has no `split` concept (each item carries its own member_ratios,
-   * not a whole-expense split type) — customizing "who's involved" for an itemized group
-   * expense is expressed as this member subset instead of a full `split` value. Every item
-   * gets an equal member_ratios map over just these members. Omitted = every group member. */
-  participantMemberIds?: string[];
 }
 
 export interface QuickLogGroupResult {
@@ -149,21 +140,15 @@ export function useLogExpense() {
       purchased_at: input.purchasedAtIso || new Date().toISOString(),
       amount: input.amount,
       tax: input.tax || 0,
-      tip: 0,
-      discount: input.discount || 0,
+      // The scanned tip is kept (it was dropped before TS-FIX-102). No header discount: savings
+      // are already in the line prices.
+      tip: input.tip || 0,
       description: input.description,
       main_category_name: findMainCategory(input.category),
       category_name: input.category,
       fingerprint: input.fingerprint || '',
     };
-    const items = input.items.map((it, idx) => ({
-      line_no: idx + 1,
-      item_name: it.item_name,
-      normalized_name: it.normalized_name,
-      quantity: it.quantity ?? null,
-      unit_price: it.unit_price ?? null,
-      line_total: it.line_total,
-    }));
+    const items = input.items.map((it, idx) => toSaveLine(it, idx));
     const result = await addExpenseWithItems({
       user_email: user, header, items,
       tag_names: input.tagNames?.length ? input.tagNames : undefined,
@@ -178,29 +163,10 @@ export function useLogExpense() {
     const myMember = group.members.find((m) => m.user_email === user);
     if (!myMember) throw new Error('You are not a member of this group.');
 
-    // The itemized endpoint has no per-item person-assignment UI in QuickCaptureSheet (that's
-    // ItemSplitBoard's job, reachable only from the full editor) and no whole-expense `split`
-    // concept either — split every item equally across `participantMemberIds` (defaulting to
-    // every group member) so the line items themselves are preserved instead of silently
-    // dropped, while still letting PaidBySplitSummary's participant-subset editing apply.
-    const participants = input.participantMemberIds ?? group.members.map((m) => m.member_id);
-    const ratio = participants.length > 0 ? 1 / participants.length : 1;
-    const memberRatios = Object.fromEntries(participants.map((id) => [id, ratio]));
-    const items: GroupExpenseItemEntry[] = input.items.map((it, idx) => ({
-      line_no: idx + 1,
-      item_name: it.item_name,
-      normalized_name: it.normalized_name,
-      quantity: it.quantity ?? null,
-      unit_price: it.unit_price ?? null,
-      line_total: it.line_total,
-      // tax/discount are per-item fields server-side but resolve_itemized_split pools and
-      // prorates them across every assigned member regardless of which item carries them —
-      // attaching the header-level scan values to just the first item is equivalent to a
-      // true header-level tax/discount.
-      tax: idx === 0 ? input.tax || 0 : 0,
-      discount: idx === 0 ? input.discount || 0 : 0,
-      member_ratios: memberRatios,
-    }));
+    // A group receipt is split on its TOTAL (Equal/Exact/Shares, TS-FIX-102); the lines are for
+    // tracking only. Default: everyone, equally.
+    const split = input.split ?? { type: 'equal' as const, entries: group.members.map((m) => ({ member_id: m.member_id })) };
+    const items: GroupExpenseItemEntry[] = input.items.map((it, idx) => toSaveLine(it, idx));
     const payload: GroupExpenseWithItemsPayload = {
       date: isoToMMDDYYYY(input.date || todayIso()),
       description: input.description,
@@ -208,6 +174,9 @@ export function useLogExpense() {
       amount: input.amount,
       merchant_name: input.merchantName || undefined,
       payers: input.payers ?? [{ member_id: myMember.member_id, amount_paid: input.amount }],
+      split,
+      tax: input.tax || 0,
+      tip: input.tip || 0,
       items,
       card_id: input.cardId || undefined,
     };

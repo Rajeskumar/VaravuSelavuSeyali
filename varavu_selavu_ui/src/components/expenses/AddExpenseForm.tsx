@@ -40,11 +40,9 @@ import {
   GroupSummary,
   GroupDetailResponse,
   PayerSummaryItem,
-  GroupExpenseItemEntry,
   listGroups,
   getGroup,
   createGroupExpense,
-  createGroupExpenseWithItems,
   ApiError,
 } from '../../api/groups';
 import { useGroupsEnabled } from '../../hooks/useGroupsEnabled';
@@ -52,7 +50,7 @@ import { useEntityResolutionEnabled } from '../../hooks/useEntityResolutionEnabl
 import { useReceiptScan } from '../../hooks/useReceiptScan';
 import { suggestMerchants } from '../../api/entityResolution';
 import PayerPicker from '../groups/PayerPicker';
-import ItemSplitBoard from '../groups/ItemSplitBoard';
+import { receiptTotals, toSaveLine } from '../../utils/receiptLines';
 import SplitEditor, { SplitEditorEntry } from '../groups/SplitEditor';
 import SegmentedTabs from '../common/SegmentedTabs';
 import EntityAutocomplete from './EntityAutocomplete';
@@ -209,8 +207,6 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
   const [payersValid, setPayersValid] = useState(false);
   const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
   const [splitValid, setSplitValid] = useState(false);
-  const [groupItems, setGroupItems] = useState<GroupExpenseItemEntry[]>([]);
-  const [groupItemsValid, setGroupItemsValid] = useState(false);
   const [groupSubmitError, setGroupSubmitError] = useState<string | null>(null);
   // The "Cost" field and every split/payer control below are shared between personal and
   // group mode — once a group is selected, its currency (not USD) is what the amount actually
@@ -293,14 +289,6 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     };
     setDraft(processed);
     setCostValue(Number(res.header.amount) || 0);
-    setGroupItems((res.items || []).map((i: any, idx: number) => ({
-      line_no: idx + 1,
-      item_name: i.item_name,
-      line_total: Number(i.line_total) || 0,
-      quantity: Number(i.quantity) || null,
-      unit_price: Number(i.unit_price) || null,
-      member_ratios: {},
-    })));
     setMessage('Receipt parsed successfully. Review details below.');
     setDescription(desc);
     // Populate merchant from receipt header if user hasn't manually typed one
@@ -412,14 +400,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     if (res) applyParseResult(res);
   };
 
-  const reconcileDelta = () => {
-    if (!draft) return 0;
-    const subtotal = draft.items.reduce((s: number, it: any) => s + (Number(it.line_total) || 0), 0);
-    const { tax = 0, tip = 0, discount = 0 } = draft.header;
-    return subtotal + tax + tip - discount - cost;
-  };
-
-  const reconcileOk = () => Math.abs(reconcileDelta()) <= 0.02;
+  // TS-FIX-102: line prices are paid prices; paid + tax + tip must match the total (no discount term).
+  const draftTotals = () => receiptTotals(draft ? draft.items : [], Number(draft?.header.tax) || 0, Number(draft?.header.tip) || 0, cost);
+  const reconcileDelta = () => (draft ? draftTotals().delta : 0);
+  const reconcileOk = () => !draft || draft.items.length === 0 || draftTotals().reconciled;
 
   const dateProblem = expenseDateProblem(expenseDate, undefined, existing ? mmddyyyyToISO(existing.date) : undefined);
 
@@ -428,13 +412,10 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
     const requiredFilled =
       description.trim() !== '' && isValidAmount(cost) && expenseDate && subcategory && mainCategory;
     if (mode === 'group' && !existing) {
-      if (draft && draft.items.length > 0) {
-        return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payersValid || !groupItemsValid;
-      }
       return saving || parsing || converting || !requiredFilled || !selectedGroupId || !payersValid || !splitValid;
     }
     return (
-      saving || parsing || converting || !requiredFilled
+      saving || parsing || converting || !requiredFilled || (!existing && !reconcileOk())
     );
   };
 
@@ -459,29 +440,18 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
       if (mode === 'group' && !existing) {
         setGroupSubmitError(null);
         try {
-          if (draft && draft.items.length > 0) {
-            await createGroupExpenseWithItems(selectedGroupId, {
-              date: formattedDate,
-              description,
-              category: subcategory,
-              amount: cost,
-              merchant_name: merchantName || undefined,
-              payers,
-              items: groupItems,
-              card_id: cardCoachEnabled ? cardId : undefined,
-            }, capture);
-          } else {
-            await createGroupExpense(selectedGroupId, {
-              date: formattedDate,
-              description,
-              category: subcategory,
-              amount: cost,
-              merchant_name: merchantName || undefined,
-              payers,
-              split: { type: 'equal', entries: splitEntries },
-              card_id: cardCoachEnabled ? cardId : undefined,
-            }, capture);
-          }
+          // Group receipts are saved from Quick Capture (split on the total, TS-FIX-102); this
+          // form's group path records the total only.
+          await createGroupExpense(selectedGroupId, {
+            date: formattedDate,
+            description,
+            category: subcategory,
+            amount: cost,
+            merchant_name: merchantName || undefined,
+            payers,
+            split: { type: 'equal', entries: splitEntries },
+            card_id: cardCoachEnabled ? cardId : undefined,
+          }, capture);
           setMessage('Group expense added successfully.');
           setDescription('');
           setCostValue(0);
@@ -539,7 +509,7 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
             fingerprint: draft.fingerprint,
             merchant_name: merchantName || undefined,
           },
-          items: draft.items.map((i: any) => ({ ...i })),
+          items: draft.items.map((i: any, idx: number) => ({ ...toSaveLine(i, idx), category_name: i.category_name })),
           tag_names: tagsEnabled && tagNames.length > 0 ? tagNames : undefined,
           card_id: cardCoachEnabled ? cardId : undefined,
         };
@@ -661,37 +631,19 @@ const AddExpenseForm: React.FC<AddExpenseFormProps> = ({ existing = null, onSucc
                     </Grid>
                     <Grid size={12}>
                       <Divider sx={{ my: 1 }} />
-                      {draft && draft.items.length > 0 ? (
-                        <>
-                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                            Split Items
-                          </Typography>
-                          <ItemSplitBoard
-                            items={groupItems}
-                            members={groupDetail.members}
-                            onChange={setGroupItems}
-                            onValidityChange={setGroupItemsValid}
-                            groupId={groupDetail.group_id}
-                            currency={activeCurrency}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                            Split equally among
-                          </Typography>
-                          <SplitEditor
-                            amount={cost}
-                            members={groupDetail.members}
-                            value={{ type: 'equal', entries: splitEntries }}
-                            onChange={(v) => setSplitEntries(v.entries)}
-                            onValidityChange={setSplitValid}
-                            allowedTypes={['equal']}
-                            serverError={groupSubmitError}
-                            currency={activeCurrency}
-                          />
-                        </>
-                      )}
+                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                        Split equally among
+                      </Typography>
+                      <SplitEditor
+                        amount={cost}
+                        members={groupDetail.members}
+                        value={{ type: 'equal', entries: splitEntries }}
+                        onChange={(v) => setSplitEntries(v.entries)}
+                        onValidityChange={setSplitValid}
+                        allowedTypes={['equal']}
+                        serverError={groupSubmitError}
+                        currency={activeCurrency}
+                      />
                     </Grid>
                   </>
                 )}

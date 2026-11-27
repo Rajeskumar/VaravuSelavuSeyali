@@ -25,6 +25,7 @@ from varavu_selavu_service.services.expense_write_service import (
     reconcile_receipt_totals,
 )
 from varavu_selavu_service.services.category_catalog import resolve, COUNTS
+from varavu_selavu_service.services.receipt_lines import LineError, distribute_cents, money, prepare_lines
 
 
 def canonical(value):
@@ -77,6 +78,38 @@ def duplicates(db, email, payload):
     ]
 
 
+def fold_receipt_discount(payload):
+    """TS-FIX-102: a whole-receipt discount is divided across the lines by paid price (tracking only), so
+    the approval preview shows exactly the lines that will be saved. Lines get original_price filled in."""
+    if payload.get("kind") != "itemized":
+        return payload
+    items = payload.get("items", [])
+    try:
+        lines = prepare_lines([{**i, "line_total": i["line_total"], "discount": i.get("discount")} for i in items])
+    except LineError as e:
+        raise MCPError("validation_error", hint=str(e))
+    extra = int(money(payload.get("discount")) * 100)
+    absorbed = Decimal("0")
+    if extra and lines:
+        parts = distribute_cents(extra, [int(ln["line_total"] * 100) for ln in lines])
+        for ln, part in zip(lines, parts):
+            take = min(Decimal(part) / 100, ln["line_total"])
+            ln["line_total"] -= take
+            ln["discount"] += take
+            absorbed += take
+    for item, ln in zip(items, lines):
+        item["line_total"] = f"{ln['line_total']:.2f}"
+        item["discount"] = f"{ln['discount']:.2f}"
+        item["original_price"] = f"{ln['line_total'] + ln['discount']:.2f}"
+    if extra and payload.get("subtotal") is not None:
+        # The supplied subtotal is the sum of lines before the whole-receipt discount; the lines now
+        # carry it, so the subtotal does too.
+        # Only what the lines actually absorbed (a discount larger than the lines can't push them below 0).
+        payload["subtotal"] = f"{money(payload['subtotal']) - absorbed:.2f}"
+    payload["discount"] = "0.00"
+    return payload
+
+
 def warning_list(payload):
     warnings = []
     if COUNTS[resolve(payload["category_id"])[1]] > 1:
@@ -87,18 +120,23 @@ def warning_list(payload):
             }
         )
     if payload["kind"] == "itemized":
+        if payload.get("accept_unreconciled"):
+            raise MCPError(
+                "validation_error",
+                hint="accept_unreconciled is no longer supported: item prices plus tax and tip must match the total.",
+            )
+        if money(payload.get("discount")) != 0:
+            # Only a payload verified before TS-FIX-102 still has one; it would be subtracted again.
+            raise MCPError("totals_mismatch", hint="Verify this receipt again.")
         figures = reconcile_receipt_totals(
             payload["items"],
             payload["total"],
             payload["tax"],
             payload["tip"],
-            payload["discount"],
             payload["subtotal"],
         )
         if not figures["reconciled"]:
-            if not payload["accept_unreconciled"]:
-                raise MCPError("totals_mismatch", **figures)
-            warnings.append({"code": "unreconciled_totals", **figures})
+            raise MCPError("totals_mismatch", **figures)
         for n, item in enumerate(payload["items"], 1):
             if item["unit_price"] is not None and abs(
                 Decimal(item["quantity"]) * Decimal(item["unit_price"])
@@ -210,6 +248,7 @@ def verify(db, principal, data):
             db, principal.user_email, existing.id, principal.connection_id
         )
         return output(db, existing, principal, replayed=True)
+    payload = fold_receipt_discount(payload)
     warnings = warning_list(payload)
     matches = duplicates(db, principal.user_email, payload)
     if matches:
@@ -371,6 +410,9 @@ def save(db, principal, operation_id):
             30,
             user_email=conn.user_email,
         )
+    # TS-FIX-102: the totals rule is re-checked at save, so an operation verified under the old rule
+    # (whole-receipt discount subtracted) is refused rather than saved with a second discount.
+    warning_list(row.payload)
     row.expense_id = ExpenseWriteService(db).from_verified(
         conn.user_email, row.payload, conn.id
     )

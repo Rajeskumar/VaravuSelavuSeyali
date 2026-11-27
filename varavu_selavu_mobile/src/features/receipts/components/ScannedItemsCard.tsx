@@ -5,14 +5,10 @@ import TypeaheadInput from '../../../core/ui/TypeaheadInput';
 import { suggestItems } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
+import { ReceiptLine, ReceiptReviewLine, lineDiscount, receiptTotals } from '../utils/receiptLines';
 
-export interface ScannedItem {
-  line_no: number;
-  item_name: string;
-  line_total: number;
-  quantity?: number | null;
-  unit_price?: number | null;
-  normalized_name?: string;
+/** A receipt line being reviewed: `line_total` is the paid price (TS-FIX-102). */
+export interface ScannedItem extends ReceiptLine {
   /** Per-item subcategory from the parser (e.g. paper towels on a grocery receipt). */
   category_name?: string;
 }
@@ -23,11 +19,14 @@ interface ScannedItemsCardProps {
   onChange: (items: ScannedItem[]) => void;
   merchant?: string | null;
   tax?: number;
-  discount?: number;
-  /** AddExpenseScreen's editable top amount — used only to flag drift in the footer caption,
-   * never to block saving (mirrors the web app's ScannedItemsCard for the same reason: a
-   * receipt total the user tweaks by a few cents shouldn't stop them from logging it). */
+  tip?: number;
+  /** The expense amount. Paid prices + tax + tip must match it within 0.02; the caller blocks
+   * Save until they do, and the footer says by how much (same as web). */
   currentAmount: number;
+  /** Returns/refunds the scanner left out of the items, for the person to account for. */
+  review?: ReceiptReviewLine[];
+  /** Saved in the old discount format; prices were adjusted for checking. */
+  legacyFormat?: boolean;
 }
 
 function fmt(n: number): string {
@@ -43,17 +42,14 @@ function fmt(n: number): string {
  * varavu_selavu_ui/src/components/expenses/ScannedItemsCard.tsx). Keeping a local draft
  * string while focused lets the user type a decimal normally.
  */
-const ItemPriceInput: React.FC<{ theme: AppTheme; style: any; value: number; onCommit: (n: number) => void }> = ({
-  theme,
-  style,
-  value,
-  onCommit,
-}) => {
-  const [text, setText] = useState(String(value));
+const ItemPriceInput: React.FC<{
+  theme: AppTheme; style: any; value: number | null; onCommit: (n: number | null) => void; label: string; allowEmpty?: boolean;
+}> = ({ theme, style, value, onCommit, label, allowEmpty = false }) => {
+  const [text, setText] = useState(value == null ? '' : String(value));
   const focused = useRef(false);
 
   useEffect(() => {
-    if (!focused.current) setText(String(value));
+    if (!focused.current) setText(value == null ? '' : String(value));
   }, [value]);
 
   return (
@@ -63,16 +59,20 @@ const ItemPriceInput: React.FC<{ theme: AppTheme; style: any; value: number; onC
       onFocus={() => { focused.current = true; }}
       onBlur={() => {
         focused.current = false;
-        const n = Number(text.replace(/[^0-9.-]/g, '')) || 0;
+        if (allowEmpty && text.trim() === '') { onCommit(null); return; }
+        // No minus values on receipts (TS-FIX-101/102): the minus sign isn't accepted at all.
+        const n = Number(text.replace(/[^0-9.]/g, '')) || 0;
         setText(String(n));
         onCommit(n);
       }}
       onChangeText={(t) => {
-        const cleaned = t.replace(/[^0-9.-]/g, '');
+        const cleaned = t.replace(/[^0-9.]/g, '');
         setText(cleaned);
         const n = Number(cleaned);
-        if (cleaned !== '' && cleaned !== '-' && !Number.isNaN(n)) onCommit(n);
+        if (cleaned === '' && allowEmpty) onCommit(null);
+        else if (cleaned !== '' && !Number.isNaN(n)) onCommit(n);
       }}
+      accessibilityLabel={label}
       keyboardType="decimal-pad"
       placeholder="0.00"
       placeholderTextColor={theme.colors.textQuaternary}
@@ -91,8 +91,10 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
   onChange,
   merchant,
   tax = 0,
-  discount = 0,
+  tip = 0,
   currentAmount,
+  review = [],
+  legacyFormat = false,
 }) => {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const [expanded, setExpanded] = useState(true);
@@ -102,10 +104,8 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
     [entityResolutionEnabled]
   );
 
-  const subtotal = items.reduce((s, it) => s + (Number(it.line_total) || 0), 0);
-  const computedTotal = subtotal + tax - discount;
-  const delta = computedTotal - currentAmount;
-  const reconciled = Math.abs(delta) <= 0.02;
+  const { subtotal, computed: computedTotal, delta, savings, reconciled } = receiptTotals(items, tax, tip, currentAmount);
+  const [originalOpen, setOriginalOpen] = useState<Record<number, boolean>>({});
 
   const updateItem = (lineNo: number, patch: Partial<ScannedItem>) => {
     onChange(items.map((it) => (it.line_no === lineNo ? { ...it, ...patch } : it)));
@@ -134,8 +134,13 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
       {expanded && (
         <View style={styles.body}>
           <ScrollView style={styles.itemsScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-            {items.map((item) => (
-              <View key={item.line_no} style={styles.itemRow}>
+            {items.map((item) => {
+              const saved = lineDiscount(item);
+              const showOriginal = originalOpen[item.line_no] ?? saved > 0;
+              const name = item.item_name || 'item';
+              return (
+              <View key={item.line_no}>
+              <View style={styles.itemRow}>
                 <TypeaheadInput
                   theme={theme}
                   value={item.item_name}
@@ -151,21 +156,52 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
                     theme={theme}
                     style={styles.itemPriceInput}
                     value={item.line_total}
-                    onCommit={(n) => updateItem(item.line_no, { line_total: n })}
+                    label={`Price paid for ${name}`}
+                    onCommit={(n) => updateItem(item.line_no, { line_total: n ?? 0 })}
                   />
                 </View>
-                <TouchableOpacity onPress={() => removeItem(item.line_no)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setOriginalOpen((o) => ({ ...o, [item.line_no]: !showOriginal }))}
+                  style={styles.iconTarget}
+                  accessibilityRole="button"
+                  accessibilityLabel={showOriginal ? `Hide original price for ${name}` : `Add original price for ${name}`}
+                  accessibilityState={{ expanded: showOriginal }}
+                >
+                  <Text style={[styles.removeX, saved > 0 && { color: theme.colors.success }]}>%</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => removeItem(item.line_no)}
+                  style={styles.iconTarget}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${name}`}
+                >
                   <Text style={styles.removeX}>✕</Text>
                 </TouchableOpacity>
               </View>
-            ))}
+              {showOriginal && (
+                <View style={styles.originalRow}>
+                  <Text style={styles.summaryLabel}>Original price $</Text>
+                  <ItemPriceInput
+                    theme={theme}
+                    style={styles.itemPriceInput}
+                    value={item.original_price ?? null}
+                    allowEmpty
+                    label={`Original price for ${name}`}
+                    onCommit={(n) => updateItem(item.line_no, { original_price: n, discount: n == null ? 0 : Math.max(0, n - item.line_total) })}
+                  />
+                  {saved > 0 && <Text style={[styles.summaryLabel, { color: theme.colors.success }]}>saved {fmt(saved)}</Text>}
+                </View>
+              )}
+              </View>
+              );
+            })}
           </ScrollView>
 
           <TouchableOpacity style={styles.addItemRow} onPress={addItem} activeOpacity={0.7}>
             <Text style={styles.addItemText}>+ Add item</Text>
           </TouchableOpacity>
 
-          {(tax > 0 || discount > 0) && (
+          {(tax > 0 || tip > 0 || savings > 0) && (
             <View style={styles.summaryBlock}>
               {tax > 0 && (
                 <View style={styles.summaryRow}>
@@ -173,19 +209,48 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
                   <Text style={styles.summaryValue}>{fmt(tax)}</Text>
                 </View>
               )}
-              {discount > 0 && (
+              {tip > 0 && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Discount</Text>
-                  <Text style={styles.summaryValue}>-{fmt(discount)}</Text>
+                  <Text style={styles.summaryLabel}>Tip</Text>
+                  <Text style={styles.summaryValue}>{fmt(tip)}</Text>
+                </View>
+              )}
+              {savings > 0 && (
+                <View style={styles.summaryRow}>
+                  {/* Already included in the prices above: a record, not subtracted again. */}
+                  <Text style={styles.summaryLabel}>You saved (already in prices)</Text>
+                  <Text style={[styles.summaryValue, { color: theme.colors.success }]}>{fmt(savings)}</Text>
                 </View>
               )}
             </View>
           )}
 
-          <Text accessibilityRole="alert" style={[styles.reconcileText, { color: reconciled ? theme.colors.success : theme.colors.warning }]}>
+          {review.length > 0 && (
+            <View style={styles.reviewBlock}>
+              <Text style={[styles.summaryLabel, { fontFamily: 'InstrumentSans-SemiBold', color: theme.colors.text }]}>Not included: returns or refunds</Text>
+              {review.map((r, i) => (
+                <View key={i} style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel} numberOfLines={1}>{r.item_name}</Text>
+                  <Text style={styles.summaryValue}>{fmt(r.amount)}</Text>
+                </View>
+              ))}
+              <Text style={styles.summaryLabel}>Adjust the prices or the total so they match.</Text>
+            </View>
+          )}
+
+          {legacyFormat && (
+            <Text style={[styles.reconcileText, { color: theme.colors.warning, textAlign: 'left' }]}>
+              Prices were adjusted for discounts. Check them before saving.
+            </Text>
+          )}
+
+          <Text
+            accessibilityRole={reconciled ? undefined : 'alert'}
+            accessibilityLiveRegion="polite"
+            style={[styles.reconcileText, { color: reconciled ? theme.colors.success : theme.colors.warning }]}>
             {reconciled
                 ? 'Matches total'
-                : `Items total ${fmt(computedTotal)}, ${fmt(Math.abs(delta))} ${delta > 0 ? 'more' : 'less'} than the expense total. Fix an item or the total to save.`}
+                : `Items${tax > 0 || tip > 0 ? ' plus tax and tip' : ''} come to ${fmt(computedTotal)}, ${fmt(Math.abs(delta))} ${delta > 0 ? 'more' : 'less'} than the total. Make them match to save.`}
           </Text>
         </View>
       )}
@@ -242,11 +307,15 @@ const createStyles = (theme: AppTheme) =>
       paddingVertical: 2,
     },
     removeX: { color: theme.colors.textTertiary, fontSize: 13, paddingHorizontal: 4 },
+    // 44pt touch target (varavu_selavu_mobile/AGENTS.md) without making each row taller than its input.
+    iconTarget: { minWidth: 32, minHeight: 44, marginVertical: -8, alignItems: 'center', justifyContent: 'center' },
 
     addItemRow: { paddingVertical: 6 },
     addItemText: { fontFamily: 'InstrumentSans-SemiBold', fontSize: 12.5, color: theme.colors.primary },
 
     summaryBlock: { marginTop: 4, gap: 2 },
+    originalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6, paddingBottom: 4, paddingRight: 40 },
+    reviewBlock: { marginTop: 6, padding: 8, borderRadius: 8, gap: 2, backgroundColor: theme.colors.surfaceSecondary },
     summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
     summaryLabel: { fontFamily: 'InstrumentSans-Regular', fontSize: 11.5, color: theme.colors.textSecondary },
     summaryValue: {

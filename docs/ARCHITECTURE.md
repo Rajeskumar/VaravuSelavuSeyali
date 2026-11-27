@@ -24,7 +24,7 @@ The existing FastAPI process mounts the official MCP SDK transport at `/mcp` and
 - **Receipts** — `OCR_ENGINE=hybrid`: RapidOCR + `receipt_text_parser.py`, with Gemini only when parser confidence is low. Mobile runs OCR on-device and posts the text lines to `/ingest/receipt/parse_ocr`.
 
 ## Design patterns in use
-- **Pure domain engines, no DB/HTTP**, so they can be unit-tested directly: `split_engine.py`, `item_split_engine.py`, `card_rewards_engine.py`, `receipt_text_parser.py`, `category_rules/`.
+- **Pure domain engines, no DB/HTTP**, so they can be unit-tested directly: `split_engine.py`, `receipt_lines.py`, `card_rewards_engine.py`, `receipt_text_parser.py`, `category_rules/`.
 - **FastAPI dependency injection** — `get_*_service` factories in `api/routes.py` build a service per request around a DB `Session`. `repo/postgres_repo.py` exists but only some routes use it; most services query the DB directly.
 - **Env feature flags**, read fresh through `Settings()` on each request:
   - `require_*_enabled` dependencies gate the server side.

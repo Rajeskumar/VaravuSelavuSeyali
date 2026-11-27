@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -231,7 +232,7 @@ const BudgetsTab: React.FC = () => {
                 type="number"
                 fullWidth
                 value={form.amount}
-                onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                {...noMinusProps((e) => setForm((f) => ({ ...f, amount: e.target.value })))}
                 InputProps={{ startAdornment: <Box component="span" sx={{ mr: 0.5, color: 'text.secondary' }}>$</Box> }}
                 color={implausible ? 'warning' : undefined}
                 focused={implausible || undefined}

@@ -166,6 +166,7 @@ def test_put_items_rejects_empty_items(test_client, db_session):
 
 def test_group_get_and_put_items_rescales_payers_and_splits(test_client, db_session):
     group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
+    everyone = [{"member_id": mid, "value": 0} for mid in m.values()]
 
     create_res = test_client.post(
         f"/api/v1/groups/{group_id}/expenses/itemized",
@@ -178,19 +179,10 @@ def test_group_get_and_put_items_rescales_payers_and_splits(test_client, db_sess
                 {"member_id": m["test@user.com"], "amount_paid": 60.0},
                 {"member_id": m["b@test.com"], "amount_paid": 40.0},
             ],
+            "split": {"type": "equal", "entries": everyone},
             "items": [
-                {
-                    "line_no": 1,
-                    "item_name": "Steak",
-                    "line_total": 60.0,
-                    "member_ratios": {m["test@user.com"]: 1.0},
-                },
-                {
-                    "line_no": 2,
-                    "item_name": "Wine",
-                    "line_total": 40.0,
-                    "member_ratios": {m["b@test.com"]: 0.5, m["c@test.com"]: 0.5},
-                },
+                {"line_no": 1, "item_name": "Steak", "line_total": 60.0},
+                {"line_no": 2, "item_name": "Wine", "line_total": 40.0},
             ],
         },
     )
@@ -202,10 +194,8 @@ def test_group_get_and_put_items_rescales_payers_and_splits(test_client, db_sess
     assert get_res.json()["amount"] == 100.0
     assert len(get_res.json()["items"]) == 2
 
-    # Double the total by editing item prices — all 3 members had item splits before the
-    # edit (test@user.com on Steak, b@test.com + c@test.com on Wine), so the update should
-    # re-split every item equally across all 3, and rescale payer amounts proportionally
-    # (60/100 -> 120, 40/100 -> 80) to keep summing to the new total.
+    # Doubling the total by editing item prices (TS-FIX-102): payers rescale proportionally
+    # (60/100 -> 120, 40/100 -> 80) and an Equal receipt re-splits the new total cent-exact.
     put_res = test_client.put(
         f"/api/v1/groups/{group_id}/expenses/{expense_id}/items",
         json={
@@ -215,7 +205,6 @@ def test_group_get_and_put_items_rescales_payers_and_splits(test_client, db_sess
             ],
             "amount": 200.0,
             "tax": 0.0,
-            "discount": 0.0,
         },
     )
     assert put_res.status_code == 200, put_res.text
@@ -226,13 +215,12 @@ def test_group_get_and_put_items_rescales_payers_and_splits(test_client, db_sess
     assert float(expense.amount) == 200.0
 
     payers = db_session.query(ExpensePayer).filter(ExpensePayer.expense_id == eid).all()
-    assert round(sum(float(p.amount_paid) for p in payers), 2) == 200.0
     payer_by_member = {str(p.member_id): float(p.amount_paid) for p in payers}
     assert payer_by_member[m["test@user.com"]] == 120.0
     assert payer_by_member[m["b@test.com"]] == 80.0
 
     splits = db_session.query(ExpenseSplit).filter(ExpenseSplit.expense_id == eid).all()
-    assert round(sum(float(s.amount_owed) for s in splits), 2) == 200.0
+    assert sorted(float(s.amount_owed) for s in splits) == [66.66, 66.67, 66.67]
 
     items = db_session.query(ExpenseItem).filter(ExpenseItem.expense_id == eid).all()
     assert len(items) == 2
@@ -242,11 +230,7 @@ def test_group_get_and_put_items_rescales_payers_and_splits(test_client, db_sess
         .filter(ExpenseItem.expense_id == eid)
         .all()
     )
-    # 2 items x 3 participants, equal-split across all 3 members who had any item split before.
-    assert len(item_splits) == 6
-    for s in item_splits:
-        # ratio column is Numeric(7, 4), so 1/3 rounds to 0.3333.
-        assert float(s.ratio) == pytest.approx(1 / 3, abs=1e-4)
+    assert item_splits == []  # no item-by-item assignment any more
 
 
 def test_group_put_items_rejects_non_reconciling_total(test_client, db_session):
@@ -260,9 +244,8 @@ def test_group_put_items_rejects_non_reconciling_total(test_client, db_session):
             "category": "Food & Drink",
             "amount": 20.0,
             "payers": [{"member_id": m["test@user.com"], "amount_paid": 20.0}],
-            "items": [
-                {"line_no": 1, "item_name": "Chips", "line_total": 20.0, "member_ratios": {m["test@user.com"]: 1.0}},
-            ],
+            "split": {"type": "equal", "entries": [{"member_id": m["test@user.com"], "value": 0}]},
+            "items": [{"line_no": 1, "item_name": "Chips", "line_total": 20.0}],
         },
     )
     assert create_res.status_code == 201

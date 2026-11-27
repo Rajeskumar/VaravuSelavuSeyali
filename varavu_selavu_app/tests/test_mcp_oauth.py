@@ -184,6 +184,7 @@ def test_sdk_transport_auth_and_tools(mcp, monkeypatch):
     monkeypatch.setattr(module, "SessionLocal", session)
     monkeypatch.setenv("MCP_RESOURCE_URL", "https://api.trackspense.com/mcp")
     monkeypatch.setenv("MCP_ISSUER", "https://api.trackspense.com")
+    monkeypatch.setenv("PUBLIC_APP_URL", "https://expense.trackspense.com")
     sdk, gateway = module.build_app()
     app = FastAPI(lifespan=sdk.router.lifespan_context)
     app.mount("/", gateway)
@@ -205,6 +206,9 @@ def test_sdk_transport_auth_and_tools(mcp, monkeypatch):
         }
         response = client.post("/mcp", json=request, headers=headers)
         assert response.status_code == 200, response.text
+        server_info = response.json()["result"]["serverInfo"]
+        assert server_info["websiteUrl"] == "https://expense.trackspense.com"
+        assert server_info["icons"][0]["src"] == "https://api.trackspense.com/favicon.png"
         response = client.post(
             "/mcp",
             json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},

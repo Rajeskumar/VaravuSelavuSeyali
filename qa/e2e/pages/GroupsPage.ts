@@ -1,4 +1,4 @@
-import { Page, expect } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class GroupsPage extends BasePage {
@@ -47,5 +47,53 @@ export class GroupsPage extends BasePage {
 
   get addMemberButton() {
     return this.page.getByRole('button', { name: 'Add Member' });
+  }
+
+  /** Opens one group's detail view directly, with the cookie banner out of the way. */
+  async openDetail(groupId: string): Promise<void> {
+    await this.page.goto(`/groups/${groupId}`);
+    const decline = this.page.getByRole('button', { name: 'Decline' });
+    if (await decline.isVisible().catch(() => false)) await decline.click();
+    await expect(this.page.getByRole('button', { name: 'Group settings' })).toBeVisible({ timeout: 15_000 });
+  }
+
+  /** The group page's own Add Expense button; it opens Quick Capture with this group selected. */
+  async openAddExpense(): Promise<Locator> {
+    await this.page.getByRole('button', { name: 'Add Expense' }).filter({ visible: true }).first().click();
+    const dialog = this.page.getByRole('dialog', { name: 'New expense' });
+    // The "Paid by … split …" line appears once the group's members have loaded.
+    await expect(dialog.getByText(/Paid by/)).toBeVisible({ timeout: 15_000 });
+    return dialog;
+  }
+
+  /**
+   * An expense row in the group feed. Matched by description: the amount in the row's accessible
+   * name is the viewer's share, not the expense total. Descriptions must be unique, regex-safe labels.
+   */
+  expenseRow(description: string) {
+    return this.page.getByRole('button', { name: new RegExp(`^${description}, `) });
+  }
+
+  /** Opens an expense's detail drawer by tapping its row. */
+  async openExpense(description: string): Promise<Locator> {
+    await this.expenseRow(description).click();
+    const drawer = this.page.getByRole('dialog', { name: 'Group expense details' });
+    await expect(drawer).toBeVisible();
+    return drawer;
+  }
+
+  /** Opens the split picker from a "Paid by X and split Y" line. `current` is Y's present wording. */
+  async openSplitPicker(scope: Locator, current = 'equally'): Promise<Locator> {
+    await scope.getByRole('button', { name: current, exact: true }).click();
+    const picker = this.page.getByRole('dialog', { name: 'Choose how to split' });
+    await expect(picker).toBeVisible();
+    return picker;
+  }
+
+  async openPayerPicker(scope: Locator, current = 'you'): Promise<Locator> {
+    await scope.getByRole('button', { name: current, exact: true }).click();
+    const picker = this.page.getByRole('dialog', { name: 'Choose payer' });
+    await expect(picker).toBeVisible();
+    return picker;
   }
 }

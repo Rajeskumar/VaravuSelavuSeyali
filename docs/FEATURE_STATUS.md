@@ -25,7 +25,7 @@
 
 ## Mobile analytics and crash reporting (TS-GA4-002) — implemented locally (2026-11-25)
 
-🚧 iOS and Android share one Firebase Analytics + Crashlytics layer with the web event catalog: two separate opt-ins (Account → Privacy), screen views, confirmed-write business events, receipt/permission/deep-link events, sanitized crash reports, no advertising ID, collection only in explicitly configured `qa`/`production` builds. Not released: Firebase projects, real-device DebugView and test-crash verification, store disclosures. See [mobile analytics](analytics/mobile.md).
+🚧 iOS and Android share one Firebase Analytics + Crashlytics layer with the web event catalog: two separate opt-ins (Account → Privacy), screen views, confirmed-write business events, receipt/permission/deep-link events, sanitized crash reports, no advertising ID, collection only in explicitly configured `qa`/`production` builds. On 2026-11-26 the owner reported an Android production-configured device smoke test: analytics events arrived, and disabling analytics consent stopped new analytics data. Deeper Android event, crash, privacy and non-production DebugView testing remains open, as do store disclosures and release. See [mobile analytics](analytics/mobile.md).
 
 ## 1. Core Product (Section 3 of the master spec)
 
@@ -36,6 +36,7 @@ All shipped and working — verified via direct API/route inspection and live te
 | Auth (register/login/Google OAuth/refresh/logout/forgot-password/profile) | ✅ Built | Includes `DELETE /auth/profile` (account deletion) with a real confirmation-dialog UX (type "DELETE" to confirm). As of TS-GRP-112, personal expenses are hard-deleted explicitly (no longer a DB-level cascade) while group expenses survive with the author anonymized — see §6 below |
 | Expense CRUD + AI auto-categorization | ✅ Built | `POST/GET/PUT/DELETE /expenses`, `/expenses/categorize`, `/expenses/with_items` |
 | Receipt OCR scanning | ✅ Built | `/ingest/receipt/parse`, fingerprint dedup, "Upload Receipt" UI on web (Add Expense dialog) |
+| Receipts split by total; paid/original line prices; totals must match (TS-FIX-102) | ✅ Built (not released) | Group receipts split Equal/Exact/Shares on the total (item assignment and suggestions removed, old requests get `app_update_required`); lines keep paid price, discount and original price (`expense_items.original_price`, migration `8e1f1b7751c5`); coupons/receipt discounts folded server-side, refunds listed for review; paid + tax + tip must match on every save path incl. MCP; old receipts keep shares and are shown converted. Web + mobile. Record: `docs/sdlc/work-items/TS-FIX-102/`. |
 | Recurring expense management | ✅ Built | Full CRUD + due/confirm/execute_now. Run now is once per template per month (2026-11-22) |
 | Expense date window | ✅ Built (2026-11-22) | No future dates, nothing older than 1 year — pickers, API, AI chat, MCP (spec R15). Revisit: ROADMAP |
 | Registration email verification | 📝 Spec only | `docs/features/registration_email_verification/SPEC.md`; not implemented |

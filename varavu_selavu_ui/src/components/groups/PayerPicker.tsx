@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import Box from '@mui/material/Box';
 import Checkbox from '@mui/material/Checkbox';
@@ -11,6 +12,7 @@ import { useTheme } from '@mui/material/styles';
 import { MemberDTO, PayerSummaryItem } from '../../api/groups';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import { formatMoney, currencySymbol } from '../../utils/money';
+import { addsUpTo, TWO_DECIMALS } from '../../utils/splitPreview';
 
 interface PayerPickerProps {
   amount: number;
@@ -34,7 +36,6 @@ interface PayerPickerProps {
   onModeChange?: (mode: 'single' | 'multiple') => void;
 }
 
-const TOLERANCE = 0.01;
 
 /**
  * Pure validity check, usable by a parent form even while this picker isn't mounted (it only
@@ -45,7 +46,7 @@ const TOLERANCE = 0.01;
  */
 export function computePayersValid(payers: PayerSummaryItem[], amount: number): boolean {
   const total = payers.reduce((sum, p) => sum + p.amount_paid, 0);
-  return Math.abs(total - amount) < TOLERANCE;
+  return addsUpTo(total, amount);
 }
 
 /**
@@ -68,7 +69,7 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
   const selectedIds = React.useMemo(() => new Set(payers.map((p) => p.member_id)), [payers]);
 
   const totalEntered = payers.reduce((sum, p) => sum + p.amount_paid, 0);
-  const isValid = mode === 'single' ? payers.length === 1 : Math.abs(totalEntered - amount) < TOLERANCE;
+  const isValid = mode === 'single' ? payers.length === 1 : addsUpTo(totalEntered, amount);
 
   React.useEffect(() => {
     onValidityChange?.(isValid);
@@ -87,7 +88,8 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
 
   const toggleMember = (memberId: string, checked: boolean) => {
     if (checked) {
-      const remaining = Math.max(0, amount - totalEntered);
+      // Whole cents: 50.3 - 20.1 is 30.199999999999996, which the server refuses.
+      const remaining = Math.max(0, Math.round((amount - totalEntered) * 100) / 100);
       onChange([...payers, { member_id: memberId, amount_paid: remaining }]);
     } else {
       onChange(payers.filter((p) => p.member_id !== memberId));
@@ -196,7 +198,9 @@ const PayerPicker: React.FC<PayerPickerProps> = ({
                   size="small"
                   type="number"
                   value={payer?.amount_paid ?? 0}
-                  onChange={(e) => updateAmount(m.member_id, parseFloat(e.target.value) || 0)}
+                  {...noMinusProps((e) => {
+                    if (TWO_DECIMALS.test(e.target.value)) updateAmount(m.member_id, parseFloat(e.target.value) || 0);
+                  })}
                   sx={{ width: 120 }}
                   inputProps={{ 'aria-label': `Amount paid by ${m.display_name}` }}
                   InputProps={{

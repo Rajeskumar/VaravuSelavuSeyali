@@ -5,6 +5,7 @@ import { AppTheme } from '../../../core/theme/theme';
 import { MemberDTO, PayerSummaryItem } from '../api/groups';
 import { memberColor } from './BalanceRow';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
+import { addsUpTo, amountText, TWO_DECIMALS } from '../utils/splitAmounts';
 
 interface Props {
   amount: number;
@@ -14,14 +15,13 @@ interface Props {
   onValidityChange?: (valid: boolean) => void;
 }
 
-const TOLERANCE = 0.01;
 
 /** Usable without mounting the component (mirrors web's PayerPicker.tsx export) — lets a
  * parent gate its own Save button on the currently-staged payers before the picker is even
  * open. */
 export function computePayersValid(payers: PayerSummaryItem[], amount: number): boolean {
   const totalEntered = payers.reduce((sum, p) => sum + p.amount_paid, 0);
-  return Math.abs(totalEntered - amount) < TOLERANCE;
+  return addsUpTo(totalEntered, amount);
 }
 
 export default function PayerPicker({
@@ -48,14 +48,19 @@ export default function PayerPicker({
 
   const toggleMember = (memberId: string, checked: boolean) => {
     if (checked) {
-      const remaining = Math.max(0, amount - totalEntered);
+      // Whole cents: 50.3 - 20.1 is 30.199999999999996, which the server refuses.
+      const remaining = Math.max(0, Math.round((amount - totalEntered) * 100) / 100);
       onChange([...payers, { member_id: memberId, amount_paid: remaining }]);
     } else {
       onChange(payers.filter((p) => p.member_id !== memberId));
     }
   };
 
+  const [typed, setTyped] = React.useState<Record<string, string>>({});
+
   const updateAmount = (memberId: string, valStr: string) => {
+    if (!TWO_DECIMALS.test(valStr)) return;
+    setTyped((prev) => ({ ...prev, [memberId]: valStr }));
     const num = parseFloat(valStr) || 0;
     onChange(
       payers.map((p) => (p.member_id === memberId ? { ...p, amount_paid: num } : p))
@@ -74,6 +79,7 @@ export default function PayerPicker({
             <Switch
               value={isSelected}
               onValueChange={(v) => toggleMember(member.member_id, v)}
+              accessibilityLabel={`Include ${member.display_name} as payer`}
               trackColor={{ false: theme.colors.borderLight, true: theme.colors.primary }}
               thumbColor="#fff"
               style={{ marginRight: 12, transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
@@ -92,8 +98,9 @@ export default function PayerPicker({
                 <Text style={styles.currencySymbol}>$</Text>
                 <TextInput
                   style={styles.numberInput}
+                  accessibilityLabel={`Amount paid by ${member.display_name}`}
                   keyboardType="numeric"
-                  value={payer?.amount_paid?.toString() ?? '0'}
+                  value={amountText(typed[member.member_id], payer?.amount_paid ?? 0)}
                   onChangeText={(text) => updateAmount(member.member_id, text)}
                   placeholder="0.00"
                   placeholderTextColor={theme.colors.textQuaternary}

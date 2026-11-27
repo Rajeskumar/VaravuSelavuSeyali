@@ -28,8 +28,8 @@ jest.mock('../../groups/api/groups', () => ({ ...jest.requireActual('../../group
 const draft = {
   amt: '7.89', desc: 'Recovered native coffee', expenseDate: new Date(2026, 9, 6).getTime(),
   merchantName: '', mainCategory: 'Other', subcategory: 'General', userPickedCategory: true, userPickedMerchant: true,
-  recurring: false, cardId: null, who: 'me', scannedItems: [], scannedTax: 0, scannedDiscount: 0,
-  scannedPurchasedAt: null, scannedFingerprint: null, assignments: {}, tagNames: [], payers: [],
+  recurring: false, cardId: null, who: 'me', scannedItems: [], scannedTax: 0, scannedTip: 0, scannedReview: [],
+  scannedPurchasedAt: null, scannedFingerprint: null, tagNames: [], payers: [],
   splitValue: { type: 'equal', entries: [] }, customized: false, unknownOutcome: false,
 };
 const clients: QueryClient[] = [];

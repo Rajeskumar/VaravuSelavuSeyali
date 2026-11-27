@@ -94,7 +94,7 @@ REGISTRY = {
         "expenses:create",
         schemas.VerifyExpense,
         operations.verify,
-        "Validate an expense and return a browser approval link. Show the preview and ask the user to approve in TrackSpense. This does not save.",
+        "Validate an expense and return a browser approval link. Show the preview and ask the user to approve in TrackSpense. This does not save. For receipts, each item line_total is the price actually paid (after its own coupon, recorded in discount); item prices plus tax and tip must equal total within 0.02. A whole-receipt discount is divided across the items by price. Never send negative lines; leave returns and refunds out.",
     ),
     "save_expense": (
         "expenses:create",
@@ -384,6 +384,12 @@ def build_app():
             "MCP requires a canonical HTTPS issuer origin and its /mcp resource"
         )
     signing_keys()  # fail startup before mounting an unusable resource
+    issuer_origin = settings.MCP_ISSUER.rstrip("/")
+    server.website_url = settings.PUBLIC_APP_URL.rstrip("/")
+    server.icons = [
+        types.Icon(src=f"{issuer_origin}/favicon.png", mime_type="image/png"),
+        types.Icon(src=f"{issuer_origin}/apple-touch-icon.png", mime_type="image/png"),
+    ]
     app = server.streamable_http_app(
         stateless_http=True,
         json_response=True,

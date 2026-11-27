@@ -58,16 +58,34 @@ export interface ExpenseListResponse {
   next_offset?: number;
 }
 
+export interface ExpenseDateRange {
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string;   // YYYY-MM-DD
+}
+
+/** Converts a 'YYYY-MM' month key into an inclusive ISO date range; empty string -> undefined (all time). */
+export function monthToDateRange(month: string): ExpenseDateRange | undefined {
+  if (!/^\d{4}-\d{2}$/.test(month)) return undefined;
+  const [y, m] = month.split('-').map(Number);
+  if (!y || m < 1 || m > 12) return undefined;
+  const lastDay = new Date(y, m, 0).getDate();
+  const mm = String(m).padStart(2, '0');
+  return { startDate: `${y}-${mm}-01`, endDate: `${y}-${mm}-${String(lastDay).padStart(2, '0')}` };
+}
+
 export async function listExpenses(
   offset = 0,
   limit = 30,
   tagIds?: string[],
+  dateRange?: ExpenseDateRange,
 ): Promise<ExpenseListResponse> {
   const params = new URLSearchParams({
     offset: offset.toString(),
     limit: limit.toString(),
   });
   (tagIds || []).forEach((id) => params.append('tag_ids', id));
+  if (dateRange?.startDate) params.set('start_date', dateRange.startDate);
+  if (dateRange?.endDate) params.set('end_date', dateRange.endDate);
   const res = await fetchWithAuth(`/api/v1/expenses?${params.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch expenses');
   return res.json();
@@ -97,6 +115,8 @@ export interface ReceiptParseDraft {
   warnings: string[];
   fingerprint: string;
   ocr_text?: string;
+  /** Returns/refunds left out of the items for the person to review (TS-FIX-102). */
+  review?: { item_name: string; amount: number; reason?: string }[];
 }
 
 export async function parseReceipt(file: File): Promise<ReceiptParseDraft> {
@@ -116,9 +136,17 @@ export async function addExpenseWithItems(payload: any, capture?: ExpenseCapture
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw Object.assign(new Error('Failed to save expense'), { status: res.status });
+    if (!res.ok) await throwReceiptError(res, 'Failed to save expense');
     return res.json();
   }, capture, 'personal', value => !!value?.expense_id);
+}
+
+/** Receipt saves explain refusals (totals don't match, update the app): show the server's words. */
+async function throwReceiptError(res: Response, fallback: string): Promise<never> {
+  let detail: any = null;
+  try { detail = (await res.json())?.detail ?? null; } catch { /* non-JSON body */ }
+  const message = typeof detail === 'string' ? detail : detail?.message || fallback;
+  throw Object.assign(new Error(message), { status: res.status, detail });
 }
 
 export interface ExpenseItemDTO {
@@ -133,13 +161,18 @@ export interface ExpenseItemDTO {
   line_total: number;
   tax?: number | null;
   discount?: number | null;
+  original_price?: number | null;
 }
 
 export interface ItemsResponse {
   items: ExpenseItemDTO[];
   amount: number;
   tax: number;
+  tip?: number;
+  /** Always 0 since TS-FIX-102: discounts are already in the line prices. */
   discount: number;
+  savings?: number;
+  legacy_discount_format?: boolean;
 }
 
 export interface ItemsUpdatePayload {
@@ -151,10 +184,12 @@ export interface ItemsUpdatePayload {
     quantity?: number | null;
     unit_price?: number | null;
     line_total: number;
+    discount?: number;
+    original_price?: number | null;
   }[];
   amount: number;
   tax?: number;
-  discount?: number;
+  tip?: number;
 }
 
 export async function getExpenseItems(rowId: number | string): Promise<ItemsResponse> {
@@ -168,7 +203,7 @@ export async function updateExpenseItems(rowId: number | string, payload: ItemsU
     method: 'PUT',
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error('Failed to update expense items');
+  if (!res.ok) await throwReceiptError(res, 'Failed to update expense items');
   return res.json();
 }
 

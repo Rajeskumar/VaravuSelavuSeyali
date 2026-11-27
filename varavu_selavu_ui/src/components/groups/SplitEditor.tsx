@@ -7,7 +7,7 @@ import Avatar from '@mui/material/Avatar';
 import InputAdornment from '@mui/material/InputAdornment';
 import { useTheme } from '@mui/material/styles';
 import { MemberDTO } from '../../api/groups';
-import { previewEqualSplit, previewPercentageSplit, previewSharesSplit, previewAdjustmentSplit } from '../../utils/splitPreview';
+import { previewEqualSplit, previewPercentageSplit, previewSharesSplit, previewAdjustmentSplit, splitWithRandomRemainder, addsUpTo, TWO_DECIMALS } from '../../utils/splitPreview';
 import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import SegmentedTabs from '../common/SegmentedTabs';
 import { formatMoney, currencySymbol } from '../../utils/money';
@@ -41,7 +41,6 @@ interface SplitEditorProps {
   currency?: string;
 }
 
-const TOLERANCE = 0.02;
 const ALL_TYPES: SplitType[] = ['equal', 'exact', 'percentage', 'shares', 'adjustment'];
 
 /**
@@ -49,12 +48,19 @@ const ALL_TYPES: SplitType[] = ['equal', 'exact', 'percentage', 'shares', 'adjus
  * mounts when its popover is open) — mirrors the isValid computation below exactly.
  */
 export function computeSplitValid(value: SplitEditorValue, amount: number): boolean {
-  if (value.type === 'equal' || value.type === 'shares' || value.type === 'adjustment') {
+  // No minus values in any split type, including ones restored from a draft or saved settings.
+  if (value.entries.some((e) => (e.value || 0) < 0)) return false;
+  if (value.type === 'adjustment') {
+    // With no minus values and no more than the total, nobody's share can go below zero.
+    const adjustments = value.entries.reduce((sum, e) => sum + (e.value || 0), 0);
+    return value.entries.length > 0 && adjustments <= amount + 1e-9;
+  }
+  if (value.type === 'equal' || value.type === 'shares') {
     return value.entries.length > 0;
   }
   const target = value.type === 'percentage' ? 100 : amount;
   const totalEntered = value.entries.reduce((sum, e) => sum + (e.value || 0), 0);
-  return Math.abs(totalEntered - target) < TOLERANCE;
+  return addsUpTo(totalEntered, target);
 }
 
 const SplitEditor: React.FC<SplitEditorProps> = ({
@@ -110,13 +116,16 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
 
   const handleTabChange = (newType: SplitType) => {
     const participantIds = members.map((m) => m.member_id);
-    const entries: SplitEditorEntry[] = participantIds.map((member_id) => ({
+    // Chosen once per tab change, so the values stay put while the person edits them.
+    const prefilled =
+      newType === 'percentage' ? splitWithRandomRemainder(100, participantIds.length)
+      : newType === 'exact' ? splitWithRandomRemainder(amount, participantIds.length)
+      : null;
+    const entries: SplitEditorEntry[] = participantIds.map((member_id, i) => ({
       member_id,
       value:
-        newType === 'percentage'
-          ? Math.round((100 / participantIds.length) * 100) / 100
-          : newType === 'exact'
-          ? Math.round((amount / participantIds.length) * 100) / 100
+        prefilled
+          ? prefilled[i]
           : newType === 'shares'
           ? 1
           : newType === 'adjustment'
@@ -226,7 +235,7 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
                   }
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (val !== '' && !/^\d*\.?\d*$/.test(val)) return;
+                    if (val !== '' && !TWO_DECIMALS.test(val)) return;
                     setRawInputs((prev) => ({ ...prev, [m.member_id]: val }));
                     if (val === '') { updateEntryValue(m.member_id, undefined); return; }
                     const parsed = parseFloat(val);
@@ -272,6 +281,11 @@ const SplitEditor: React.FC<SplitEditorProps> = ({
           {value.type === 'percentage'
             ? `Percentages must total 100 (currently ${totalEntered.toFixed(2)})`
             : `Exact amounts must total ${formatMoney(amount, currency)} (currently ${formatMoney(totalEntered, currency)})`}
+        </Typography>
+      )}
+      {value.type === 'adjustment' && value.entries.length > 0 && !isValid && (
+        <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+          Adjustments can't add up to more than {formatMoney(amount, currency)}, or be negative
         </Typography>
       )}
       {isValid && (

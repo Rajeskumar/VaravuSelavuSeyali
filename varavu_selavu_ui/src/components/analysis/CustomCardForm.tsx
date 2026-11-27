@@ -1,3 +1,4 @@
+import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Box, Typography, Button, TextField, IconButton, Alert } from '@mui/material';
@@ -69,7 +70,7 @@ const CustomCardForm: React.FC<Props> = ({ onDone, onCancel }) => {
           <TextField size="small" label="Issuer (optional)" placeholder="e.g. Chase" value={issuer} onChange={(e) => setIssuer(e.target.value)} fullWidth />
           <TextField
             size="small" label="Annual fee" type="number" value={annualFee}
-            onChange={(e) => setAnnualFee(e.target.value)}
+            {...noMinusProps((e) => setAnnualFee(e.target.value))}
             InputProps={{ startAdornment: <Box component="span" sx={{ mr: 0.5, color: 'text.secondary' }}>$</Box> }}
             sx={{ width: { xs: '100%', sm: 140 }, flexShrink: 0 }}
           />
@@ -93,7 +94,7 @@ const CustomCardForm: React.FC<Props> = ({ onDone, onCancel }) => {
             )}
             <TextField
               size="small" label="%" type="number" value={rule.multiplier}
-              onChange={(e) => updateRule(idx, { multiplier: e.target.value })}
+              {...noMinusProps((e) => updateRule(idx, { multiplier: e.target.value }))}
               sx={{ width: 90, flexShrink: 0 }}
             />
             <IconButton size="small" onClick={() => removeRule(idx)} aria-label="Remove rate">

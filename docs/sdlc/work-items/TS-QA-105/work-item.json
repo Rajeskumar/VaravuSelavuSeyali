@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "id": "TS-QA-105",
+  "title": "Web group money journeys: browser E2E (backlog A1)",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Browser tests drive, through the web UI, adding members and adding group expenses with each split type, an invalid split, multiple payers, and group capture from the dashboard."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Browser tests drive edit, delete, delete-undo, comment, settle-my-share, move-to-group and custom settlement through the web UI."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "Every money change is verified against the server's stored payers, shares, balances or settlements, exact to the cent."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "Tests use no new logins or registrations and run only against a local isolated stack."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "local-integration",
+    "code-review"
+  ],
+  "implementation_approval": null,
+  "links": [
+    "docs/qa/10-coverage-map.md"
+  ],
+  "notes": ""
+}

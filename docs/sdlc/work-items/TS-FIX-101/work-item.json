@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "TS-FIX-101",
+  "title": "Split pre-fill and validation must match the server to the cent",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Web pre-filled Exact and Percentage values add up exactly to the total or 100, with each leftover hundredth on a different randomly chosen member."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Web and mobile accept an exact, percentage or payer total only when it matches to the cent; floating-point noise is tolerated."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "Saving pre-filled values works for a new group expense, an edit and a move to a group, and stored shares add up to the total."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "No minus value is accepted for money or splits: the server refuses negative split values and group receipt item values and never stores or drops a negative share; web and mobile number fields ignore a typed minus; saved settings from before the rule still load."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "red-green",
+    "local-integration",
+    "code-review",
+    "security-review",
+    "ui-review"
+  ],
+  "implementation_approval": null,
+  "links": [
+    "docs/sdlc/work-items/TS-QA-105/work-item.json"
+  ],
+  "notes": "Implementation authorized by the owner in conversation on 2026-11-26 ('...randomly assign one person with a cent more... can you apply this fix?'). The owner has not reviewed these plan documents, so implementation_approval is left empty. Scope extended by the owner on 2026-11-26: 'go with no minus value fix', after the proposal to block minus values in every form and on the server."
+}

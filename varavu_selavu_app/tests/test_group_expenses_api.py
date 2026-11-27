@@ -407,59 +407,8 @@ def test_random_amounts_sum_to_the_cent_after_persistence_and_readback(test_clie
         assert round(sum(float(s.amount_owed) for s in splits), 2) == amount
         assert round(sum(float(p.amount_paid) for p in payers), 2) == amount
 
-def test_create_itemized_group_expense(test_client, db_session):
-    group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com", "c@test.com"])
-
-    res = test_client.post(
-        f"/api/v1/groups/{group_id}/expenses/itemized",
-        json={
-            "date": "01/15/2026",
-            "description": "Dinner",
-            "category": "Food",
-            "amount": 100.00,
-            "payers": [
-                {"member_id": m["test@user.com"], "amount_paid": 60.00},
-                {"member_id": m["b@test.com"], "amount_paid": 40.00}
-            ],
-            "items": [
-                {
-                    "line_no": 1,
-                    "item_name": "Steak",
-                    "line_total": 50.00,
-                    "member_ratios": {m["test@user.com"]: 1.0}
-                },
-                {
-                    "line_no": 2,
-                    "item_name": "Wine",
-                    "line_total": 40.00,
-                    "tax": 10.00, # Subtotal 90, tax 10 => 100 total
-                    "member_ratios": {m["b@test.com"]: 0.5, m["c@test.com"]: 0.5}
-                }
-            ]
-        },
-    )
-    
-    assert res.status_code == 201
-    body = res.json()["expense"]
-    
-    expense_id = uuid.UUID(body["row_id"])
-    splits = db_session.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense_id).all()
-    
-    # A's subtotal: 50. Tax proportion: 50/90 * 10 = 5.555 -> 5.55 -> A total = 55.55
-    # B's subtotal: 20. Tax proportion: 20/90 * 10 = 2.222 -> 2.22 -> B total = 22.22
-    # C's subtotal: 20. Tax proportion: 20/90 * 10 = 2.222 -> 2.22 -> C total = 22.22
-    # Residual: 100 - (55.55 + 22.22 + 22.22) = 0.01.
-    # Remainders: A = 0.555 - 0.55 = 0.005. B = C = 0.222 - 0.22 = 0.002.
-    # So A gets the extra cent: 55.56
-    
-    a_owed = next(s.amount_owed for s in splits if str(s.member_id) == m["test@user.com"])
-    b_owed = next(s.amount_owed for s in splits if str(s.member_id) == m["b@test.com"])
-    c_owed = next(s.amount_owed for s in splits if str(s.member_id) == m["c@test.com"])
-    
-    assert float(a_owed) == 55.56
-    assert float(b_owed) == 22.22
-    assert float(c_owed) == 22.22
-
+# Item-by-item group receipts were removed in TS-FIX-102; receipts split on the total are covered in
+# tests/test_receipt_split_by_total.py.
 
 
 def test_group_expense_notes_round_trip_and_omitted_is_unchanged(test_client, db_session):

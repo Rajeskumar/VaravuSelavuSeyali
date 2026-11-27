@@ -82,7 +82,8 @@ const GroupBalancesPanel: React.FC<Props> = ({ members, transfers, myMemberId, o
         )}
       </Box>
 
-      <Box sx={{ px: 3, py: 2.5, flex: 1, overflowY: 'auto' }}>
+      {/* tabIndex={0} keeps the scrollable balances list keyboard-reachable (axe scrollable-region-focusable). */}
+      <Box tabIndex={0} role="region" aria-label="Member balances" sx={{ px: 3, py: 2.5, flex: 1, overflowY: 'auto' }}>
         <Typography sx={{ ...typeScale.label, color: 'text.secondary', mb: 1.5 }}>Balances</Typography>
         {members.filter(m => m.member_id !== myMemberId).map((m) => {
           const amount = withMe(m.member_id);

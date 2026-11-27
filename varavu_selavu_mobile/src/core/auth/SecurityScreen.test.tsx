@@ -83,6 +83,8 @@ describe('SecurityScreen change password', () => {
     const deletes = runTokenWrite(async () => {
       await SecureStore.deleteItemAsync('access_token'); await SecureStore.deleteItemAsync('refresh_token');
     });
+    // Give the deletes every chance to run while the write is held: only the queue may stop them.
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
     release();
     await act(async () => { await deletes; });
     expect(mockData.has('access_token')).toBe(false);
