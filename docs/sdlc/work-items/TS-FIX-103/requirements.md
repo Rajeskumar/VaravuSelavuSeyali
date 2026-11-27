@@ -23,3 +23,7 @@ and group expense edit. Other mobile money fields are excluded (option B, ROADMA
 "Fix android keyboard bug": modals with text fields stay above the Android keyboard, and split fields stay typeable there.
 
 Added by the owner 2026-11-27: "fix all four" older wrong-amount problems found by the follow-up reviews (AC-008..AC-011).
+
+Added by the owner 2026-11-27: fix the AC-011 typing problem in receipt, split and payer fields, and fix recurring amounts (AC-012). Budgets and card fees stay excluded (ROADMAP).
+
+Added 2026-11-27: the owner replied "Fix it, then go" to fixing blank split fields in the app and server (AC-013). This brings one backend change into scope; older apps benefit only after the server is deployed.

@@ -152,11 +152,11 @@
     {
       "id": "checks",
       "status": "passed",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Re-run on a later tree that includes TS-FIX-103: framework-check (276), test-backend (1124 passed, 15 skipped), web lint/typecheck/test (417), mobile typecheck/Jest (731), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip. All passed.",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Re-run on a later tree that includes TS-FIX-103: framework-check (276), test-backend (1133 passed, 15 skipped), web lint/typecheck/test (417), mobile typecheck/Jest (777), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip. All passed.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": [
         "AC-001",
         "AC-002",
@@ -169,11 +169,11 @@
     {
       "id": "local-integration",
       "status": "passed",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
       "command_or_method": "Re-run on a later tree: Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed. One 429 on the receipt-parse endpoint in the first part; none on login.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": [
         "AC-001",
         "AC-002",

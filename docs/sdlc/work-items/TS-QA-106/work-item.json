@@ -29,9 +29,13 @@
     "security-review",
     "acceptance-verification"
   ],
-  "implementation_approval": null,
+  "implementation_approval": {
+    "actor": "Rajeshkumar Ganesan",
+    "fingerprint": "9fa2690893cfc54e2374f2f7715723125f911478652f57fb07a973a0d82cc103",
+    "reference": "User message 2026-11-27: 'I confirm AC-005 to AC-010. I approve the TS-QA-106 plan. Fix the AC-011 problem in receipt, split and payer fields, and fix recurring amounts too.', replying to a summary of this plan's scope. It does not state that the native suites passed, and authorizes no merge or release."
+  },
   "links": [
     "docs/sdlc/work-items/TS-FIX-103/work-item.json"
   ],
-  "notes": "Record written after the build (2026-11-27). Raised from standard to high: it touches a CI workflow file (comment only) and a password-reset token script. The owner asked for the work ('Continue step 2 - 4') and approved the account approach and the single-browser skip, but has not seen these criteria or approved this plan, so implementation_approval is empty."
+  "notes": "Record written after the build (2026-11-27). Raised from standard to high: it touches a CI workflow file (comment only) and a password-reset token script. The owner approved the plan after the build (see implementation_approval)."
 }

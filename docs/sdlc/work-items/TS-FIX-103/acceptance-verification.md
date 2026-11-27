@@ -39,3 +39,11 @@
 - Native, targeted, with a temporary comma-typing edit of the flows (reverted): Android and iOS expense-edit-delete (`14,75`), settle-up (`5,00`) and group-split-exact (`18,00`, `12,00`) passed with stored-data checks. This is also the AC-004 iOS flow.
 - After those device runs one line changed (the warning points at Activity, so Activity is now refreshed too; failing test first). Mobile Jest 731/731.
 - Not run: full native suites, receipt price typing, double tap, unknown outcome and the alert on a device, real devices.
+
+## Unclear typing, recurring amounts and blank split fields (AC-009, AC-011..013), 2026-11-27
+
+- Failing first: 34 cases (unclear amounts typed key by key kept 1.23; recurring fields dropped the dot or used parseFloat; Move and group saves unguarded), then the settings guard, a null-value crash (4 cases, introduced by this change and found by review) and blank split fields (8 mobile, 8 backend; `InvalidOperation`).
+- Mobile Jest 777/777, tsc; backend split tests pass.
+- Reviews: UI pass; security BLOCKED on the crash, then PASS, and PASS for the blank-field fix; code P1 (same crash), then approve.
+- Native, targeted, with temporary flow edits (reverted): Android and iOS group-split-exact (`1,000` kept and flagged on screen, then `18,00`/`12,00` stored exactly) and recurring-run-edit (`17,25`); Android receipt OCR and iOS receipt import passed.
+- Not run: full native suites, recurring template/run-now/due-prompt on a device, receipt price typing, real devices.

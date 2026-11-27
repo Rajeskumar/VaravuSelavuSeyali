@@ -20,3 +20,6 @@ Requirements: requirements.md; acceptance-criterion text: work-item.json.
 | S14 | AC-010 | Personal edit sheet | 12,50; 1,234.50 | 12.5 sent; nothing sent | Jest ExpensesScreen.editAmount |
 | S15 | AC-011 | Receipt card | price 15,00; 1,234.50 | 15; ignored | Jest ReceiptLines |
 | S16 | AC-008 | Settle up | time out single and list; dismiss while sending; open while balances refresh or after the refresh failed | one POST, alert, closed; not dismissed; nothing opens | Jest SettleUpSheet.amount, GroupDetailScreen.settle |
+| S17 | AC-009, AC-011 | Split, payer, receipt fields | type 1,234.50, 1,000, 1.234,50 key by key; save from each screen | text visible, flagged, nothing saved | Jest UnreadableInputs, ReceiptLines, EditGroupExpenseModal.save, GroupSettingsSheet.split, ExpensesScreen.recurringAmount |
+| S18 | AC-012 | Recurring template, inline edit, run now, due prompt | type 12.50, 12,50, 1,234.50, 0 | correct amount, or nothing saved with a message | Jest RecurringExpensesScreen.amount, ExpensesScreen.recurringAmount, RecurringPrompt |
+| S19 | AC-013 | Equal split without values | switch type; POST with a blank value | filled 0 or 1; 400 with reason, nothing stored | Jest UnreadableInputs; tests/test_blank_split_values.py |

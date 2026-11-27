@@ -906,6 +906,8 @@ Pure functions, no DB. `resolve_split(amount, split_type, entries, member_ids)` 
 
 **Rounding:** each share is rounded *down* to the cent, the remaining cents are handed out by **largest fractional remainder, ties broken by member id ascending** — so sums are exact and results deterministic. Members whose resolved share is zero are dropped. `validate_payers` requires payer amounts to sum to the expense total.
 
+**No blank values (TS-FIX-103):** in `exact`, `percentage`, `shares` and `adjustment` splits an entry whose `value` is explicitly `null` is refused with a 400; `equal` ignores values.
+
 **No minus values (owner decision 2026-11-26):** no split type, payer amount, receipt tax, discount or item quantity accepts a negative value, and no resolved share or rescaled payer amount may be negative. Receipt lines are never negative either: coupons are folded into paid prices (TS-FIX-102 closed the former scanned-coupon exception). To have one person pay less, add an adjustment for everyone else. Saved group default splits and recurring split settings are checked only when new or changed, so ones saved earlier still load. Clients ignore any edit containing a minus sign.
 
 **Client rules:** `exact`, `percentage` and payer totals are compared exactly by the server, so clients must not accept a total that is a cent (or 0.01%) out; their only slack is floating-point noise. When web pre-fills an `exact` or `percentage` split, the values add up exactly and each leftover hundredth goes to a different, **randomly** chosen member (owner decision 2026-11-26), e.g. $10 three ways is 3.33 / 3.33 / 3.34. Mobile does not pre-fill these two. This differs on purpose from the deterministic rounding above, which applies to shares the server computes.

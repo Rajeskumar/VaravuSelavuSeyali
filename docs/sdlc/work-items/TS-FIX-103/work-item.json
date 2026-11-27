@@ -50,7 +50,15 @@
     },
     {
       "id": "AC-011",
-      "outcome": "Mobile receipt item prices, paid and original, read a comma as the decimal mark and ignore input that could be read as another amount; minus signs are still dropped."
+      "outcome": "Mobile receipt item prices (paid and original), split fields and payer fields read a comma as the decimal mark and still drop minus signs. Text that could be another amount (such as 1,234.50 or 1,000, typed or pasted) stays visible, is flagged, and blocks every save that would use it. A third decimal after a lone dot is not taken, as before."
+    },
+    {
+      "id": "AC-012",
+      "outcome": "Mobile recurring amounts (template form, inline edit, run now with a typed amount, and the due prompt) can be typed with a dot or comma decimal; unclear or zero amounts save or run nothing and say why. In the due prompt an empty or zero amount still skips that item."
+    },
+    {
+      "id": "AC-013",
+      "outcome": "Switching a mobile split to Exact, Percent or Adjust shows 0, and to Shares 1, for everyone without a value, so no blank is sent; the server refuses a blank value in those types with a clear 400 instead of failing, and stores nothing. Equal splits still ignore values."
     }
   ],
   "required_evidence": [
@@ -66,8 +74,8 @@
   ],
   "implementation_approval": {
     "actor": "Rajeshkumar Ganesan",
-    "fingerprint": "d228d99db336a8b3ac19abf5ed8a66346aa496e3f0ff5624c210b2281cda5903",
-    "reference": "User message 2026-11-27: 'Agreed and proceed on all those.', replying to a request to confirm the fix plan (then AC-001..AC-004 in implementation.md) and to also fix web group editing and the Settle up button. AC-005 and AC-006 were written after that message under that instruction; the owner has not read their text. No commit, push, production access or release authorized. Later on 2026-11-27 the owner asked to fix the Android keyboard bug ('Fix android keyboard bug'), then, after option A (shared amount reader for Settle up and group edit) was described, wrote 'create a work tree afor the branch we worked on before and fix that change and push to the branch. also do those record work as well. dont disturb observability branch'. AC-007 text was written after that message; the owner has not read the text of AC-005 to AC-007. Commit and push of qa-coverage-extend authorized; no merge, production access or release authorized. Later still, after the four older wrong-amount problems were listed with a recommendation to fix all four before release, the owner replied 'fix all four'. AC-008 to AC-011 text was written after that reply and has not been read by the owner. That reply did not mention commit or push. AC-008 was tightened after the security review of that fix found a retry after an unknown outcome (same 'fix all four' scope)."
+    "fingerprint": "da97ca954a1fa0561429a2763bb9d5f1f427d7040f4cc63ece8a4756569ef255",
+    "reference": "User message 2026-11-27: 'Agreed and proceed on all those.', replying to a request to confirm the fix plan (then AC-001..AC-004 in implementation.md) and to also fix web group editing and the Settle up button. AC-005 and AC-006 were written after that message under that instruction; the owner has not read their text. No commit, push, production access or release authorized. Later on 2026-11-27 the owner asked to fix the Android keyboard bug ('Fix android keyboard bug'), then, after option A (shared amount reader for Settle up and group edit) was described, wrote 'create a work tree afor the branch we worked on before and fix that change and push to the branch. also do those record work as well. dont disturb observability branch'. AC-007 text was written after that message; the owner has not read the text of AC-005 to AC-007. Commit and push of qa-coverage-extend authorized; no merge, production access or release authorized. Later still, after the four older wrong-amount problems were listed with a recommendation to fix all four before release, the owner replied 'fix all four'. AC-008 to AC-011 text was written after that reply and has not been read by the owner. That reply did not mention commit or push. AC-008 was tightened after the security review of that fix found a retry after an unknown outcome (same 'fix all four' scope). On 2026-11-27, after being shown a summary of AC-005 to AC-011 and told AC-011 was overstated, the owner replied 'I confirm AC-005 to AC-010. I approve the TS-QA-106 plan. Fix the AC-011 problem in receipt, split and payer fields, and fix recurring amounts too.' This confirms AC-005 to AC-010. AC-011 was then reworded and AC-012 added as that reply instructed; the owner has not read those two texts. After the blank-split-field bug was described with a proposed app and server fix, the owner replied 'Fix it, then go' (fix, then run the device check). AC-013 text was written after that reply."
   },
   "links": [
     "docs/sdlc/work-items/TS-QA-106/work-item.md"

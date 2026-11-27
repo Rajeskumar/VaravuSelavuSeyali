@@ -4,11 +4,11 @@
     {
       "id": "checks",
       "status": "passed",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "framework-check (276), test-backend (1124 passed, 15 skipped), web lint/typecheck/test (417), mobile typecheck/Jest (731), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip. All passed. Includes the reset-token guard tests.",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "framework-check (276), test-backend (1133 passed, 15 skipped), web lint/typecheck/test (417), mobile typecheck/Jest (777), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip. All passed. Includes the reset-token guard tests.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": [
         "AC-003"
       ]
@@ -16,11 +16,11 @@
     {
       "id": "local-integration",
       "status": "passed",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
       "command_or_method": "Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed. One 429 on the receipt-parse endpoint in the first part; none on login. Includes account-recovery.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": [
         "AC-002"
       ]
@@ -28,41 +28,41 @@
     {
       "id": "code-review",
       "status": "passed",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
       "command_or_method": "The web specs and native flows were in the first review passes; no open P0/P1. They have not changed since. Open P3: two flow waits can pass before a save ends. The files this review covers have not changed since.",
       "source": "Reviewer reports in the 2026-11-27 session",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": []
     },
     {
       "id": "security-review",
       "status": "passed",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
       "command_or_method": "Reset-token script, guard and account spec reviewed; no P0/P1. Open: provisioning scripts have no database host guard. The files this review covers have not changed since.",
       "source": "Reviewer reports in the 2026-11-27 session",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": []
     },
     {
       "id": "native-e2e",
       "status": "skipped",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "Full suites not run on this version; three flows ran targeted (see TS-FIX-103).",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Full suites not run on this version; some flows ran targeted (see TS-FIX-103).",
       "source": "TS-FIX-103 evidence",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": []
     },
     {
       "id": "acceptance-verification",
       "status": "skipped",
-      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
-      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
       "command_or_method": "Incomplete until the native suites pass on this version.",
       "source": "test-plan.md",
-      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
       "acceptance_criteria": []
     }
   ]

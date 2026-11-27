@@ -32,6 +32,14 @@ Status: built 2026-11-27. Requirements: requirements.md; AC text: work-item.json
   ignored. Receipt prices keep dropping minus signs and currency symbols.
 - AC-010: `ExpensesScreen` edit uses `parseAmount` for both PUTs, the card picker and the receipt check.
 
+- AC-011 (revised): split, payer and receipt fields keep the typed text; an unreadable value is NaN. `computeSplitValid`,
+  `computePayersValid`, `receiptTotals` (also null from a saved draft) and the Move, group edit and group settings saves
+  refuse it, because sent as JSON it would become an empty value. The receipt original-price field stays open while edited.
+- AC-012: recurring screens hold the typed text and use `parseAmount` at save time.
+
+- AC-013: `SplitEditor.setType` fills missing values; `split_engine.resolve_split` raises `SplitError` (mapped to 400)
+  for an explicit null outside Equal. A missing key still counts as 0. No schema or contract change; either deploy order.
+
 ## Risks and safeguards
 Money: direction and amount come only from server transfers; the user still confirms. No schema, auth or API change.
 Omitting the split must not reset a custom split: covered by server carry-over (existing backend tests) and the native flow's stored-data check.
