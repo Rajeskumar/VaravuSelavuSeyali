@@ -11,7 +11,7 @@ import { AppTheme, inkOnPastel } from '../../../core/theme/theme';
 import { MemberDTO } from '../api/groups';
 import { memberColor } from './BalanceRow';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
-import { addsUpTo, amountText, distributeCents, TWO_DECIMALS, withDecimalDot } from '../utils/splitAmounts';
+import { acceptsAmountText, addsUpTo, amountText, distributeCents, hasUnreadableSplit, typedValue, UNREADABLE_AMOUNT } from '../utils/splitAmounts';
 
 export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
 
@@ -82,6 +82,7 @@ export function previewAdjustmentSplit(entries: SplitEntry[], amount: number): n
  * PayerPicker/SplitEditor.tsx computeSplitValid convention of actually gating on that).
  */
 export function computeSplitValid(value: SplitEditorValue, totalAmount: number): boolean {
+  if (hasUnreadableSplit(value)) return false;
   // No minus values in any split type, including ones restored from a draft or saved settings.
   if (value.entries.some((e) => (e.value || 0) < 0)) return false;
   if (
@@ -122,8 +123,11 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
 
   const setType = (newType: SplitType) => {
     let newEntries = value.entries;
-    if (newType !== 'equal' && newEntries.length === 0) {
-      newEntries = activeMembers.map((m) => ({ member_id: m.member_id, value: newType === 'shares' ? 1 : 0 }));
+    if (newType !== 'equal') {
+      const filled = newType === 'shares' ? 1 : 0;
+      if (newEntries.length === 0) newEntries = activeMembers.map((m) => ({ member_id: m.member_id }));
+      // An equal split has no values (the server and drafts send null): left blank they were sent as "no value".
+      newEntries = newEntries.map((e) => (e.value == null ? { ...e, value: filled } : e));
     }
     onChange({ type: newType, entries: newEntries });
   };
@@ -156,14 +160,13 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
 
   const updateEntryValue = (memberId: string, typedText: string) => {
     cancelSelect(); // typing already started: never select what is being typed
-    const valStr = withDecimalDot(typedText);
     // No minus sign, adjustments included, until the server refuses negative shares (ROADMAP).
-    if (!TWO_DECIMALS.test(valStr)) return;
-    setTyped((prev) => ({ ...prev, [memberId]: valStr }));
-    const num = parseFloat(valStr);
+    if (!acceptsAmountText(typedText)) return;
+    setTyped((prev) => ({ ...prev, [memberId]: typedText }));
+    const num = typedValue(typedText);
     onChange({
       ...value,
-      entries: value.entries.map((e) => (e.member_id === memberId ? { ...e, value: isNaN(num) ? 0 : num } : e)),
+      entries: value.entries.map((e) => (e.member_id === memberId ? { ...e, value: num } : e)),
     });
   };
 
@@ -205,6 +208,12 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
       isValid = false;
       validationMessage = `Adjustments can't add up to more than ${formatCurrency(totalAmount)}, or be negative`;
     }
+  }
+
+  const unreadable = hasUnreadableSplit(value);
+  if (unreadable) {
+    isValid = false;
+    validationMessage = UNREADABLE_AMOUNT;
   }
 
   // Whatever the current preview doesn't account for (exact amounts still to allocate, or a
@@ -293,7 +302,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
           </View>
         );
       })}
-      {!quiet && selectedMembers.length > 0 && totalAmount > 0 && (isValid || value.type !== 'adjustment') && (
+      {!quiet && !unreadable && selectedMembers.length > 0 && totalAmount > 0 && (isValid || value.type !== 'adjustment') && (
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>{typedTotals ? 'Must add up exactly' : 'Rounding cents are balanced automatically'}</Text>
           <Text style={[styles.footerLeft, { color: balanced ? theme.colors.success : theme.colors.error }]}>

@@ -44,12 +44,15 @@ export function receiptTotals(lines: ReceiptLine[], tax: number, tip: number, am
   const subtotalCents = lines.reduce((s, l) => s + cents(l.line_total), 0);
   const computedCents = subtotalCents + cents(tax) + cents(tip);
   const deltaCents = computedCents - cents(amount);
+  // NaN is a price typed unclearly; null is one that came back from a saved draft that way. cents() would count 0.
+  const unreadable = lines.some((l) => l.line_total === null || Number.isNaN(l.line_total) || Number.isNaN(l.original_price));
   return {
+    unreadable,
     subtotal: subtotalCents / 100,
     computed: computedCents / 100,
     delta: deltaCents / 100,
     savings: lines.reduce((s, l) => s + cents(lineDiscount(l)), 0) / 100,
-    reconciled: Math.abs(deltaCents) <= cents(RECEIPT_TOLERANCE),
+    reconciled: !unreadable && Math.abs(deltaCents) <= cents(RECEIPT_TOLERANCE),
   };
 }
 

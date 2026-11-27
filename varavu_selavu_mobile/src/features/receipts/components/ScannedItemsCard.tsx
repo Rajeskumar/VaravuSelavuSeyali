@@ -6,7 +6,7 @@ import { suggestItems } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
 import { ReceiptLine, ReceiptReviewLine, lineDiscount, receiptTotals } from '../utils/receiptLines';
-import { TWO_DECIMALS, withDecimalDot } from '../../groups/utils/splitAmounts';
+import { acceptsAmountText, typedValue } from '../../groups/utils/splitAmounts';
 
 /** A receipt line being reviewed: `line_total` is the paid price (TS-FIX-102). */
 export interface ScannedItem extends ReceiptLine {
@@ -36,12 +36,12 @@ function fmt(n: number): string {
 }
 
 /**
- * The price text to keep, or null to ignore the edit. Minus signs and symbols are dropped (TS-FIX-101/102); a comma is
- * the decimal mark, never removed ("15,00" became 1500); anything with two marks or three decimals is ignored.
+ * The price text to keep, or null to ignore the edit. Minus signs and symbols are dropped (TS-FIX-101/102); dots and
+ * commas stay as typed, so a comma is never removed ("15,00" became 1500) and an unclear price blocks the receipt.
  */
 function priceText(typed: string): string | null {
-  const text = withDecimalDot(typed.replace(/[^0-9.,]/g, ''));
-  return TWO_DECIMALS.test(text) ? text : null;
+  const text = typed.replace(/[^0-9.,]/g, '');
+  return acceptsAmountText(text) ? text : null;
 }
 
 /**
@@ -55,11 +55,13 @@ function priceText(typed: string): string | null {
 const ItemPriceInput: React.FC<{
   theme: AppTheme; style: any; value: number | null; onCommit: (n: number | null) => void; label: string; allowEmpty?: boolean;
 }> = ({ theme, style, value, onCommit, label, allowEmpty = false }) => {
-  const [text, setText] = useState(value == null ? '' : String(value));
+  const shown = value == null || Number.isNaN(value) ? '' : String(value);
+  const [text, setText] = useState(shown);
   const focused = useRef(false);
 
   useEffect(() => {
-    if (!focused.current) setText(value == null ? '' : String(value));
+    // NaN means the typed text can't be read: keep it on screen.
+    if (!focused.current && !Number.isNaN(value)) setText(shown);
   }, [value]);
 
   return (
@@ -70,17 +72,16 @@ const ItemPriceInput: React.FC<{
       onBlur={() => {
         focused.current = false;
         if (allowEmpty && text.trim() === '') { onCommit(null); return; }
-        const n = Number(text) || 0;
-        setText(String(n));
+        const n = typedValue(text);
+        if (!Number.isNaN(n)) setText(String(n));
         onCommit(n);
       }}
       onChangeText={(t) => {
         const cleaned = priceText(t);
         if (cleaned === null) return;
         setText(cleaned);
-        const n = Number(cleaned);
         if (cleaned === '' && allowEmpty) onCommit(null);
-        else if (cleaned !== '' && !Number.isNaN(n)) onCommit(n);
+        else if (!/^[.,]?$/.test(cleaned)) onCommit(typedValue(cleaned));
       }}
       accessibilityLabel={label}
       keyboardType="decimal-pad"
@@ -114,7 +115,7 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
     [entityResolutionEnabled]
   );
 
-  const { subtotal, computed: computedTotal, delta, savings, reconciled } = receiptTotals(items, tax, tip, currentAmount);
+  const { subtotal, computed: computedTotal, delta, savings, reconciled, unreadable } = receiptTotals(items, tax, tip, currentAmount);
   const [originalOpen, setOriginalOpen] = useState<Record<number, boolean>>({});
 
   const updateItem = (lineNo: number, patch: Partial<ScannedItem>) => {
@@ -146,7 +147,7 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
           <ScrollView style={styles.itemsScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {items.map((item) => {
               const saved = lineDiscount(item);
-              const showOriginal = originalOpen[item.line_no] ?? saved > 0;
+              const showOriginal = originalOpen[item.line_no] ?? (saved > 0 || Number.isNaN(item.original_price));
               const name = item.item_name || 'item';
               return (
               <View key={item.line_no}>
@@ -197,7 +198,11 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
                     value={item.original_price ?? null}
                     allowEmpty
                     label={`Original price for ${name}`}
-                    onCommit={(n) => updateItem(item.line_no, { original_price: n, discount: n == null ? 0 : Math.max(0, n - item.line_total) })}
+                    onCommit={(n) => {
+                      // Stays open while edited: it used to vanish as soon as the typed value implied no saving.
+                      setOriginalOpen((o) => ({ ...o, [item.line_no]: true }));
+                      updateItem(item.line_no, { original_price: n, discount: n == null ? 0 : Math.max(0, n - item.line_total) || 0 });
+                    }}
                   />
                   {saved > 0 && <Text style={[styles.summaryLabel, { color: theme.colors.success }]}>saved {fmt(saved)}</Text>}
                 </View>
@@ -258,7 +263,9 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
             accessibilityRole={reconciled ? undefined : 'alert'}
             accessibilityLiveRegion="polite"
             style={[styles.reconcileText, { color: reconciled ? theme.colors.success : theme.colors.warning }]}>
-            {reconciled
+            {unreadable
+                ? 'Check the item prices: use one decimal mark and no thousands separators.'
+                : reconciled
                 ? 'Matches total'
                 : `Items${tax > 0 || tip > 0 ? ' plus tax and tip' : ''} come to ${fmt(computedTotal)}, ${fmt(Math.abs(delta))} ${delta > 0 ? 'more' : 'less'} than the total. Make them match to save.`}
           </Text>

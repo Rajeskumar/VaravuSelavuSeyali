@@ -1,6 +1,6 @@
 import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Pressable, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Pressable, KeyboardAvoidingView, Platform, useWindowDimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateGroupExpense, getGroupExpenseItems, updateGroupExpenseItems, GroupExpenseRow, MemberDTO, PayerSummaryItem } from '../api/groups';
@@ -13,6 +13,7 @@ import CustomButton from '../../../core/ui/CustomButton';
 import { MAIN_CATEGORIES, CATEGORY_GROUPS, findMainCategory } from '../../expenses/utils/categories';
 import SplitEditor, { SplitEntry as SplitEditorEntry, SplitType } from './SplitEditor';
 import PayerPicker from './PayerPicker';
+import { hasUnreadablePayer, hasUnreadableSplit, UNREADABLE_AMOUNT } from '../utils/splitAmounts';
 import ScannedItemsCard, { ScannedItem } from '../../receipts/components/ScannedItemsCard';
 import TagChipsDisplay from '../../tags/components/TagChipsDisplay';
 import TagPickerModal from '../../tags/components/TagPickerModal';
@@ -143,7 +144,12 @@ export default function EditGroupExpenseModal({
     const amountValue = parseAmount(amount);
     // A misread amount would be saved, and the server would rescale every share to it.
     if (amountValue === null || amountValue <= 0) {
-      showToast({ message: 'Enter an amount greater than 0, like 12.50, without thousands separators', type: 'warning' });
+      // An alert, not a toast: a toast is drawn behind this sheet.
+      Alert.alert('Check the amount', 'Enter an amount greater than 0, like 12.50, without thousands separators.');
+      return;
+    }
+    if (splitTouched && (hasUnreadableSplit({ type: splitType, entries: splitEntries }) || hasUnreadablePayer(payers))) {
+      Alert.alert('Check the amounts', UNREADABLE_AMOUNT);
       return;
     }
     setLoading(true);

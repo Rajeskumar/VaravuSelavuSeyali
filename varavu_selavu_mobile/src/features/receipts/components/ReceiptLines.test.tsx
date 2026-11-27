@@ -4,6 +4,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
 import ReceiptItemsSheet from './ReceiptItemsSheet';
 import { darkTheme } from '../../../core/theme/theme';
+import { receiptTotals } from '../utils/receiptLines';
 
 jest.mock('../../../core/theme/ThemeContext', () => ({
   useAppTheme: () => ({ theme: require('../../../core/theme/theme').darkTheme }),
@@ -51,12 +52,29 @@ describe('ScannedItemsCard (mobile)', () => {
     expect(onChange).toHaveBeenLastCalledWith([expect.objectContaining({ [field]: 15 })]);
   });
 
-  it.each(['1,234.50', '12.345'])('ignores a price that could be read as another amount: %s', (typed) => {
-    const onChange = jest.fn();
-    const { getByLabelText } = render(<ScannedItemsCard theme={darkTheme} items={[milk]} onChange={onChange} currentAmount={8} />);
-    fireEvent.changeText(getByLabelText('Price paid for Milk'), typed);
-    expect(onChange).not.toHaveBeenCalled();
-    expect(getByLabelText('Price paid for Milk').props.value).toBe('8');
+  // Typed key by key, "1,234.50" used to keep 1.23; an original price of 1.23 had no total to catch it.
+  it.each([['Price paid for Milk', 'line_total'], ['Original price for Milk', 'original_price']])('keeps an unclear amount visible in %s and blocks the receipt', (label, field) => {
+    let latest: ScannedItem[] = [milk];
+    const Host = () => {
+      const [items, setItems] = React.useState<ScannedItem[]>([milk]);
+      latest = items;
+      return <ScannedItemsCard theme={darkTheme} items={items} onChange={setItems} currentAmount={8} />;
+    };
+    const { getByLabelText, getByText } = render(<Host />);
+    // Replace the value with the first key (clearing the original price would hide its field), then type on.
+    fireEvent(getByLabelText(label), 'focus'); // as a tap does
+    fireEvent.changeText(getByLabelText(label), '1');
+    for (const key of ',234.50') fireEvent.changeText(getByLabelText(label), `${getByLabelText(label).props.value}${key}`);
+    fireEvent(getByLabelText(label), 'blur');
+    expect(getByLabelText(label).props.value).toBe('1,234.50');
+    expect(Number.isNaN((latest[0] as any)[field])).toBe(true);
+    expect(receiptTotals(latest, 0, 0, 8).reconciled).toBe(false);
+    expect(getByText(/Check the item prices/)).toBeTruthy();
+  });
+
+  it('never counts an unclear price as zero when the rest matches the total', () => {
+    const lines = [milk, { line_no: 2, item_name: 'Bag', line_total: NaN }];
+    expect(receiptTotals(lines, 0, 0, 8).reconciled).toBe(false);
   });
 
   it('drops a minus sign and lists returns for review', () => {

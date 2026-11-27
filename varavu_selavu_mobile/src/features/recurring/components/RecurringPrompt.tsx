@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { todayIso } from '../../expenses/utils/expenseDates';
 import {
     Modal, View, Text, StyleSheet, TouchableOpacity,
-    TextInput, ScrollView, Switch
+    TextInput, ScrollView, Switch, Alert
 } from 'react-native';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
 import { AppTheme } from '../../../core/theme/theme';
@@ -14,10 +14,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { refreshExpenseViews } from '../../expenses/utils/expenseEvents';
 import { setOverlayBusy } from '../../../core/ui/overlayGate';
 import KeyboardLift from '../../../core/ui/KeyboardLift';
+import { parseAmount } from '../../groups/utils/parseAmount';
 
 interface ItemState {
     selected: boolean;
-    cost: number;
+    /** As typed: rewriting it from a number on each key dropped the dot ("12.50" became 1250). */
+    cost: string;
 }
 
 const promptedSessions = new Set<string>();
@@ -46,7 +48,7 @@ export default function RecurringPrompt() {
                     const state: Record<string, ItemState> = {};
                     dueItems.forEach((d) => {
                         const key = `${d.template_id}__${d.date_iso}`;
-                        state[key] = { selected: true, cost: d.suggested_cost };
+                        state[key] = { selected: true, cost: String(Number(d.suggested_cost.toFixed(2))) };
                     });
                     setItems(state);
                     setDue(dueItems);
@@ -79,7 +81,12 @@ export default function RecurringPrompt() {
                 const key = `${d.template_id}__${d.date_iso}`;
                 const it = items[key];
                 if (!it?.selected) continue;
-                const cost = Number(it.cost) || 0;
+                // Empty or zero skips the item, as before; unclear text stops everything so nothing is half-added.
+                const cost = it.cost.trim() ? parseAmount(it.cost) : 0;
+                if (cost === null) {
+                    Alert.alert('Check the amount', `${d.description}: Enter an amount greater than 0, like 12.50, without thousands separators.`);
+                    return;
+                }
                 if (cost <= 0) continue;
                 toSend.push({ template_id: d.template_id, date_iso: d.date_iso, cost });
             }
@@ -101,7 +108,7 @@ export default function RecurringPrompt() {
     };
 
     const updateCost = (key: string, value: string) => {
-        setItems((s) => ({ ...s, [key]: { ...s[key], cost: parseFloat(value) || 0 } }));
+        setItems((s) => ({ ...s, [key]: { ...s[key], cost: value } }));
     };
 
     return (
@@ -136,7 +143,7 @@ export default function RecurringPrompt() {
                                     <TextInput
                                         style={styles.costInput}
                                         keyboardType="numeric"
-                                        value={st?.cost?.toString()}
+                                        value={st?.cost}
                                         onChangeText={noMinus((val) => updateCost(key, val))}
                                     />
                                 </View>

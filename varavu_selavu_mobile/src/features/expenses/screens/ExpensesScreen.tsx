@@ -43,6 +43,7 @@ import ExpenseQuickSheet from '../components/ExpenseQuickSheet';
 import ToggleSwitch from '../../../core/ui/ToggleSwitch';
 import SpendFilterChips from '../components/SpendFilterChips';
 import SplitEditor, { SplitEditorValue } from '../../groups/components/SplitEditor';
+import { hasUnreadableSplit, UNREADABLE_AMOUNT } from '../../groups/utils/splitAmounts';
 import TagPickerModal from '../../tags/components/TagPickerModal';
 import { showToast } from '../../../core/ui/Toast';
 import { ListSkeleton } from '../../../core/ui/SkeletonLoader';
@@ -288,6 +289,10 @@ export default function ExpensesScreen() {
 
     const handleMove = async () => {
         if (!movingExpense || !moveGroupId) return;
+        if (hasUnreadableSplit(moveSplit)) {
+            Alert.alert('Check the amounts', UNREADABLE_AMOUNT);
+            return;
+        }
         setMoving(true);
         try {
             await moveExpenseToGroup(movingExpense.row_id, {
@@ -312,7 +317,8 @@ export default function ExpensesScreen() {
         if (!editingExpense || !accessToken || !userEmail) return;
         const amountValue = parseAmount(editAmount);
         if (amountValue === null || amountValue <= 0) {
-            showToast({ message: 'Enter an amount greater than 0, like 12.50, without thousands separators', type: 'warning' });
+            // An alert, not a toast: a toast is drawn behind this sheet.
+            Alert.alert('Check the amount', 'Enter an amount greater than 0, like 12.50, without thousands separators.');
             return;
         }
         try {
@@ -475,8 +481,12 @@ export default function ExpensesScreen() {
     const saveRecurringEdit = (t: RecurringTemplateDTO) => {
         if (!recEdit) return;
         const day = Math.max(1, Math.min(31, parseInt(recEdit.day_of_month, 10) || t.day_of_month));
-        const cost = parseFloat(recEdit.default_cost) || 0;
-        if (!recEdit.description.trim() || cost <= 0) return;
+        const cost = parseAmount(recEdit.default_cost);
+        if (cost === null || cost <= 0) {
+            Alert.alert('Check the amount', 'Enter an amount greater than 0, like 12.50, without thousands separators.');
+            return;
+        }
+        if (!recEdit.description.trim()) return;
         saveRecurringEditMut.mutate({
             description: recEdit.description.trim(),
             category: recEdit.category,

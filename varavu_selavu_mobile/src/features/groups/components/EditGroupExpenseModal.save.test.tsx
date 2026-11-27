@@ -19,7 +19,10 @@ jest.mock('../../../core/ui/Toast', () => ({ showToast: jest.fn() }));
 jest.mock('./SplitEditor', () => {
   const { Text } = jest.requireActual('react-native');
   return (p: any) => (
-    <Text onPress={() => p.onChange({ type: 'equal', entries: [{ member_id: 'me' }, { member_id: 'bob' }] })}>pick equal</Text>
+    <>
+      <Text onPress={() => p.onChange({ type: 'equal', entries: [{ member_id: 'me' }, { member_id: 'bob' }] })}>pick equal</Text>
+      <Text onPress={() => p.onChange({ type: 'adjustment', entries: [{ member_id: 'me', value: NaN }, { member_id: 'bob', value: 0 }] })}>pick unclear</Text>
+    </>
   );
 });
 jest.mock('../api/groups', () => ({ ...jest.requireActual('../api/groups'), updateGroupExpense: jest.fn(async () => ({})) }));
@@ -45,6 +48,14 @@ const sentBody = async () => {
 beforeEach(() => (updateGroupExpense as jest.Mock).mockClear());
 
 describe('editing a manual group expense (TS-FIX-103)', () => {
+  it('does not save a split with an unclear amount', async () => {
+    mount();
+    fireEvent.press(screen.getByText('pick unclear'));
+    fireEvent.press(screen.getByText('Save Changes'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(updateGroupExpense).not.toHaveBeenCalled();
+  });
+
   it('saves a comma decimal as typed, for keypads that offer only a comma', async () => {
     mount();
     fireEvent.changeText(screen.getByTestId('groupEdit.amount'), '41,25');
