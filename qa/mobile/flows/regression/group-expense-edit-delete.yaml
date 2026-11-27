@@ -1,0 +1,53 @@
+# SCENARIO M-17 regression (TS-QA-106): edit a group expense, delete another from its detail sheet, check balances tab
+# LOGINS: 1
+# Preconditions: fresh verified user; group-expense-edit-delete.seed.py. Assertions: UI below; stored data in group-expense-edit-delete.verify.py.
+# Reset/cleanup: none (own user and data, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "tabs.GroupsTab"
+- extendedWaitUntil:
+    visible: ".*${GROUP_NAME}.*"
+    timeout: 20000
+- tapOn: ".*${GROUP_NAME}.*"
+- extendedWaitUntil:
+    visible: ".*${RUN_LABEL} dinner.*"
+    timeout: 20000
+- tapOn: ".*${RUN_LABEL} dinner.*"
+- scrollUntilVisible:
+    element: "Edit Expense"
+    direction: DOWN
+- tapOn: "Edit Expense"
+- tapOn:
+    id: "groupEdit.amount"
+- eraseText: 10
+- inputText: "41"
+- waitForAnimationToEnd
+- takeScreenshot: group-edit-keypad-open
+# The iOS number pad has no Done key and hideKeyboard leaves it up: close it as a user does, by tapping a label.
+- tapOn: "(?i)merchant / store name"
+- waitForAnimationToEnd
+- tapOn: "Save Changes"
+- extendedWaitUntil:
+    notVisible: "Edit Expense"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*41\\.00.*"
+    timeout: 20000
+- tapOn: ".*${RUN_LABEL} taxi.*"
+- scrollUntilVisible:
+    element: "Delete Expense"
+    direction: DOWN
+- tapOn: "Delete Expense"
+- tapOn: "Confirm Delete"
+- extendedWaitUntil:
+    notVisible: ".*${RUN_LABEL} taxi.*"
+    timeout: 20000
+- tapOn: "Balances"
+- extendedWaitUntil:
+    visible: ".*20\\.50.*"
+    timeout: 20000

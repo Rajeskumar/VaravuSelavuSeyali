@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "TS-QA-106",
+  "title": "Mobile money journeys: Maestro E2E (backlog A2)",
+  "owner": "Product owner",
+  "risk": "standard",
+  "mode": "normal",
+  "phase": "discover",
+  "status": "in_progress",
+  "acceptance_criteria": [],
+  "required_evidence": [],
+  "implementation_approval": null,
+  "links": [],
+  "notes": ""
+}

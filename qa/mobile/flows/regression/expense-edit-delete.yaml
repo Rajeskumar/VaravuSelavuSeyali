@@ -1,0 +1,43 @@
+# SCENARIO M-09 regression (TS-QA-106): edit a personal expense, then delete another (cancel first)
+# LOGINS: 1
+# Preconditions: fresh verified user; expense-edit-delete.seed.py. Assertions: UI below; stored data in expense-edit-delete.verify.py.
+# Reset/cleanup: none (own user and data, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "tabs.Expenses"
+- extendedWaitUntil:
+    visible: ".*${RUN_LABEL} keep.*"
+    timeout: 20000
+- tapOn: ".*${RUN_LABEL} keep.*"
+- tapOn: "Edit"
+- tapOn:
+    id: "expenseEdit.amount"
+- eraseText: 10
+- inputText: "14.75"
+# Save is tapped with the number pad still open: the header must stay on screen and one tap must save (TS-FIX-103).
+- waitForAnimationToEnd
+- takeScreenshot: edit-keypad-open
+- assertVisible: "Edit Transaction"
+- tapOn: "Save Changes"
+- extendedWaitUntil:
+    notVisible: "Edit Transaction"
+    timeout: 20000
+- extendedWaitUntil:
+    visible: ".*14\\.75.*"
+    timeout: 20000
+- tapOn: ".*${RUN_LABEL} drop.*"
+- tapOn: "Delete expense"
+- assertVisible: "Are you sure you want to delete this expense\\?"
+- tapOn: "Cancel"
+- assertVisible: ".*${RUN_LABEL} drop.*"
+- tapOn: ".*${RUN_LABEL} drop.*"
+- tapOn: "Delete expense"
+- tapOn: "Delete"
+- extendedWaitUntil:
+    notVisible: ".*${RUN_LABEL} drop.*"
+    timeout: 20000

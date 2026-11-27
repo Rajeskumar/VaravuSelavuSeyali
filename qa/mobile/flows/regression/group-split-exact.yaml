@@ -1,0 +1,56 @@
+# SCENARIO M-15 regression (TS-QA-106): add a group expense with an exact (non-equal) split from the Add sheet
+# LOGINS: 1
+# Preconditions: fresh verified user; group-split-exact.seed.py. Assertions: UI below; stored data in group-split-exact.verify.py.
+# Reset/cleanup: none (own user and data, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "fab.add"
+- tapOn:
+    id: "addExpense.key.3"
+- tapOn:
+    id: "addExpense.key.0"
+- tapOn:
+    id: "addExpense.description"
+- inputText: "${RUN_LABEL} dinner"
+- pressKey: Enter
+- tapOn: "Just me"
+- tapOn: ".*${GROUP_NAME}.*"
+# The split chip starts off screen to the right of the group chip: scroll the chip row to reach it.
+- waitForAnimationToEnd
+- swipe:
+    from:
+      text: ".*${GROUP_NAME}.*"
+    direction: LEFT
+- extendedWaitUntil:
+    visible: ".*paid · Equal"
+    timeout: 20000
+- tapOn: ".*paid · Equal"
+- tapOn: "Exact"
+- tapOn: "exact for QA Mobile.*"
+- eraseText: 10
+- inputText: "18"
+# No keyboard dismissal on Android: the next field and Done must be reachable with the keyboard open (TS-FIX-103).
+- takeScreenshot: split-keypad-first
+- tapOn: "exact for QA Guest"
+- eraseText: 10
+- inputText: "12"
+- waitForAnimationToEnd
+- takeScreenshot: split-keypad-second
+# The iOS number pad has no Done key and hideKeyboard leaves it up: close it as a user does, by tapping a label.
+- tapOn: "Must add up exactly"
+- waitForAnimationToEnd
+- tapOn: "Done"
+- extendedWaitUntil:
+    visible: ".*paid · Custom"
+    timeout: 10000
+- tapOn:
+    id: "addExpense.save"
+- extendedWaitUntil:
+    visible:
+      id: "addExpense.saved"
+    timeout: 20000

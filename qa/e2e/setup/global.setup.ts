@@ -3,7 +3,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { healthz, ensureUserRegistered } from '../helpers/api.helper';
 import { env } from '../helpers/env';
-import { QA_USERS, QA_SESSION_USER, QA_DISPOSABLE_USER } from '../fixtures/users.fixture';
+import { QA_USERS, QA_SESSION_USER, QA_DISPOSABLE_USER, QA_RESET_USER } from '../fixtures/users.fixture';
 import { RUN_ID } from '../helpers/test-data.helper';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -43,6 +43,7 @@ export default async function globalSetup(): Promise<void> {
   markVerified(Object.values(QA_USERS).map((p) => p.email));
   provisionSessionUser();
   provisionSessionUser(QA_DISPOSABLE_USER);
+  provisionSessionUser(QA_RESET_USER);
 
   fs.mkdirSync(path.dirname(MARKER_PATH), { recursive: true });
   fs.writeFileSync(MARKER_PATH, JSON.stringify({ runId: RUN_ID, at: new Date().toISOString() }));

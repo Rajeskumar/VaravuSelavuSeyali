@@ -1,0 +1,55 @@
+# SCENARIO M-18 regression (TS-QA-106): record a partial payment owed to me, then pay what I owe
+# LOGINS: 1
+# Preconditions: fresh verified user; settle-up.seed.py. Assertions: UI below; stored data in settle-up.verify.py.
+# Reset/cleanup: none (own user and data, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "tabs.GroupsTab"
+- extendedWaitUntil:
+    visible: ".*${OWED_GROUP}.*"
+    timeout: 20000
+- tapOn: ".*${OWED_GROUP}.*"
+- tapOn: "Balances"
+# The guest's balance row (not the "Suggested Transfers" line above it) opens a one-payment sheet.
+- tapOn:
+    text: ".*QA Guest.*"
+    index: 1
+- extendedWaitUntil:
+    visible:
+      id: "settle.amount"
+    timeout: 20000
+# The sheet focuses the pre-filled amount with the cursor at its end (tapping into it can land mid-text on Android).
+- eraseText: 10
+- inputText: "5"
+# With the keyboard open, the title, amount and Record button must all stay visible and usable (TS-FIX-103).
+- tapOn:
+    id: "settle.amount"
+- waitForAnimationToEnd
+- takeScreenshot: settle-amount-entered
+- assertVisible: "Settle up"
+- tapOn: "Record \\$5\\.00 paid"
+- extendedWaitUntil:
+    visible: ".*still owes.*"
+    timeout: 20000
+- tapOn: "Done"
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible: ".*${OWE_GROUP}.*"
+    timeout: 20000
+- tapOn: ".*${OWE_GROUP}.*"
+- extendedWaitUntil:
+    visible: ".*${RUN_LABEL} mine.*"
+    timeout: 20000
+- tapOn: "Settle up"
+- extendedWaitUntil:
+    visible: "Record \\$11\\.00 paid"
+    timeout: 20000
+- tapOn: "Record \\$11\\.00 paid"
+- extendedWaitUntil:
+    notVisible: "Record \\$11\\.00 paid"
+    timeout: 20000

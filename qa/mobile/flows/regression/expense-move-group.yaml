@@ -1,0 +1,29 @@
+# SCENARIO M-10 regression (TS-QA-106): move a personal expense into a group
+# LOGINS: 1
+# Preconditions: fresh verified user; expense-move-group.seed.py. Assertions: UI below; stored data in expense-move-group.verify.py.
+# Reset/cleanup: none (own user and data, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "tabs.Expenses"
+- extendedWaitUntil:
+    visible: ".*${RUN_LABEL} hotel.*"
+    timeout: 20000
+- tapOn: ".*${RUN_LABEL} hotel.*"
+- tapOn: "Move"
+- assertVisible: "Move to Group"
+- tapOn: "${GROUP_NAME}"
+- extendedWaitUntil:
+    visible: "Include QA Guest"
+    timeout: 20000
+- scrollUntilVisible:
+    element: "Move"
+    direction: DOWN
+- tapOn: "Move"
+- extendedWaitUntil:
+    visible: ".*your share.*"
+    timeout: 20000
