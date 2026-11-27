@@ -25,7 +25,7 @@
 
 ## Mobile analytics and crash reporting (TS-GA4-002) — implemented locally (2026-11-25)
 
-🚧 iOS and Android share one Firebase Analytics + Crashlytics layer with the web event catalog: two separate opt-ins (Account → Privacy), screen views, confirmed-write business events, receipt/permission/deep-link events, sanitized crash reports, no advertising ID, collection only in explicitly configured `qa`/`production` builds. Not released: Firebase projects, real-device DebugView and test-crash verification, store disclosures. See [mobile analytics](analytics/mobile.md).
+🚧 iOS and Android share one Firebase Analytics + Crashlytics layer with the web event catalog: two separate opt-ins (Account → Privacy), screen views, confirmed-write business events, receipt/permission/deep-link events, sanitized crash reports, no advertising ID, collection only in explicitly configured `qa`/`production` builds. On 2026-11-26 the owner reported an Android production-configured device smoke test: analytics events arrived, and disabling analytics consent stopped new analytics data. Deeper Android event, crash, privacy and non-production DebugView testing remains open, as do store disclosures and release. See [mobile analytics](analytics/mobile.md).
 
 ## 1. Core Product (Section 3 of the master spec)
 
