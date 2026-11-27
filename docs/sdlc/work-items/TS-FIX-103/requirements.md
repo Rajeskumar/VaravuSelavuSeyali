@@ -21,3 +21,5 @@ Scope added by the owner 2026-11-27 (supersedes those two exclusions and "Mobile
 Added by the owner 2026-11-27 (later the same day): "option A" for typed amounts, AC-007: one mobile reader for Settle up
 and group expense edit. Other mobile money fields are excluded (option B, ROADMAP). Also in scope since the owner's
 "Fix android keyboard bug": modals with text fields stay above the Android keyboard, and split fields stay typeable there.
+
+Added by the owner 2026-11-27: "fix all four" older wrong-amount problems found by the follow-up reviews (AC-008..AC-011).

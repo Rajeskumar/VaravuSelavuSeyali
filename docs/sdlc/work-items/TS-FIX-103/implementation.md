@@ -24,6 +24,14 @@ Status: built 2026-11-27. Requirements: requirements.md; AC text: work-item.json
 - Android keyboard: sheets use `KeyboardAvoidingView` padding (or `KeyboardLift`) and can shrink; Settle up scrolls with
   its action below the scroll area; split fields select a filled value once on focus.
 
+- AC-008: `SettleUpSheet` locks on the first submit (a ref, so two taps before a re-render count once) and keeps the
+  lock after success until the sheet is opened again; the button is disabled outside the review stage.
+  An unknown outcome (`RequestError.outcomeUnknown`) keeps the lock, refetches, closes and shows an alert. Dismissal is
+  off while sending. `openSettleSheet` refuses while balances are fetching or in error.
+- AC-009 / AC-011: keystroke fields turn a comma into a dot before the existing two-decimal check; text that fails it is
+  ignored. Receipt prices keep dropping minus signs and currency symbols.
+- AC-010: `ExpensesScreen` edit uses `parseAmount` for both PUTs, the card picker and the receipt check.
+
 ## Risks and safeguards
 Money: direction and amount come only from server transfers; the user still confirms. No schema, auth or API change.
 Omitting the split must not reset a custom split: covered by server carry-over (existing backend tests) and the native flow's stored-data check.

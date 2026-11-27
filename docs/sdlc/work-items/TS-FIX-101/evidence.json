@@ -94,11 +94,11 @@
     {
       "id": "n4-regression",
       "status": "passed",
-      "snapshot": "b766d6dde44220707e55ab799f45768b94402744ff4fe36871264bd9022367be",
-      "environment": "Local macOS, worktree on qa-coverage-extend (committed tree at 3e924e3); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "pytest -q tests/test_receipt_split_by_total.py: 35 passed, including test_receipt_items_must_match_amount (amount 100 with one item of 10 is refused with 400 and nothing is stored). Fixed by TS-FIX-102. All rerun on the committed tree with the same results.",
+      "snapshot": "b54f7c2809bd880e34f6dfed95b52d766d36db56d8cb183e624ba49020d5a59c",
+      "environment": "Local macOS, worktree on qa-coverage-extend (a55bba1 plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "pytest -q tests/test_receipt_split_by_total.py: 35 passed, including test_receipt_items_must_match_amount.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T20:33:42.737181+00:00",
+      "recorded_at": "2026-11-27T21:17:22.405580+00:00",
       "acceptance_criteria": []
     }
   ]

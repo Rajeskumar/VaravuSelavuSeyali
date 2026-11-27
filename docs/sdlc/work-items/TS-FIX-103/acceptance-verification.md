@@ -30,3 +30,12 @@
 - AC-007 scope: the main amount field of Settle up and group edit. Split and payer fields inside group edit still drop a comma (ROADMAP); it is not claimed there. No device test with a comma keypad.
 - Follow-up reviews of everything after 6273a20: code PASS, security PASS, UI earlier P1 resolved (iOS screenshot and code; Android by code), no P0/P1. After them one line changed (`nestedScrollEnabled` on the Move to group list), not re-reviewed or device-tested. Older wrong-amount findings are in ROADMAP for an owner decision.
 - Not run on this version: native flows (full or targeted) and real devices. AC-004 rests on an iOS flow from before the review fixes.
+
+## Four older wrong-amount fixes (AC-008..011), 2026-11-27
+
+- Failing first: 2,50 became 250 and 20,50 became 2050; two records for one payment and four for a two-payment list; unclear personal-edit amounts saved; receipt comma misread. Then six more cases for the security finding: retry after an unknown outcome, dismissal while sending, opening from outdated balances.
+- Mobile Jest 730/730, tsc.
+- Reviews: code approve, UI pass, security BLOCKED (P1: retry after an unknown outcome), fixed; security re-check PASS. Code and UI re-checks cover the later changes.
+- Native, targeted, with a temporary comma-typing edit of the flows (reverted): Android and iOS expense-edit-delete (`14,75`), settle-up (`5,00`) and group-split-exact (`18,00`, `12,00`) passed with stored-data checks. This is also the AC-004 iOS flow.
+- After those device runs one line changed (the warning points at Activity, so Activity is now refreshed too; failing test first). Mobile Jest 731/731.
+- Not run: full native suites, receipt price typing, double tap, unknown outcome and the alert on a device, real devices.
