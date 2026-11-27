@@ -8,6 +8,12 @@ export function addsUpTo(total: number, target: number): boolean {
   return Math.abs(total - target) < 1e-9;
 }
 
+/**
+ * A comma typed as the decimal mark becomes a dot before the check below. Refusing the keystroke instead left the digits
+ * typed after it to be appended: "2,50" became 250.
+ */
+export const withDecimalDot = (text: string) => text.replace(/,/g, '.');
+
 /** What a split or payer field accepts while typing: at most two decimals, like the server. */
 export const TWO_DECIMALS = /^\d*\.?\d{0,2}$/;
 

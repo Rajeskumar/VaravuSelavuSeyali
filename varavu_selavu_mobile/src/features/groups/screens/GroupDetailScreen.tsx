@@ -169,6 +169,12 @@ export default function GroupDetailScreen() {
   // down, after those guards) so the new auto-open effect right below it — which must run
   // unconditionally on every render per the Rules of Hooks — can reference it.
   const openSettleSheet = (payment: BalanceTransfer, list: BalanceTransfer[] | null) => {
+    // Just after a payment, balances on screen can still include it: never pre-fill from anything not current.
+    if (balancesFetching || balancesFailed) {
+      if (balancesFailed) refetchBalances();
+      showToast({ message: 'Balances are updating. Try again in a moment.', type: 'info' });
+      return;
+    }
     setSettleTransfers(list);
     setSettleFrom(payment.from_member_id);
     setSettleTo(payment.to_member_id);
@@ -521,6 +527,7 @@ export default function GroupDetailScreen() {
         onSettled={() => {
           qc.invalidateQueries({ queryKey: ['group-balances', groupId] });
           qc.invalidateQueries({ queryKey: ['group-expenses', groupId] });
+          qc.invalidateQueries({ queryKey: ['group-activity', groupId] });
           // Groups list, People tab and Home's "owed to you" also show these balances.
           qc.invalidateQueries({ queryKey: ['groups'] });
           qc.invalidateQueries({ queryKey: ['friend-balances'] });

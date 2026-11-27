@@ -5,7 +5,7 @@ import { AppTheme } from '../../../core/theme/theme';
 import { MemberDTO, PayerSummaryItem } from '../api/groups';
 import { memberColor } from './BalanceRow';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
-import { addsUpTo, amountText, TWO_DECIMALS } from '../utils/splitAmounts';
+import { addsUpTo, amountText, TWO_DECIMALS, withDecimalDot } from '../utils/splitAmounts';
 
 interface Props {
   amount: number;
@@ -61,7 +61,8 @@ export default function PayerPicker({
 
   const [typed, setTyped] = React.useState<Record<string, string>>({});
 
-  const updateAmount = (memberId: string, valStr: string) => {
+  const updateAmount = (memberId: string, typedText: string) => {
+    const valStr = withDecimalDot(typedText);
     if (!TWO_DECIMALS.test(valStr)) return;
     setTyped((prev) => ({ ...prev, [memberId]: valStr }));
     const num = parseFloat(valStr) || 0;

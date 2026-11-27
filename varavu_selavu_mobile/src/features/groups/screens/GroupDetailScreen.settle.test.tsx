@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import GroupDetailScreen from './GroupDetailScreen';
 import { getGroupDetail, listGroupExpenses, getGroupBalances } from '../api/groups';
@@ -23,7 +23,8 @@ jest.mock('../../../core/ui/Toast', () => ({ showToast: jest.fn() }));
 jest.mock('../components/SettleUpSheet', () => {
   const { Text } = jest.requireActual('react-native');
   return (p: any) => (p.visible ? (
-    <Text>{`sheet ${p.fromMemberId}>${p.toMemberId} ${p.suggestedAmount}${p.transfers ? ` list ${p.transfers.length}` : ''}`}</Text>
+    // Pressing the stand-in reports that something may have been recorded.
+    <Text onPress={p.onSettled}>{`sheet ${p.fromMemberId}>${p.toMemberId} ${p.suggestedAmount}${p.transfers ? ` list ${p.transfers.length}` : ''}`}</Text>
   ) : null);
 });
 jest.mock('../components/GroupSettingsSheet', () => () => null);
@@ -153,6 +154,44 @@ describe('the Settle up button and my own row (TS-FIX-103)', () => {
     await settleButton();
     expect(screen.queryByText(/^sheet /)).toBeNull();
     expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ message: 'You have nothing to settle in this group' }));
+  });
+});
+
+// Just after a payment the cached transfers still include it; offering them could record it twice (AC-008).
+describe('settle up while balances are not current (TS-FIX-103)', () => {
+  const old = {
+    members: [balance('me', 'Ada', 99), balance('bob', 'Bob', -99), balance('cy', 'Cy', 0)],
+    transfers: [{ from_member_id: 'bob', to_member_id: 'me', amount: 99 }],
+  };
+  const expectBlocked = () => {
+    expect(screen.queryByText(/^sheet /)).toBeNull();
+    expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ message: 'Balances are updating. Try again in a moment.' }));
+  };
+
+  it('opens nothing by hand while balances are refreshing', async () => {
+    mount([['bob', 'me', 15]], [15, -15, 0], old);
+    await tapRow('Owes $99.00');
+    expectBlocked();
+  });
+
+  // The balances query retries twice before it reports the failure.
+  it('opens nothing by hand from old balances after the refresh failed', async () => {
+    mount([['bob', 'me', 15]], [15, -15, 0], old, 'active', true);
+    await act(async () => { await new Promise((r) => setTimeout(r, 3800)); });
+    await tapRow('Owes $99.00');
+    expectBlocked();
+  }, 15000);
+});
+
+describe('after a payment that was, or may have been, recorded (TS-FIX-103)', () => {
+  // The "check before recording again" alert points at Activity, which is otherwise cached for five minutes.
+  it('refreshes balances and activity', async () => {
+    mount([['bob', 'me', 15]], [15, -15, 0]);
+    await tapRow('Owes $15.00');
+    const invalidate = jest.spyOn(client, 'invalidateQueries');
+    await act(async () => { fireEvent.press(await screen.findByText('sheet bob>me 15')); });
+    const keys = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+    expect(keys).toEqual(expect.arrayContaining([JSON.stringify(['group-balances', 'g1']), JSON.stringify(['group-activity', 'g1'])]));
   });
 });
 

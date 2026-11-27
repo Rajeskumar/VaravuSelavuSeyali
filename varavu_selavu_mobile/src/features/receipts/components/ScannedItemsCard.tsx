@@ -6,6 +6,7 @@ import { suggestItems } from '../api/entityResolution';
 import { useEntityResolutionEnabled } from '../hooks/useEntityResolutionEnabled';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
 import { ReceiptLine, ReceiptReviewLine, lineDiscount, receiptTotals } from '../utils/receiptLines';
+import { TWO_DECIMALS, withDecimalDot } from '../../groups/utils/splitAmounts';
 
 /** A receipt line being reviewed: `line_total` is the paid price (TS-FIX-102). */
 export interface ScannedItem extends ReceiptLine {
@@ -35,6 +36,15 @@ function fmt(n: number): string {
 }
 
 /**
+ * The price text to keep, or null to ignore the edit. Minus signs and symbols are dropped (TS-FIX-101/102); a comma is
+ * the decimal mark, never removed ("15,00" became 1500); anything with two marks or three decimals is ignored.
+ */
+function priceText(typed: string): string | null {
+  const text = withDecimalDot(typed.replace(/[^0-9.,]/g, ''));
+  return TWO_DECIMALS.test(text) ? text : null;
+}
+
+/**
  * Price field for one scanned item. Not a plain controlled TextInput bound to
  * `item.line_total` — coercing the text to a Number() on every keystroke drops a trailing
  * "." the instant it's typed (Number("5.") === 5, redisplayed as "5"), so typing "5.98"
@@ -60,13 +70,13 @@ const ItemPriceInput: React.FC<{
       onBlur={() => {
         focused.current = false;
         if (allowEmpty && text.trim() === '') { onCommit(null); return; }
-        // No minus values on receipts (TS-FIX-101/102): the minus sign isn't accepted at all.
-        const n = Number(text.replace(/[^0-9.]/g, '')) || 0;
+        const n = Number(text) || 0;
         setText(String(n));
         onCommit(n);
       }}
       onChangeText={(t) => {
-        const cleaned = t.replace(/[^0-9.]/g, '');
+        const cleaned = priceText(t);
+        if (cleaned === null) return;
         setText(cleaned);
         const n = Number(cleaned);
         if (cleaned === '' && allowEmpty) onCommit(null);

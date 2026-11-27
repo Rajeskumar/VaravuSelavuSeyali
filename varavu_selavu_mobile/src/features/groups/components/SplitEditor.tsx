@@ -11,7 +11,7 @@ import { AppTheme, inkOnPastel } from '../../../core/theme/theme';
 import { MemberDTO } from '../api/groups';
 import { memberColor } from './BalanceRow';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
-import { addsUpTo, amountText, distributeCents, TWO_DECIMALS } from '../utils/splitAmounts';
+import { addsUpTo, amountText, distributeCents, TWO_DECIMALS, withDecimalDot } from '../utils/splitAmounts';
 
 export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
 
@@ -154,8 +154,9 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
     pendingSelect.current = setTimeout(() => inputs.current[memberId]?.setSelection(0, text.length), 150);
   };
 
-  const updateEntryValue = (memberId: string, valStr: string) => {
+  const updateEntryValue = (memberId: string, typedText: string) => {
     cancelSelect(); // typing already started: never select what is being typed
+    const valStr = withDecimalDot(typedText);
     // No minus sign, adjustments included, until the server refuses negative shares (ROADMAP).
     if (!TWO_DECIMALS.test(valStr)) return;
     setTyped((prev) => ({ ...prev, [memberId]: valStr }));

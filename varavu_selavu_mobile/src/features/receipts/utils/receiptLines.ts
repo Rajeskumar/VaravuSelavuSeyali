@@ -63,7 +63,7 @@ export function fromServerLine(it: any, idx: number): ReceiptLine {
     item_name: it.item_name || it.normalized_name || 'Item',
     line_total: paid,
     discount,
-    original_price: it.original_price != null ? Number(it.original_price) : discount ? paid + discount : null,
+    original_price: it.original_price != null ? Number(it.original_price) : discount ? Math.round((paid + discount) * 100) / 100 : null,
     quantity: it.quantity != null ? Number(it.quantity) : null,
     unit_price: it.unit_price != null ? Number(it.unit_price) : null,
     normalized_name: it.normalized_name || undefined,

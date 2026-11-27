@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  Alert,
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,6 +31,7 @@ import { memberColor, initialsFromName } from './BalanceRow';
 import { venmoLink, paypalMeLink, upiLink } from '../utils/paymentDeepLinks';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
 import { parseAmount } from '../utils/parseAmount';
+import { RequestError } from '../../../core/api/request';
 
 type Stage = 'review' | 'settling' | 'done';
 
@@ -93,6 +95,9 @@ export default function SettleUpSheet({
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const bodyRef = useRef<ScrollView>(null);
+  // Held from the first tap until the sheet is opened again, or the server refuses the attempt, so one opening sends a
+  // payment once. A ref, because a second tap can arrive before the button has re-rendered as disabled.
+  const submitted = useRef(false);
   const { userEmail } = useAuth();
 
   const [amount, setAmount] = useState(
@@ -143,6 +148,7 @@ export default function SettleUpSheet({
 
   React.useEffect(() => {
     if (visible) {
+      submitted.current = false;
       const initial = suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '';
       setAmount(initial);
       setStage('review');
@@ -156,6 +162,21 @@ export default function SettleUpSheet({
     if (stage === 'review') setDisplayValue(typedAmount);
   }, [typedAmount, stage, setDisplayValue]);
 
+  // No dismissal while a payment is on its way: its result must land on this opening.
+  const sending = loading || stage === 'settling';
+  const dismiss = sending ? undefined : onClose;
+
+  // A timeout, lost connection or 5xx may still have saved the payment (the app never replays such a write), so it is
+  // not offered again: balances are refetched and the person checks first.
+  const checkBeforeRetry = (recorded = 0) => {
+    onSettled();
+    onClose();
+    Alert.alert(
+      'Check before recording again',
+      `${recorded > 0 ? `${recorded} of ${transfers?.length} were recorded. ` : ''}We couldn't confirm that the ${recorded > 0 ? 'next ' : ''}payment was saved. Check this group's balances and activity before you record it again.`,
+    );
+  };
+
   const handleSubmit = async () => {
     const parsedAmount = typedAmount;
     if (!fromMemberId || !toMemberId) {
@@ -166,6 +187,8 @@ export default function SettleUpSheet({
       showToast({ message: 'Enter an amount like 12.50, without thousands separators', type: 'warning' });
       return;
     }
+    if (submitted.current) return;
+    submitted.current = true;
     setLoading(true);
     setStage('settling');
     try {
@@ -180,7 +203,12 @@ export default function SettleUpSheet({
       onSettled();
       runFrom(owedBefore ?? parsedAmount, () => setStage('done'), left === null ? parsedAmount : Math.max(left, 0));
     } catch (e: any) {
+      if (e instanceof RequestError && e.outcomeUnknown) {
+        checkBeforeRetry();
+        return;
+      }
       showToast({ message: e.message ?? 'Failed to record settlement', type: 'error' });
+      submitted.current = false;
       setStage('review');
     } finally {
       setLoading(false);
@@ -190,7 +218,8 @@ export default function SettleUpSheet({
   // List mode: record every transfer in order. Stops at the first failure so nothing is recorded
   // twice on retry — the ones already recorded drop out of the group's suggested transfers.
   const handleRecordAll = async () => {
-    if (!transfers || loading) return;
+    if (!transfers || submitted.current) return;
+    submitted.current = true;
     setLoading(true);
     let recorded = 0;
     try {
@@ -207,12 +236,18 @@ export default function SettleUpSheet({
       onSettled();
       onClose();
     } catch (e: any) {
+      if (e instanceof RequestError && e.outcomeUnknown) {
+        checkBeforeRetry(recorded);
+        return;
+      }
       if (recorded > 0) onSettled();
       showToast({
         message: recorded > 0 ? `Recorded ${recorded} of ${transfers.length}; the rest failed` : (e.message ?? 'Failed to record settlement'),
         type: 'error',
       });
       if (recorded > 0) onClose();
+      // Only an attempt that recorded nothing can be repeated from this sheet.
+      else submitted.current = false;
     } finally {
       setLoading(false);
     }
@@ -227,19 +262,19 @@ export default function SettleUpSheet({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={() => dismiss?.()}
       statusBarTranslucent
     >
       <KeyboardAvoidingView
         behavior="padding"
         style={[styles.overlay, { paddingTop: insets.top }]}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} accessible={false} />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={stage === 'settling' ? undefined : onClose}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessible={false} />
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={dismiss}>
           <View style={styles.pill} />
           <View style={styles.titleRow}>
             <Text style={styles.title}>Settle up</Text>
-            {stage !== 'settling' && (
+            {!sending && (
               <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
                 <Ionicons name="close" size={16} color={theme.colors.textSecondary} />
               </Pressable>
@@ -386,7 +421,7 @@ export default function SettleUpSheet({
             <CustomButton
               title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record ${formatCurrency(parsedAmountForLinks)} paid` : 'Record payment'}
               onPress={handleSubmit}
-              disabled={loading}
+              disabled={loading || stage !== 'review'}
             />
           )}
         </View>

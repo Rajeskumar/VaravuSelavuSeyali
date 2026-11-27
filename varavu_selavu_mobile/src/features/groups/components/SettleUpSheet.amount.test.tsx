@@ -1,5 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert, Modal } from 'react-native';
+import { RequestError } from '../../../core/api/request';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import SettleUpSheet from './SettleUpSheet';
 import { recordSettlement } from '../api/groups';
 
@@ -18,6 +20,76 @@ const members: any = [
   { member_id: 'me', display_name: 'Ada', user_email: 'ada@example.com', status: 'active' },
   { member_id: 'bob', display_name: 'Bob', status: 'active' },
 ];
+// One opening records each payment once: a second tap would over-settle the balance (AC-008).
+describe('recording a settle-up payment once (TS-FIX-103)', () => {
+  const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+
+  it('ignores another tap while the saved payment is still animating', async () => {
+    type('20');
+    fireEvent.press(screen.getByText('Record $20.00 paid'));
+    await settle();
+    fireEvent.press(screen.getByText('Settling…'));
+    await settle();
+    expect(recordSettlement).toHaveBeenCalledTimes(1);
+  });
+
+  it('can be retried after a failed attempt', async () => {
+    (recordSettlement as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    type('20');
+    fireEvent.press(screen.getByText('Record $20.00 paid'));
+    await settle();
+    fireEvent.press(screen.getByText('Record $20.00 paid'));
+    await settle();
+    expect(recordSettlement).toHaveBeenCalledTimes(2);
+  });
+
+  // A timeout or 5xx may have been saved, so offering the same payment again could record it twice (AC-008).
+  it.each(['single', 'list'])('offers no retry when the outcome is unknown, and asks for a check (%s)', async (mode) => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (recordSettlement as jest.Mock).mockRejectedValueOnce(new RequestError('The request timed out.', true));
+    const onClose = jest.fn();
+    const onSettled = jest.fn();
+    const transfers = mode === 'list' ? [{ from_member_id: 'me', to_member_id: 'bob', amount: 20 }] : undefined;
+    render(<SettleUpSheet visible groupId="g1" members={members} balances={[]} fromMemberId="bob" toMemberId="me" suggestedAmount={20}
+      transfers={transfers} onClose={onClose} onSettled={onSettled} />);
+    fireEvent.press(screen.getByText('Record $20.00 paid'));
+    await settle();
+    const again = screen.queryByText('Record $20.00 paid');
+    if (again) fireEvent.press(again);
+    await settle();
+    expect(recordSettlement).toHaveBeenCalledTimes(1);
+    expect(onSettled).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith('Check before recording again', expect.any(String));
+    alert.mockRestore();
+  });
+
+  it.each(['single', 'list'])('cannot be dismissed while the payment is being sent (%s)', async (mode) => {
+    let finish = () => {};
+    (recordSettlement as jest.Mock).mockImplementationOnce(() => new Promise<void>((r) => { finish = r; }));
+    const onClose = jest.fn();
+    const transfers = mode === 'list' ? [{ from_member_id: 'me', to_member_id: 'bob', amount: 20 }] : undefined;
+    render(<SettleUpSheet visible groupId="g1" members={members} balances={[]} fromMemberId="bob" toMemberId="me" suggestedAmount={20}
+      transfers={transfers} onClose={onClose} onSettled={jest.fn()} />);
+    fireEvent.press(screen.getByText('Record $20.00 paid'));
+    fireEvent(screen.UNSAFE_getByType(Modal), 'requestClose');
+    const close = screen.queryByLabelText('Close');
+    if (close) fireEvent.press(close);
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => { finish(); });
+  });
+
+  it('records a list once, even if tapped again before the sheet has closed', async () => {
+    const transfers = [{ from_member_id: 'me', to_member_id: 'bob', amount: 4 }, { from_member_id: 'me', to_member_id: 'bob', amount: 6 }];
+    render(<SettleUpSheet visible groupId="g1" members={members} balances={[]} transfers={transfers} onClose={jest.fn()} onSettled={jest.fn()} />);
+    fireEvent.press(screen.getByText('Record $10.00 paid'));
+    await settle();
+    fireEvent.press(screen.getByText('Record $10.00 paid'));
+    await settle();
+    expect(recordSettlement).toHaveBeenCalledTimes(2);
+  });
+});
+
 const type = (text: string) => {
   render(
     <SettleUpSheet visible groupId="g1" members={members} balances={[]} fromMemberId="bob" toMemberId="me" suggestedAmount={20}

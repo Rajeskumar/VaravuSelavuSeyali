@@ -10,6 +10,7 @@
  * editing those happens in GroupDetailScreen; tapping one navigates there instead).
  */
 import { noMinus } from '../utils/noMinus';
+import { parseAmount } from '../../groups/utils/parseAmount';
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, Modal, Platform, ScrollView, Pressable, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -309,16 +310,16 @@ export default function ExpensesScreen() {
 
     const saveEdit = async () => {
         if (!editingExpense || !accessToken || !userEmail) return;
-        const amountValue = parseFloat(editAmount);
-        if (!Number.isFinite(amountValue) || amountValue <= 0) {
-            showToast({ message: 'Enter an amount greater than 0', type: 'warning' });
+        const amountValue = parseAmount(editAmount);
+        if (amountValue === null || amountValue <= 0) {
+            showToast({ message: 'Enter an amount greater than 0, like 12.50, without thousands separators', type: 'warning' });
             return;
         }
         try {
             if (editItemsLoaded && editItems.length > 0) {
                 await updateExpenseItems(editingExpense.row_id, {
                     items: editItems.map((it, idx) => toSaveLine(it, idx)),
-                    amount: parseFloat(editAmount) || 0,
+                    amount: amountValue,
                     tax: editItemsTax,
                     tip: editItemsTip,
                 });
@@ -327,7 +328,7 @@ export default function ExpensesScreen() {
                 editingExpense.row_id,
                 {
                     description: editDescription,
-                    cost: parseFloat(editAmount),
+                    cost: amountValue,
                     category: editSubcategory,
                     date: editDate,
                     sub_category: editSubcategory,
@@ -837,7 +838,7 @@ export default function ExpensesScreen() {
                                 tax={editItemsTax}
                                 tip={editItemsTip}
                                 legacyFormat={editLegacyFormat}
-                                currentAmount={parseFloat(editAmount) || 0}
+                                currentAmount={parseAmount(editAmount) ?? 0}
                             />
                         )}
 
@@ -878,7 +879,7 @@ export default function ExpensesScreen() {
                                 <CustomButton
                                     title="Save Changes"
                                     onPress={saveEdit}
-                                    disabled={editItemsLoaded && editItems.length > 0 && !receiptTotals(editItems, editItemsTax, editItemsTip, parseFloat(editAmount) || 0).reconciled}
+                                    disabled={editItemsLoaded && editItems.length > 0 && !receiptTotals(editItems, editItemsTax, editItemsTip, parseAmount(editAmount) ?? 0).reconciled}
                                     fullWidth={false}
                                     style={{ flex: 1 }}
                                 />

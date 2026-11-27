@@ -42,6 +42,23 @@ describe('ScannedItemsCard (mobile)', () => {
     expect(onChange).toHaveBeenLastCalledWith([expect.objectContaining({ line_total: 8, original_price: 9.5, discount: 1.5 })]);
   });
 
+  // The comma used to be stripped, so "15,00" became 1500 (TS-FIX-103, AC-011).
+  it.each([['Price paid for Milk', 'line_total'], ['Original price for Milk', 'original_price']])('reads a comma decimal in %s', (label, field) => {
+    const onChange = jest.fn();
+    const { getByLabelText } = render(<ScannedItemsCard theme={darkTheme} items={[milk]} onChange={onChange} currentAmount={8} />);
+    fireEvent.changeText(getByLabelText(label), '15,00');
+    fireEvent(getByLabelText(label), 'blur');
+    expect(onChange).toHaveBeenLastCalledWith([expect.objectContaining({ [field]: 15 })]);
+  });
+
+  it.each(['1,234.50', '12.345'])('ignores a price that could be read as another amount: %s', (typed) => {
+    const onChange = jest.fn();
+    const { getByLabelText } = render(<ScannedItemsCard theme={darkTheme} items={[milk]} onChange={onChange} currentAmount={8} />);
+    fireEvent.changeText(getByLabelText('Price paid for Milk'), typed);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(getByLabelText('Price paid for Milk').props.value).toBe('8');
+  });
+
   it('drops a minus sign and lists returns for review', () => {
     const onChange = jest.fn();
     const { getByLabelText, getByText } = render(
