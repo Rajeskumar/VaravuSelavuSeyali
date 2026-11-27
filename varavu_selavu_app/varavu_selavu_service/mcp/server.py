@@ -94,7 +94,7 @@ REGISTRY = {
         "expenses:create",
         schemas.VerifyExpense,
         operations.verify,
-        "Validate an expense and return a browser approval link. Show the preview and ask the user to approve in TrackSpense. This does not save.",
+        "Validate an expense and return a browser approval link. Show the preview and ask the user to approve in TrackSpense. This does not save. For receipts, each item line_total is the price actually paid (after its own coupon, recorded in discount); item prices plus tax and tip must equal total within 0.02. A whole-receipt discount is divided across the items by price. Never send negative lines; leave returns and refunds out.",
     ),
     "save_expense": (
         "expenses:create",

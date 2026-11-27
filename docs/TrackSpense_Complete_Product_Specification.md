@@ -64,7 +64,7 @@ It ships as three clients over one backend:
 |:---|:---|
 | **Capture in seconds** | Keypad-first quick capture, a type-to-log bar that parses "coffee 6.75 at Blue Bottle", AI receipt scanning with line items, AI auto-categorization, recurring templates. |
 | **Understand** | Dashboard with six-month history, category breakdown, "what changed" insights, per-item price history, merchant insights, budgets with projected pace. |
-| **Share & settle** | Groups with equal/exact/percent/shares/adjustment/itemized splits, multi-payer, multi-currency, simplified debts, settlements, comments, push notifications. |
+| **Share & settle** | Groups with equal/exact/percent/shares/adjustment splits (receipts: equal/exact/shares on the total), multi-payer, multi-currency, simplified debts, settlements, comments, push notifications. |
 | **Ask** | A tool-calling AI analyst that answers from the user's real data and can log expenses on request. Every answer states the period and scope it looked at. |
 | **Optimize** | Budgets, and Card Coach — which credit card would have earned the most on each category/merchant. |
 | **Trust** | Money is `Decimal`, never float; HttpOnly-cookie sessions with CSRF; rate limits; sanitized input; a QA framework and a dependency-audit gate in CI. |
@@ -120,7 +120,7 @@ It ships as three clients over one backend:
 | R14 | An AI write action can only ever act on the authenticated user's own ledger; the agent's tools close over the caller's identity. |
 | R15 | **Expense date window (2026-11-22).** An expense a person enters can't be future-dated (use Recurring for upcoming bills) and can't be dated more than one year back; one day of slack either side covers timezones. Enforced in the pickers, the REST API (422), AI chat tools and MCP. Editing an existing expense may keep an older stored date; recurring auto-add is exempt. Revisit later (ROADMAP). |
 | R16 | **Concurrent edits: last write wins.** Two people editing the same expense (or one person in two tabs) is not detected; the later save replaces the earlier one. |
-| R17 | **Itemized totals must reconcile.** Items + tax + tip − discount must equal the expense total (±2¢). The UI shows how far off the items are and disables Save; the API returns 400. |
+| R17 | **Receipt totals must match (TS-FIX-102).** Paid line prices + tax + tip must equal the expense total (±2¢) on every receipt save path (personal, group, item edits, MCP); discounts are already in the line prices and are never subtracted again. The UI shows how far off the items are and disables Save; the API returns 400 (`totals_mismatch`). A receipt needs at least one line. |
 
 ---
 
@@ -149,8 +149,8 @@ Legend — **Web / Mobile**: ✅ shipped · — not applicable. **Flag** is the 
 | **Quick Capture** | The single fast-entry surface on both clients. Mobile: a bottom sheet with a numeric keypad — amount, one description, then Save; category is AI-suggested and, with date, "More" (merchant, card, repeat-monthly) sit behind chips. Web: a shared `QuickCaptureSheet` (bottom sheet on small screens, dialog on desktop) opened from the header "+ New expense", the mobile FAB, the Expenses page, or a group's own "Add expense" (pre-scoped to that group). |
 | **Type-to-log bar** | A one-line input (`"coffee 6.75 at Blue Bottle"`, optionally naming a group/split) parsed client-side by `quickLogParse`; a clean parse saves directly (personal or group), a question routes to the AI Analyst, anything else falls back to the full capture sheet. Shows a "Will log…" preview. |
 | **AI categorization** | `POST /expenses/categorize` asks the LLM for `(main, sub, merchant)` and **validates** it against the taxonomy (§14); on any failure it falls back to `Other / General`. |
-| **Receipt scan** | Image (PNG/JPEG; web also converts HEIC with an on-demand converter) or PDF, max **12 MB**, content type verified by magic bytes. The OCR engine (`hybrid` by default: on-server RapidOCR plus a rule parser, asking Gemini only when the parse is unsure; on mobile, on-device OCR sends only the text) returns a header (merchant, date, totals, tax/tip/discount, category) plus line items with normalized names. Nothing is saved until the user reviews and confirms. Repeat scans are detectable by `fingerprint`. |
-| **Itemized expenses** | `POST /expenses/with_items` stores line items (`expense_items`) that feed item-price history; items can be edited after saving (`PUT /expenses/{id}/items`). Group expenses can be itemized and assigned per person (§3.6). |
+| **Receipt scan** | Image (PNG/JPEG; web also converts HEIC with an on-demand converter) or PDF, max **12 MB**, content type verified by magic bytes. The OCR engine (`hybrid` by default: on-server RapidOCR plus a rule parser, asking Gemini only when the parse is unsure; on mobile, on-device OCR sends only the text) returns a header (merchant, date, total, tax, tip, `savings`, category) plus line items with normalized names. Scanner output is converted by `services/receipt_lines.py` (TS-FIX-102): a coupon line is folded into the line above (or divided by price when there is no line above or it is larger), a whole-receipt discount is divided by price, no line is negative, and returns/refunds are left out and listed in `review`. Nothing is saved until the user reviews and confirms. Repeat scans are detectable by `fingerprint`. |
+| **Itemized expenses** | `POST /expenses/with_items` stores line items (`expense_items`) that feed item-price history; items can be edited after saving (`PUT /expenses/{id}/items`). Each line keeps its **paid** price (`line_total`, shown everywhere), `discount` (a record) and `original_price`; `unit_price` is the paid price per unit, so price history uses paid prices. The request header must not carry a `discount` (refused as the old format, `app_update_required`); tax and tip are kept. Group receipts are split on their **total** (§3.6), never per item (TS-FIX-102). |
 | **Browse / search / filter** | Combined feed of personal and group rows; month, free-text search, tag filter and scope (personal / groups / combined). Edit, delete, and *move to group* (§3.6). |
 | **Expense detail** | Personal detail with merchant, split, tags, receipt info and card; the mobile sheet adds an **"above your usual"** note when an amount is ≥1.5× the mean of at least three other expenses at the same merchant (a client-side heuristic over loaded rows). |
 | **Card attribution** | An optional card per expense (§3.8) so Card Coach can compute *actual* earnings. |
@@ -203,13 +203,12 @@ A LangGraph **ReAct tool-calling agent** (§11.3) that answers from the user's d
 
 | Feature | Detail |
 |:---|:---|
-| Split types | `equal`, `exact`, `percentage`, `shares` (proportional), `adjustment` (fixed offsets), and **itemized** (per-line-item member ratios). Always cent-exact (R10). |
+| Split types | `equal`, `exact`, `percentage`, `shares` (proportional), `adjustment` (fixed offsets). Always cent-exact (R10). **Receipts** (group expenses with lines) use only `equal` (default), `exact` or `shares` on the total; lines are for tracking only (TS-FIX-102). Older receipts saved as `itemized` keep their stored shares while the amount is unchanged; changing an Exact or `itemized` receipt's amount needs a new split (`split_required`). Requests carrying item `member_ratios` are refused with `app_update_required`. |
 | Payers | One or many payers per expense; payer amounts must sum to the total. |
 | Currency | Each expense may carry its own currency + `fx_rate_to_group_currency`, from a free daily-cached provider (`open.er-api.com`); a lookup failure falls back to 1:1 and never blocks saving. |
 | Editing | Any member may edit or delete; every change writes per-expense **history** and a group **activity** row. |
 | Comments | Flat, chronological, author-deletable. |
 | Move to group | Convert a personal expense into a group expense in place (`POST /expenses/{id}/move_to_group`). |
-| Suggestions | `GET /groups/{id}/items/suggest_assignment` proposes who usually gets an item. |
 | Recurring | Group-scoped recurring templates create split expenses. |
 
 **Balances & settlement.** `GET /groups/{id}/balances` returns per-member net and suggested transfers — either the literal pairwise ledger or, when `simplify_debts` is on, a **greedy-netting** simplification. `GET /friends/balances` aggregates the net with each *person* across every shared group (the mobile/web **People** view). Settlements can be recorded, listed and undone (only by the recorder or an admin — VS-08); a member's share of one specific expense can be settled individually. Payment deep links to Venmo, PayPal.me and UPI are built client-side.
@@ -336,7 +335,7 @@ Two independent Cloud Run services and one Cloud Run *Job* (`migrate-db`) make u
 ```
 HTTP  →  Middleware (CORS, CSRF)  →  Routers  →  Services  →  SQLAlchemy models  →  PostgreSQL
                                         │            │
-                                        │            └── engines: SplitEngine, ItemSplitEngine, BalanceService,
+                                        │            └── engines: SplitEngine, receipt_lines, BalanceService,
                                         │                CardRewardsEngine, BudgetService, InsightAnalytics …
                                         └── Pydantic models (request validation + response shaping)
 ```
@@ -361,7 +360,7 @@ HTTP  →  Middleware (CORS, CSRF)  →  Routers  →  Services  →  SQLAlchemy
 
 **Logging an expense (personal).** Client → `POST /expenses` (validated + sanitized; optional `tag_names`, `card_id`) → `ExpenseService` writes the row → analysis cache invalidated → background task refreshes item/merchant insights.
 
-**Logging a group expense.** Client → `POST /groups/{id}/expenses` → `GroupExpenseService` validates payers, runs `SplitEngine` (cent-exact) → writes `expenses` + `expense_payers` + `expense_splits` (+ per-item splits when itemized) → `ActivityService` records the event → cache invalidated → `NotificationService.fan_out` sends pushes (background).
+**Logging a group expense.** Client → `POST /groups/{id}/expenses` → `GroupExpenseService` validates payers, runs `SplitEngine` (cent-exact) → writes `expenses` + `expense_payers` + `expense_splits` (+ receipt lines in `expense_items` when scanned; no per-item splits since TS-FIX-102) → `ActivityService` records the event → cache invalidated → `NotificationService.fan_out` sends pushes (background).
 
 **Receipt to expense.** Client uploads to `POST /ingest/receipt/parse` (type, size, magic-byte checks; 3/min) → `ReceiptService` (RapidOCR + rule parser; Gemini only for low-confidence reads under the `hybrid` engine) → validated header + items + fingerprint returned, **nothing persisted** → user edits → `POST /expenses/with_items` (or the group equivalent).
 
@@ -455,7 +454,7 @@ VaravuSelavuSeyali/
 │       ├── db/                    # models.py (33 tables), session.py, schema.sql
 │       ├── models/api_models.py   # Pydantic request/response models
 │       └── services/              # expense, group, group_expense, balance, settlement, split_engine,
-│                                  # item_split_engine, analysis, analytics, insight_analytics,
+│                                  # receipt_lines, analysis, analytics, insight_analytics,
 │                                  # insights_aggregation, budget, card, card_rewards_engine, tag, tag_bulk,
 │                                  # entity_resolution, chat, categorization, receipt, recurring, activity,
 │                                  # notification, fx_rate, email, expense_comment, friend_balance,
@@ -481,7 +480,7 @@ VaravuSelavuSeyali/
         │                          #   AddExpense (capture), Profile, Login, Register, JoinGroup, Recurring, About, Feedback,
         │                          #   ItemDetail, MerchantDetail, Cards, Tags)
         ├── components/            # ListRow, TopTabs, ScreenHeader, Sheet, ExpenseQuickSheet, SettleUpSheet,
-        │                          #   SplitEditor, ItemSplitBoard, Budgets/Cards content, SegmentDonut, MonthChip, OptionSheet, ToggleSwitch …
+        │                          #   SplitEditor, Budgets/Cards content, SegmentDonut, MonthChip, OptionSheet, ToggleSwitch …
         ├── context/               # AuthContext, ThemeContext
         ├── hooks/                 # feature-flag hooks, useQuickLogBar
         └── utils/                 # currencyMath, dashboardTotals, spendTrend, activityFeed, categoryCode, expenseInsights,
@@ -504,7 +503,7 @@ All tables live in the PostgreSQL schema **`trackspense`** (not `public`); Alemb
 | | `email_tokens` | One-time verification/reset tokens — **only the SHA-256 hash** is stored; `expires_at`, `used_at` |
 | | `refresh_tokens` | Rotation state: `jti`, `family_id`, `expires_at`, `revoked_at`, `revoked_reason`, `replaced_by` |
 | **Ledger** | `expenses` | `id`, `user_email` (author), `group_id` (null = personal), `purchased_at`, `merchant_name`, `merchant_id`→canonical merchant, `category_id` (**holds the subcategory name**, not an FK), `amount`, `currency`, `tax`, `tip`, `discount`, `payment_method`, `card_id`→`card_catalog`, `description`, `notes`, `fingerprint`, `split_type`, `fx_rate_to_group_currency` |
-| | `expense_items` | Line items: `line_no`, `item_name`, `normalized_name`, `quantity`, `unit`, `unit_price`, `line_total`, `tax`, `discount`, `attributes_json` |
+| | `expense_items` | Line items: `line_no`, `item_name`, `normalized_name`, `quantity`, `unit`, `unit_price` (paid, per unit), `line_total` (paid), `tax`, `discount` (record), `original_price` (TS-FIX-102; NULL = saved in the old format, where `line_total` was before discount), `attributes_json` |
 | | `recurring_templates` | `description`, `category`, `merchant_name`, `day_of_month`, `default_cost`, `start_date`, `last_processed_date`, `status`, `group_id`, `split_config` (JSON) |
 | **Insights** | `item_insights`, `item_price_history` | Per-user item rollups (avg/min/max price, quantity, spent) and per-purchase price points |
 | | `merchant_insights`, `merchant_aggregates` | Per-user merchant totals and per-month aggregates |
@@ -513,7 +512,7 @@ All tables live in the PostgreSQL schema **`trackspense`** (not `public`); Alemb
 | | `group_invitations` | `member_id` (the seat), `invited_email`, `token`, `expires_at`, `accepted_at` |
 | | `expense_payers` | Who paid: (`expense_id`, `member_id`, `amount_paid`) — unique per pair |
 | | `expense_splits` | Who owes: `amount_owed`, `basis_type`, `basis_value`, `settled_via_settlement_id` |
-| | `expense_item_splits` | Itemized ratios per line item (`ratio` in (0,1], `amount`) |
+| | `expense_item_splits` | Legacy per-line ratios from item-split receipts (`ratio` in (0,1], `amount`); no longer written (TS-FIX-102), kept for old receipts' analytics |
 | | `settlements` | `from_member_id`, `to_member_id` (must differ), `amount`, `method`, `settled_at`, `notes`, `created_by` |
 | | `group_activity` | Append-only feed: `action`, `actor_member_id`, `entity_id`, `payload_json` (`settlement_created` carries `amount`, `from_member_id`, `to_member_id`; `member_added` carries `display_name`, `user_email`); indexed by (group, created) |
 | | `expense_comments` | Flat comments: `member_id`, `body`, `edited_at` |
@@ -654,8 +653,8 @@ Migrations are applied automatically before every backend deploy by the `migrate
 | DELETE | `/expenses/{row_id}` | Delete an expense | Bearer / cookie | — | — |
 | POST | `/ingest/receipt/parse` | OCR and parse a receipt without persisting | Bearer / cookie | — | 3/minute |
 | POST | `/expenses/with_items` | Create an expense with itemized lines | Bearer / cookie | — | — |
-| GET | `/expenses/{expense_id}/items` | Get line items for an itemized expense | Bearer / cookie | — | — |
-| PUT | `/expenses/{expense_id}/items` | Replace line items on an already-saved itemized expense | Bearer / cookie | — | — |
+| GET | `/expenses/{expense_id}/items` | Get a receipt's lines (paid prices; old formats converted) | Bearer / cookie | — | — |
+| PUT | `/expenses/{expense_id}/items` | Replace a receipt's lines (totals must match) | Bearer / cookie | — | — |
 
 ### 8.4 Analysis & AI chat
 
@@ -693,18 +692,17 @@ Migrations are applied automatically before every backend deploy by the `migrate
 | Method | Path | Description | Auth | Flag | Rate limit |
 |:---|:---|:---|:---|:---|:---|
 | POST | `/groups/{group_id}/expenses` | Create a group expense | Bearer / cookie | GROUPS | — |
-| POST | `/groups/{group_id}/expenses/itemized` | Create an itemized group expense | Bearer / cookie | GROUPS | — |
+| POST | `/groups/{group_id}/expenses/itemized` | Create a group receipt split on its total (equal/exact/shares) | Bearer / cookie | GROUPS | — |
 | GET | `/groups/{group_id}/expenses` | List group expenses | Bearer / cookie | GROUPS | — |
 | PUT | `/groups/{group_id}/expenses/{expense_id}` | Edit a group expense (any member). `payers` and `split` are optional together: omit both to keep the stored split (rescaled if `amount` changed) | Bearer / cookie | GROUPS | — |
-| GET | `/groups/{group_id}/expenses/{expense_id}/items` | Get line items for an itemized group expense | Bearer / cookie | GROUPS | — |
-| PUT | `/groups/{group_id}/expenses/{expense_id}/items` | Replace line items on an already-saved itemized group expense | Bearer / cookie | GROUPS | — |
+| GET | `/groups/{group_id}/expenses/{expense_id}/items` | Get a group receipt's lines (paid prices; old formats converted) | Bearer / cookie | GROUPS | — |
+| PUT | `/groups/{group_id}/expenses/{expense_id}/items` | Replace a group receipt's lines; keeps shares unless the amount changes | Bearer / cookie | GROUPS | — |
 | DELETE | `/groups/{group_id}/expenses/{expense_id}` | Delete a group expense (any member) | Bearer / cookie | GROUPS | — |
 | GET | `/groups/{group_id}/expenses/{expense_id}/history` | Per-expense edit history | Bearer / cookie | GROUPS | — |
 | GET | `/groups/{group_id}/expenses/{expense_id}/comments` | List comments on a group expense | Bearer / cookie | GROUPS | — |
 | POST | `/groups/{group_id}/expenses/{expense_id}/comments` | Add a comment on a group expense | Bearer / cookie | GROUPS | — |
 | DELETE | `/groups/{group_id}/expenses/{expense_id}/comments/{comment_id}` | Delete a comment (author only) | Bearer / cookie | GROUPS | — |
 | POST | `/groups/{group_id}/expenses/{expense_id}/settle_share` | Settle one member's share of a specific expense | Bearer / cookie | GROUPS | — |
-| GET | `/groups/{group_id}/items/suggest_assignment` | Suggest which member(s) usually get a given item | Bearer / cookie | GROUPS | — |
 | POST | `/expenses/{expense_id}/move_to_group` | Convert a personal expense into a group expense in place | Bearer / cookie | GROUPS | — |
 
 ### 8.7 Balances & settlements
@@ -908,13 +906,13 @@ Pure functions, no DB. `resolve_split(amount, split_type, entries, member_ids)` 
 
 **Rounding:** each share is rounded *down* to the cent, the remaining cents are handed out by **largest fractional remainder, ties broken by member id ascending** — so sums are exact and results deterministic. Members whose resolved share is zero are dropped. `validate_payers` requires payer amounts to sum to the expense total.
 
-**No minus values (owner decision 2026-11-26):** no split type, payer amount, receipt tax, discount or item quantity accepts a negative value, and no resolved share or rescaled payer amount may be negative. **Open exception:** a scanned receipt line (`line_total`, `unit_price`) may be negative on group itemized expenses and in the receipt line editors, because the scanner records coupons that way (pending an owner decision). To have one person pay less, add an adjustment for everyone else. Saved group default splits and recurring split settings are checked only when new or changed, so ones saved earlier still load. Clients ignore any edit containing a minus sign.
+**No minus values (owner decision 2026-11-26):** no split type, payer amount, receipt tax, discount or item quantity accepts a negative value, and no resolved share or rescaled payer amount may be negative. Receipt lines are never negative either: coupons are folded into paid prices (TS-FIX-102 closed the former scanned-coupon exception). To have one person pay less, add an adjustment for everyone else. Saved group default splits and recurring split settings are checked only when new or changed, so ones saved earlier still load. Clients ignore any edit containing a minus sign.
 
 **Client rules:** `exact`, `percentage` and payer totals are compared exactly by the server, so clients must not accept a total that is a cent (or 0.01%) out; their only slack is floating-point noise. When web pre-fills an `exact` or `percentage` split, the values add up exactly and each leftover hundredth goes to a different, **randomly** chosen member (owner decision 2026-11-26), e.g. $10 three ways is 3.33 / 3.33 / 3.34. Mobile does not pre-fill these two. This differs on purpose from the deterministic rounding above, which applies to shares the server computes.
 
-### 10.2 Itemized splits (`services/item_split_engine.py`)
+### 10.2 Receipts are split on the total (`services/receipt_lines.py`, TS-FIX-102)
 
-Each line item carries `member_ratios` summing to 1 (±0.001, then normalized). A member's subtotal is the sum of their share of each line; **tax, tip and discount are pro-rated by each member's subtotal**; the same largest-remainder rounding then guarantees the members' totals equal the expense total. Persisted per line in `expense_item_splits`.
+Item-by-item splitting (`item_split_engine.py`, `member_ratios`) was removed. A group receipt's shares come from `split_engine.resolve_split` with `equal`, `exact` or `shares` on the receipt **amount**, so they equal it to the cent. Lines are for tracking and analysis: each person's part of a line for item insights follows their share of the total (computed on demand, never stored). Old item-split receipts keep their `expense_item_splits` rows (used only to back out their analytics on delete). Old-format receipts (lines without `original_price`) are shown converted to paid prices by replaying exactly what the old totals check subtracted — personal: the header discount; group: the line discounts — with `legacy_discount_format: true`; saving stores the new format once.
 
 ### 10.3 Balances and debt simplification (`services/balance_service.py`)
 
@@ -970,7 +968,7 @@ Mobile reads the receipt on-device (Apple Vision on iOS, ML Kit on Android) and 
 
 When `hybrid` can't reach the LLM for a quota reason, the warning names it: today's limit reached, AI paused (global budget), account blocked, or email not verified. If OCR itself fails and the LLM is unavailable, the quota error is returned instead.
 
-The output is a *header* (merchant, normalized merchant, `purchased_at`, amount, tax/tip/discount, main + subcategory) and *items* (name, normalized name, quantity, unit price, line total, category). Post-processing: the normalized merchant becomes the merchant used downstream (raw kept as `merchant_name_raw`); header and item categories are validated against the taxonomy (paraphrases like "Food and Drink" are corrected or fall back); a **fingerprint** is computed as SHA-256 of raw merchant + hour of purchase + amount + first three item names. Nothing is persisted by the parse endpoint.
+The output is a *header* (merchant, normalized merchant, `purchased_at`, amount, tax, tip, `discount` always 0 and `savings`, main + subcategory) and *items* (name, normalized name, quantity, unit price, line total, category). Post-processing: the normalized merchant becomes the merchant used downstream (raw kept as `merchant_name_raw`); header and item categories are validated against the taxonomy (paraphrases like "Food and Drink" are corrected or fall back); a **fingerprint** is computed as SHA-256 of raw merchant + hour of purchase + amount + first three item names. Nothing is persisted by the parse endpoint.
 
 ### 11.2 Categorization (`CategorizationService`)
 
@@ -1062,7 +1060,7 @@ A React 19 single-page app (Create React App, TypeScript) built to static files 
 | **Dashboard** | `TrueTotalHero` (spend, MoM delta, lens toggle My expenses / I paid, Net with people — the spend figure is `spend_breakdown.personal` + `group_share` (or `i_paid_share`), so it always equals Analysis's combined total; group shares count whatever the group's status, while `group_summaries`/`MyGroupsStrip` list only active groups), `SpendSpectrum`, `TopCategoriesChart`, `MonthlyTrendChart`, `MyGroupsStrip`, `InsightOfTheDay`, `TypeToLogBar`, `BudgetsSummaryCard`, `CardCoachSummaryCard` |
 | **Expenses** | `ExpenseFeed` (day-grouped combined feed), `QuickCaptureSheet`, `AddExpenseForm` (used for editing), `ExpenseDetailSheet`, `MoveToGroupDialog`, `ScannedItemsCard`, `CategoryPickerField`, `CardPickerField`, `TagInput`, `EntityAutocomplete`, `RecurringTab`, `RecurringPrompt`, `WillLogPreview` |
 | **Analysis** | `OverviewTab` (`CategorySpectrum`, `TrendNavigator`, `WhatChangedRail`, `SmartChangeInsightsCard`, group picker, include-group-shares toggle), `ItemsTab` (`PriceHistoryChart`, `StoreComparisonChips`, `PurchaseTape`, `StatBlock`), `MerchantsTab` (`MonthlySpendSparkline`, `WhatChangedCallout`), `BudgetsTab`, `CardsTab` (`CardDetailDialog`, `CustomCardForm`), `AskSheet`, `MoneyFlowSankey` |
-| **Groups** | `GroupsListRail`, `GroupCard`, `GroupAvatar`, `MemberAvatarStack`, `SplitEditor`, `PaidBySplitSummary`, `PayerPicker`, `ItemSplitBoard`, `BalanceList`, `GroupBalancesPanel`, `SettleUpDialog`, `ExpenseDetailDialog` (comments, history, settle-my-share), `ActivityFeed`, `GroupSettingsDialog`, `PeopleList` |
+| **Groups** | `GroupsListRail`, `GroupCard`, `GroupAvatar`, `MemberAvatarStack`, `SplitEditor`, `PaidBySplitSummary`, `PayerPicker`, `BalanceList`, `GroupBalancesPanel`, `SettleUpDialog`, `ExpenseDetailDialog` (comments, history, settle-my-share), `ActivityFeed`, `GroupSettingsDialog`, `PeopleList` |
 | **Ask** | `AIAnalystChat` (Fast/Deep picker, starter prompts, "Looked at" scope chip), `AskOverlay` |
 | **Tags & budgets** | `TagManagementSection`, `TagFilterSelect`, `TagBulkApplyDialog`, `BulkTagDialog`, `BudgetCard`, `BudgetProgressBar` |
 | **Common** | `SegmentedTabs`, `ConfirmDialog`, `FormSheet`, `EmptyState`, `StatusBadge`, `ErrorBoundary`, `GroupScopeFilter`, `InsightScopeFilter`, `LazyPlot`, `ScrollReveal` |
@@ -1117,14 +1115,14 @@ The redesign ("TrackSpense V2 Flows", 20 screens in 7 flows) is implemented on t
 | Flow | Screens | Implementation notes |
 |:---|:---|:---|
 | **01 Get in** | Sign in, Create account, Invite | Brand statement + two fields; three-field register with inline consent (phone no longer collected); the invite screen **asks the user to confirm** before joining (the backend has no invite-preview endpoint, so it cannot yet name the inviter/group). |
-| **02 Log something** | Quick capture, Split, Scan, Itemized split | `AddExpenseScreen` provider hosts a keypad-first sheet: amount, one caption, one chip row (Category · date · Who · Card · *More*), keypad, gradient **Save**. *Who* and *Card* open option sheets (Just me / a group; a card you own); merchant, category picker and *repeat monthly* sit behind *More*. When a group is chosen a *paid · Equal* chip opens **`SplitSheet`** (Equal / Exact / Percent / Shares / Adjust over the restyled `SplitEditor`, a *PAID BY* line that swaps to the payer picker, a running *$X left*, Done). **Scan** opens `ReceiptScanScreen` — a receipt-shaped viewfinder with a *Reading receipt…* status and a shutter; there is no live preview (that needs `expo-camera`), so the shutter hands off to the system camera through `expo-image-picker` and *Choose from library* covers saved photos (on web the shutter opens the file picker). A successful read opens **`ReceiptItemsSheet`**: the merchant, *N items read*, each line with quantity × unit price, and — for group expenses — tap-to-assign chips per line (unassigned lines split among everyone), the tax + tip, *Your share* (`utils/receiptSplit.ts`, integer-cent maths) and *Save N items*; the per-line assignments are sent as `member_ratios` to the itemised group-expense endpoint. The parser returns no confidence figure, so none is shown. *Edit items* returns to the capture sheet, where `ScannedItemsCard` still edits names and prices. |
+| **02 Log something** | Quick capture, Split, Scan, Receipt review | `AddExpenseScreen` provider hosts a keypad-first sheet: amount, one caption, one chip row (Category · date · Who · Card · *More*), keypad, gradient **Save**. *Who* and *Card* open option sheets (Just me / a group; a card you own); merchant, category picker and *repeat monthly* sit behind *More*. When a group is chosen a *paid · Equal* chip opens **`SplitSheet`** (Equal / Exact / Percent / Shares / Adjust over the restyled `SplitEditor`, a *PAID BY* line that swaps to the payer picker, a running *$X left*, Done). **Scan** opens `ReceiptScanScreen` — a receipt-shaped viewfinder with a *Reading receipt…* status and a shutter; there is no live preview (that needs `expo-camera`), so the shutter hands off to the system camera through `expo-image-picker` and *Choose from library* covers saved photos (on web the shutter opens the file picker). A successful read opens **`ReceiptItemsSheet`**: the merchant, *N items read*, each line with quantity × unit price and its paid price with any saving, the tax, tip, how the total is split (from `SplitSheet`: Equal, Exact or Shares for receipts) and *Your share* (`receiptShareFor` in `receipts/utils/receiptLines.ts`), and *Save N items*, disabled until paid prices + tax + tip match the amount. Receipts are split on the total; there is no per-item assignment (TS-FIX-102). The parser returns no confidence figure, so none is shown. *Edit items* returns to the capture sheet, where `ScannedItemsCard` still edits names and prices. |
 | **03 Home** | Dashboard, Activity, Account | Two figures then the feed: spend this month with a six-bar history and MoM delta, Net with people, the ask/log bar, three recent rows. **Activity** is client-assembled (§3.11). **Account** is the design's eight-row menu — Cards & accounts, Categories & tags, Budgets, Notifications (opens OS settings; On/Off from the OS permission), Appearance (Dark / Light / System), Export data (CSV via the share sheet), Feedback, About — plus **Sign out**. *Edit profile* holds the profile form, payment handles and account deletion; Terms/Privacy links moved into About. *Cards & accounts* (`CardsScreen`) hosts the card wallet and Card Coach; *Categories & tags* (`TagsScreen`) creates, renames, recolours, archives and deletes tags (this widens the original mobile scope, which was apply-only) and lists the fixed categories read-only. The home greeting uses the profile's first name. |
 | **04 Spend** | Transactions, Expense detail, Recurring | Flat hairline `ListRow`s with a three-letter category code; a filter-chip row (Month — defaulting to the current month — · Category · Tags · Scope, each an option sheet), search, and a *This month* subtotal; personal rows open `ExpenseQuickSheet` (edit, view items, move to group, delete, and the "above your usual" note). Recurring shows a due-soon prompt, per-template switch (`ToggleSwitch`), run-now and inline edit. |
 | **05 Groups** | Groups, Group detail, Settle up | Aggregate net "Across all groups"; group detail leads with the balance (with a balance-tinted glow), **Add expense** and **Settle up** beneath, per-expense "you +$X / −$X" deltas; tapping an expense opens its detail sheet, which now holds **Edit**. **Settle up** opens `SettleUpSheet` in list mode — one row per transfer you owe, Venmo / PayPal / Cash method chips, and a single *Record $total paid*; the per-member path keeps the single-payment form with payment-app deep links. Recording never changes spend totals. |
 | **06 Insights** | Overview, Item detail, Merchant detail, Budgets | `MonthChip` header; `SegmentDonut` with a top-5 legend straight under the tabs (tap to drill); "What changed vs <month>" rows that link to the item or merchant behind them; Items/Merchants ranked lists open `ItemDetailScreen` (average price, change vs six months ago, price-history chart, cheapest-where, *Ask about this item*) and `MerchantDetailScreen`; **Budgets** open with a *Left to spend · N days* hero and one bar per category (green on track, amber at risk, red over — status, not category, sets the colour; mute, *Ask why* and delete live in the edit sheet). The analyse-group picker, tag filter and *Include group shares* switch sit in a **Scope** block at the foot of Overview. |
 | **07 Ask** | Conversation | Right-aligned user bubbles, tinted assistant bubbles, and the backend-supplied **LOOKED AT** provenance line above each answer. |
 
-**Shared V2 primitives** (`src/components/`): `ListRow`, `TopTabs`, `ScreenHeader`, `IconButton`, `SectionLabel`, `Chip`, `FieldBox`, `Sheet`, `OptionSheet`, `MonthChip`, `ToggleSwitch`, `TabBarIcon`, `SegmentDonut`, `PriceAreaChart`, `StatCard`, `TintGlow`, `SpendFilterChips`, `ExpenseQuickSheet`, `SplitSheet`, `ReceiptScanScreen`, `ReceiptItemsSheet`. Pure helpers with unit tests: `categoryCode`/`categoryTone` (deterministic tile code + colour per category), `spendTrend` (six-month bars, MoM %), `activityFeed`, `expenseInsights` (short dates, anomaly note, ordinals, next recurring occurrence, share delta, days left), `segments` (donut geometry, top-N fold), `chatScope` (provenance line), `insightsFormat` (month list, change rows, price change, confidence badge, donut colours), `spendFilters` (month/category/scope/search matching), `identity` (first name, initial), `receiptSplit` (per-line assignment, cent-exact shares incl. prorated tax − discount).
+**Shared V2 primitives** (`src/components/`): `ListRow`, `TopTabs`, `ScreenHeader`, `IconButton`, `SectionLabel`, `Chip`, `FieldBox`, `Sheet`, `OptionSheet`, `MonthChip`, `ToggleSwitch`, `TabBarIcon`, `SegmentDonut`, `PriceAreaChart`, `StatCard`, `TintGlow`, `SpendFilterChips`, `ExpenseQuickSheet`, `SplitSheet`, `ReceiptScanScreen`, `ReceiptItemsSheet`. Pure helpers with unit tests: `categoryCode`/`categoryTone` (deterministic tile code + colour per category), `spendTrend` (six-month bars, MoM %), `activityFeed`, `expenseInsights` (short dates, anomaly note, ordinals, next recurring occurrence, share delta, days left), `segments` (donut geometry, top-N fold), `chatScope` (provenance line), `insightsFormat` (month list, change rows, price change, confidence badge, donut colours), `spendFilters` (month/category/scope/search matching), `identity` (first name, initial), `receiptLines` (paid/original price, totals check, share preview; mirrors web `utils/receiptLines.ts`).
 
 **Deliberately not built** (would need a backend change or a new native dependency): an invite-preview screen with inviter/group name; the Ask "N purchases · M merchants" line, follow-up chips and create-expense *Undo*; a live camera preview inside the Scan screen (needs `expo-camera`); Google/Apple sign-in; an in-app notification-preferences screen (the row opens OS settings); an Activity unread badge; a per-group expense count on the Groups list.
 
@@ -1640,9 +1638,11 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 | `quantity` | `float | None` | optional |
 | `unit` | `str | None` | optional |
 | `unit_price` | `OptionalNonNegativeMoney` | optional |
-| `line_total` | `NonNegativeMoney` | required |
+| `line_total` | `NonNegativeMoney` | required (paid price) |
 | `tax` | `OptionalNonNegativeMoney` | `Decimal('0')` |
-| `discount` | `OptionalNonNegativeMoney` | `Decimal('0')` |
+| `discount` | `OptionalNonNegativeMoney` | `Decimal('0')` (record only) |
+| `original_price` | `OptionalNonNegativeMoney` | optional (= `line_total` + `discount`) |
+| `id` | `str | None` | optional (edit in place) |
 | `attributes_json` | `str | None` | optional |
 
 **`ExpenseWithItemsRequest`**
@@ -1677,15 +1677,18 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 | `line_total` | `float` | required |
 | `tax` | `float | None` | `0` |
 | `discount` | `float | None` | `0` |
+| `original_price` | `float | None` | optional |
 
-**`ItemsUpdateRequest`** — Body for PUT .../items — full replace of an already-saved itemized expense's line
+**`ItemsUpdateRequest`** — Body for PUT .../items — replaces a saved receipt's lines; paid prices + tax + tip must match `amount`
 
 | Field | Type | Default |
 |:---|:---|:---|
 | `items` | `List[ExpenseItem]` | required |
 | `amount` | `MoneyAmount` | required |
 | `tax` | `NonNegativeMoney` | `Decimal('0')` |
-| `discount` | `NonNegativeMoney` | `Decimal('0')` |
+| `tip` | `NonNegativeMoney` | `Decimal('0')` |
+| `discount` | `NonNegativeMoney` | `Decimal('0')` (non-zero refused: old format) |
+| `split` | `GroupSplitConfig?` | optional (group receipts: equal/exact/shares, needed on `split_required`) |
 
 **`ItemsResponse`**
 
@@ -1694,7 +1697,10 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 | `items` | `List[ExpenseItemDTO]` | required |
 | `amount` | `float` | required |
 | `tax` | `float` | required |
-| `discount` | `float` | required |
+| `tip` | `float` | `0` |
+| `discount` | `float` | required (always 0) |
+| `savings` | `float` | `0` |
+| `legacy_discount_format` | `bool` | `False` |
 
 **`CategorizeRequest`** — Request payload for expense categorization.
 
@@ -2117,12 +2123,13 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 | `category_id` | `str | None` | optional |
 | `quantity` | `float | None` | optional |
 | `unit` | `str | None` | optional |
-| `unit_price` | `float | None` | optional |
-| `line_total` | `float` | required |
-| `tax` | `float | None` | `0` |
-| `discount` | `float | None` | `0` |
+| `unit_price` | `OptionalNonNegativeMoney` | optional |
+| `line_total` | `NonNegativeMoney` | required (paid price) |
+| `discount` | `OptionalNonNegativeMoney` | `Decimal('0')` |
+| `original_price` | `OptionalNonNegativeMoney` | optional |
 | `attributes_json` | `str | None` | optional |
-| `member_ratios` | `Dict[str, float]` | required |
+
+Requests whose items carry `member_ratios` are refused before validation (400 `app_update_required`).
 
 **`GroupExpenseWithItemsRequest`**
 
@@ -2134,7 +2141,10 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 | `amount` | `MoneyAmount` | required |
 | `merchant_name` | `OptionalMerchantStr` | optional |
 | `payers` | `List[GroupExpensePayerEntry]` | required |
-| `items` | `List[GroupExpenseItemEntry]` | required |
+| `split` | `GroupSplitConfig` | required (equal, exact or shares) |
+| `tax` | `NonNegativeMoney` | `Decimal('0')` |
+| `tip` | `NonNegativeMoney` | `Decimal('0')` |
+| `items` | `List[GroupExpenseItemEntry]` | required (at least one) |
 | `currency` | `CurrencyCode?` | optional |
 | `card_id` | `str?` | optional |
 
@@ -2176,6 +2186,7 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 | `currency` | `CurrencyCode?` | optional |
 | `fx_rate_to_group_currency` | `float?` | optional |
 | `split_type` | `str?` | optional |
+| `has_items` | `bool` | `False` (a receipt with saved lines, TS-FIX-102) |
 | `tags` | `List[TagRefDTO]` | `Field(default_factory=list)` |
 | `card` | `CardRefDTO?` | optional |
 | `notes` | `str?` | optional |
@@ -2279,20 +2290,6 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 |:---|:---|:---|
 | `balances` | `List[FriendBalanceDTO]` | required |
 
-**`SplitSuggestionDTO`**
-
-| Field | Type | Default |
-|:---|:---|:---|
-| `member_id` | `str` | required |
-| `display_name` | `str` | required |
-| `confidence` | `str` | required |
-| `times_assigned` | `int` | required |
-
-**`SplitSuggestionResponse`**
-
-| Field | Type | Default |
-|:---|:---|:---|
-| `suggestions` | `List[SplitSuggestionDTO]` | required |
 
 ### A.8 Groups — comments, history, notifications, devices
 

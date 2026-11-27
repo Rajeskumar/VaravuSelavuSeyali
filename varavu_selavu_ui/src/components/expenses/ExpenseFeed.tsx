@@ -71,6 +71,8 @@ export interface FeedExpense {
    * has >=1 synthesized proxy item, so only itemCount > 1 means "really itemized"). */
   itemCount?: number;
   splitType?: string | null;
+  /** TS-FIX-102: a group receipt with saved lines (its split type is equal/exact/shares now). */
+  hasItems?: boolean;
   tags?: TagRefDTO[];
   card?: CardRefDTO | null;
 }

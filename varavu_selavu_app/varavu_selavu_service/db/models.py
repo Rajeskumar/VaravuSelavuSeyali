@@ -146,6 +146,9 @@ class ExpenseItem(Base):
     line_total = Column(Numeric(12, 2), nullable=False)
     tax = Column(Numeric(12, 2), default=0)
     discount = Column(Numeric(12, 2), default=0)
+    # TS-FIX-102: price before discount. line_total is the PAID price and discount is a record only.
+    # NULL means the line was saved in the old format (line_total pre-discount); every later write sets it.
+    original_price = Column(Numeric(12, 2), nullable=True)
     attributes_json = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

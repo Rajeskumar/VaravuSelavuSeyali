@@ -232,7 +232,10 @@ export interface SplitEntryPayload {
   value?: number;
 }
 
+/** A receipt line (TS-FIX-102): `line_total` is the paid price; discount and original price are a
+ * record only. Lines never say who owes what — the receipt is split on its total. */
 export interface GroupExpenseItemEntry {
+  id?: string;
   line_no: number;
   item_name: string;
   normalized_name?: string | null;
@@ -241,11 +244,13 @@ export interface GroupExpenseItemEntry {
   unit?: string | null;
   unit_price?: number | null;
   line_total: number;
-  tax?: number | null;
   discount?: number | null;
+  original_price?: number | null;
   attributes_json?: string | null;
-  member_ratios: Record<string, number>;
 }
+
+/** A receipt split type: a receipt is split on its total by Equal, Exact or Shares. */
+export type ReceiptSplitType = 'equal' | 'exact' | 'shares';
 
 export interface GroupExpenseWithItemsPayload {
   date: string;
@@ -254,6 +259,9 @@ export interface GroupExpenseWithItemsPayload {
   amount: number;
   merchant_name?: string;
   payers: { member_id: string; amount_paid: number }[];
+  split: { type: ReceiptSplitType | string; entries: { member_id: string; value?: number }[] };
+  tax?: number;
+  tip?: number;
   items: GroupExpenseItemEntry[];
   currency?: string;
   card_id?: string | null;
@@ -299,6 +307,8 @@ export interface GroupExpenseRow {
   currency?: string | null;
   fx_rate_to_group_currency?: number | null;
   split_type?: string | null;
+  /** TS-FIX-102: the expense is a receipt with saved lines (split_type alone no longer says so). */
+  has_items?: boolean;
   // TS-TAG-103 — filtered to the caller (PRD §9.2): a tag applied to a shared group expense is
   // visible ONLY to the member who applied it, never other group members.
   tags?: TagRefDTO[];
@@ -319,28 +329,28 @@ export interface GroupExpenseItemDTO {
   line_total: number;
   tax?: number | null;
   discount?: number | null;
+  original_price?: number | null;
 }
 
 export interface GroupItemsResponse {
   items: GroupExpenseItemDTO[];
   amount: number;
   tax: number;
+  tip?: number;
+  /** Always 0 since TS-FIX-102: discounts are already in the line prices. */
   discount: number;
+  savings?: number;
+  /** Saved in the old discount format; the lines shown were converted to paid prices for checking. */
+  legacy_discount_format?: boolean;
 }
 
 export interface GroupItemsUpdatePayload {
-  items: {
-    line_no: number;
-    item_name: string;
-    normalized_name?: string | null;
-    category_id?: string | null;
-    quantity?: number | null;
-    unit_price?: number | null;
-    line_total: number;
-  }[];
+  items: GroupExpenseItemEntry[];
   amount: number;
   tax?: number;
-  discount?: number;
+  tip?: number;
+  /** Needed when the amount changes on an Exact or old item-split receipt (`split_required`). */
+  split?: { type: ReceiptSplitType | string; entries: { member_id: string; value?: number }[] };
 }
 
 export async function getGroupExpenseItems(groupId: string, expenseId: string): Promise<GroupItemsResponse> {
@@ -678,23 +688,6 @@ export async function getFriendBalances(): Promise<FriendBalanceDTO[]> {
   const res = await fetchWithAuth('/api/v1/friends/balances');
   if (!res.ok) await throwApiError(res, 'Failed to load friend balances');
   return (await res.json()).balances;
-}
-
-// ---------------------------------------------------------------------------
-// AI split suggestions (TS-GRP-133)
-// ---------------------------------------------------------------------------
-
-export interface SplitSuggestionDTO {
-  member_id: string;
-  display_name: string;
-  confidence: 'high' | 'medium' | 'low';
-  times_assigned: number;
-}
-
-export async function suggestItemAssignment(groupId: string, itemName: string): Promise<SplitSuggestionDTO[]> {
-  const res = await fetchWithAuth(`/api/v1/groups/${groupId}/items/suggest_assignment?item_name=${encodeURIComponent(itemName)}`);
-  if (!res.ok) await throwApiError(res, 'Failed to load split suggestions');
-  return (await res.json()).suggestions;
 }
 
 // ---------------------------------------------------------------------------

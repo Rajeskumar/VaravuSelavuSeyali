@@ -26,11 +26,8 @@ interface Props {
   splitValue: SplitEditorValue;
   onSplitChange: (value: SplitEditorValue) => void;
   onSplitValidityChange?: (valid: boolean) => void;
-  /** Restricts the split picker's type tabs — e.g. Quick Capture's itemized-receipt path only
-   * supports an equal split (member_ratios per line item has no percentage/exact/shares/
-   * adjustment analog), so it passes ['equal'] to keep this same summary/picker reusable there
-   * instead of needing a second UI just for that case. Defaults to all 5 types (unchanged
-   * behavior for existing callers like ExpenseDetailDialog). */
+  /** Restricts the split picker's type tabs — e.g. a receipt is split on its total by Equal,
+   * Exact or Shares only (TS-FIX-102). Defaults to all 5 types for manual expenses. */
   allowedTypes?: SplitType[];
   /** Fired after either picker's own Save commits a change — lets the parent flip a single
    * shared "customized" flag without this component needing to know that concept exists. */

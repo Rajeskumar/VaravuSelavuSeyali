@@ -93,13 +93,13 @@ Input is a discriminated union: `kind="simple"` or, from Phase 4, `kind="itemize
 | `merchant` | Optional simple / required itemized; sanitized, at most 100 chars |
 | `notes` | Optional, sanitized, at most 500 chars |
 
-Simple additionally requires `amount`. Itemized instead requires `total` and 1–200 `items`, with optional `subtotal`, header `tax`, `tip`, `discount` (default zero), `payment_method` (`card|cash|other|unknown`) and `accept_unreconciled` (default false).
+Simple additionally requires `amount`. Itemized instead requires `total` and 1–200 `items`, with optional `subtotal`, header `tax`, `tip`, `discount` (default zero), `payment_method` (`card|cash|other|unknown`) and `accept_unreconciled` (default false; `true` is refused since TS-FIX-102).
 
-Each item has `name` (1–200 sanitized chars), `quantity` (default `"1"`), optional `unit_price`, required `line_total`, `discount` (default zero) and optional catalog category (defaults to header). Assign sequential `line_no`; map catalog IDs to stored subcategory names.
+Each item has `name` (1–200 sanitized chars), `quantity` (default `"1"`), optional `unit_price`, required `line_total`, `discount` (default zero), optional `original_price` (must equal `line_total + discount`) and optional catalog category (defaults to header). Assign sequential `line_no`; map catalog IDs to stored subcategory names.
 
 `line_total` is net of item discount and excludes header tax/tip/discount. `subtotal` means the sum of net lines. Do not double-count item discounts as header discount. Compare `quantity × unit_price − item_discount` to `line_total` when unit price exists; differences over $0.02 are visible warnings. Example: 2 × $3.49 − $1.00 = $5.98; with $0.50 header tax, total is $6.48. Negative-return lines are unsupported in v1.
 
-Reconcile `abs(sum(lines) + tax + tip − header_discount − total) <= 0.02`; supplied subtotal must match the line sum within $0.02. With `accept_unreconciled=false`, mismatch returns `totals_mismatch` without a draft. With `true`, prepare a draft whose discrepancy requires explicit acknowledgement in TrackSpense. The flag never grants approval or changes totals. Three-decimal quantities require the Phase 4 migration before enablement.
+**TS-FIX-102:** a header `discount` is divided across the lines by paid price at verify time (each line's `discount` grows and its `line_total` drops; `original_price` is filled in), so the approval preview shows exactly the lines that will be saved and the stored header discount is `0.00`. Then reconcile `abs(sum(lines) + tax + tip − total) <= 0.02` (no discount term); supplied subtotal must match the line sum within $0.02. A mismatch always returns `totals_mismatch` without a draft; `accept_unreconciled=true` returns `validation_error`. Save re-checks the rule, so an operation verified under the old rule (still carrying a header discount) is refused and must be verified again. Three-decimal quantities require the Phase 4 migration before enablement.
 
 Verify authenticates/authorizes, normalizes/validates, finds possible duplicates, and stores one immutable pending operation plus audit event. It does not create expenses, update category memory or run financial aggregation. Example output:
 
@@ -164,7 +164,7 @@ Filters support globally unique subcategory names. A main filter is supported on
 
 `ExpenseSummary`: `{id,date,amount,currency,category_id?,category_name,category_ambiguous,merchant,description,item_count,source,created_by}`. Source is `mcp|other|unknown`, based on stored provenance, never hard-coded. Agent provenance uses the retained safe client display name; other records use `you`/`unknown`. Provenance grants no authority.
 
-Lists omit notes/cards/tags/fingerprints/user identity/internal FKs. Detail includes notes, tax/tip/discount and items with quantity/unit price/net line total/discount/category ambiguity. Hide synthesized proxies based on the non-itemized expense type, not item count: real one-item receipts stay visible.
+Lists omit notes/cards/tags/fingerprints/user identity/internal FKs. Detail includes notes, tax/tip/discount and items with quantity/unit price/line total/discount/`original_price`/category ambiguity. Since TS-FIX-102 `line_total` is the paid price and `discount` a record when `original_price` is set; `original_price: null` marks an older receipt whose line total is before the header discount. Hide synthesized proxies based on the non-itemized expense type, not item count: real one-item receipts stay visible.
 
 ### 4.3 `list_expenses`
 

@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Tuple, Optional
 
 import requests
 
+from varavu_selavu_service.services import receipt_lines
+
 from .categorization_service import CATEGORY_GROUPS
 from .receipt_text_parser import ReceiptTextParser
 
@@ -128,10 +130,12 @@ class ReceiptService:
             "'Boneless Skinless Chicken Breast'), "
             "quantity, unit, unit_price, line_total, and category_name. Correct any "
             "misspelled or partial item names using your knowledge of grocery products. "
-            "Crucially, accurately identify taxes and discounts. A discount can be a global "
-            "receipt discount, or a negative line item (set line_total to a negative number). "
-            "Ensure that the sum of line_total for all items plus tax and tip, minus discount "
-            "exactly matches the total amount. Be extremely careful not to miss tax details. "
+            "Crucially, accurately identify taxes, tips and discounts. A discount can be a global "
+            "receipt discount, or a coupon line printed under the item it applies to (set its "
+            "line_total to a negative number). Returns, refunds and bottle-deposit refunds are NOT "
+            "discounts: include them as items with is_refund set to true. Ensure that the sum of "
+            "line_total for all items plus tax and tip, minus discount exactly matches the total "
+            "amount. Be extremely careful not to miss tax or tip details. "
             "All monetary values must be floating point dollars exactly as shown on the "
             "receipt with no rounding. Respond only with JSON."
         )
@@ -204,11 +208,13 @@ class ReceiptService:
                 "'GV WHOLE MLK GL' becomes 'Great Value Whole Milk Gallon'), "
                 "quantity, unit, unit_price, line_total, and category_name. "
                 "Fix any misspelled or partial item names using your knowledge of "
-                "grocery products. Crucially, accurately identify taxes and discounts. "
-                "A discount can be a global receipt discount, or a negative line item "
-                "(set line_total to a negative number). Ensure the sum of line_total "
+                "grocery products. Crucially, accurately identify taxes, tips and discounts. "
+                "A discount can be a global receipt discount, or a coupon line printed "
+                "under the item it applies to (set its line_total to a negative number). "
+                "Returns, refunds and bottle-deposit refunds are NOT discounts: include "
+                "them as items with is_refund set to true. Ensure the sum of line_total "
                 "for all items plus tax and tip, minus discount exactly matches the "
-                "total amount. Be extremely careful not to miss tax details. "
+                "total amount. Be extremely careful not to miss tax or tip details. "
                 "All monetary values must be floating point dollars exactly as shown. "
                 "Respond only with JSON. Image (base64): "
                 + b64
@@ -309,8 +315,12 @@ class ReceiptService:
         return result
 
     def _finalize(self, parsed: Dict[str, Any], save_ocr_text: bool) -> Dict[str, Any]:
-        header = parsed.get("header", {})
-        items = parsed.get("items", [])
+        # TS-FIX-102: every scan source ends here, so this is where scanner output (coupons as negative
+        # lines, a whole-receipt discount) becomes paid-price lines with no negative values. Refunds are
+        # listed in `review`, never folded into prices.
+        header, items, review, line_warnings = receipt_lines.normalize_scan(
+            parsed.get("header", {}) or {}, parsed.get("items", []) or []
+        )
 
         # ── Normalize names (ensure fields always exist) ──
         # If the LLM returned normalized_merchant_name, keep it; otherwise
@@ -344,7 +354,8 @@ class ReceiptService:
         result: Dict[str, Any] = {
             "header": header,
             "items": items,
-            "warnings": parsed.get("warnings", []),
+            "warnings": list(parsed.get("warnings", [])) + line_warnings,
+            "review": review,
             "fingerprint": fingerprint,
         }
         if save_ocr_text and parsed.get("ocr_text"):

@@ -1,34 +1,33 @@
 /**
- * ReceiptItemsSheet.tsx — the V2 "Items" review after a receipt scan: what was read, who each line
- * belongs to (group expenses only), the tax + tip, your share, and Save. Lines with nobody
- * assigned are split equally among the participants. There's no confidence figure — the receipt
- * parser doesn't return one, so none is shown rather than invented.
+ * ReceiptItemsSheet.tsx — the V2 "Items" review after a receipt scan: what was read (paid prices,
+ * with any saving), the tax and tip, your share and Save. Lines are for tracking only (TS-FIX-102):
+ * a group receipt is split on its total (Equal, Exact or Shares) in the split sheet, never item by
+ * item. There's no confidence figure — the receipt parser doesn't return one, so none is shown.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
-import { AppTheme, inkOnPastel } from '../../../core/theme/theme';
+import { AppTheme } from '../../../core/theme/theme';
 import Sheet from '../../../core/ui/Sheet';
 import CustomButton from '../../../core/ui/CustomButton';
-import { memberColor, initialsFromName } from '../../groups/components/BalanceRow';
 import { ScannedItem } from './ScannedItemsCard';
-import { Assignments, effectiveAssignees } from '../utils/receiptSplit';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
-
-export interface ItemsSheetPerson { id: string; name: string }
+import { lineDiscount, receiptTotals } from '../utils/receiptLines';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
   merchant: string;
   items: ScannedItem[];
-  /** Group participants; empty for a personal expense (no assignment UI). */
-  people: ItemsSheetPerson[];
-  assignments: Assignments;
-  onToggle: (lineNo: number, personId: string) => void;
-  /** tax − discount. */
-  extras: number;
+  tax: number;
+  tip: number;
+  /** The expense amount; Save stays off until paid prices + tax + tip match it. */
+  amount: number;
+  /** True for a group receipt: the footer shows the caller's share of the split total. */
+  grouped: boolean;
+  /** e.g. "Split equally among 3" — how the total is divided (set in the split sheet). */
+  splitLabel?: string;
   yourShare: number;
   saving: boolean;
   canSave: boolean;
@@ -46,15 +45,12 @@ function qtyLine(it: ScannedItem): string {
 }
 
 export default function ReceiptItemsSheet({
-  visible, onClose, merchant, items, people, assignments, onToggle, extras, yourShare, saving, canSave, onSave, onEditItems,
+  visible, onClose, merchant, items, tax, tip, amount, grouped, splitLabel, yourShare, saving, canSave, onSave, onEditItems,
 }: Props) {
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
-  const [openLine, setOpenLine] = useState<number | null>(null);
-  const grouped = people.length > 0;
-  const personIds = useMemo(() => people.map((p) => p.id), [people]);
-  const byId = useMemo(() => Object.fromEntries(people.map((p) => [p.id, p])), [people]);
   const n = items.length;
+  const totals = receiptTotals(items, tax, tip, amount);
 
   return (
     <Sheet visible={visible} onClose={onClose} tall>
@@ -69,80 +65,57 @@ export default function ReceiptItemsSheet({
       </View>
 
       <Text style={styles.help}>
-        {grouped ? 'Tap an item to assign it to people. Unassigned items split equally.' : 'Check what was read before saving.'}{' '}
+        {grouped && splitLabel ? `${splitLabel}. ` : ''}Check what was read before saving.{' '}
         <Text style={styles.link} onPress={onEditItems} accessibilityRole="button">Edit items</Text>
       </Text>
 
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
         {items.map((it) => {
-          const assigned = effectiveAssignees(assignments[it.line_no], personIds);
-          const explicit = (assignments[it.line_no] ?? []).filter((id) => byId[id]);
-          const open = grouped && openLine === it.line_no;
+          const saved = lineDiscount(it);
           return (
             <View key={it.line_no} style={styles.rowWrap}>
-              <TouchableOpacity
-                style={styles.row}
-                activeOpacity={grouped ? 0.6 : 1}
-                onPress={() => grouped && setOpenLine(open ? null : it.line_no)}
-                accessibilityRole={grouped ? 'button' : undefined}
-                accessibilityState={grouped ? { expanded: open } : undefined}
-              >
+              <View style={styles.row}>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.name} numberOfLines={1}>{it.item_name}</Text>
                   {!!qtyLine(it) && <Text style={styles.qty}>{qtyLine(it)}</Text>}
+                  {saved > 0 && <Text style={styles.saved}>Saved {money(saved)}</Text>}
                 </View>
-                {grouped && explicit.length > 0 && (
-                  <View style={styles.stack}>
-                    {explicit.map((id) => (
-                      <View key={id} style={[styles.miniAvatar, { backgroundColor: memberColor(id) }]}>
-                        <Text style={styles.miniAvatarText}>{initialsFromName(byId[id].name)}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
                 <Text style={styles.amount}>{money(it.line_total)}</Text>
-              </TouchableOpacity>
-              {open && (
-                <View style={styles.chips}>
-                  {people.map((p) => {
-                    const on = explicit.includes(p.id);
-                    return (
-                      <TouchableOpacity
-                        key={p.id}
-                        onPress={() => onToggle(it.line_no, p.id)}
-                        style={[styles.chip, on && { borderColor: memberColor(p.id), backgroundColor: 'rgba(255,255,255,0.05)' }]}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: on }}
-                      >
-                        <View style={[styles.miniAvatar, { backgroundColor: memberColor(p.id) }]}>
-                          <Text style={styles.miniAvatarText}>{initialsFromName(p.name)}</Text>
-                        </View>
-                        <Text style={[styles.chipText, on && { color: theme.colors.text }]} numberOfLines={1}>{p.name}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {explicit.length === 0 && (
-                    <Text style={styles.everyone}>Everyone ({assigned.length})</Text>
-                  )}
-                </View>
-              )}
+              </View>
             </View>
           );
         })}
       </ScrollView>
 
       <View style={styles.foot}>
-        {extras !== 0 && (
+        {tax > 0 && (
           <View style={styles.footRow}>
-            <Text style={styles.footLabel}>{grouped ? 'Tax + tip, split by share' : 'Tax & fees'}</Text>
-            <Text style={styles.footLabel}>{extras < 0 ? '−' : ''}{money(extras)}</Text>
+            <Text style={styles.footLabel}>Tax</Text>
+            <Text style={styles.footLabel}>{money(tax)}</Text>
           </View>
+        )}
+        {tip > 0 && (
+          <View style={styles.footRow}>
+            <Text style={styles.footLabel}>Tip</Text>
+            <Text style={styles.footLabel}>{money(tip)}</Text>
+          </View>
+        )}
+        {totals.savings > 0 && (
+          <View style={styles.footRow}>
+            <Text style={styles.footLabel}>You saved (already in prices)</Text>
+            <Text style={styles.footLabel}>{money(totals.savings)}</Text>
+          </View>
+        )}
+        {!totals.reconciled && (
+          <Text style={styles.mismatch} accessibilityLiveRegion="polite">
+            Items{tax > 0 || tip > 0 ? ' plus tax and tip' : ''} come to {money(totals.computed)}, not {money(amount)}. Make them match to save.
+          </Text>
         )}
         <View style={styles.footRow}>
           <Text style={styles.share}>{grouped ? 'Your share' : 'Total'}</Text>
           <Text style={styles.share}>{money(yourShare)}</Text>
         </View>
-        <CustomButton title={saving ? 'Saving…' : `Save ${n} item${n === 1 ? '' : 's'}`} onPress={onSave} disabled={!canSave || saving} />
+        <CustomButton title={saving ? 'Saving…' : `Save ${n} item${n === 1 ? '' : 's'}`} onPress={onSave} disabled={!canSave || saving || !totals.reconciled} />
       </View>
     </Sheet>
   );
@@ -160,16 +133,8 @@ const createStyles = (theme: AppTheme) => StyleSheet.create({
   name: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 14.5, color: theme.colors.text },
   qty: { fontFamily: theme.typography.fontFamily.regular, fontSize: 11.5, color: theme.colors.textTertiary, marginTop: 2 },
   amount: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 14.5, color: theme.colors.text, width: 62, textAlign: 'right', fontVariant: ['tabular-nums'] },
-  stack: { flexDirection: 'row', paddingRight: 6 },
-  miniAvatar: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: -6, borderWidth: 1.5, borderColor: theme.colors.surfaceElevated },
-  miniAvatarText: { fontFamily: theme.typography.fontFamily.bold, fontSize: 10, color: inkOnPastel },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingBottom: 12 },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, height: 34, paddingLeft: 5, paddingRight: 12,
-    borderRadius: 999, borderWidth: 1, borderColor: theme.colors.border,
-  },
-  chipText: { fontFamily: theme.typography.fontFamily.semiBold, fontSize: 13, color: theme.colors.textSecondary, maxWidth: 110 },
-  everyone: { fontFamily: theme.typography.fontFamily.regular, fontSize: 12, color: theme.colors.textTertiary, alignSelf: 'center' },
+  saved: { fontFamily: theme.typography.fontFamily.regular, fontSize: 11.5, color: theme.colors.success, marginTop: 2 },
+  mismatch: { fontFamily: theme.typography.fontFamily.regular, fontSize: 13, color: theme.colors.warning },
   foot: { gap: 10, paddingTop: 12 },
   footRow: { flexDirection: 'row', justifyContent: 'space-between' },
   footLabel: { fontFamily: theme.typography.fontFamily.regular, fontSize: 14, color: theme.colors.textSecondary, fontVariant: ['tabular-nums'] },

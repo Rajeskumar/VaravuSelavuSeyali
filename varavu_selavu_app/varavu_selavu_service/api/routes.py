@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, Response, Depends, status, Query, File, UploadFile, HTTPException, BackgroundTasks, Request
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional
 
@@ -35,6 +35,7 @@ from varavu_selavu_service.core.money import to_decimal, validate_money_amount
 from varavu_selavu_service.services.expense_service import ExpenseService, NOTES_UNCHANGED
 from varavu_selavu_service.services.personal_export_service import PersonalExportService
 from varavu_selavu_service.services.receipt_service import ReceiptService
+from varavu_selavu_service.services import receipt_lines
 from varavu_selavu_service.services.ocr.layout import OcrFragment, group_rows
 from varavu_selavu_service.services.category_memory_service import CategoryMemoryService
 from varavu_selavu_service.repo.postgres_repo import PostgresRepo
@@ -107,7 +108,7 @@ from varavu_selavu_service.services.insight_analytics_service import InsightAnal
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
 from varavu_selavu_service.services.notification_service import NotificationService
 from varavu_selavu_service.api.groups_routes import get_group_expense_service, get_notification_service
-from varavu_selavu_service.db.models import ExpenseSplit, Expense
+from varavu_selavu_service.db.models import ExpenseSplit, Expense, ExpenseItem as ExpenseItemRow
 import uuid as _uuid
 from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.services.ai_quota_service import (
@@ -404,10 +405,27 @@ def list_expenses(
     limit: int = Query(30, ge=1),
     offset: int = Query(0, ge=0),
     tag_ids: List[str] | None = Query(default=None),
+    start_date: Optional[str] = Query(default=None, description="Inclusive start date (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(default=None, description="Inclusive end date (YYYY-MM-DD)"),
     expense_service: ExpenseService = Depends(get_expense_service),
     user_id: str = Depends(auth_required),
 ):
-    expenses = expense_service.get_expenses_for_user(user_id)
+    parsed_start: Optional[date] = None
+    parsed_end: Optional[date] = None
+    if start_date is not None:
+        try:
+            parsed_start = date.fromisoformat(start_date)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="start_date must be YYYY-MM-DD")
+    if end_date is not None:
+        try:
+            parsed_end = date.fromisoformat(end_date)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="end_date must be YYYY-MM-DD")
+    if parsed_start and parsed_end and parsed_start > parsed_end:
+        raise HTTPException(status_code=422, detail="start_date must be on or before end_date")
+
+    expenses = expense_service.get_expenses_for_user(user_id, start_date=parsed_start, end_date=parsed_end)
     # TS-TAG-106 (PRD §10.4/§7.4) — OR semantics within tag_ids, AND against other active
     # filters. `tags` is always already scoped to this user (get_tags_for_expenses, PRD §9.2),
     # so this is a plain in-memory filter, not a fresh access check.
@@ -978,7 +996,7 @@ def create_expense_with_items(
     if payload.card_id:
         card_service.assert_card_is_held(user_id, payload.card_id)
     header = {**payload.header, "card_id": payload.card_id} if payload.card_id else payload.header
-    items = [i.dict(exclude_unset=True) for i in payload.items]
+    items = [i.model_dump(exclude_unset=True) for i in payload.items]
     required_header = ["purchased_at", "amount"]
     for field in required_header:
         if field not in header:
@@ -990,13 +1008,14 @@ def create_expense_with_items(
     # `header` is an untyped dict, so its amount has not been through the
     # constrained money types the way a declared field would have been.
     amount = validate_money_amount(header["amount"], field_name="amount")
-    header = {**header, "amount": amount}
-    subtotal = sum(((i.get("line_total") or Decimal("0")) for i in items), Decimal("0"))
     tax = to_decimal(header.get("tax"))
     tip = to_decimal(header.get("tip"))
-    discount = to_decimal(header.get("discount"))
-    if abs(subtotal + tax + tip - discount - amount) > Decimal("0.02"):
-        raise HTTPException(status_code=400, detail="Totals do not reconcile")
+    if tax < 0 or tip < 0:
+        raise HTTPException(status_code=400, detail="Tax and tip cannot be negative")
+    # TS-FIX-102: line prices are paid prices; a header discount is the old format.
+    receipt_lines.refuse_header_discount(header.get("discount"))
+    items = receipt_lines.checked_lines(items, amount=amount, tax=tax, tip=tip)
+    header = {**header, "amount": amount, "tax": tax, "tip": tip, "discount": receipt_lines.savings_of(items)}
     existing = repo.find_expense_by_fingerprint(user_id, header.get("fingerprint", ""))
     if existing and not force:
         raise HTTPException(status_code=409, detail={"expense_id": existing.get("id")})
@@ -1065,13 +1084,17 @@ def get_expense_items(
     user_id: str = Depends(auth_required),
 ):
     expense = _get_owned_personal_expense(db, expense_id, user_id)
-    items = repo.get_items_for_expense(expense_id)
-    return {
-        "items": items,
-        "amount": float(expense.amount or 0),
-        "tax": float(expense.tax or 0),
-        "discount": float(expense.discount or 0),
-    }
+    return _personal_items_view(db, expense)
+
+
+def _personal_items_view(db: Session, expense: Expense) -> dict:
+    rows = (
+        db.query(ExpenseItemRow).filter(ExpenseItemRow.expense_id == expense.id).order_by(ExpenseItemRow.line_no).all()
+    )
+    return receipt_lines.items_view(
+        rows, amount=expense.amount, tax=expense.tax, tip=expense.tip,
+        header_discount=expense.discount, group=False,
+    )
 
 
 @router.put(
@@ -1091,30 +1114,22 @@ def update_expense_items(
     from varavu_selavu_service.services.personal_write_lock import lock_personal_user
     lock_personal_user(db, user_id)
     expense = _get_owned_personal_expense(db, expense_id, user_id)
-    items = [i.dict(exclude_unset=True) for i in payload.items]
-    if not items:
-        raise HTTPException(status_code=400, detail="At least one item is required")
-    for item in items:
-        if "item_name" not in item or "line_total" not in item:
-            raise HTTPException(status_code=400, detail="Invalid item")
-    subtotal = sum(((i.get("line_total") or Decimal("0")) for i in items), Decimal("0"))
-    if abs(subtotal + payload.tax - payload.discount - payload.amount) > Decimal("0.02"):
-        raise HTTPException(status_code=400, detail="Totals do not reconcile")
+    items = [i.model_dump(exclude_unset=True, exclude={"id"}) for i in payload.items]
+    receipt_lines.refuse_header_discount(payload.discount)
+    if payload.split is not None:
+        raise HTTPException(status_code=400, detail="A personal expense has no split")
+    items = receipt_lines.checked_lines(items, amount=payload.amount, tax=payload.tax, tip=payload.tip)
 
     repo.delete_items_for_expense(expense_id, commit=False)
     expense.amount = payload.amount
     expense.tax = payload.tax
-    expense.discount = payload.discount
+    expense.tip = payload.tip
+    expense.discount = receipt_lines.savings_of(items)
     db.add(expense)
     repo.append_items(user_id, expense_id, items)
     analysis_service.invalidate_cache()
-
-    return {
-        "items": repo.get_items_for_expense(expense_id),
-        "amount": float(expense.amount or 0),
-        "tax": float(expense.tax or 0),
-        "discount": float(expense.discount or 0),
-    }
+    db.refresh(expense)
+    return _personal_items_view(db, expense)
 
 
 @router.get(
@@ -1193,7 +1208,7 @@ def get_recurring_due(
     # Build set of (yyyy-mm, desc, category) that already exist in expenses
     existing = expense_service.get_expenses_for_user(user_id)
     existing_keys: set[str] = set()
-    from datetime import datetime as _dt
+    from datetime import date, datetime as _dt
     for e in existing:
         try:
             d = _dt.strptime(e["date"], "%m/%d/%Y")
@@ -1238,7 +1253,7 @@ def confirm_recurring(
     from varavu_selavu_service.db.models import Expense
     existing_rows = db.query(Expense).filter(Expense.user_email == user_id).all()
     existing_keys = set()
-    from datetime import datetime as _dt
+    from datetime import date, datetime as _dt
     for e in existing_rows:
         date_str = e.purchased_at.strftime("%m/%d/%Y") if e.purchased_at else "01/01/1970"
         key = f"{date_str}__{e.description or ''}__{e.category_id or ''}"
@@ -1359,7 +1374,7 @@ def execute_recurring_now(
     db: Session = Depends(get_db),
     user_id: str = Depends(auth_required),
 ):
-    from datetime import datetime as _dt
+    from datetime import date, datetime as _dt
     template_id: str = str(payload.get("template_id"))
     if not template_id:
         return {"success": False, "created": False, "error": "template_id required"}
@@ -1378,7 +1393,7 @@ def execute_recurring_now(
     y, m0 = now.year, now.month - 1
     # scheduled date within this month (clamped)
     def _last_day_of_month(y: int, m0: int) -> int:
-        from datetime import datetime, timedelta
+        from datetime import date, datetime, timedelta
         first_next = datetime(y + (1 if m0 == 11 else 0), (m0 + 1) % 12 + 1, 1)
         return (first_next - timedelta(days=1)).day
 

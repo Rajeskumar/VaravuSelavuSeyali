@@ -159,3 +159,43 @@ def test_malformed_expense_id_is_404_not_500(test_client, db_session):
         "category": "Dining out", "cost": 5,
     })
     assert res.status_code == 404
+
+
+def test_list_expenses_filters_by_date_range(test_client, db_session):
+    db_session.add_all([
+        Expense(
+            id=uuid.uuid4(), user_email="test@user.com",
+            purchased_at=datetime(2026, 2, 28, 23, 59, 59),
+            category_id="Food & Drink", amount=10.0, description="Feb",
+        ),
+        Expense(
+            id=uuid.uuid4(), user_email="test@user.com",
+            purchased_at=datetime(2026, 3, 1, 0, 0, 0),
+            category_id="Food & Drink", amount=15.0, description="Mar start",
+        ),
+        Expense(
+            id=uuid.uuid4(), user_email="test@user.com",
+            purchased_at=datetime(2026, 3, 31, 22, 30, 0),
+            category_id="Food & Drink", amount=25.0, description="Mar end",
+        ),
+        Expense(
+            id=uuid.uuid4(), user_email="test@user.com",
+            purchased_at=datetime(2026, 4, 1, 0, 0, 0),
+            category_id="Food & Drink", amount=30.0, description="Apr",
+        ),
+    ])
+    db_session.commit()
+
+    # Month slice returns only March (including late-evening timestamp on Mar 31).
+    res = test_client.get("/api/v1/expenses", params={"start_date": "2026-03-01", "end_date": "2026-03-31"})
+    assert res.status_code == 200
+    assert [i["description"] for i in res.json()["items"]] == ["Mar end", "Mar start"]
+
+    # Omitting dates preserves all-time listing.
+    all_res = test_client.get("/api/v1/expenses")
+    assert all_res.status_code == 200
+    assert len(all_res.json()["items"]) == 4
+
+    # Validation errors return 422.
+    assert test_client.get("/api/v1/expenses", params={"start_date": "03/01/2026"}).status_code == 422
+    assert test_client.get("/api/v1/expenses", params={"start_date": "2026-04-01", "end_date": "2026-03-01"}).status_code == 422

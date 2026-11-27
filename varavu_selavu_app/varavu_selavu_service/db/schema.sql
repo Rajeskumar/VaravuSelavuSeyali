@@ -56,6 +56,7 @@ CREATE TABLE trackspense.expense_items (
     line_total NUMERIC(12, 2) NOT NULL,
     tax NUMERIC(12, 2) DEFAULT 0,
     discount NUMERIC(12, 2) DEFAULT 0,
+    original_price NUMERIC(12, 2),                         -- TS-FIX-102: NULL = old format
     attributes_json JSONB,                                 -- Stores dynamic receipt data flags
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

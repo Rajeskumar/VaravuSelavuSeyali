@@ -1,7 +1,7 @@
 /**
  * SplitEditor.tsx — full equal/exact/percentage/shares/adjustment split selector, gated per
- * call site via `allowedTypes` (e.g. Quick Capture's itemized-receipt path only supports
- * 'equal' — member_ratios per line item has no percentage/exact/shares/adjustment analog).
+ * call site via `allowedTypes` (e.g. a receipt is split on its total by Equal, Exact or Shares only,
+ * TS-FIX-102).
  */
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';

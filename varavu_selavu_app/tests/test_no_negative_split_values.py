@@ -14,7 +14,6 @@ from pydantic import ValidationError
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, Group
 from varavu_selavu_service.models.api_models import ExpenseItem
 from varavu_selavu_service.services.group_expense_service import GroupExpenseService
-from varavu_selavu_service.services.item_split_engine import resolve_itemized_split
 from varavu_selavu_service.services.split_engine import SplitError, resolve_split
 from tests.test_group_expenses_api import _make_group_with_members
 
@@ -45,10 +44,8 @@ def test_non_negative_adjustments_still_share_the_whole_total():
     assert [r.amount_owed for r in results] == [Decimal("12.00"), Decimal("12.00"), Decimal("6.00")]
 
 
-def test_itemized_discount_cannot_push_a_share_below_zero():
-    items = [{"item_name": "A", "line_total": 10, "member_ratios": {"m0": 1}}]
-    with pytest.raises(SplitError, match="cannot be negative"):
-        resolve_itemized_split(items, tax=0, tip=0, discount=15, total_amount=0.01)
+# The item-split engine was removed in TS-FIX-102; a discount larger than the items can no longer
+# produce a negative line or share (tests/test_receipt_lines.py).
 
 
 def _expense_body(m, split_type, values, amount=10.0):
@@ -68,15 +65,21 @@ def test_api_refuses_a_negative_adjustment_and_stores_nothing(test_client, db_se
     assert db_session.query(ExpenseSplit).count() == 0
 
 
-@pytest.mark.parametrize("field", ["tax", "discount", "quantity"])
-def test_api_refuses_a_minus_value_on_group_receipt_items(test_client, db_session, field):
+@pytest.mark.parametrize("where,field", [
+    ("header", "tax"), ("header", "tip"),
+    ("item", "discount"), ("item", "quantity"), ("item", "line_total"), ("item", "unit_price"), ("item", "original_price"),
+])
+def test_api_refuses_a_minus_value_on_group_receipts(test_client, db_session, where, field):
     group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
-    item = {"line_no": 1, "item_name": "Steak", "line_total": 10.0, "member_ratios": {m["test@user.com"]: 1.0}}
-    item[field] = -1
-    res = test_client.post(f"/api/v1/groups/{group_id}/expenses/itemized", json={
+    item = {"line_no": 1, "item_name": "Steak", "line_total": 10.0}
+    body = {
         "date": "01/15/2026", "description": "Dinner", "category": "Food", "amount": 10.0,
-        "payers": [{"member_id": m["test@user.com"], "amount_paid": 10.0}], "items": [item],
-    })
+        "payers": [{"member_id": m["test@user.com"], "amount_paid": 10.0}],
+        "split": {"type": "equal", "entries": [{"member_id": m["test@user.com"], "value": 0}]},
+        "items": [item],
+    }
+    (item if where == "item" else body)[field] = -1
+    res = test_client.post(f"/api/v1/groups/{group_id}/expenses/itemized", json=body)
     assert res.status_code == 422
     assert db_session.query(Expense).filter(Expense.group_id == uuid.UUID(group_id)).count() == 0
 
@@ -128,18 +131,19 @@ def test_resaving_an_old_negative_default_split_unchanged_does_not_block_a_renam
 
 # Receipt scans record a coupon as a negative line (receipt_text_parser, and both AI prompts). That is
 # not something a person types, so it must keep saving until the owner decides how to treat it.
-def test_a_scanned_coupon_line_still_saves_and_shares_total_the_amount(test_client, db_session):
+def test_a_scanned_coupon_saves_as_a_paid_price_and_shares_total_the_amount(test_client, db_session):
+    # TS-FIX-102: a coupon is folded into the line it applies to; no negative line reaches the server.
+    from varavu_selavu_service.services.receipt_lines import normalize_scan
+    _, lines, _, _ = normalize_scan({}, [{"item_name": "Vitamins", "line_total": 10.0},
+                                         {"item_name": "CVS COUPON", "line_total": -2.0, "unit_price": -2.0}])
     group_id, m = _make_group_with_members(test_client, db_session, ["b@test.com"])
-    ratios = {mid: 0.5 for mid in m.values()}
     res = test_client.post(f"/api/v1/groups/{group_id}/expenses/itemized", json={
         "date": "01/15/2026", "description": "Pharmacy", "category": "Food", "amount": 8.0,
         "payers": [{"member_id": m["test@user.com"], "amount_paid": 8.0}],
-        "items": [
-            {"line_no": 1, "item_name": "Vitamins", "line_total": 10.0, "member_ratios": ratios},
-            {"line_no": 2, "item_name": "CVS COUPON", "line_total": -2.0, "unit_price": -2.0, "member_ratios": ratios},
-        ],
+        "split": {"type": "equal", "entries": [{"member_id": mid, "value": 0} for mid in m.values()]},
+        "items": lines,
     })
-    assert res.status_code in (200, 201), res.text
+    assert res.status_code == 201, res.text
     assert sorted(float(s.amount_owed) for s in db_session.query(ExpenseSplit).all()) == [4.0, 4.0]
 
 

@@ -184,8 +184,12 @@ class InsightsAggregationService:
         old_purchased_at: Optional[datetime],
         new_merchant_name: Optional[str],
         new_purchased_at: Optional[datetime],
+        old_member_item_shares: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+        new_member_item_shares: Optional[Dict[str, List[Dict[str, Any]]]] = None,
     ) -> None:
-        """Call after a group simple expense is updated."""
+        """Call after a group expense is updated. For a receipt, each person's item totals move with their
+        share (TS-FIX-102): the old item shares are backed out and the new ones added, so a later delete
+        backs out exactly what is there. Price history is per purchase and is not touched by an edit."""
         # 1. Back out old values
         if old_merchant_name:
             for member_email, share_amount in old_member_shares.items():
@@ -203,7 +207,11 @@ class InsightsAggregationService:
                 self._update_merchant_insight(
                     member_email, new_merchant_name, new_purchased_at, share_amount, count_delta=1
                 )
-                
+
+        if old_member_item_shares != new_member_item_shares:
+            self._adjust_item_totals(old_member_item_shares, -1)
+            self._adjust_item_totals(new_member_item_shares, +1)
+
         self.db.commit()
 
     def on_group_expense_deleted(
@@ -225,37 +233,7 @@ class InsightsAggregationService:
                 )
         
         # 2. Back out item aggregates
-        if member_item_shares:
-            for member_email, user_items in member_item_shares.items():
-                if not member_email:
-                    continue
-                for item in user_items:
-                    normalized_name = item.get("normalized_name") or item.get("item_name", "Unknown")
-                    quantity = float(item.get("share_quantity", 1))
-                    line_total = float(item.get("share_amount", 0))
-                    
-                    insight = (
-                        self.db.query(ItemInsight)
-                        .filter(
-                            ItemInsight.user_email == member_email,
-                            ItemInsight.normalized_name == normalized_name,
-                        )
-                        .first()
-                    )
-                    if insight:
-                        prev_total = float(insight.total_spent or 0)
-                        prev_qty = float(insight.total_quantity_bought or 0)
-                        new_total = max(0, prev_total - line_total)
-                        new_qty = max(0, prev_qty - quantity)
-                        
-                        insight.total_spent = Decimal(str(new_total))
-                        insight.total_quantity_bought = Decimal(str(new_qty))
-                        insight.avg_unit_price = Decimal(str(new_total / new_qty)) if new_qty > 0 else Decimal("0")
-                        
-                        if new_qty == 0:
-                            insight.min_price = Decimal("0")
-                            insight.max_price = Decimal("0")
-                            insight.avg_unit_price = Decimal("0")
+        self._adjust_item_totals(member_item_shares, -1)
 
         self.db.commit()
 
@@ -294,6 +272,47 @@ class InsightsAggregationService:
     # ------------------------------------------------------------------
     # Internal: Item insight helpers
     # ------------------------------------------------------------------
+
+    def move_item_totals(self, old_member_item_shares, new_member_item_shares) -> None:
+        """Moves item totals from one attribution to another (e.g. a personal receipt moved to a group)."""
+        self._adjust_item_totals(old_member_item_shares, -1)
+        self._adjust_item_totals(new_member_item_shares, +1)
+        self.db.commit()
+
+    def _adjust_item_totals(self, member_item_shares: Optional[Dict[str, List[Dict[str, Any]]]], sign: int) -> None:
+        """Adds (sign=+1) or backs out (sign=-1) each person's item spend and quantity, in Decimal. Totals
+        never go below zero; an emptied insight resets its prices."""
+        for member_email, user_items in (member_item_shares or {}).items():
+            if not member_email:
+                continue
+            for item in user_items:
+                normalized_name = item.get("normalized_name") or item.get("item_name", "Unknown")
+                quantity = Decimal(str(item.get("share_quantity", 1)))
+                line_total = Decimal(str(item.get("share_amount", 0)))
+                insight = (
+                    self.db.query(ItemInsight)
+                    .filter(ItemInsight.user_email == member_email, ItemInsight.normalized_name == normalized_name)
+                    .first()
+                )
+                if insight is None:
+                    if sign < 0:
+                        continue
+                    unit = float(item.get("unit_price") or 0)
+                    insight = ItemInsight(
+                        user_email=member_email, normalized_name=normalized_name,
+                        avg_unit_price=Decimal(str(unit)), min_price=Decimal(str(unit)), max_price=Decimal(str(unit)),
+                        total_quantity_bought=Decimal("0"), total_spent=Decimal("0"),
+                    )
+                    self.db.add(insight)
+                cent = Decimal("0.01")
+                new_total = max(Decimal("0"), Decimal(str(insight.total_spent or 0)) + sign * line_total).quantize(cent)
+                new_qty = max(Decimal("0"), Decimal(str(insight.total_quantity_bought or 0)) + sign * quantity).quantize(cent)
+                insight.total_spent = new_total
+                insight.total_quantity_bought = new_qty
+                insight.avg_unit_price = (new_total / new_qty).quantize(cent) if new_qty > 0 else Decimal("0")
+                if new_qty == 0:
+                    insight.min_price = Decimal("0")
+                    insight.max_price = Decimal("0")
 
     def _update_item_insight(
         self,

@@ -64,7 +64,7 @@ import { useEntityResolutionEnabled } from '../../receipts/hooks/useEntityResolu
 import SplitSheet, { paidByName } from '../../groups/components/SplitSheet';
 import ReceiptScanScreen from '../../receipts/components/ReceiptScanScreen';
 import ReceiptItemsSheet from '../../receipts/components/ReceiptItemsSheet';
-import { Assignments, buildMemberRatios, computeReceiptShares, toggleAssignee } from '../../receipts/utils/receiptSplit';
+import { RECEIPT_SPLIT_TYPES, ReceiptReviewLine, fromServerLine, receiptShareFor, receiptTotals, toSaveLine } from '../../receipts/utils/receiptLines';
 import { SplitEditorValue, computeSplitValid } from '../../groups/components/SplitEditor';
 import { computePayersValid } from '../../groups/components/PayerPicker';
 import { notifyExpenseChanged } from '../utils/expenseEvents';
@@ -166,7 +166,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [scanning, setScanning] = useState(false);
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   const [scannedTax, setScannedTax] = useState(0);
-  const [scannedDiscount, setScannedDiscount] = useState(0);
+  const [scannedTip, setScannedTip] = useState(0);
+  const [scannedReview, setScannedReview] = useState<ReceiptReviewLine[]>([]);
   const [scannedPurchasedAt, setScannedPurchasedAt] = useState<string | null>(null);
   const [scannedFingerprint, setScannedFingerprint] = useState<string | null>(null);
   // Full-screen scanner, the itemised review sheet, and the split sheet.
@@ -174,7 +175,6 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const [itemsVisible, setItemsVisible] = useState(false);
   const [splitVisible, setSplitVisible] = useState(false);
   // Who each scanned line belongs to (group expenses); missing = split among everyone.
-  const [assignments, setAssignments] = useState<Assignments>({});
   const [groupDetail, setGroupDetail] = useState<GroupDetail | null>(null);
   const [payers, setPayers] = useState<PayerSummaryItem[]>([]);
   const [splitValue, setSplitValue] = useState<SplitEditorValue>({ type: 'equal', entries: [] });
@@ -222,13 +222,13 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setWho(initialWho);
     setScannedItems([]);
     setScannedTax(0);
-    setScannedDiscount(0);
+    setScannedTip(0);
+    setScannedReview([]);
     setScannedPurchasedAt(null);
     setScannedFingerprint(null);
     setScanVisible(false);
     setItemsVisible(false);
     setSplitVisible(false);
-    setAssignments({});
     setTagNames([]);
     setTagPickerVisible(false);
     setGroupDetail(null);
@@ -237,7 +237,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
     setCustomized(false);
   };
 
-  const draft = { amt, desc, merchantName, mainCategory, subcategory, userPickedCategory, userPickedMerchant, recurring, cardId, who, scannedItems, scannedTax, scannedDiscount, scannedPurchasedAt, scannedFingerprint, assignments, tagNames, payers, splitValue, customized, expenseDate: expenseDate.getTime(), unknownOutcome: unknownOutcome || loading };
+  const draft = { amt, desc, merchantName, mainCategory, subcategory, userPickedCategory, userPickedMerchant, recurring, cardId, who, scannedItems, scannedTax, scannedTip, scannedReview, scannedPurchasedAt, scannedFingerprint, tagNames, payers, splitValue, customized, expenseDate: expenseDate.getTime(), unknownOutcome: unknownOutcome || loading };
   const dirty = stage === 'entry' && !!(amt || desc || scannedItems.length);
   React.useEffect(() => {
     let mounted = true;
@@ -257,10 +257,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
       setWho(saved.who);
       setScannedItems(saved.scannedItems);
       setScannedTax(saved.scannedTax);
-      setScannedDiscount(saved.scannedDiscount);
+      setScannedTip(Number(saved.scannedTip) || 0);
+      setScannedReview(Array.isArray(saved.scannedReview) ? saved.scannedReview : []);
       setScannedPurchasedAt(saved.scannedPurchasedAt);
       setScannedFingerprint(saved.scannedFingerprint);
-      setAssignments(saved.assignments);
       setTagNames(saved.tagNames);
       setPayers(saved.payers);
       setSplitValue(saved.splitValue);
@@ -368,7 +368,10 @@ export default function AddExpenseProvider({ children }: { children: React.React
       setUserPickedCategory(true);
     }
     setScannedTax(Number(hdr.tax) || 0);
-    setScannedDiscount(Number(hdr.discount) || 0);
+    // TS-FIX-102: the server already folded coupons and whole-receipt discounts into the line
+    // prices; the tip is kept, and returns/refunds come back separately for review.
+    setScannedTip(Number(hdr.tip) || 0);
+    setScannedReview(Array.isArray(res.review) ? res.review : []);
     setScannedPurchasedAt(hdr.purchased_at || null);
     if (hdr.purchased_at) {
       // Parse the "YYYY-MM-DD" calendar date directly rather than via `new
@@ -379,22 +382,11 @@ export default function AddExpenseProvider({ children }: { children: React.React
       if (y && m && d) setExpenseDate(new Date(y, m - 1, d));
     }
     setScannedFingerprint(res.fingerprint || null);
-    setAssignments({});
-    // The itemized save path only supports an equal split (member_ratios per item, no
-    // percentage/exact/shares/adjustment analog) — if the user had already customized to a
-    // weighted split before scanning, drop back to equal over the same participants rather
-    // than silently ignoring their weights at save time.
-    setSplitValue((v) => (v.type === 'equal' ? v : { type: 'equal', entries: v.entries }));
+    // A receipt is split on its total by Equal, Exact or Shares (TS-FIX-102); a Percentage or
+    // Adjustment split chosen before scanning drops back to Equal over the same people.
+    setSplitValue((v) => ((RECEIPT_SPLIT_TYPES as readonly string[]).includes(v.type) ? v : { type: 'equal', entries: v.entries }));
     setScannedItems(
-      (res.items || []).map((it: any, idx: number) => ({
-        line_no: idx + 1,
-        item_name: it.item_name || it.normalized_name || 'Item',
-        line_total: Number(it.line_total) || 0,
-        quantity: it.quantity != null ? Number(it.quantity) : null,
-        unit_price: it.unit_price != null ? Number(it.unit_price) : null,
-        normalized_name: it.normalized_name,
-        category_name: it.category_name,
-      }))
+      (res.items || []).map((it: any, idx: number) => ({ ...fromServerLine(it, idx), category_name: it.category_name }))
     );
   };
 
@@ -522,12 +514,12 @@ export default function AddExpenseProvider({ children }: { children: React.React
   const knownMembers = !isGroup || (!!groupDetail && [...payers, ...splitValue.entries].every((entry) => groupDetail.members.some((member) => member.member_id === entry.member_id)));
   // A scanned receipt or restored draft can carry a date outside the allowed window.
   const dateProblem = expenseDateProblem(`${expenseDate.getFullYear()}-${String(expenseDate.getMonth() + 1).padStart(2, '0')}-${String(expenseDate.getDate()).padStart(2, '0')}`);
-  // Itemized expenses must add up to the total (server rule, ±2¢); ScannedItemsCard shows the figures.
+  // Receipts must match their total: paid prices + tax + tip, ±2¢ (server rule, TS-FIX-102).
+  // Discounts are already in the prices and are never subtracted again.
   const itemsMismatch = (() => {
     const named = scannedItems.filter((it) => it.item_name.trim() !== '');
     if (!named.length) return false;
-    const sum = named.reduce((t, it) => t + (Number(it.line_total) || 0), 0) + (Number(scannedTax) || 0) - (Number(scannedDiscount) || 0);
-    return Math.abs(sum - numAmount) > 0.02;
+    return !receiptTotals(named, scannedTax, scannedTip, numAmount).reconciled;
   })();
   const capReady = !dateProblem && !itemsMismatch && hydrated && !unknownOutcome && (!isGroup || !!selectedGroup) && knownMembers && numAmount > 0 && desc.trim().length > 0 && payersValid && splitValid;
   const amtDisplay = amt ? '$' + amt : '$0.00';
@@ -538,14 +530,13 @@ export default function AddExpenseProvider({ children }: { children: React.React
   // can see it too.
   const itemsToSave = scannedItems.filter((it) => it.item_name.trim() !== '');
 
-  // Items-sheet inputs. `participantIds` = who the group split currently includes.
-  const participantIds = splitValue.entries.map((e) => e.member_id);
-  const itemPeople = isGroup && groupDetail
-    ? participantIds.map((id) => ({ id, name: groupDetail.members.find((m) => m.member_id === id)?.display_name ?? '?' }))
-    : [];
-  const receiptShares = computeReceiptShares(itemsToSave, assignments, participantIds, scannedTax, scannedDiscount);
-  const itemsExtras = isGroup ? receiptShares.extras : Math.round((scannedTax - scannedDiscount) * 100) / 100;
-  const itemsYourShare = isGroup && myMemberId ? (receiptShares.perMember[myMemberId] ?? 0) : numAmount;
+  // Items-sheet inputs: a group receipt is split on its total (TS-FIX-102), so "your share" comes
+  // from the split chosen in the split sheet, not from the lines.
+  const splitPeople = splitValue.entries.length;
+  const splitLabel = splitValue.type === 'equal'
+    ? `Split equally among ${splitPeople}`
+    : splitValue.type === 'shares' ? `Split by shares among ${splitPeople}` : `Split by exact amounts among ${splitPeople}`;
+  const itemsYourShare = isGroup ? receiptShareFor(splitValue, numAmount, myMemberId) : numAmount;
 
   const handleSave = async () => {
     if (!capReady || !accessToken || !userEmail || loading || saveLock.current) return;
@@ -571,22 +562,14 @@ export default function AddExpenseProvider({ children }: { children: React.React
           purchased_at: formatMMDDYYYY(expenseDate),
           amount: numAmount,
           tax: scannedTax || 0,
-          tip: 0,
-          discount: scannedDiscount || 0,
+          // The scanned tip is kept; no header discount (savings are already in the line prices).
+          tip: scannedTip || 0,
           description: desc.trim(),
           main_category_name: mainCategory || 'Other',
           category_name: subcategory || 'General',
           fingerprint: scannedFingerprint || '',
         };
-        const items = itemsToSave.map((it, idx) => ({
-          line_no: idx + 1,
-          item_name: it.item_name,
-          normalized_name: it.normalized_name,
-          quantity: it.quantity ?? null,
-          unit_price: it.unit_price ?? null,
-          line_total: it.line_total,
-          category_name: it.category_name,
-        }));
+        const items = itemsToSave.map((it, idx) => ({ ...toSaveLine(it, idx), category_name: it.category_name }));
         await addExpenseWithItems({
           user_email: userEmail, header, items,
           card_id: cardCoachEnabled ? cardId : undefined,
@@ -642,22 +625,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
         let myShare: number;
         let groupExpenseRowId: string;
         if (itemsToSave.length > 0) {
-          // Each line is split equally among the people it was assigned to in the Items sheet, or
-          // among every participant when nobody was.
-          const items: GroupExpenseItemEntry[] = itemsToSave.map((it, idx) => ({
-            line_no: idx + 1,
-            item_name: it.item_name,
-            normalized_name: it.normalized_name,
-            quantity: it.quantity ?? null,
-            unit_price: it.unit_price ?? null,
-            line_total: it.line_total,
-            member_ratios: buildMemberRatios(assignments[it.line_no], participantIds),
-            // tax/discount are per-item fields server-side but resolve_itemized_split pools
-            // and prorates them across every assigned member regardless of which item carries
-            // them — attaching the header-level scan values to just the first item is
-            // equivalent to a true header-level tax/discount.
-            ...(idx === 0 ? { tax: scannedTax || 0, discount: scannedDiscount || 0 } : {}),
-          }));
+          // A group receipt is split on its TOTAL by the split sheet's Equal/Exact/Shares
+          // (TS-FIX-102); the lines are for tracking only, with tax and tip on the receipt itself.
+          const items: GroupExpenseItemEntry[] = itemsToSave.map((it, idx) => toSaveLine(it, idx));
           const row = await addGroupExpenseWithItems(who, {
             date: formatMMDDYYYY(expenseDate),
             description: desc.trim(),
@@ -665,6 +635,9 @@ export default function AddExpenseProvider({ children }: { children: React.React
             amount: numAmount,
             merchant_name: merchantName || undefined,
             payers,
+            split: splitValue,
+            tax: scannedTax || 0,
+            tip: scannedTip || 0,
             items,
             card_id: cardCoachEnabled ? cardId : undefined,
           }, capture);
@@ -885,7 +858,7 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     myMemberId={myMemberId}
                     payers={payers}
                     splitValue={splitValue}
-                    allowedTypes={itemsToSave.length > 0 ? ['equal'] : undefined}
+                    allowedTypes={itemsToSave.length > 0 ? [...RECEIPT_SPLIT_TYPES] : undefined}
                     onDone={(nextPayers, nextSplit) => {
                       setPayers(nextPayers);
                       setSplitValue(nextSplit);
@@ -905,10 +878,11 @@ export default function AddExpenseProvider({ children }: { children: React.React
                     onClose={() => setItemsVisible(false)}
                     merchant={merchantName}
                     items={itemsToSave}
-                    people={itemPeople}
-                    assignments={assignments}
-                    onToggle={(lineNo, personId) => setAssignments((a) => toggleAssignee(a, lineNo, personId))}
-                    extras={itemsExtras}
+                    tax={scannedTax}
+                    tip={scannedTip}
+                    amount={numAmount}
+                    grouped={isGroup}
+                    splitLabel={splitLabel}
                     yourShare={itemsYourShare}
                     saving={loading}
                     canSave={capReady}
@@ -982,7 +956,8 @@ export default function AddExpenseProvider({ children }: { children: React.React
                       onChange={setScannedItems}
                       merchant={merchantName}
                       tax={scannedTax}
-                      discount={scannedDiscount}
+                      tip={scannedTip}
+                      review={scannedReview}
                       currentAmount={numAmount}
                     />
                   )}

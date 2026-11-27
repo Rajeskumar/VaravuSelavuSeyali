@@ -17,7 +17,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../../core/auth/AuthContext';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { listExpenses, deleteExpense, updateExpense, getExpenseItems, updateExpenseItems, ExpenseRecord } from '../api/expenses';
+import { listAllExpenses, monthToDateRange, deleteExpense, updateExpense, getExpenseItems, updateExpenseItems, ExpenseRecord } from '../api/expenses';
+import { fromServerLine, receiptTotals, toSaveLine } from '../../receipts/utils/receiptLines';
 import ScannedItemsCard, { ScannedItem } from '../../receipts/components/ScannedItemsCard';
 import ExpenseItemsViewSheet from '../components/ExpenseItemsViewSheet';
 import { listGroups, getGroupDetail, moveExpenseToGroup, listAllMyGroupExpenses, UnifiedGroupExpenseRow, GroupSummary, ApiError } from '../../groups/api/groups';
@@ -94,8 +95,7 @@ export default function ExpensesScreen() {
     const [tab, setTab] = useState<Tab>('transactions');
     const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
     const [loading, setLoading] = useState(false);
-    const [offset, setOffset] = useState(0);
-    const [hasMore, setHasMore] = useState(true);
+    const fetchSeqRef = React.useRef(0);
 
     // Edit Modal State
     const [editModalVisible, setEditModalVisible] = useState(false);
@@ -111,7 +111,8 @@ export default function ExpensesScreen() {
     // show" from "haven't fetched yet" so saveEdit knows whether to also call updateExpenseItems.
     const [editItems, setEditItems] = useState<ScannedItem[]>([]);
     const [editItemsTax, setEditItemsTax] = useState(0);
-    const [editItemsDiscount, setEditItemsDiscount] = useState(0);
+    const [editItemsTip, setEditItemsTip] = useState(0);
+    const [editLegacyFormat, setEditLegacyFormat] = useState(false);
     const [editItemsLoaded, setEditItemsLoaded] = useState(false);
     // TS-TAG-112 — personal expenses have the tag_names write-through field, so this is sent
     // full-replace with the rest of the edit payload (no separate association calls needed).
@@ -186,32 +187,28 @@ export default function ExpensesScreen() {
 
     const fetchExpenses = async (reset = false) => {
         if (!accessToken || !userEmail) return;
+        const seq = ++fetchSeqRef.current;
         if (reset) {
             setLoading(true);
-            setOffset(0);
         }
 
         try {
-            const currentOffset = reset ? 0 : offset;
-            const data = await listExpenses(accessToken, userEmail, currentOffset, 50, tagFilterIds);
-
-            if (reset) {
-                setExpenses(data.items || []);
-            } else {
-                setExpenses((prev) => {
-                    const newItems = (data.items || []).filter(
-                        (item: ExpenseRecord) => !prev.some((p) => p.row_id === item.row_id)
-                    );
-                    return [...prev, ...newItems];
-                });
-            }
-
-            setOffset(currentOffset + (data.items?.length || 0));
-            setHasMore(!!data.next_offset);
+            // When a specific month is selected, push the date range to SQL so only that month's
+            // rows are fetched; when "All time" is selected (`monthFilter === ''`), fetch all pages.
+            const items = await listAllExpenses(
+                accessToken,
+                userEmail,
+                tagFilterIds,
+                500,
+                10,
+                monthToDateRange(monthFilter),
+            );
+            if (seq !== fetchSeqRef.current) return;
+            setExpenses(items);
         } catch (error) {
             logger.error('Failed to fetch expenses', error);
         } finally {
-            setLoading(false);
+            if (seq === fetchSeqRef.current) setLoading(false);
         }
     };
 
@@ -219,7 +216,7 @@ export default function ExpensesScreen() {
         if (isFocused && accessToken && userEmail) {
             fetchExpenses(true);
         }
-    }, [isFocused, accessToken, userEmail, tagFilterIds]);
+    }, [isFocused, accessToken, userEmail, tagFilterIds, monthFilter]);
 
     // TS-DES-112: the global "+" opens as a Modal overlay (not a navigator screen), so
     // useIsFocused() never toggles when it closes — refetch on the expense-changed signal too.
@@ -227,7 +224,7 @@ export default function ExpensesScreen() {
         fetchExpenses(true);
         qc.invalidateQueries({ queryKey: ['groupExpenses'] });
         qc.invalidateQueries({ queryKey: ['recurringTemplates'] });
-    }), [accessToken, userEmail]);
+    }), [accessToken, userEmail, tagFilterIds, monthFilter]);
 
     const handleDelete = (rowId: number) => {
         Alert.alert('Delete Expense', 'Are you sure you want to delete this expense?', [
@@ -268,16 +265,10 @@ export default function ExpensesScreen() {
         if (isItemized) {
             getExpenseItems(expense.row_id)
                 .then((res) => {
-                    setEditItems(res.items.map((it) => ({
-                        line_no: it.line_no,
-                        item_name: it.item_name,
-                        line_total: it.line_total,
-                        quantity: it.quantity,
-                        unit_price: it.unit_price,
-                        normalized_name: it.normalized_name || undefined,
-                    })));
+                    setEditItems(res.items.map(fromServerLine));
                     setEditItemsTax(res.tax);
-                    setEditItemsDiscount(res.discount);
+                    setEditItemsTip(res.tip || 0);
+                    setEditLegacyFormat(!!res.legacy_discount_format);
                     setEditItemsLoaded(true);
                 })
                 .catch(() => { /* falls back to the flat amount field only */ });
@@ -322,17 +313,10 @@ export default function ExpensesScreen() {
         try {
             if (editItemsLoaded && editItems.length > 0) {
                 await updateExpenseItems(editingExpense.row_id, {
-                    items: editItems.map((it) => ({
-                        line_no: it.line_no,
-                        item_name: it.item_name,
-                        normalized_name: it.normalized_name,
-                        quantity: it.quantity,
-                        unit_price: it.unit_price,
-                        line_total: it.line_total,
-                    })),
+                    items: editItems.map((it, idx) => toSaveLine(it, idx)),
                     amount: parseFloat(editAmount) || 0,
                     tax: editItemsTax,
-                    discount: editItemsDiscount,
+                    tip: editItemsTip,
                 });
             }
             await updateExpense(
@@ -354,7 +338,9 @@ export default function ExpensesScreen() {
             showToast({ message: 'Expense updated!', type: 'success' });
             fetchExpenses(true);
         } catch (error) {
-            showToast({ message: 'Failed to update expense', type: 'error' });
+            // Receipt refusals (totals don't match, update the app) carry the server's own words.
+            const detail = (error as any)?.detail;
+            showToast({ message: detail?.message || 'Failed to update expense', type: 'error' });
         }
     };
 
@@ -841,7 +827,8 @@ export default function ExpensesScreen() {
                                 onChange={setEditItems}
                                 merchant={editMerchantName}
                                 tax={editItemsTax}
-                                discount={editItemsDiscount}
+                                tip={editItemsTip}
+                                legacyFormat={editLegacyFormat}
                                 currentAmount={parseFloat(editAmount) || 0}
                             />
                         )}
@@ -870,6 +857,7 @@ export default function ExpensesScreen() {
                             <CustomButton
                                 title="Save Changes"
                                 onPress={saveEdit}
+                                disabled={editItemsLoaded && editItems.length > 0 && !receiptTotals(editItems, editItemsTax, editItemsTip, parseFloat(editAmount) || 0).reconciled}
                                 fullWidth={false}
                                 style={{ flex: 1 }}
                             />

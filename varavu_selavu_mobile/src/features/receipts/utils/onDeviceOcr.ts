@@ -64,16 +64,50 @@ export async function recognizeReceipt(uri: string): Promise<OcrResult | null> {
 // upload endpoint accepts, whatever the picker handed back.
 const UPLOAD_MAX_WIDTH = 1600;
 
-export async function toUploadableJpeg(uri: string, width?: number): Promise<string> {
-  if (Platform.OS === 'web') return uri;
+export interface UploadableImage {
+  uri: string;
+  /** Raw JPEG bytes for Expo SDK 57's winter/fetch FormData serializer (which rejects bare `{ uri }` parts). */
+  bytes?: Uint8Array;
+  name?: string;
+  type?: string;
+}
+
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/** Pure-JS base64 decoder that works identically in Hermes, JSC, V8, and Jest without Node's Buffer. */
+export function base64ToBytes(input: string): Uint8Array {
+  const clean = input.replace(/[^A-Za-z0-9+/=]/g, '');
+  const pad = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+  const out = new Uint8Array((clean.length * 3) / 4 - pad);
+  let j = 0;
+  for (let i = 0; i < clean.length; i += 4) {
+    const a = B64.indexOf(clean[i]);
+    const b = B64.indexOf(clean[i + 1]);
+    const c = clean[i + 2] === '=' ? 0 : B64.indexOf(clean[i + 2]);
+    const d = clean[i + 3] === '=' ? 0 : B64.indexOf(clean[i + 3]);
+    const n = (a << 18) | (b << 12) | (c << 6) | d;
+    out[j++] = (n >> 16) & 0xff;
+    if (j < out.length) out[j++] = (n >> 8) & 0xff;
+    if (j < out.length) out[j++] = n & 0xff;
+  }
+  return out;
+}
+
+export async function toUploadableJpeg(uri: string, width?: number): Promise<UploadableImage> {
+  if (Platform.OS === 'web') return { uri };
   try {
     const { ImageManipulator, SaveFormat } = require('expo-image-manipulator');
     const ctx = ImageManipulator.manipulate(uri);
     if (!width || width > UPLOAD_MAX_WIDTH) ctx.resize({ width: UPLOAD_MAX_WIDTH });
     const image = await ctx.renderAsync();
-    const saved = await image.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
-    return saved.uri;
+    const saved = await image.saveAsync({ compress: 0.8, format: SaveFormat.JPEG, base64: true });
+    return {
+      uri: saved.uri,
+      bytes: saved.base64 ? base64ToBytes(saved.base64) : undefined,
+      name: 'receipt.jpg',
+      type: 'image/jpeg',
+    };
   } catch {
-    return uri;
+    return { uri };
   }
 }

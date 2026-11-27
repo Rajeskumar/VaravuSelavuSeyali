@@ -236,6 +236,55 @@ def test_itemized_historical_receipt(mcp):
     assert len(detail["items"]) == 1 and detail["source"] == "mcp"
 
 
+def test_receipt_discount_is_folded_into_lines_at_verify(mcp):
+    # TS-FIX-102: the approval preview shows the paid-price lines that will be saved.
+    db, p, c = mcp
+    value = draft(
+        kind="itemized", amount=None, total="27.00", merchant="Shop", discount="3.00",
+        items=[{"name": "A", "line_total": "10.00"}, {"name": "B", "line_total": "20.00"}],
+    )
+    r = verify(db, p, value)
+    db.commit()
+    op = get_operation(db, p.user_email, r["operation_id"])
+    assert op.payload["discount"] == "0.00"
+    assert [(i["line_total"], i["discount"], i["original_price"]) for i in op.payload["items"]] == [
+        ("9.00", "1.00", "10.00"), ("18.00", "2.00", "20.00")]
+    decide(db, p.user_email, r["operation_id"], 1, True, True, str(uuid.uuid4()))
+    db.commit()
+    save(db, p, r["operation_id"])
+    db.commit()
+    exp = db.query(Expense).one()
+    assert exp.amount == Decimal("27.00") and exp.discount == Decimal("3.00")
+    assert sorted(i.line_total for i in db.query(ExpenseItem)) == [Decimal("9.00"), Decimal("18.00")]
+
+
+def test_unreconciled_receipts_are_always_refused(mcp):
+    db, p, c = mcp
+    mismatch = dict(kind="itemized", amount=None, total="30.00", merchant="Shop",
+                    items=[{"name": "A", "line_total": "10.00"}])
+    with pytest.raises(MCPError, match="totals_mismatch"):
+        verify(db, p, draft(**mismatch))
+    with pytest.raises(MCPError, match="validation_error"):
+        verify(db, p, draft(**{**mismatch, "accept_unreconciled": True}))
+
+
+def test_operation_verified_under_the_old_rule_is_refused_at_save(mcp):
+    db, p, c = mcp
+    r = verify(db, p, draft(kind="itemized", amount=None, total="10.00", merchant="Shop",
+                            items=[{"name": "A", "line_total": "10.00"}]))
+    db.commit()
+    op = get_operation(db, p.user_email, r["operation_id"])
+    # As stored before TS-FIX-102: pre-discount line plus a whole-receipt discount.
+    op.payload = {**op.payload, "total": "8.00", "discount": "2.00"}
+    db.commit()
+    decide(db, p.user_email, r["operation_id"], op.revision, True, True, str(uuid.uuid4()))
+    db.commit()
+    with pytest.raises(MCPError, match="totals_mismatch"):
+        save(db, p, r["operation_id"])
+    db.rollback()
+    assert db.query(Expense).count() == 0
+
+
 def test_personal_currency_separation_and_foreign_not_found(mcp):
     db, p, c = mcp
     oid = approved(db, p)
@@ -430,3 +479,20 @@ def test_date_window_rejects_future_and_over_a_year_old():
         draft(date=(datetime.now(timezone.utc) + timedelta(days=3)).date().isoformat())
     with pytest.raises(ValidationError):
         draft(date=(datetime.now(timezone.utc) - timedelta(days=400)).date().isoformat())
+
+
+def test_receipt_subtotal_before_the_discount_still_matches(mcp):
+    # A printed subtotal is before the whole-receipt discount; once folded into the lines it moves with them.
+    db, p, c = mcp
+    r = verify(db, p, draft(kind="itemized", amount=None, total="27.00", merchant="Shop", subtotal="30.00", discount="3.00",
+                            items=[{"name": "A", "line_total": "10.00"}, {"name": "B", "line_total": "20.00"}]))
+    db.commit()
+    assert get_operation(db, p.user_email, r["operation_id"]).payload["subtotal"] == "27.00"
+
+
+def test_a_discount_larger_than_the_lines_never_makes_the_subtotal_negative(mcp):
+    # Security re-check SEC-4: only the discount the lines absorbed comes off the subtotal.
+    db, p, c = mcp
+    with pytest.raises(MCPError):
+        verify(db, p, draft(kind="itemized", amount=None, total="1.00", merchant="Shop", subtotal="5.00", discount="9.00",
+                            items=[{"name": "A", "line_total": "5.00"}]))

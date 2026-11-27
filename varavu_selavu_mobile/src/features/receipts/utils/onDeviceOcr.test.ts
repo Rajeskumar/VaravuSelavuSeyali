@@ -1,4 +1,4 @@
-import { toOcrResult } from './onDeviceOcr';
+import { base64ToBytes, toOcrResult } from './onDeviceOcr';
 
 const line = (text: string, x: number, y: number, width: number, height: number, angle = 0) => ({
   text, x, y, width, height, angle, confidence: 0.9,
@@ -37,5 +37,13 @@ describe('toOcrResult', () => {
   it('truncates very long lines to the server limit', () => {
     const lines = ['X'.repeat(300), 'A 1.00', 'B 2.00'].map((t, i) => line(t, 0, i * 20, 100, 15));
     expect(toOcrResult({ lines })!.lines[0].text).toHaveLength(200);
+  });
+});
+
+describe('base64ToBytes', () => {
+  it('decodes JPEG base64 payloads into exact bytes', () => {
+    const expected = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+    const b64 = Buffer.from(expected).toString('base64');
+    expect(Array.from(base64ToBytes(b64))).toEqual(Array.from(expected));
   });
 });

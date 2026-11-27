@@ -59,6 +59,7 @@ import { applyTagsToExpense, removeTagFromExpense } from '../../api/tags';
 import { findMainCategory } from '../expenses/AddExpenseForm';
 import { formatMoney } from '../expenses/ExpenseFeed';
 import { typeScale, tabularNums } from '../../theme';
+import { RECEIPT_SPLIT_TYPES, fromServerLine, receiptTotals, toSaveLine } from '../../utils/receiptLines';
 
 interface Props {
   open: boolean;
@@ -140,10 +141,12 @@ const ExpenseDetailDialog: React.FC<Props> = ({
   // Itemized expenses (receipt-scanned) get a line-item section: read-only rows in view
   // mode, editable ScannedItemsCard in edit mode. itemsLoaded distinguishes "no items" from
   // "haven't fetched yet" so Save knows whether to also call updateGroupExpenseItems.
-  const isItemized = expense.split_type === 'itemized';
+  // TS-FIX-102: new receipts are split Equal/Exact/Shares on the total and flagged by has_items.
+  const isItemized = expense.split_type === 'itemized' || !!expense.has_items;
   const [items, setItems] = useState<ScannedItem[]>([]);
   const [itemsTax, setItemsTax] = useState(0);
-  const [itemsDiscount, setItemsDiscount] = useState(0);
+  const [itemsTip, setItemsTip] = useState(0);
+  const [legacyFormat, setLegacyFormat] = useState(false);
   const [itemsLoaded, setItemsLoaded] = useState(false);
 
   // --- Edit mode — description/date/amount/category plus who-paid/split, reusing the
@@ -165,8 +168,14 @@ const ExpenseDetailDialog: React.FC<Props> = ({
   // Derived directly from editPayers/editSplitValue/editAmount rather than tracked via a
   // callback from the picker — see the matching fix in GroupsPage's Add Expense form for why
   // (Save must reflect the real current state even if the user never opens the popover).
-  const editPayersValid = computePayersValid(editPayers, editAmount);
-  const editSplitValid = computeSplitValid(editSplitValue, editAmount);
+  // For a receipt, payers/split are sent only when the user changed them in the picker; otherwise the
+  // server keeps the stored split (an Equal/Shares receipt stays Equal/Shares and re-splits a new
+  // amount, TS-FIX-102 D8) instead of every edit being saved as this exact pre-fill. Manual expenses
+  // keep today's behavior: the split is always sent and must add up to the edited amount.
+  const [pickerTouched, setSplitTouched] = useState(false);
+  const splitTouched = !isItemized || pickerTouched;
+  const editPayersValid = !splitTouched || computePayersValid(editPayers, editAmount);
+  const editSplitValid = !splitTouched || computeSplitValid(editSplitValue, editAmount);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -190,16 +199,10 @@ const ExpenseDetailDialog: React.FC<Props> = ({
     if (!open || !isItemized) return;
     getGroupExpenseItems(groupId, expense.row_id)
       .then((res) => {
-        setItems(res.items.map((it) => ({
-          line_no: it.line_no,
-          item_name: it.item_name,
-          line_total: it.line_total,
-          quantity: it.quantity,
-          unit_price: it.unit_price,
-          normalized_name: it.normalized_name || undefined,
-        })));
+        setItems(res.items.map(fromServerLine));
         setItemsTax(res.tax);
-        setItemsDiscount(res.discount);
+        setItemsTip(res.tip || 0);
+        setLegacyFormat(!!res.legacy_discount_format);
         setItemsLoaded(true);
       })
       .catch(() => {});
@@ -214,6 +217,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
     setEditSplitValue({ type: 'exact', entries: expense.splits.map((s) => ({ member_id: s.member_id, value: s.share })) });
     setEditTagNames((expense.tags || []).map((t) => t.name));
     setEditCardId(expense.card?.id ?? null);
+    setSplitTouched(false);
     setEditError(null);
     setEditing(true);
   }, [expense]);
@@ -239,18 +243,15 @@ const ExpenseDetailDialog: React.FC<Props> = ({
     setSavingEdit(true);
     try {
       if (itemsLoaded && items.length > 0) {
+        // A changed amount carries the split chosen below (Equal/Exact/Shares), which the server
+        // needs for Exact and old item-split receipts; ids keep edited lines in place.
+        const amountChanged = Math.round(editAmount * 100) !== Math.round(expense.cost * 100);
         await updateGroupExpenseItems(groupId, expense.row_id, {
-          items: items.map((it) => ({
-            line_no: it.line_no,
-            item_name: it.item_name,
-            normalized_name: it.normalized_name,
-            quantity: it.quantity,
-            unit_price: it.unit_price,
-            line_total: it.line_total,
-          })),
+          items: items.map((it, idx) => toSaveLine(it, idx, true)),
           amount: editAmount,
           tax: itemsTax,
-          discount: itemsDiscount,
+          tip: itemsTip,
+          ...(amountChanged && splitTouched ? { split: { type: editSplitValue.type, entries: editSplitValue.entries } } : {}),
         });
       }
       await confirmed(() => updateGroupExpense(groupId, expense.row_id, {
@@ -258,8 +259,9 @@ const ExpenseDetailDialog: React.FC<Props> = ({
         description: editDescription,
         category: editCategory,
         amount: editAmount,
-        payers: editPayers,
-        split: { type: editSplitValue.type, entries: editSplitValue.entries },
+        ...(splitTouched
+          ? { payers: editPayers, split: { type: editSplitValue.type, entries: editSplitValue.entries } }
+          : {}),
         currency: expense.currency || groupCurrency || undefined,
         card_id: editCardId,
       }), 'group_expense_updated', { expense_scope: 'group' }, result => !!result?.row_id, operation);
@@ -454,6 +456,8 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               onPayersChange={setEditPayers}
               splitValue={editSplitValue}
               onSplitChange={setEditSplitValue}
+              allowedTypes={isItemized ? [...RECEIPT_SPLIT_TYPES] : undefined}
+              onCustomized={() => setSplitTouched(true)}
               currency={displayCurrency}
             />
           </Box>
@@ -464,7 +468,9 @@ const ExpenseDetailDialog: React.FC<Props> = ({
               onChange={setItems}
               merchant={expense.merchant_name}
               tax={itemsTax}
-              discount={itemsDiscount}
+              tip={itemsTip}
+              legacyFormat={legacyFormat}
+              statusId="group-expense-items-status"
               currentAmount={editAmount}
               currency={displayCurrency}
             />
@@ -488,7 +494,7 @@ const ExpenseDetailDialog: React.FC<Props> = ({
             <Button
               variant="contained"
               fullWidth
-              disabled={savingEdit || !!editDateProblem || !editDescription.trim() || !editCategory.trim() || editAmount <= 0 || !editPayersValid || !editSplitValid}
+              disabled={savingEdit || !!editDateProblem || !editDescription.trim() || !editCategory.trim() || editAmount <= 0 || !editPayersValid || !editSplitValid || (itemsLoaded && items.length > 0 && !receiptTotals(items, itemsTax, itemsTip, editAmount).reconciled)}
               onClick={handleSaveEdit}
             >
               {savingEdit ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : 'Save'}

@@ -41,7 +41,7 @@ const mockDraft = {
   fingerprint: 'fp',
 };
 
-test('add and delete items, save enabled on mismatch', async () => {
+test('add and delete items; Save is blocked until the items match the total (TS-FIX-102)', async () => {
   jest.spyOn(api, 'parseReceipt').mockResolvedValue(mockDraft);
   jest.spyOn(api, 'suggestCategory').mockResolvedValue({
     main_category: 'Food & Drink',
@@ -66,5 +66,10 @@ test('add and delete items, save enabled on mismatch', async () => {
   expect(
     screen.getByText((content) => content.startsWith('Totals mismatch by $'))
   ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Add Expense' })).toBeDisabled();
+
+  // The remaining line is the new, empty one; pricing it at the total lets the expense save.
+  fireEvent.change(screen.getByLabelText(/Line Total/i), { target: { value: '2' } });
+  expect(screen.getByText('Totals match')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Add Expense' })).not.toBeDisabled();
 });

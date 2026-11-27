@@ -41,7 +41,6 @@ from varavu_selavu_service.models.api_models import (
     RecordSettlementRequest,
     SettleExpenseShareRequest,
     SettlementDTO,
-    SplitSuggestionResponse,
     UpdateGroupRequest,
     UpdateNotificationPreferenceRequest,
 )
@@ -57,7 +56,7 @@ from varavu_selavu_service.services.group_export_service import GroupExportServi
 from varavu_selavu_service.services.group_service import GroupService
 from varavu_selavu_service.services.notification_service import NotificationService
 from varavu_selavu_service.services.settlement_service import SettlementService
-from varavu_selavu_service.services.split_suggestion_service import SplitSuggestionService
+from varavu_selavu_service.services import receipt_lines
 from varavu_selavu_service.services.analysis_service import AnalysisService
 from varavu_selavu_service.services.insights_aggregation_service import InsightsAggregationService
 
@@ -85,8 +84,24 @@ def _get_email_shares(db: Session, eid: uuid.UUID) -> dict:
 
 
 def _get_itemized_email_shares(db: Session, eid: uuid.UUID) -> dict:
+    """Per-person item analytics. Old item-split receipts use their assignment rows (so a delete backs out
+    exactly what create added); receipts split on the total follow each person's share (TS-FIX-102, D3)."""
     if not eid:
         return {}
+    has_assignments = (
+        db.query(ExpenseItemSplit.id)
+        .join(ExpenseItem, ExpenseItemSplit.expense_item_id == ExpenseItem.id)
+        .filter(ExpenseItem.expense_id == eid)
+        .first()
+        is not None
+    )
+    if not has_assignments:
+        expense = db.query(Expense).filter(Expense.id == eid).first()
+        rows = db.query(ExpenseItem).filter(ExpenseItem.expense_id == eid).order_by(ExpenseItem.line_no).all()
+        # A moved personal expense's proxy line is not a receipt and never fed group item insights.
+        if expense is None or not rows or not receipt_lines.is_receipt(expense.split_type, rows):
+            return {}
+        return receipt_lines.member_item_shares(rows, _get_email_shares(db, eid), expense.amount)
     results = (
         db.query(ExpenseItemSplit, ExpenseItem, GroupMember)
         .join(ExpenseItem, ExpenseItemSplit.expense_item_id == ExpenseItem.id)
@@ -167,10 +182,6 @@ def get_friend_balance_service(db: Session = Depends(get_db)) -> FriendBalanceSe
 
 def get_group_export_service(db: Session = Depends(get_db)) -> GroupExportService:
     return GroupExportService(db)
-
-
-def get_split_suggestion_service(db: Session = Depends(get_db)) -> SplitSuggestionService:
-    return SplitSuggestionService(db)
 
 
 router = APIRouter(prefix="/groups", tags=["Groups"], dependencies=[Depends(require_groups_enabled)])
@@ -519,11 +530,25 @@ def create_group_expense(
     return {"success": True, "expense": row}
 
 
+async def reject_item_assignments(request: Request, _user: str = Depends(auth_required)) -> None:
+    """TS-FIX-102: item-by-item splitting is gone. Runs before body validation so an old app always gets
+    this message (its coupon lines would otherwise fail validation first), and never a changed split.
+    Authenticated first, so an anonymous caller still gets 401."""
+    try:
+        body = await request.json()
+    except Exception:
+        return
+    items = body.get("items") if isinstance(body, dict) else None
+    if isinstance(items, list) and any(isinstance(i, dict) and "member_ratios" in i for i in items):
+        raise receipt_lines.http_error("app_update_required", receipt_lines.ITEM_SPLIT_REMOVED_MESSAGE)
+
+
 @router.post(
     "/{group_id}/expenses/itemized",
     response_model=GroupExpenseCreatedResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Create an itemized group expense",
+    summary="Create a group receipt, split on its total (Equal, Exact or Shares)",
+    dependencies=[Depends(reject_item_assignments)],
 )
 def create_itemized_group_expense(
     group_id: str,
@@ -550,6 +575,10 @@ def create_itemized_group_expense(
         merchant_name=data.merchant_name,
         payers=[p.model_dump() for p in data.payers],
         items=[i.model_dump() for i in data.items],
+        split_type=data.split.type,
+        split_entries=[e.model_dump() for e in data.split.entries],
+        tax=data.tax,
+        tip=data.tip,
         currency=data.currency,
         card_id=data.card_id,
     )
@@ -633,6 +662,7 @@ def update_group_expense(
         else None
     )
     old_email_shares = _get_email_shares(db, eid) if existing else {}
+    old_email_item_shares = _get_itemized_email_shares(db, eid) if existing else {}
     old_merchant = existing.merchant_name if existing else None
     old_purchased_at = existing.purchased_at if existing else None
     
@@ -689,6 +719,8 @@ def update_group_expense(
         old_purchased_at=old_purchased_at,
         new_merchant_name=data.merchant_name,
         new_purchased_at=datetime.strptime(row["date"], "%m/%d/%Y"),
+        old_member_item_shares=old_email_item_shares,
+        new_member_item_shares=_get_itemized_email_shares(db, eid),
     )
     
     return {"success": True, "expense": row}
@@ -717,11 +749,24 @@ def update_group_expense_items(
     group_id: str,
     expense_id: str,
     payload: ItemsUpdateRequest,
+    background_tasks: BackgroundTasks,
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
+    db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
-    items = [i.dict(exclude_unset=True) for i in payload.items]
+    receipt_lines.refuse_header_discount(payload.discount)
+    eid = _to_uuid(expense_id)
+    gid = _to_uuid(group_id)
+    existing = (
+        db.query(Expense).filter(Expense.id == eid, Expense.group_id == gid).first()
+        if eid is not None and gid is not None else None
+    )
+    # Snapshot before the edit so item insights move with the new lines/shares (TS-FIX-102).
+    old_email_shares = _get_email_shares(db, eid) if existing else {}
+    old_email_item_shares = _get_itemized_email_shares(db, eid) if existing else {}
+    items = [i.model_dump(exclude_unset=True) for i in payload.items]
     result = svc.update_items(
         group_id=group_id,
         expense_id=expense_id,
@@ -729,9 +774,24 @@ def update_group_expense_items(
         items=items,
         amount=payload.amount,
         tax=payload.tax,
-        discount=payload.discount,
+        tip=payload.tip,
+        split_type=payload.split.type if payload.split else None,
+        split_entries=[e.model_dump() for e in payload.split.entries] if payload.split else None,
     )
     analysis_service.invalidate_cache()
+    if existing is not None:
+        db.refresh(existing)
+        background_tasks.add_task(
+            aggregation_svc.on_group_expense_updated,
+            old_member_shares=old_email_shares,
+            new_member_shares=_get_email_shares(db, eid),
+            old_merchant_name=existing.merchant_name,
+            old_purchased_at=existing.purchased_at,
+            new_merchant_name=existing.merchant_name,
+            new_purchased_at=existing.purchased_at,
+            old_member_item_shares=old_email_item_shares,
+            new_member_item_shares=_get_itemized_email_shares(db, eid),
+        )
     return result
 
 
@@ -990,24 +1050,6 @@ def export_group_csv(
 
 
 # ------------------------------------------------------------------
-# AI split suggestions (TS-GRP-133) — heuristic, history-based.
-# ------------------------------------------------------------------
-
-@router.get(
-    "/{group_id}/items/suggest_assignment",
-    response_model=SplitSuggestionResponse,
-    summary="Suggest which member(s) usually get a given item",
-)
-def suggest_item_assignment(
-    group_id: str,
-    item_name: str = Query(...),
-    svc: SplitSuggestionService = Depends(get_split_suggestion_service),
-    user_email: str = Depends(auth_required),
-):
-    return {"suggestions": svc.suggest_assignment(group_id, item_name, user_email)}
-
-
-# ------------------------------------------------------------------
 # Cross-group friend balances (TS-GRP-128) — top-level, not group-scoped.
 # ------------------------------------------------------------------
 
@@ -1046,6 +1088,7 @@ def move_expense_to_group(
     svc: GroupExpenseService = Depends(get_group_expense_service),
     analysis_service: AnalysisService = Depends(get_analysis_service),
     notification_service: NotificationService = Depends(get_notification_service),
+    aggregation_svc: InsightsAggregationService = Depends(get_insights_aggregation_service),
     db: Session = Depends(get_db),
     user_email: str = Depends(auth_required),
 ):
@@ -1074,4 +1117,11 @@ def move_expense_to_group(
         description=row["description"],
         shares=shares,
     )
+    # TS-FIX-102: a moved receipt's item insights move from "all mine" to each person's share, so a
+    # later split edit or delete backs out exactly what is counted (group shares derive from the split).
+    moved = db.query(Expense).filter(Expense.id == eid).first() if eid is not None else None
+    lines = db.query(ExpenseItem).filter(ExpenseItem.expense_id == eid).all() if moved is not None else []
+    if moved is not None and receipt_lines.is_receipt(moved.split_type, lines):
+        owner_full = receipt_lines.member_item_shares(lines, {user_email: moved.amount}, moved.amount)
+        aggregation_svc.move_item_totals(owner_full, _get_itemized_email_shares(db, eid))
     return {"success": True, "expense": row}

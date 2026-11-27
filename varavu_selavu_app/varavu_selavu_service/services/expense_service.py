@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Union
 from datetime import date as date_type
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from fastapi import HTTPException
@@ -126,8 +126,24 @@ class ExpenseService:
             return deleted_data
         return None
 
-    def get_expenses_for_user(self, user_id: str) -> List[Dict]:
-        expenses = self.db.query(Expense).filter(Expense.user_email == user_id, Expense.group_id.is_(None)).order_by(Expense.purchased_at.desc()).all()
+    def get_expenses_for_user(
+        self,
+        user_id: str,
+        start_date: Optional[date_type] = None,
+        end_date: Optional[date_type] = None,
+    ) -> List[Dict]:
+        query = self.db.query(Expense).filter(Expense.user_email == user_id, Expense.group_id.is_(None))
+        if start_date is not None:
+            query = query.filter(
+                Expense.purchased_at >= datetime(start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc)
+            )
+        if end_date is not None:
+            # Half-open upper bound (< start of next day) so expenses recorded at any time on end_date are included.
+            next_day = end_date + timedelta(days=1)
+            query = query.filter(
+                Expense.purchased_at < datetime(next_day.year, next_day.month, next_day.day, tzinfo=timezone.utc)
+            )
+        expenses = query.order_by(Expense.purchased_at.desc()).all()
 
         from varavu_selavu_service.db.models import ExpenseItem
         expense_ids = [r.id for r in expenses]
@@ -209,6 +225,17 @@ class ExpenseService:
         # Editing an older expense is fine as long as its date is left alone.
         assert_expense_date(date_str, check_past=not (expense.purchased_at and expense.purchased_at.date() == purchased_at.date()))
 
+        from varavu_selavu_service.db.models import ExpenseItem
+        from varavu_selavu_service.services import receipt_lines
+        items = self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == parsed_id).all()
+        receipt = receipt_lines.is_receipt(expense.split_type, items)
+        if receipt and receipt_lines.money(cost) != receipt_lines.money(expense.amount):
+            # TS-FIX-102: a receipt's amount must keep matching its lines (paid + tax + tip); it
+            # changes through the items edit (PUT /expenses/{id}/items), which checks the totals.
+            raise receipt_lines.http_error(
+                "totals_mismatch", "This receipt's amount must match its items. Edit the items to change the amount."
+            )
+
         old_expense_data = None
         if expense:
             old_expense_data = {
@@ -226,9 +253,9 @@ class ExpenseService:
             if notes is not NOTES_UNCHANGED:
                 expense.notes = notes
 
-            from varavu_selavu_service.db.models import ExpenseItem
-            items = self.db.query(ExpenseItem).filter(ExpenseItem.expense_id == parsed_id).all()
-            if len(items) == 1:
+            if receipt:
+                pass  # receipt lines are edited through the items endpoint, never overwritten here
+            elif len(items) == 1:
                 # If there's exactly one item, we assume it's our synthesized proxy (or a 1-item receipt). Keep it in sync.
                 items[0].item_name = description
                 items[0].normalized_name = description

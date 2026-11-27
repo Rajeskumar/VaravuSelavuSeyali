@@ -18,6 +18,7 @@ import TagPickerModal from '../../tags/components/TagPickerModal';
 import CardPickerField from '../../cards/components/CardPickerField';
 import { useCardCoachEnabled } from '../../cards/hooks/useCardCoachEnabled';
 import { showToast } from '../../../core/ui/Toast';
+import { RECEIPT_SPLIT_TYPES, fromServerLine, receiptTotals, toSaveLine } from '../../receipts/utils/receiptLines';
 
 interface EditGroupExpenseModalProps {
   visible: boolean;
@@ -57,6 +58,10 @@ export default function EditGroupExpenseModal({
   const [splitType, setSplitType] = useState<SplitType>('equal');
   const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  // For a receipt, payers/split are sent only when the user changed them; otherwise the server keeps the
+  // stored split (an Equal/Shares receipt stays Equal/Shares, TS-FIX-102 D8) instead of saving this exact
+  // pre-fill. Manual expenses keep today's behavior (always sent). Same as web ExpenseDetailDialog.
+  const [pickerTouched, setSplitTouched] = useState(false);
 
   // Itemized expenses (receipt-scanned) get a line-item review/edit section, reusing the
   // same ScannedItemsCard the create flow uses. itemsLoaded distinguishes "no items to
@@ -64,7 +69,11 @@ export default function EditGroupExpenseModal({
   // updateGroupExpenseItems.
   const [items, setItems] = useState<ScannedItem[]>([]);
   const [itemsTax, setItemsTax] = useState(0);
-  const [itemsDiscount, setItemsDiscount] = useState(0);
+  const [itemsTip, setItemsTip] = useState(0);
+  const [legacyFormat, setLegacyFormat] = useState(false);
+  // TS-FIX-102: new receipts are split Equal/Exact/Shares on the total and flagged by has_items.
+  const isReceipt = !!expense && (expense.split_type === 'itemized' || !!expense.has_items);
+  const splitTouched = !isReceipt || pickerTouched;
   const [itemsLoaded, setItemsLoaded] = useState(false);
 
   // TS-TAG-112 — group expenses have no tag_names write-through field (personal-only by
@@ -92,6 +101,7 @@ export default function EditGroupExpenseModal({
       setMerchantName(expense.merchant_name || '');
       setCurrency(expense.currency || '');
       setPayers(expense.payer_summary.map((p) => ({ ...p })));
+      setSplitTouched(false);
       setSplitType('exact');
       setSplitEntries(expense.splits.map((s) => ({ member_id: s.member_id, value: s.share })));
       setTagNames((expense.tags || []).map((t) => t.name));
@@ -99,19 +109,13 @@ export default function EditGroupExpenseModal({
 
       setItems([]);
       setItemsLoaded(false);
-      if (expense.split_type === 'itemized') {
+      if (expense.split_type === 'itemized' || expense.has_items) {
         getGroupExpenseItems(groupId, expense.row_id)
           .then((res) => {
-            setItems(res.items.map((it) => ({
-              line_no: it.line_no,
-              item_name: it.item_name,
-              line_total: it.line_total,
-              quantity: it.quantity,
-              unit_price: it.unit_price,
-              normalized_name: it.normalized_name || undefined,
-            })));
+            setItems(res.items.map(fromServerLine));
             setItemsTax(res.tax);
-            setItemsDiscount(res.discount);
+            setItemsTip(res.tip || 0);
+            setLegacyFormat(!!res.legacy_discount_format);
             setItemsLoaded(true);
           })
           .catch(() => { /* falls back to the flat amount field only */ });
@@ -130,18 +134,17 @@ export default function EditGroupExpenseModal({
     setLoading(true);
     try {
       if (itemsLoaded && items.length > 0) {
+        // A changed amount carries the split chosen below (Equal/Exact/Shares), which the server
+        // needs for Exact and old item-split receipts; ids keep edited lines in place.
+        const amountChanged = Math.round((parseFloat(amount) || 0) * 100) !== Math.round(expense.cost * 100);
         await updateGroupExpenseItems(groupId, expense.row_id, {
-          items: items.map((it) => ({
-            line_no: it.line_no,
-            item_name: it.item_name,
-            normalized_name: it.normalized_name,
-            quantity: it.quantity,
-            unit_price: it.unit_price,
-            line_total: it.line_total,
-          })),
+          items: items.map((it, idx) => toSaveLine(it, idx, true)),
           amount: parseFloat(amount) || 0,
           tax: itemsTax,
-          discount: itemsDiscount,
+          tip: itemsTip,
+          ...(amountChanged && splitTouched
+            ? { split: { type: splitType, entries: splitEntries.map((e) => ({ member_id: e.member_id, value: e.value })) } }
+            : {}),
         });
       }
       await updateGroupExpense(groupId, expense.row_id, {
@@ -151,11 +154,12 @@ export default function EditGroupExpenseModal({
         date,
         merchant_name: merchantName || undefined,
         currency: currency || undefined,
-        split: {
-          type: splitType,
-          entries: splitEntries.map(e => ({ member_id: e.member_id, value: e.value })),
-        },
-        payers: payers.map(p => ({ member_id: p.member_id, amount_paid: p.amount_paid })),
+        ...(splitTouched
+          ? {
+              split: { type: splitType, entries: splitEntries.map(e => ({ member_id: e.member_id, value: e.value })) },
+              payers: payers.map(p => ({ member_id: p.member_id, amount_paid: p.amount_paid })),
+            }
+          : {}),
         card_id: cardCoachEnabled ? cardId : undefined,
       });
       if (tagsEnabled) {
@@ -240,7 +244,7 @@ export default function EditGroupExpenseModal({
 
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Who Paid?</Text>
-                <PayerPicker members={members} amount={parseFloat(amount) || 0} payers={payers} onChange={setPayers} />
+                <PayerPicker members={members} amount={parseFloat(amount) || 0} payers={payers} onChange={(next) => { setPayers(next); setSplitTouched(true); }} />
               </View>
 
               <View style={styles.section}>
@@ -250,9 +254,11 @@ export default function EditGroupExpenseModal({
                   totalAmount={parseFloat(amount) || 0}
                   value={{ type: splitType, entries: splitEntries }}
                   onChange={(val) => {
+                    setSplitTouched(true);
                     setSplitType(val.type);
                     setSplitEntries(val.entries);
                   }}
+                  allowedTypes={isReceipt ? [...RECEIPT_SPLIT_TYPES] : undefined}
                 />
               </View>
 
@@ -263,7 +269,8 @@ export default function EditGroupExpenseModal({
                   onChange={setItems}
                   merchant={merchantName}
                   tax={itemsTax}
-                  discount={itemsDiscount}
+                  tip={itemsTip}
+                  legacyFormat={legacyFormat}
                   currentAmount={parseFloat(amount) || 0}
                 />
               )}
@@ -288,7 +295,7 @@ export default function EditGroupExpenseModal({
               </View>
             </ScrollView>
             <View style={styles.footer}>
-              <CustomButton title={loading ? 'Saving...' : 'Save Changes'} onPress={handleSave} disabled={loading} />
+              <CustomButton title={loading ? 'Saving...' : 'Save Changes'} onPress={handleSave} disabled={loading || (itemsLoaded && items.length > 0 && !receiptTotals(items, itemsTax, itemsTip, parseFloat(amount) || 0).reconciled)} />
             </View>
           </Pressable>
         </KeyboardAvoidingView>

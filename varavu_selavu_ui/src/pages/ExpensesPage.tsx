@@ -20,7 +20,7 @@ import MoveToGroupDialog from '../components/expenses/MoveToGroupDialog';
 import RecurringTab from '../components/expenses/RecurringTab';
 import SegmentedTabs from '../components/common/SegmentedTabs';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
-import { listExpenses, deleteExpense, updateExpense, exportMyExpensesCsv, ExpenseRecord } from '../api/expenses';
+import { listExpenses, monthToDateRange, deleteExpense, updateExpense, exportMyExpensesCsv, ExpenseRecord } from '../api/expenses';
 import {
   listAllMyGroupExpenses,
   updateGroupExpense,
@@ -104,6 +104,8 @@ const ExpensesPage: React.FC = () => {
     updateFilters({ month: value });
   };
 
+  const monthDateRange = React.useMemo(() => monthToDateRange(monthFilter), [monthFilter]);
+
   const {
     data,
     fetchNextPage,
@@ -113,8 +115,8 @@ const ExpensesPage: React.FC = () => {
     error: personalError,
     refetch: refetchPersonal,
   } = useInfiniteQuery({
-    queryKey: ['expenses', user, tagFilterIds],
-    queryFn: ({ pageParam = 0 }) => listExpenses(pageParam, 30, tagFilterIds),
+    queryKey: ['expenses', user, tagFilterIds, monthFilter],
+    queryFn: ({ pageParam = 0 }) => listExpenses(pageParam, 30, tagFilterIds, monthDateRange),
     getNextPageParam: (lastPage) => lastPage.next_offset ?? undefined,
     enabled: !!user,
     initialPageParam: 0,
@@ -134,8 +136,8 @@ const ExpensesPage: React.FC = () => {
     enabled: groupsEnabled && scope !== 'personal',
   });
   const combinedPersonalQuery = useQuery({
-    queryKey: ['expenses-full-for-combined', user, tagFilterIds],
-    queryFn: () => listExpenses(0, 500, tagFilterIds),
+    queryKey: ['expenses-full-for-combined', user, tagFilterIds, monthFilter],
+    queryFn: () => listExpenses(0, 500, tagFilterIds, monthDateRange),
     enabled: !!user && scope === 'combined',
   });
 
@@ -174,6 +176,7 @@ const ExpensesPage: React.FC = () => {
       groupAmount: e.cost,
       groupName: e.group_name,
       splitType: e.split_type,
+      hasItems: e.has_items,
       tags: e.tags,
       card: e.card,
       notes: e.notes || undefined,
@@ -225,15 +228,19 @@ const ExpensesPage: React.FC = () => {
   }, [scope, groupExpensesQuery.data, personalExpenses, combinedPersonalQuery.data]);
 
   // Months that actually have expenses in the current scope, newest first — drives the month
-  // selector so it never offers an empty month. A native `<input type="month">` used to sit
-  // here; it rendered as a bare text field on desktop Safari and mis-aligned/vanished on
-  // phones, so this is a plain select instead.
+  // selector so it never offers an empty month. Keep previously seen months in `knownMonthsRef`
+  // so picking a single month (which narrows the server query to that month) does not collapse
+  // the selector to only that month.
+  const knownMonthsRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => { knownMonthsRef.current = new Set(); }, [user, scope]);
   const availableMonths = React.useMemo(() => {
-    const keys = new Set<string>();
+    const keys = new Set<string>(knownMonthsRef.current);
     for (const r of scopedRows) {
       const d = parseAppDate(r.date);
       keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
+    if (monthFilter && /^\d{4}-\d{2}$/.test(monthFilter)) keys.add(monthFilter);
+    knownMonthsRef.current = keys;
     return Array.from(keys)
       .sort()
       .reverse()
@@ -241,7 +248,7 @@ const ExpensesPage: React.FC = () => {
         const [y, m] = key.split('-').map(Number);
         return { key, label: new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) };
       });
-  }, [scopedRows]);
+  }, [scopedRows, monthFilter]);
 
   const feedExpenses: FeedExpense[] = React.useMemo(() => {
     let result = scopedRows;

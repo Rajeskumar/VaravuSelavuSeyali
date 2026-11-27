@@ -7,34 +7,34 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded';
+import Tooltip from '@mui/material/Tooltip';
 import { typeScale, tabularNums } from '../../theme';
 import { formatMoney } from './ExpenseFeed';
 import { currencySymbol } from '../../utils/money';
 import { suggestItems } from '../../api/entityResolution';
 import { useEntityResolutionEnabled } from '../../hooks/useEntityResolutionEnabled';
 import EntityAutocomplete from './EntityAutocomplete';
+import { ReceiptLine, ReceiptReviewLine, lineDiscount, receiptTotals } from '../../utils/receiptLines';
 
-export interface ScannedItem {
-  line_no: number;
-  item_name: string;
-  line_total: number;
-  quantity?: number | null;
-  unit_price?: number | null;
-  normalized_name?: string;
-}
+/** A receipt line being reviewed: `line_total` is the paid price (TS-FIX-102). */
+export type ScannedItem = ReceiptLine;
 
 interface ScannedItemsCardProps {
   items: ScannedItem[];
   onChange: (items: ScannedItem[]) => void;
   merchant?: string | null;
   tax?: number;
-  discount?: number;
-  /** QuickCaptureSheet's editable top amount — used only to flag drift in the footer
-   * caption below, never to block saving (mirrors AddExpenseForm's non-blocking
-   * reconcileOk() caption for the same reason: a receipt total the user tweaks by a
-   * few cents shouldn't stop them from logging the expense). */
+  tip?: number;
+  /** The expense's amount. Paid prices + tax + tip must match it within 0.02; the caller blocks
+   * Save until they do (`receiptTotals(...).reconciled`), and the footer says by how much. */
   currentAmount: number;
   currency?: string;
+  /** Returns/refunds the scanner left out of the items, for the person to account for. */
+  review?: ReceiptReviewLine[];
+  /** The receipt was saved in the old discount format and its prices were adjusted for checking. */
+  legacyFormat?: boolean;
+  /** id for the totals status line, so the caller's Save button can point at it (aria-describedby). */
+  statusId?: string;
 }
 
 /**
@@ -45,12 +45,12 @@ interface ScannedItemsCardProps {
  * while focused lets the user type a decimal normally; onCommit still pushes numeric
  * updates up on every valid keystroke so the reconciliation footer stays live.
  */
-const ItemPriceField: React.FC<{ value: number; onCommit: (n: number) => void; currency?: string }> = ({ value, onCommit, currency = 'USD' }) => {
-  const [text, setText] = React.useState(String(value));
+const ItemPriceField: React.FC<{ value: number | null; onCommit: (n: number | null) => void; currency?: string; label: string; allowEmpty?: boolean }> = ({ value, onCommit, currency = 'USD', label, allowEmpty = false }) => {
+  const [text, setText] = React.useState(value == null ? '' : String(value));
   const focused = React.useRef(false);
 
   React.useEffect(() => {
-    if (!focused.current) setText(String(value));
+    if (!focused.current) setText(value == null ? '' : String(value));
   }, [value]);
 
   return (
@@ -59,20 +59,23 @@ const ItemPriceField: React.FC<{ value: number; onCommit: (n: number) => void; c
       onFocus={() => { focused.current = true; }}
       onBlur={() => {
         focused.current = false;
-        const n = Number(text.replace(/[^0-9.-]/g, '')) || 0;
+        if (allowEmpty && text.trim() === '') { onCommit(null); return; }
+        // No minus values on receipts (TS-FIX-101/102): the minus sign isn't accepted at all.
+        const n = Number(text.replace(/[^0-9.]/g, '')) || 0;
         setText(String(n));
         onCommit(n);
       }}
       onChange={(e) => {
-        const v = e.target.value.replace(/[^0-9.-]/g, '');
+        const v = e.target.value.replace(/[^0-9.]/g, '');
         setText(v);
         const n = Number(v);
-        if (v !== '' && v !== '-' && !Number.isNaN(n)) onCommit(n);
+        if (v === '' && allowEmpty) onCommit(null);
+        else if (v !== '' && !Number.isNaN(n)) onCommit(n);
       }}
       startAdornment={
         <Typography component="span" sx={{ fontSize: 13.5, color: 'text.secondary', mr: 0.25 }}>{currencySymbol(currency)}</Typography>
       }
-      inputProps={{ style: { textAlign: 'right' }, inputMode: 'decimal' }}
+      inputProps={{ style: { textAlign: 'right' }, inputMode: 'decimal', 'aria-label': label }}
       sx={{ width: 68, fontSize: 13.5, ...tabularNums }}
     />
   );
@@ -90,9 +93,12 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
   onChange,
   merchant,
   tax = 0,
-  discount = 0,
+  tip = 0,
   currentAmount,
   currency = 'USD',
+  review = [],
+  legacyFormat = false,
+  statusId,
 }) => {
   const [expanded, setExpanded] = React.useState(true);
   const { enabled: entityResolutionEnabled } = useEntityResolutionEnabled();
@@ -101,10 +107,8 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
     [entityResolutionEnabled]
   );
 
-  const subtotal = items.reduce((s, it) => s + (Number(it.line_total) || 0), 0);
-  const computedTotal = subtotal + tax - discount;
-  const delta = computedTotal - currentAmount;
-  const reconciled = Math.abs(delta) <= 0.02;
+  const { subtotal, computed: computedTotal, delta, savings, reconciled } = receiptTotals(items, tax, tip, currentAmount);
+  const [originalOpen, setOriginalOpen] = React.useState<Record<number, boolean>>({});
 
   const updateItem = (lineNo: number, patch: Partial<ScannedItem>) => {
     onChange(items.map((it) => (it.line_no === lineNo ? { ...it, ...patch } : it)));
@@ -147,8 +151,13 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
       {expanded && (
         <Box sx={{ px: 1.5, py: 1 }}>
           <Box sx={{ maxHeight: 190, overflowY: 'auto', pr: 0.5 }}>
-            {items.map((item) => (
-              <Box key={item.line_no} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 0.5 }}>
+            {items.map((item) => {
+              const saved = lineDiscount(item);
+              const showOriginal = originalOpen[item.line_no] ?? saved > 0;
+              const name = item.item_name || 'item';
+              return (
+              <Box key={item.line_no} sx={{ py: 0.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <EntityAutocomplete
                     value={item.item_name}
@@ -163,14 +172,45 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
                 </Box>
                 <ItemPriceField
                   value={item.line_total}
-                  onCommit={(n) => updateItem(item.line_no, { line_total: n })}
+                  label={`Price paid for ${name}`}
+                  onCommit={(n) => updateItem(item.line_no, { line_total: n ?? 0 })}
                   currency={currency}
                 />
-                <IconButton size="small" onClick={() => removeItem(item.line_no)} aria-label="Remove item" sx={{ p: 0.5 }}>
+                <Tooltip title="Original price and saving">
+                  <IconButton
+                    size="small"
+                    onClick={() => setOriginalOpen((o) => ({ ...o, [item.line_no]: !showOriginal }))}
+                    aria-label={showOriginal ? `Hide original price for ${name}` : `Add original price for ${name}`}
+                    aria-expanded={showOriginal}
+                    sx={{ minWidth: 32, minHeight: 32, fontSize: 13, fontWeight: 700, color: saved > 0 ? 'success.main' : 'text.secondary' }}
+                  >
+                    %
+                  </IconButton>
+                </Tooltip>
+                <IconButton size="small" onClick={() => removeItem(item.line_no)} aria-label={`Remove ${name}`} sx={{ minWidth: 32, minHeight: 32 }}>
                   <CloseRoundedIcon sx={{ fontSize: 15 }} />
                 </IconButton>
               </Box>
-            ))}
+              {showOriginal && (
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.75, pr: 6 }}>
+                  <Typography variant="caption" color="text.secondary">Original price</Typography>
+                  <ItemPriceField
+                    value={item.original_price ?? null}
+                    allowEmpty
+                    label={`Original price for ${name}`}
+                    onCommit={(n) => updateItem(item.line_no, { original_price: n, discount: n == null ? 0 : Math.max(0, n - item.line_total) })}
+                    currency={currency}
+                  />
+                  {saved > 0 && (
+                    <Typography variant="caption" sx={{ color: 'success.main', ...tabularNums }}>
+                      saved {formatMoney(saved, currency)}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+              </Box>
+              );
+            })}
           </Box>
 
           <Box
@@ -183,7 +223,7 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
             <AddRoundedIcon sx={{ fontSize: 16 }} /> Add item
           </Box>
 
-          {(tax > 0 || discount > 0) && (
+          {(tax > 0 || tip > 0 || savings > 0) && (
             <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
               {tax > 0 && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -191,23 +231,52 @@ const ScannedItemsCard: React.FC<ScannedItemsCardProps> = ({
                   <Typography variant="caption" color="text.secondary" sx={tabularNums}>{formatMoney(tax, currency)}</Typography>
                 </Box>
               )}
-              {discount > 0 && (
+              {tip > 0 && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="caption" color="text.secondary">Discount</Typography>
-                  <Typography variant="caption" color="text.secondary" sx={tabularNums}>-{formatMoney(discount, currency)}</Typography>
+                  <Typography variant="caption" color="text.secondary">Tip</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={tabularNums}>{formatMoney(tip, currency)}</Typography>
+                </Box>
+              )}
+              {savings > 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  {/* Already included in the prices above: a record, not subtracted again. */}
+                  <Typography variant="caption" color="text.secondary">You saved (already in prices)</Typography>
+                  <Typography variant="caption" sx={{ color: 'success.main', ...tabularNums }}>{formatMoney(savings, currency)}</Typography>
                 </Box>
               )}
             </Box>
           )}
 
+          {review.length > 0 && (
+            <Box sx={{ mt: 0.75, p: 1, borderRadius: 1, bgcolor: 'action.hover' }}>
+              <Typography variant="caption" sx={{ display: 'block', fontWeight: 700 }}>Not included: returns or refunds</Typography>
+              {review.map((r, i) => (
+                <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" color="text.secondary" noWrap sx={{ minWidth: 0 }}>{r.item_name}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={tabularNums}>{formatMoney(r.amount, currency)}</Typography>
+                </Box>
+              ))}
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                Adjust the prices or the total so they match.
+              </Typography>
+            </Box>
+          )}
+
+          {legacyFormat && (
+            <Typography variant="caption" role="note" sx={{ display: 'block', mt: 0.75, color: 'warning.main' }}>
+              Prices were adjusted for discounts. Check them before saving.
+            </Typography>
+          )}
+
           <Typography
             variant="caption"
             role="status"
+            id={statusId}
             sx={{ display: 'block', mt: 0.75, textAlign: 'right', color: reconciled ? 'success.main' : 'warning.main' }}
           >
             {reconciled
               ? 'Matches total'
-              : `Items total ${formatMoney(computedTotal, currency)}, ${formatMoney(Math.abs(delta), currency)} ${delta > 0 ? 'more' : 'less'} than the expense total. Fix an item or the total to save.`}
+              : `Items${tax > 0 || tip > 0 ? ' plus tax and tip' : ''} come to ${formatMoney(computedTotal, currency)}, ${formatMoney(Math.abs(delta), currency)} ${delta > 0 ? 'more' : 'less'} than the total. Make them match to save.`}
           </Typography>
         </Box>
       )}

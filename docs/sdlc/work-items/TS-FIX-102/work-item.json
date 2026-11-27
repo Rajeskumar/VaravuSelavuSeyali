@@ -5,7 +5,7 @@
   "owner": "Rajeshkumar Ganesan",
   "risk": "high",
   "mode": "normal",
-  "phase": "plan",
+  "phase": "validate",
   "status": "in_progress",
   "acceptance_criteria": [
     {
@@ -33,10 +33,27 @@
       "outcome": "Returns and refund lines are flagged for review, and price history uses paid prices."
     }
   ],
-  "required_evidence": [],
-  "implementation_approval": null,
-  "links": [
-    "docs/sdlc/work-items/TS-FIX-101/work-item.json"
+  "required_evidence": [
+    "checks",
+    "red-green",
+    "migration-postgres",
+    "local-integration",
+    "native-e2e",
+    "native-device",
+    "code-review",
+    "security-review",
+    "ui-review",
+    "product-review",
+    "acceptance-verification"
   ],
-  "notes": ""
+  "implementation_approval": {
+    "actor": "Rajeshkumar Ganesan",
+    "reference": "User message 2026-11-26: 'plan approved. D1-D8 looks good to me as per your suggestion.' Covers implementation.md, test-plan.md and decisions D1-D8, including the local-only migration rehearsal. No push, production access or release authorized.",
+    "fingerprint": "39ac36796aa2fc0a780f84dbf43e008981c3f53eef76532243ea02809528ad0a"
+  },
+  "links": [
+    "docs/sdlc/work-items/TS-FIX-101/work-item.json",
+    "github-issue:#65"
+  ],
+  "notes": "Plan and D1-D8 approved by the owner 2026-11-26. Built and validated locally 2026-11-26 (uncommitted). Owner acknowledged test-integrity (TEST_INTEGRITY_ACK='TS-FIX-102 removes item-by-item receipt splitting (agreed requirement 2)'); 7/7 checks pass. Owner deferred native-e2e and native-device evidence to release time and kept open P3s (F8, UI-5, PR-4, PR-6) as follow-ups."
 }

@@ -2,6 +2,8 @@ import { test, expect } from '../../fixtures/auth.fixture';
 import { QuickCapturePanel } from '../../pages/QuickCapturePanel';
 import { qaLabel, uniqueSuffix } from '../../helpers/test-data.helper';
 import { MOBILE_VIEWPORT_MAX_WIDTH, dismissCookieConsent } from '../../helpers/responsive.helper';
+import { GroupsPage } from '../../pages/GroupsPage';
+import { createTripGroup, storedExpense, storedShares } from '../../helpers/group-money.helper';
 
 // Backlog B-07 / UAT-RCPT-001..006 (docs/qa/06-automation-strategy.md). Runs against the backend's
 // `OCR_ENGINE=mock`, which "reads" the upload as plain text — so a fixture is just a PNG signature
@@ -14,8 +16,8 @@ function recentIso(daysAgo = 3): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function receiptPng(merchant: string, lines: string[], subtotal: string): { name: string; mimeType: string; buffer: Buffer } {
-  const text = [`Merchant: ${merchant}`, `Date: ${recentIso()}`, ...lines, `Subtotal: ${subtotal}`].join('\n');
+function receiptPng(merchant: string, lines: string[], subtotal: string, extra: string[] = []): { name: string; mimeType: string; buffer: Buffer } {
+  const text = [`Merchant: ${merchant}`, `Date: ${recentIso()}`, ...lines, ...extra, `Subtotal: ${subtotal}`].join('\n');
   return { name: 'receipt.png', mimeType: 'image/png', buffer: Buffer.concat([PNG_MAGIC, Buffer.from('\n' + text + '\n')]) };
 }
 
@@ -130,16 +132,47 @@ test.describe('receipt scan (UI) @regression', () => {
     await expect(panel.saveButton).toBeEnabled();
 
     // Remove one item: the remaining lines no longer add up to the $10 total.
-    await page.getByRole('button', { name: 'Remove item' }).first().click();
-    const status = page.getByRole('status').filter({ hasText: 'more than the expense total' }).or(page.getByRole('status').filter({ hasText: 'less than the expense total' }));
+    await page.getByRole('button', { name: 'Remove Oat Milk' }).click();
+    const status = page.getByRole('status').filter({ hasText: 'less than the total' });
     await expect(status).toBeVisible();
-    await expect(status).toContainText('Fix an item or the total to save');
+    await expect(status).toContainText('Make them match to save');
     await expect(panel.saveButton).toBeDisabled();
 
     // Bringing the total in line with the remaining item re-enables Save.
     await panel.fillAmount('6');
     await expect(page.getByRole('status').filter({ hasText: 'Matches total' })).toBeVisible();
     await expect(panel.saveButton).toBeEnabled();
+  });
+
+  // TS-FIX-102 (S-25): the real scan folds a whole-receipt discount into the paid line prices, and a
+  // group receipt is split on its TOTAL (Equal by default) — shares equal the amount to the cent.
+  test('a group receipt with a discount saves paid prices and splits the total equally', async ({ page, primaryApi }) => {
+    const trip = await createTripGroup(primaryApi, 'receipt_split');
+    const groups = new GroupsPage(page);
+    await groups.openDetail(trip.id);
+    await groups.openAddExpense();
+    const panel = new QuickCapturePanel(page);
+    await page.locator('input[type="file"]').first().setInputFiles(receiptPng(qaLabel(`store_${uniqueSuffix()}`), [
+      '1. Steak qty 1 ea price 20.00 total 20.00', '2. Wine qty 1 ea price 10.00 total 10.00',
+    ], '27.00', ['Discount: 3.00']));
+    await page.getByRole('button', { name: 'Allow AI features' }).click({ timeout: 4000 }).catch(() => undefined);
+    test.setTimeout(180_000);
+    await expect(page.getByText('2 items scanned')).toBeVisible({ timeout: 80_000 });
+    await expect(page.getByLabel('Price paid for Steak')).toHaveValue('18');
+    await expect(page.getByLabel('Price paid for Wine')).toHaveValue('9');
+    await expect(page.getByRole('status').filter({ hasText: 'Matches total' })).toBeVisible();
+
+    const description = qaLabel(`receipt_split_${uniqueSuffix()}`);
+    await panel.fillDescription(description);
+    await panel.save();
+    await panel.expectSavedConfirmation();
+
+    const expense = await storedExpense(primaryApi, trip.id, description);
+    expect(expense.has_items).toBe(true);
+    expect(expense.split_type).toBe('equal');
+    expect(Object.values(storedShares(expense)).sort()).toEqual([900, 900, 900]);
+    const items = await (await primaryApi.get(`/api/v1/groups/${trip.id}/expenses/${expense.row_id}/items`)).json();
+    expect(items.items.map((i: any) => [i.line_total, i.discount, i.original_price])).toEqual([[18, 2, 20], [9, 1, 10]]);
   });
 
   test('a file that is not an image or PDF is refused with a message', async ({ page }) => {

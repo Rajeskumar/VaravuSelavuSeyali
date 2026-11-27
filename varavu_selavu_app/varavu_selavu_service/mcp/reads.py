@@ -279,6 +279,9 @@ def get_expense(db, principal, data):
                 ),
                 "line_total": money(item.line_total),
                 "discount": money(item.discount),
+                # TS-FIX-102: set = line_total is the paid price and discount a record; null = an older
+                # receipt whose line_total is before discount (the header discount was subtracted).
+                "original_price": money(item.original_price) if item.original_price is not None else None,
                 **stored_category(item.category_id),
             }
             if (

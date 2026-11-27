@@ -23,14 +23,17 @@ export class ApiError extends Error {
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (res.ok) return res.json() as Promise<T>;
-  let detail: string;
+  let detail: any;
   try {
     const body = await res.json();
     detail = (body as any)?.detail ?? res.statusText;
   } catch {
     detail = res.statusText;
   }
-  throw new ApiError(detail, res.status, null);
+  // A structured refusal ({code, message}, e.g. TS-FIX-102's split_required / app_update_required)
+  // shows its message; the object stays on `body` for callers that branch on the code.
+  const message = typeof detail === 'string' ? detail : detail?.message || res.statusText;
+  throw new ApiError(message, res.status, typeof detail === 'object' ? detail : null);
 }
 
 // ---------------------------------------------------------------------------
@@ -70,10 +73,14 @@ export async function updateGroup(
   return handleResponse<GroupDetail>(res);
 }
 
+/** Edit payload: omit `payers` and `split` together to keep the stored split (rescaled if the amount changed). */
+export type UpdateGroupExpensePayload = Omit<AddGroupExpensePayload, 'payers' | 'split'> &
+  Partial<Pick<AddGroupExpensePayload, 'payers' | 'split'>>;
+
 export function updateGroupExpense(
   groupId: string,
   expenseId: string,
-  payload: AddGroupExpensePayload
+  payload: UpdateGroupExpensePayload
 ): Promise<GroupExpenseRow> {
   return confirmed(() => updateGroupExpenseRequest(groupId, expenseId, payload), 'group_expense_updated', { expense_scope: 'group' });
 }
@@ -81,7 +88,7 @@ export function updateGroupExpense(
 async function updateGroupExpenseRequest(
   groupId: string,
   expenseId: string,
-  payload: AddGroupExpensePayload
+  payload: UpdateGroupExpensePayload
 ): Promise<GroupExpenseRow> {
   // Missing `Content-Type: application/json` (present on every sibling call in this file, e.g.
   // addGroupExpense below) meant a plain-string fetch body defaults to `text/plain` — FastAPI
@@ -157,6 +164,8 @@ export interface GroupExpenseRow {
   currency?: string | null;
   fx_rate_to_group_currency?: number | null;
   split_type?: string | null;
+  /** TS-FIX-102: a receipt with saved lines (its split type is equal/exact/shares now). */
+  has_items?: boolean;
   tags?: TagRefDTO[];
   card?: CardRefDTO | null;
 }
@@ -178,28 +187,28 @@ export interface GroupExpenseItemDTO {
   line_total: number;
   tax?: number | null;
   discount?: number | null;
+  original_price?: number | null;
 }
 
 export interface GroupItemsResponse {
   items: GroupExpenseItemDTO[];
   amount: number;
   tax: number;
+  tip?: number;
+  /** Always 0 since TS-FIX-102: discounts are already in the line prices. */
   discount: number;
+  savings?: number;
+  /** Saved in the old discount format; the lines shown were converted to paid prices for checking. */
+  legacy_discount_format?: boolean;
 }
 
 export interface GroupItemsUpdatePayload {
-  items: {
-    line_no: number;
-    item_name: string;
-    normalized_name?: string | null;
-    category_id?: string | null;
-    quantity?: number | null;
-    unit_price?: number | null;
-    line_total: number;
-  }[];
+  items: GroupExpenseItemEntry[];
   amount: number;
   tax?: number;
-  discount?: number;
+  tip?: number;
+  /** Needed when the amount changes on an Exact or old item-split receipt (`split_required`). */
+  split?: { type: string; entries: { member_id: string; value?: number }[] };
 }
 
 export async function getGroupExpenseItems(groupId: string, expenseId: string): Promise<GroupItemsResponse> {
@@ -256,7 +265,11 @@ export interface PayerSummaryItem {
   amount_paid: number;
 }
 
+/** A receipt line (TS-FIX-102): `line_total` is the paid price; discount and original price are a
+ * record only. Lines never say who owes what — the receipt is split on its total. Matches web's
+ * GroupExpenseItemEntry (varavu_selavu_ui/src/api/groups.ts). */
 export interface GroupExpenseItemEntry {
+  id?: string;
   line_no: number;
   item_name: string;
   normalized_name?: string | null;
@@ -264,12 +277,8 @@ export interface GroupExpenseItemEntry {
   quantity?: number | null;
   unit_price?: number | null;
   category_name?: string | null;
-  // Per-item fields server-side, but resolve_itemized_split pools and prorates them across
-  // every assigned member regardless of which item carries them — matches web's
-  // GroupExpenseItemEntry (varavu_selavu_ui/src/api/groups.ts).
-  tax?: number | null;
   discount?: number | null;
-  member_ratios: Record<string, number>;
+  original_price?: number | null;
 }
 
 export interface AddGroupExpensePayload {
@@ -295,6 +304,10 @@ export interface GroupExpenseWithItemsPayload {
   amount: number;
   merchant_name?: string;
   payers: PayerSummaryItem[];
+  /** A receipt is split on its total: equal, exact or shares. */
+  split: { type: string; entries: { member_id: string; value?: number }[] };
+  tax?: number;
+  tip?: number;
   items: GroupExpenseItemEntry[];
   currency?: string;
   card_id?: string | null;
@@ -659,23 +672,6 @@ export async function getFriendBalances(): Promise<FriendBalanceDTO[]> {
   const res = await apiFetch('/api/v1/friends/balances');
   const data = await handleResponse<{ balances: FriendBalanceDTO[] }>(res);
   return data.balances;
-}
-
-// ---------------------------------------------------------------------------
-// AI split suggestions (TS-GRP-133)
-// ---------------------------------------------------------------------------
-
-export interface SplitSuggestionDTO {
-  member_id: string;
-  display_name: string;
-  confidence: 'high' | 'medium' | 'low';
-  times_assigned: number;
-}
-
-export async function suggestItemAssignment(groupId: string, itemName: string): Promise<SplitSuggestionDTO[]> {
-  const res = await apiFetch(`/api/v1/groups/${groupId}/items/suggest_assignment?item_name=${encodeURIComponent(itemName)}`);
-  const data = await handleResponse<{ suggestions: SplitSuggestionDTO[] }>(res);
-  return data.suggestions;
 }
 
 // ---------------------------------------------------------------------------

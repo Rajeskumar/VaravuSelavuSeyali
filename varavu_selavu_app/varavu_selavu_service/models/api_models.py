@@ -107,6 +107,8 @@ class OcrParseRequest(BaseModel):
 
 
 class ExpenseItem(BaseModel):
+    # TS-FIX-102: an existing line's id, so an edit updates it in place (keeps its old item-split records).
+    id: str | None = None
     line_no: int
     item_name: DescriptionStr
     normalized_name: OptionalNameStr = None
@@ -114,9 +116,12 @@ class ExpenseItem(BaseModel):
     quantity: float | None = Field(None, ge=0)
     unit: str | None = None
     unit_price: OptionalNonNegativeMoney = None
+    # TS-FIX-102: line_total is the PAID price; discount is money saved (a record, never subtracted
+    # again); original_price is the price before discount (filled from line_total + discount if omitted).
     line_total: NonNegativeMoney
     tax: OptionalNonNegativeMoney = Decimal("0")
     discount: OptionalNonNegativeMoney = Decimal("0")
+    original_price: OptionalNonNegativeMoney = None
     attributes_json: str | None = None
 
 
@@ -146,23 +151,34 @@ class ExpenseItemDTO(BaseModel):
     line_total: float
     tax: float | None = 0
     discount: float | None = 0
+    original_price: float | None = None
 
 
 class ItemsUpdateRequest(BaseModel):
-    """Body for PUT .../items — full replace of an already-saved itemized expense's line
-    items. `amount` is required (not derived) and validated to reconcile with the items'
-    subtotal, mirroring create_expense_with_items's existing check."""
+    """Body for PUT .../items — replaces an already-saved receipt's lines. `amount` is required and
+    paid line prices + tax + tip must match it within 0.02 (TS-FIX-102). `discount` is the old
+    whole-receipt field: anything but 0 is refused as the old format. `split` (group receipts only:
+    equal/exact/shares) is needed when the amount changes on an Exact or old item-split receipt."""
     items: List[ExpenseItem]
     amount: MoneyAmount
     tax: NonNegativeMoney = Decimal("0")
+    tip: NonNegativeMoney = Decimal("0")
     discount: NonNegativeMoney = Decimal("0")
+    split: Optional["GroupSplitConfig"] = None
 
 
 class ItemsResponse(BaseModel):
     items: List[ExpenseItemDTO]
     amount: float
     tax: float
+    tip: float = 0
+    # Always 0: discounts are already in the line prices. Kept so older apps send 0 back.
     discount: float
+    # Money saved across the lines (sum of line discounts), for display only.
+    savings: float = 0
+    # True when the receipt was saved in the old format; the lines shown are converted to paid
+    # prices for checking, and saving them stores the new format.
+    legacy_discount_format: bool = False
 
 
 class CategorizeRequest(BaseModel):
@@ -679,28 +695,32 @@ class MoveToGroupRequest(BaseModel):
 
 
 class GroupExpenseItemEntry(BaseModel):
+    """A receipt line (TS-FIX-102): tracking and analysis only, never who owes what. Requests that
+    still carry `member_ratios` are refused before validation (`reject_item_assignments`)."""
     line_no: int
-    item_name: str
-    normalized_name: str | None = None
+    item_name: DescriptionStr
+    normalized_name: OptionalNameStr = None
     category_id: str | None = None
     quantity: float | None = Field(None, ge=0)
     unit: str | None = None
-    # Scanned receipts record coupons as negative lines, so these two keep their sign (ROADMAP).
-    unit_price: float | None = None
-    line_total: float
-    tax: float | None = Field(0, ge=0)
-    discount: float | None = Field(0, ge=0)
+    unit_price: OptionalNonNegativeMoney = None
+    line_total: NonNegativeMoney
+    discount: OptionalNonNegativeMoney = Decimal("0")
+    original_price: OptionalNonNegativeMoney = None
     attributes_json: str | None = None
-    member_ratios: Dict[str, float]
 
 
 class GroupExpenseWithItemsRequest(BaseModel):
+    """A group receipt, split on its total by `split` (equal, exact or shares)."""
     date: ExpenseDateStr
     description: DescriptionStr
     category: CategoryStr
     amount: MoneyAmount
     merchant_name: OptionalMerchantStr = None
     payers: List[GroupExpensePayerEntry]
+    split: GroupSplitConfig
+    tax: NonNegativeMoney = Decimal("0")
+    tip: NonNegativeMoney = Decimal("0")
     items: List[GroupExpenseItemEntry]
     currency: Optional[CurrencyCode] = None
     # TS-CARD-114: same optional held-card attribution as GroupExpenseRequest.card_id.
@@ -739,6 +759,8 @@ class GroupExpenseRow(BaseModel):
     currency: Optional[CurrencyCode] = None
     fx_rate_to_group_currency: Optional[float] = None
     split_type: Optional[str] = None
+    # TS-FIX-102: the expense is a receipt with saved lines (split_type alone no longer says so).
+    has_items: bool = False
     # TS-TAG-103 — filtered to the caller (PRD §9.2, load-bearing): a tag applied to a shared
     # group expense is visible ONLY to the member who applied it, never other group members.
     tags: List[TagRefDTO] = Field(default_factory=list)
@@ -899,19 +921,6 @@ class UpdatePaymentHandlesRequest(BaseModel):
     venmo_handle: PaymentHandle = None
     paypal_handle: PaymentHandle = None
     upi_id: PaymentHandle = None
-
-
-# ---------------------- AI split suggestions (TS-GRP-133) ---------------------- #
-
-class SplitSuggestionDTO(BaseModel):
-    member_id: str
-    display_name: str
-    confidence: str  # high|medium|low
-    times_assigned: int
-
-
-class SplitSuggestionResponse(BaseModel):
-    suggestions: List[SplitSuggestionDTO]
 
 
 # ---------------------- Smart Entity Resolution (TS-ENT-1xx) ---------------------- #
@@ -1311,3 +1320,5 @@ class TagBulkResponse(BaseModel):
     my_expenses_total: float
     i_paid_total: float
 
+
+ItemsUpdateRequest.model_rebuild()

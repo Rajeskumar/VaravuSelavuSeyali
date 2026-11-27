@@ -207,3 +207,23 @@ def test_parse_endpoint_accepts_a_real_pdf(test_client):
         assert resp.status_code == 200
     finally:
         app.dependency_overrides.pop(get_receipt_service, None)
+
+
+def test_every_scan_returns_paid_price_lines_and_no_negative_values():
+    # TS-FIX-102: _finalize is shared by the AI, server OCR, on-device OCR and mock paths.
+    svc = ReceiptService(engine="mock")
+    result = svc._finalize({
+        "header": {"merchant_name": "Store", "amount": 27.10, "tax": 0.0, "tip": 0.0, "discount": 1.00},
+        "items": [
+            {"item_name": "Milk", "line_total": 10.00},
+            {"item_name": "COUPON", "line_total": -2.00},
+            {"item_name": "Bread", "line_total": 20.00},
+            {"item_name": "BOTTLE DEPOSIT REFUND", "line_total": -0.10},
+        ],
+    }, save_ocr_text=False)
+    lines = result["items"]
+    assert all(i["line_total"] >= 0 and i["discount"] >= 0 for i in lines)
+    assert [i["item_name"] for i in lines] == ["Milk", "Bread"]
+    assert round(sum(i["line_total"] for i in lines), 2) == 27.00
+    assert result["header"]["discount"] == 0 and result["header"]["savings"] == 3.0
+    assert result["review"] == [{"item_name": "BOTTLE DEPOSIT REFUND", "amount": 0.1, "reason": "refund"}]
