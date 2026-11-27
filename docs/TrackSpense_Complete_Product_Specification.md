@@ -1266,7 +1266,9 @@ Built and released with Expo/EAS from `varavu_selavu_mobile` (native `ios/` and 
 
 ### 15.10 Observability
 
-Structured logging to Cloud Logging (root log level `DEBUG` when `DEBUG=true`, else `INFO`); Cloud Build logs go to Cloud Logging only. `GET /healthz` and `GET /readyz` are the liveness/readiness probes. There is no scheduler, APM, or alerting configured in the repository.
+Current source (audited 2026-11-27): plain-text Python logging to stdout/Cloud Logging (root level `DEBUG` when `DEBUG=true`, else `INFO`); Cloud Build logs go to Cloud Logging only. Versioned `GET /api/v1/healthz` and `GET /api/v1/readyz` currently return static healthy responses. No application performance metrics or alert definitions are configured in the repository. Existing client GA4/Crashlytics instrumentation has separate consent and release-verification status.
+
+**Planned, not implemented — TS-OBS-001:** sanitize runtime/client/tool output and verify platform log sinks before adding structured request/component summaries, GCP metrics/dashboard/alerts, bounded database readiness, independent consented client diagnostics and an authenticated `/api/v1/telemetry/batch` endpoint. Capacity qualification targets 1,000 daily active users under explicit assumptions (20 RPS expected, 50 headroom); one warm backend instance is owner-intended, not proof of zero startup latency. Contracts, limits, acceptance tests and rollout are in the [feature plan](features/TS-OBS-001-observability.md). No new schema or changes to financial-write/retry semantics are proposed. Production activation and non-local load execution require separate authorization.
 
 ---
 

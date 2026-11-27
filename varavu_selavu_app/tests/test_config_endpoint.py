@@ -52,6 +52,7 @@ def _pin_mcp_flags(monkeypatch):
     # PUBLIC_APP_URL, and exact-dict assertions must not depend on ambient .env state.
     monkeypatch.setenv("MCP_ENABLED", "false")
     monkeypatch.setenv("PUBLIC_APP_URL", "http://localhost:3000")
+    monkeypatch.setenv("CLIENT_DIAGNOSTICS_ENABLED", "false")
 
 
 def test_config_reflects_groups_enabled_true(test_client):
@@ -67,6 +68,7 @@ def test_config_reflects_groups_enabled_true(test_client):
         "ai_enabled": True,
         "mcp_enabled": False,
         "mcp_management_url": "http://localhost:3000/account/assistants",
+        "client_diagnostics_enabled": False,
     }
 
 
@@ -83,6 +85,7 @@ def test_config_reflects_groups_enabled_false(test_client):
         "ai_enabled": True,
         "mcp_enabled": False,
         "mcp_management_url": "http://localhost:3000/account/assistants",
+        "client_diagnostics_enabled": False,
     }
 
 
@@ -112,6 +115,7 @@ def test_config_reflects_entity_resolution_enabled_true(test_client):
         "ai_enabled": True,
         "mcp_enabled": False,
         "mcp_management_url": "http://localhost:3000/account/assistants",
+        "client_diagnostics_enabled": False,
     }
 
 

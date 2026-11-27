@@ -1,16 +1,18 @@
 /**
- * Minimal logger for core code.
+ * Minimal privacy-safe logger for core code (TS-OBS-001 L15).
  *  - Silent in production builds (`__DEV__` false).
- *  - Never prints URLs, tokens or response bodies: arguments are reduced to strings, numbers and
- *    Error name/message (no stacks, no objects), and anything URL-shaped is replaced with `[url]`.
- *    Callers should still avoid passing secrets; this is a backstop, not permission.
+ *  - Never prints URLs, tokens, error messages, arbitrary objects or free-form PII/secrets:
+ *    Errors are reduced to their bounded class name only (`Error`, `TypeError`, etc.),
+ *    finite numbers and booleans are formatted, and everything else becomes `[omitted]`.
  */
-const URL_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/\S+/gi;
+const SAFE_TYPE_RE = /^[A-Za-z_][A-Za-z0-9_]{0,31}$/;
 
 function safe(arg: unknown): string {
-  if (arg instanceof Error) return `${arg.name}: ${arg.message}`.replace(URL_PATTERN, '[url]');
-  if (typeof arg === 'string') return arg.replace(URL_PATTERN, '[url]');
-  if (typeof arg === 'number' || typeof arg === 'boolean') return String(arg);
+  if (arg instanceof Error) {
+    return SAFE_TYPE_RE.test(arg.name) ? arg.name : 'Error';
+  }
+  if (typeof arg === 'number' && Number.isFinite(arg)) return String(arg);
+  if (typeof arg === 'boolean') return String(arg);
   return '[omitted]';
 }
 

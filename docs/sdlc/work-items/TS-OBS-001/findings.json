@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "F-SEC-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "PR #68 Security CI (gitleaks generic-api-key) flagged the localStorage key constant in varavu_selavu_ui/src/analytics/diagnostics/consent.ts:13 as a false-positive secret (entropy 3.54). Fixed by renaming the constant to DIAGNOSTICS_STORAGE_NAME.",
+      "owner": "Antigravity",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "client-privacy-parity",
+      "waiver": null
+    },
+    {
+      "id": "F-SEC-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "varavu_selavu_app/varavu_selavu_service/api/telemetry.py used deprecated HTTP_413_REQUEST_ENTITY_TOO_LARGE and an unpruned in-memory _rate_buckets dict. Fixed: switched to HTTP_413_CONTENT_TOO_LARGE and added stale-key pruning when >2,000 principals are tracked.",
+      "owner": "Antigravity",
+      "source": "security-review",
+      "status": "fixed",
+      "verification_evidence": "server-observability",
+      "waiver": null
+    },
+    {
+      "id": "F-IMP-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Web/mobile diagnostics clients and independent consent UIs are built and tested, and ErrorBoundary wires render errors, but App.tsx/AuthContext lifecycle wiring (setServerEnabled/setSignedIn/setSessionToken/startWebVitalsDiagnostics) is not yet hooked up. Safe while CLIENT_DIAGNOSTICS_ENABLED=false; must be wired before enabling diagnostics in staging.",
+      "owner": "Rajesh Kumar Ganesan",
+      "source": "implementation-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "F-UI-1",
+      "severity": "P3",
+      "certainty": "Suspected",
+      "summary": "[ux] AnalyticsPreferences.tsx Turn off / Allow performance diagnostics buttons both use outlined variant (matching the existing Analytics buttons above them; state is announced via role='status'). Optional visual polish.",
+      "owner": "Rajesh Kumar Ganesan",
+      "source": "ui-review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    }
+  ]
+}

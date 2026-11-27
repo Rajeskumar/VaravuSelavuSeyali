@@ -56,7 +56,16 @@ class ActivityService:
             self.db.commit()
         except Exception as e:
             self.db.rollback()
-            logger.error(f"Failed to log activity {action} for group {group_id}: {e}")
+            from varavu_selavu_service.core.observability import log_event, safe_error_type
+            log_event(
+                logger,
+                logging.ERROR,
+                "group_activity_log_failed",
+                exc_info=e,
+                component="activity",
+                outcome="failed",
+                error_type=safe_error_type(e),
+            )
 
     def get_group_activity(self, group_id: str, limit: int = 50, offset: int = 0):
         gid = self._coerce_uuid(group_id)

@@ -323,7 +323,16 @@ def _classify_scope(llm, query: str, previous_reply: Optional[str]) -> tuple[boo
             ("human", f"{context}User's latest message:\n{query[:2000]}"),
         ])
     except Exception as exc:  # pragma: no cover - network failures
-        logger.warning("Scope classifier failed, allowing the question: %s", exc)
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(
+            logger,
+            logging.WARNING,
+            "chat_scope_classifier_failed",
+            component="llm",
+            feature="chat",
+            outcome="fallback",
+            error_type=safe_error_type(exc),
+        )
         return True, 0, 0
     content = res.content
     if isinstance(content, list):
@@ -1344,18 +1353,29 @@ def call_chat_model(
         )
 
     usage = {"input_tokens": 0, "output_tokens": 0}
+    from varavu_selavu_service.core.observability import log_event, safe_error_type
+    safe_provider = provider if provider in ("gemini", "openai", "ollama") else "other"
     try:
         final_message = None
-        # Stream intermediate steps to see exactly what Gemini returns
-        logger.info(f"Starting agent execution with model {model} and provider {provider}...")
+        log_event(
+            logger,
+            logging.INFO,
+            "llm_agent_started",
+            component="llm",
+            feature="chat",
+            provider=safe_provider,
+            model=model,
+            outcome="started",
+        )
         # recursion_limit bounds how many model/tool steps one question can take; each step
         # is a paid LLM call.
+        step_count = 0
         for event in agent.stream(
             {"messages": lc_messages},
             config={"recursion_limit": ai_settings.AI_AGENT_RECURSION_LIMIT},
         ):
-            for node_name, node_output in event.items():
-                logger.info(f"Agent step [{node_name}]: {node_output}")
+            for _node_name, node_output in event.items():
+                step_count += 1
                 if "messages" in node_output:
                     for msg in node_output["messages"]:
                         meta = getattr(msg, "usage_metadata", None) if isinstance(msg, AIMessage) else None
@@ -1363,6 +1383,17 @@ def call_chat_model(
                             usage["input_tokens"] += int(meta.get("input_tokens") or 0)
                             usage["output_tokens"] += int(meta.get("output_tokens") or 0)
                     final_message = node_output["messages"][-1]
+
+        log_event(
+            logger,
+            logging.INFO,
+            "llm_agent_completed",
+            component="llm",
+            feature="chat",
+            provider=safe_provider,
+            count=step_count,
+            outcome="completed",
+        )
 
         if final_message is None:
             raise ValueError("Agent returned no messages")
@@ -1381,8 +1412,18 @@ def call_chat_model(
             return _result("".join(text_parts))
         return _result(str(content))
     except Exception as e:
-        logger.exception("Agent execution failed", extra={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Failed to generate response: {str(e)}")
+        log_event(
+            logger,
+            logging.ERROR,
+            "llm_agent_failed",
+            exc_info=e,
+            component="llm",
+            feature="chat",
+            provider=safe_provider,
+            outcome="failed",
+            error_type=safe_error_type(e),
+        )
+        raise HTTPException(status_code=500, detail="Failed to generate response.")
 
 
 # --------------------------------------------------------------------------- #
@@ -1413,13 +1454,20 @@ def list_openai_models() -> list[str]:
         filtered_ids = [mid for mid in target_models if mid in remote_ids]
         return filtered_ids
     except requests.RequestException as exc:
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
         status = getattr(getattr(exc, "response", None), "status_code", None)
-        text = getattr(getattr(exc, "response", None), "text", None)
-        logger.exception(
-            "OpenAI model listing failed",
-            extra={"provider": "openai", "status": status, "response": text},
+        log_event(
+            logger,
+            logging.ERROR,
+            "llm_model_list_failed",
+            exc_info=exc,
+            component="llm",
+            provider="openai",
+            http_status=int(status) if isinstance(status, int) else None,
+            outcome="failed",
+            error_type=safe_error_type(exc),
         )
-        raise HTTPException(status_code=502, detail=f"Error listing OpenAI models: {exc}")
+        raise HTTPException(status_code=502, detail="Error listing OpenAI models")
 
 
 def list_ollama_models() -> list[str]:
@@ -1432,13 +1480,20 @@ def list_ollama_models() -> list[str]:
         data = resp.json()
         return [m.get("name") for m in data.get("models", []) if m.get("name")]
     except requests.RequestException as exc:
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
         status = getattr(getattr(exc, "response", None), "status_code", None)
-        text = getattr(getattr(exc, "response", None), "text", None)
-        logger.exception(
-            "Ollama model listing failed",
-            extra={"provider": "ollama", "url": url, "status": status, "response": text},
+        log_event(
+            logger,
+            logging.ERROR,
+            "llm_model_list_failed",
+            exc_info=exc,
+            component="llm",
+            provider="ollama",
+            http_status=int(status) if isinstance(status, int) else None,
+            outcome="failed",
+            error_type=safe_error_type(exc),
         )
-        raise HTTPException(status_code=502, detail=f"Error listing Ollama models: {exc}")
+        raise HTTPException(status_code=502, detail="Error listing Ollama models")
 
 def list_gemini_models() -> list[str]:
     """Return a list of available Gemini models via the API."""
@@ -1462,5 +1517,15 @@ def list_gemini_models() -> list[str]:
                 models.append(name)
         return models if models else default_models
     except Exception as exc:
-        logger.exception("Gemini model listing failed", extra={"error": str(exc)})
+        from varavu_selavu_service.core.observability import log_event, safe_error_type
+        log_event(
+            logger,
+            logging.ERROR,
+            "llm_model_list_failed",
+            exc_info=exc,
+            component="llm",
+            provider="gemini",
+            outcome="failed",
+            error_type=safe_error_type(exc),
+        )
         return default_models

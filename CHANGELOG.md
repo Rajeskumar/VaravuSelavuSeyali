@@ -1,5 +1,8 @@
 # Changelog
 
+- 2026-11-27: Implemented TS-OBS-001 locally (uncommitted, not deployed): sanitized backend/web/mobile/nginx/operator/QA logging paths (L01-L23) with unconditional `SafeJsonFormatter` and `logging_guard.py`; added pure ASGI body-complete timing, server `X-Request-ID`, DB/background instrumentation, bounded `/api/v1/readyz`, feature-flagged `POST /api/v1/telemetry/batch`, independent web/mobile Performance diagnostics consent, declarative GCP observability configs (`ops/observability/`), and fail-closed 1,000-DAU load harness (`qa/load/`) (Antigravity).
+- 2026-11-27: Planned TS-OBS-001: comprehensive log sanitization, minimal GCP observability, consented client diagnostics and isolated backend qualification for 1,000 daily users (20/50 RPS); source audit and test specification only, no implementation or cloud changes (Codex).
+
 - 2026-11-26: Recorded the owner's Android production analytics smoke result and consent-off observation; deeper Android verification remains open (Codex).
 - 2026-11-26: Packaged the verified production-configured Android Release APK as a standalone friend-test file in Downloads for device sharing (Codex).
 - 2026-11-26: Built and installed a local Android Release APK with the production Firebase config; verified the embedded Firebase app ID and consent-off manifest defaults. The APK uses the local debug signing key and was not released to a store (Codex).

@@ -132,7 +132,7 @@ def main() -> int:
     llm_calls = 0
     seconds: Dict[str, List[float]] = {e: [] for e in engines}
 
-    for img in images:
+    for idx, img in enumerate(images, start=1):
         expected_path = img.with_suffix(".expected.json")
         data, mime = img.read_bytes(), _mime(img)
         cache: Dict[str, Any] = {}
@@ -158,7 +158,7 @@ def main() -> int:
             try:
                 result = run_engine(svc, engine, data, mime, cache)
             except Exception as exc:  # a crash scores zero on every field
-                print(f"{img.name} [{engine}] failed: {exc}")
+                print(f"receipt #{idx} [{engine}] failed: {type(exc).__name__}")
                 result = {"header": {}, "items": []}
             seconds[engine].append(time.time() - t0)
             if engine == "hybrid" and result.get("_llm_called"):
@@ -170,10 +170,7 @@ def main() -> int:
             if args.verbose:
                 misses = [f for f in fields if s[f] is not None and s[f] < 1]
                 if misses:
-                    h = result.get("header", {})
-                    print(f"  {img.name} [{engine}] missed {misses}: merchant={h.get('merchant_name')!r} "
-                          f"date={h.get('purchased_at')!r} total={h.get('amount')} tax={h.get('tax')} "
-                          f"conf={result.get('confidence')}")
+                    print(f"  receipt #{idx} [{engine}] missed {misses} conf={result.get('confidence')}")
 
     n = max((len(v["total"]) for v in totals.values()), default=0)
     print(f"\n{n} receipts scored\n")

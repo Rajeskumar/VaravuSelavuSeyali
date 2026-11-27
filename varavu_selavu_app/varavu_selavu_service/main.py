@@ -1,28 +1,28 @@
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import FileResponse
-from pathlib import Path
-from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
 import logging
+from pathlib import Path
 
-from varavu_selavu_service.api.routes import router
-from varavu_selavu_service.core.limiter import limiter
 from varavu_selavu_service.core.config import Settings
-from varavu_selavu_service.core.csrf import CSRFMiddleware
-from varavu_selavu_service.auth.security import assert_signing_secret_is_safe
+from varavu_selavu_service.core.observability import configure_logging, log_event
+from varavu_selavu_service.core.observability.middleware import ObservabilityMiddleware
 
 settings = Settings()
 
-# Configure root logging early
-logging.basicConfig(
-    level=logging.DEBUG if settings.DEBUG else logging.INFO,
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-)
+# Configure privacy-safe JSON logging BEFORE router/service imports (TS-OBS-001 L10).
+configure_logging(environment=settings.ENVIRONMENT, debug=settings.DEBUG)
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+
+from varavu_selavu_service.api.routes import router
+from varavu_selavu_service.api.telemetry import router as telemetry_router
+from varavu_selavu_service.core.limiter import limiter
+from varavu_selavu_service.core.csrf import CSRFMiddleware
+from varavu_selavu_service.auth.security import assert_signing_secret_is_safe
 
 # Fail fast rather than serve traffic with a forgeable signing key.
 assert_signing_secret_is_safe(settings.ENVIRONMENT, settings.JWT_SECRET)
@@ -93,8 +93,9 @@ def _warm_up_receipt_ocr() -> None:
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Include the API router (versioned only)
+# Include the API routers (versioned only)
 app.include_router(router)
+app.include_router(telemetry_router)
 
 # List the origins that should be allowed to make cross-origin requests
 origins = settings.CORS_ALLOW_ORIGINS
@@ -115,7 +116,11 @@ app.add_middleware(
     allow_credentials=True,       # allow cookies, Authorization headers
     allow_methods=["*"],          # GET, POST, PUT, etc.
     allow_headers=["*"],          # allow all headers
+    expose_headers=["X-Request-ID"],
 )
+
+# Outermost ASGI middleware: generates server X-Request-ID and measures body-complete duration.
+app.add_middleware(ObservabilityMiddleware)
 
 # Add a root endpoint for clarity
 @app.get("/")
@@ -176,11 +181,14 @@ if settings.MCP_ENABLED:
     app.router.lifespan_context = mcp_lifespan
     # Mount at the root lets the SDK match its canonical /mcp route without a redirect.
     app.mount('/', gateway)
-    logger = logging.getLogger("varavu_selavu_service.mcp")
-    logger.info(
-        "MCP server enabled and mounted at /mcp (resource: %s, writes: %s)",
-        settings.MCP_RESOURCE_URL,
-        settings.MCP_WRITES_ENABLED,
+    log_event(
+        "varavu_selavu_service.mcp",
+        logging.INFO,
+        "mcp_enabled",
+        component="mcp",
+        mcp_enabled=True,
+        writes_enabled=bool(settings.MCP_WRITES_ENABLED),
+        outcome="started",
     )
     @app.exception_handler(MCPError)
     async def mcp_error(request, exc):

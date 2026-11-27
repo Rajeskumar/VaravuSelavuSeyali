@@ -46,7 +46,7 @@ export default async function globalSetup(): Promise<void> {
 
   fs.mkdirSync(path.dirname(MARKER_PATH), { recursive: true });
   fs.writeFileSync(MARKER_PATH, JSON.stringify({ runId: RUN_ID, at: new Date().toISOString() }));
-  console.log(`[global.setup] QA personas ready: ${Object.values(QA_USERS).map((p) => p.email).join(', ')}`);
+  console.log(`[global.setup] QA personas ready (${Object.keys(QA_USERS).join(', ')})`);
 }
 
 /**
@@ -78,7 +78,8 @@ function markVerified(emails: string[]): void {
       env: process.env,
     });
   } catch (e) {
-    console.warn(`[global.setup] failed to mark QA personas email-verified — group tests will 403: ${e}`);
+    const errType = e instanceof Error ? e.name : 'Error';
+    console.warn(`[global.setup] failed to mark QA personas email-verified — group tests will 403 (${errType})`);
   }
 }
 
@@ -91,7 +92,7 @@ function markVerified(emails: string[]): void {
 function provisionSessionUser(user: { email: string; name: string; password: string } = QA_SESSION_USER): void {
   if (!process.env.QA_DATABASE_URL && !process.env.DATABASE_URL) {
     console.warn(
-      `[global.setup] QA_DATABASE_URL/DATABASE_URL not set — can't create ${user.email}, so ` +
+      '[global.setup] QA_DATABASE_URL/DATABASE_URL not set — skipping QA session user provisioning; ' +
         'the smoke test and session.spec.ts will fail to log in. See qa/README.md.',
     );
     return;
@@ -103,6 +104,7 @@ function provisionSessionUser(user: { email: string; name: string; password: str
       env: { ...process.env, QA_SESSION_PASSWORD: user.password },
     });
   } catch (e) {
-    console.warn(`[global.setup] failed to create the QA session user — the logout tests will fail to log in: ${e}`);
+    const errType = e instanceof Error ? e.name : 'Error';
+    console.warn(`[global.setup] failed to create the QA session user — the logout tests will fail to log in (${errType})`);
   }
 }

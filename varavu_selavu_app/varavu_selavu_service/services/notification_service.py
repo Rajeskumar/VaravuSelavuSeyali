@@ -129,9 +129,16 @@ class NotificationService:
     def fan_out(self, group_id: str, actor_email: str, event_type: str, **event_data) -> None:
         try:
             self._fan_out(group_id, actor_email, event_type, event_data)
-        except Exception:
-            logger.exception(
-                "NotificationService.fan_out failed (group_id=%s, event_type=%s)", group_id, event_type
+        except Exception as exc:
+            from varavu_selavu_service.core.observability import log_event, safe_error_type
+            log_event(
+                logger,
+                logging.ERROR,
+                "notification_fan_out_failed",
+                exc_info=exc,
+                component="push",
+                outcome="failed",
+                error_type=safe_error_type(exc),
             )
 
     def _fan_out(self, group_id: str, actor_email: str, event_type: str, event_data: dict) -> None:
