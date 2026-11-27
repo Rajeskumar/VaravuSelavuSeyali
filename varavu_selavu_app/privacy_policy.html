@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -112,228 +111,42 @@
         }
     </style>
 </head>
-
 <body>
-    <div class="wrap">
-
-        <h1>Privacy Policy</h1>
-        <p class="meta">TrackSpense, a product of CerebroOS · Effective date: <strong>July 4, 2026</strong> · Last
-            updated: <strong>November 25, 2026</strong></p>
-
-        <div class="note">
-            <strong>Draft template — review before publishing.</strong> This document is a starting draft based on how
-            the TrackSpense app currently appears to work. It is not legal advice. Fill in every
-            <strong>[BRACKETED]</strong> value, confirm each data-practice statement matches your real implementation,
-            and have a qualified attorney review it before you publish or submit to the app stores. If you add features
-            (e.g. bank sync), update this policy to match.
-        </div>
-
-        <p>This Privacy Policy explains how <strong>CerebroOS</strong> ("CerebroOS," "we," "us," or "our")
-            collects, uses, and protects your information when you use <strong>TrackSpense</strong>, our
-            expense-tracking application, available on the web at expense.cerebroos.com and as a mobile app (together,
-            the "Service"). By using the Service you agree to the practices described here.</p>
-
-        <h2>1. Who we are</h2>
-        <p>The Service is operated by CerebroOS, located at CerebroOS HQ. For any privacy questions or
-            requests, contact us at <a href="mailto:privacy@cerebroos.com">privacy@cerebroos.com</a>.</p>
-
-        <h2>2. Information we collect</h2>
-
-        <h3>a. Information you provide</h3>
-        <table>
-            <tr>
-                <th>Category</th>
-                <th>Examples</th>
-                <th>Why we collect it</th>
-            </tr>
-            <tr>
-                <td>Account &amp; profile</td>
-                <td>Email address, name, phone number, and (optionally) mailing address</td>
-                <td>To create and secure your account and provide the Service</td>
-            </tr>
-            <tr>
-                <td>Financial &amp; expense data</td>
-                <td>Expense descriptions, merchant/store names, amounts, dates, categories, recurring-payment templates,
-                    and income figures you enter</td>
-                <td>Core functionality — to record, categorize, and analyze your spending</td>
-            </tr>
-            <tr>
-                <td>Receipts &amp; uploads</td>
-                <td>Receipt images you upload and the text extracted from them ("Parse Receipt" OCR). Receipt images may be
-                    read by a third-party AI service (see Section 4).</td>
-                <td>To let you capture expenses from receipts</td>
-            </tr>
-            <tr>
-                <td>AI queries</td>
-                <td>Questions you type into the AI Analyst and the financial context needed to answer them</td>
-                <td>To generate answers about your spending</td>
-            </tr>
-            <tr>
-                <td>Support &amp; ideas</td>
-                <td>Messages, feedback, and ideas you submit</td>
-                <td>To respond to you and improve the Service</td>
-            </tr>
-        </table>
-
-        <p><strong>Unsaved expense drafts.</strong> To recover interrupted entries, the web app keeps a draft in
-            this browser tab's session storage, and the mobile app uses the device's secure storage. This can include
-            amounts, descriptions, receipt line items and split choices, but not receipt photos or sign-in credentials.
-            Drafts are available for recovery for one hour after the last draft update; expired drafts are removed on
-            the next access. Saving, choosing "Discard draft", or explicitly signing out on that client removes its
-            draft. Signing in as a different account also removes the previous draft. Unsaved drafts are local to the
-            device and are not included in the server data export. Closing Ask keeps its conversation in app memory
-            while you are signed in; signing out clears it.</p>
-
-        <h3>b. Information collected automatically</h3>
-        <p>Optional web analytics uses <strong>Google Analytics</strong> only when collection is enabled and you
-            allow analytics cookies. It helps us understand page and feature usage. Analytics may process technical
-            metadata such as browser/device information and network IP addresses. We exclude expense amounts,
-            descriptions, receipt contents, group identifiers, names, contact details and AI conversations from
-            analytics events. We do not use your email address as an analytics user identifier.</p>
-        <p>You can allow or decline optional analytics in <strong>Analytics preferences</strong>, available on the
-            home-page footer and in Account. Withdrawing permission stops new collection and may reload the page;
-            it cannot recall requests already sent. Analytics choices are separate from AI-feature consent.
-            If your browser cannot save a preference, analytics stays off for the current page; allow site storage
-            to save your choice. Collection remains off on sensitive invitation, password-reset and assistant
-            approval pages. Our infrastructure provider (Cloudflare) may separately process request data to deliver
-            and protect the Service.</p>
-        <p>The <strong>iOS and Android apps</strong> can use <strong>Google Firebase Analytics</strong> and
-            <strong>Firebase Crashlytics</strong>, each only if you turn it on. When you first open the app, it asks
-            once whether to allow usage analytics and, separately, crash reports. Both are off unless you allow them,
-            and you can change either at any time in <strong>Account &rarr; Privacy</strong>. Usage analytics records
-            which screens and features are used and whether actions worked. Crash reports record crashes and errors
-            with the app version and what failed. Neither includes expense amounts, descriptions, receipt contents,
-            group names or identifiers, names, email addresses, passwords, sign-in tokens or AI conversations. We do
-            not use your email address or an account identifier for these services, we do not use the advertising
-            identifier on iOS or Android, and we do not use them for advertising.</p>
-        <p>Google acts as our service provider for these services. With your permission it receives technical
-            information such as the app version, operating system and device model, a device identifier created for
-            the app (not your advertising identifier), and approximate location derived from your IP address.
-            Withdrawing permission stops new collection but cannot recall data already sent. Because this data is not
-            linked to your account, we cannot delete it for one account; it is removed automatically when its
-            retention period ends [CONFIRM BEFORE PUBLISHING: the retention period configured for usage analytics in
-            Google Analytics, and the Crashlytics retention period].</p>
-
-        <h2>3. How we use your information</h2>
-        <p>We use the information we collect to: provide, maintain, and improve the Service; record and analyze your
-            expenses; generate insights, charts, and AI-assisted answers; process recurring-expense templates;
-            authenticate you and secure your account; respond to support requests; monitor performance and prevent
-            abuse; and comply with legal obligations. We do <strong>not</strong> sell your personal information.</p>
-
-        <h2>4. Artificial intelligence features</h2>
-        <p>Three features send data to a third-party AI service, currently <strong>Google's Gemini</strong>:</p>
-        <ul>
-            <li><strong>Ask (the AI Analyst).</strong> Your question and the figures needed to answer it: expense
-                descriptions, merchant names, amounts and dates, budgets, and for groups you belong to, the group name,
-                member display names and balances.</li>
-            <li><strong>Receipt scanning.</strong> Receipts are read by our own text recognition first. Only when that read
-                isn't confident is the receipt image or PDF sent to the AI service, and never if you haven't allowed AI
-                features.</li>
-            <li><strong>Category suggestions.</strong> The description text of an expense, only when our built-in rules
-                can't categorize it.</li>
-        </ul>
-        <p>We do not send your password, payment card numbers, or access tokens. The first time you use one of these
-            features the app asks whether you allow it; if you decline, nothing is sent and the rest of the app keeps
-            working (receipts are read by our own reader only, and category suggestions use only built-in rules). You can withdraw the choice at any time by
-            clearing the app's stored data (in the mobile app, signing out also clears it), and we may ask again after material changes. Analytics and crash-report choices are separate and are changed in Account &rarr; Privacy (see Section 2b). We send only what is needed to
-            answer the request. The provider handles that data under its own terms for the Gemini API
-            [CONFIRM BEFORE PUBLISHING: the provider's retention period and whether data is used to train models for the
-            API plan in use]. Prompts and answers are not stored by TrackSpense beyond the conversation on your screen.</p>
-
-        <h2>5. How we share information</h2>
-        <p>We share personal information only as follows:</p>
-        <ul>
-            <li><strong>Service providers.</strong> Vendors who process data on our behalf to run the Service, including
-                hosting (Google Cloud), content delivery/security (Cloudflare), analytics (Google Analytics on the
-                website, only if you accept analytics cookies; Firebase Analytics and Crashlytics in the mobile apps,
-                only if you allow them), the AI service (Google Gemini, only if you allow AI features), and Google
-                sign-in (loaded only when you choose "Continue with Google"). They are permitted to use the data only to provide services to us and must
-                protect it to a standard equivalent to this Policy.</li>
-            <li><strong>Legal &amp; safety.</strong> When required by law, legal process, or to protect the rights,
-                safety, and security of our users, the public, or CerebroOS.</li>
-            <li><strong>Business transfers.</strong> In connection with a merger, acquisition, or sale of assets,
-                subject to this Policy.</li>
-        </ul>
-        <p>We do not sell or rent your personal information, and we do not share your financial data with advertisers.
-        </p>
-
-        <h3>Connected assistants (when enabled)</h3>
-        <p>If you connect an external assistant such as Claude or ChatGPT, TrackSpense shares only the personal-expense
-            data allowed by the permissions you select. That assistant and its provider process the shared data under
-            their own policies. Group expenses are excluded. Permission to prepare an expense does not authorize saving
-            it: every addition requires your separate review in TrackSpense. Possible-duplicate details may be included
-            in the review even when broader expense-reading access is not selected.</p>
-        <p>You can disconnect an assistant in Connected assistants. Signing out everywhere or changing/resetting your
-            password also revokes connections. This stops future access; it cannot remove data already held by an external
-            provider. Connections, approval records and basic activity are included in your account data export and deletion.</p>
-        <h2>6. Data retention</h2>
-        <p>Assistant drafts expire after 24 hours. Cleanup removes full draft/result payloads and warnings 30 days after
-            completion, rejection or expiry; minimal operation identifiers remain to prevent a retry from adding an expense
-            twice. Activity is retained for 180 days and rate-limit windows for two days. Physical removal follows the
-            cleanup schedule, and account deletion removes these user-linked records earlier.</p>
-        <p>We retain your personal and financial information for as long as your account is active or as needed to
-            provide the Service. When you delete your account (see Section 8), your profile, personal expenses and
-            receipt items, budgets, recurring templates, tags, cards, sign-ins and invitation records are deleted
-            immediately.</p>
-        <p><strong>Shared group records stay.</strong> Expenses you added to a group, with their descriptions, merchants,
-            notes and amounts, remain so the other members' balances and history stay correct. Your name on those
-            records becomes "Anonymous User" and your email address is removed from them. Copies in system backups age
-            out on the backup schedule of our hosting provider [CONFIRM BEFORE PUBLISHING: backup retention period].
-            We may also keep certain records where we must to comply with legal obligations or resolve disputes.</p>
-
-        <h2>7. Security</h2>
-        <p>We take reasonable technical and organizational measures to protect your information, including encryption in
-            transit and access controls. No method of transmission or storage is completely secure, so we cannot
-            guarantee absolute security. If we become aware of a breach affecting your data, we will notify you as
-            required by law.</p>
-
-        <h2>8. Your rights and choices</h2>
-        <p>You can:</p>
-        <ul>
-            <li><strong>Access and update</strong> your profile and expense data within the Service.</li>
-            <li><strong>Export</strong> your data from the Profile screen: "Export all expenses (CSV)" or "Download all my
-                data (JSON)", which includes your profile, expenses with receipt items, your share of group expenses,
-                budgets, recurring templates and cards.</li>
-            <li><strong>Secure your account</strong> from the Profile screen: change your password, see where you are
-                signed in, and sign out of other devices or all devices.</li>
-            <li><strong>Delete your account and data</strong> from the Profile screen ("Delete Account"; you confirm
-                with your password). This permanently deletes your account and personal data as described in
-                Section 6, and cannot be undone. Expenses you added to shared groups remain for the other members with
-                your name removed.</li>
-            <li><strong>Revoke consent</strong> (for example, stop using AI features, or opt out of analytics on the
-                website or in the app under Account &rarr; Privacy, where crash reports are a separate choice) at any
-                time.</li>
-        </ul>
-        <p>Depending on where you live, you may have additional rights under laws such as the GDPR or the CCPA/CPRA —
-            including the right to access, correct, delete, or restrict processing of your personal information, and the
-            right to lodge a complaint with a supervisory authority. To exercise any right, contact us at <a
-                href="mailto:privacy@cerebroos.com">privacy@cerebroos.com</a>.</p>
-
-        <h2>9. Children's privacy</h2>
-        <p>The Service is not directed to children and is not intended for anyone under the age of 18. We do not
-            knowingly collect personal information from children. If you believe a child has provided us information,
-            contact us and we will delete it.</p>
-
-        <h2>10. International data transfers</h2>
-        <p>We operate the Service using infrastructure located in the United States. If you access the Service from
-            outside the United States, your information will be transferred to and processed in the United States and
-            other countries where we or our providers operate, which may have different data-protection laws than your
-            own.</p>
-
-        <h2>11. Changes to this Policy</h2>
-        <p>We may update this Policy from time to time. When we make material changes, we will update the "Last updated"
-            date and, where appropriate, notify you in the Service. Your continued use after changes take effect
-            constitutes acceptance.</p>
-
-        <h2>12. Contact us</h2>
-        <p>Questions or requests? Email <a href="mailto:privacy@cerebroos.com">privacy@cerebroos.com</a> or write to
-            CerebroOS, CerebroOS HQ.</p>
-
-        <hr>
-        <footer>© 2026 CerebroOS. TrackSpense and CerebroOS are products of CerebroOS. This page
-            is a draft and should be reviewed by legal counsel before publication.</footer>
-
-    </div>
+    <main class="wrap">
+<h1>TrackSpense Privacy Policy</h1>
+<p><strong>Last updated: November 26, 2026</strong></p>
+<p>TrackSpense is a personal and shared expense tracking product of CerebroOS. This policy covers the TrackSpense web app at expense.cerebroos.com, its iOS and Android apps, and the services that support them. It is separate from the <a href="https://cerebroos.com/privacy">CerebroOS marketing website notice</a>. For privacy questions or requests, email <a href="mailto:cerebroos@gmail.com">cerebroos@gmail.com</a>.</p>
+<h2>1. Information we handle</h2>
+<p><strong>Account and profile.</strong> We receive the email address and name you provide, a password hash or Google account information when you choose that sign-in option, and optional profile details such as phone number, mailing address, or payment handles you add. Passwords are stored as password hashes, not readable passwords.</p>
+<p><strong>Your financial records.</strong> We process expenses, dates, amounts, descriptions, merchant names, categories, budgets, recurring templates, receipt line items, tags, cards you choose to track, income figures you enter, and the insights calculated from these records. We also process groups, member names, invitations, shared expenses, splits, settlements, comments, and balances so members can coordinate shared spending. Other members of a group can see the shared records and member details needed for that group, including optional payment handles you choose to add for settlements; they cannot see your private expenses.</p>
+<p><strong>Receipts and AI requests.</strong> A receipt image, PDF, or text extracted on your device may be sent to our service for parsing. The app shows a result for your review; it saves expense and receipt line-item data only when you confirm. We also receive questions you ask the AI Analyst and the financial context needed to answer them. Section 4 explains when a third-party AI provider receives any of this information.</p>
+<p><strong>Support and feedback.</strong> We receive messages and ideas you send through the product. The email service delivers them to our Gmail inbox. Please avoid including account passwords, payment card numbers, or unnecessary sensitive details.</p>
+<p><strong>Technical data.</strong> Our service and infrastructure may process IP address, browser or device details, app version, request time, authentication and security information, and error information to deliver and protect TrackSpense. If you enable push notifications, we process a device push token and notification content; Expo, Apple, or Google may handle delivery depending on your device.</p>
+<p><strong>Local drafts.</strong> An unfinished expense can remain on your device for recovery: in browser-tab session storage on web or secure device storage on mobile. It may contain amounts, descriptions, receipt line items, and split choices, but not the receipt photo or sign-in credentials. The draft expires one hour after its last update and is removed on the next access after expiry. Saving, discarding, or deliberately signing out on that device removes it. Local drafts are not included in a server data export.</p>
+<h2>2. Optional analytics and crash reports</h2>
+<p>On the web, Google Analytics may measure page and feature usage only if analytics is enabled for the site and you allow it in <strong>Analytics preferences</strong>. You can revisit that choice in the footer or Account. The analytics tag stays off until you allow it. Sensitive invitation, password-reset, and assistant-approval pages are excluded. Withdrawing permission stops new collection through the app but cannot recall data already sent.</p>
+<p>On iOS and Android, Firebase Analytics and Firebase Crashlytics are separate optional choices in <strong>Account → Privacy</strong>. If enabled for your app build, usage analytics records which screens and features are used and whether actions worked; crash reports help diagnose failures. Both are off unless you allow them. We do not intentionally include expense values, receipt contents, group details, names, email addresses, sign-in tokens, or AI conversations in these events, and we do not use advertising identifiers or these services for advertising. Google may also receive app, device, and network metadata, including an app-specific identifier and approximate location inferred from IP address. These analytics choices are separate from AI-feature consent and from the CerebroOS marketing website choice.</p>
+<p>Google Analytics data is kept according to the settings of the relevant property. Crashlytics data follows <a href="https://firebase.google.com/support/privacy/">Google's retention practices</a>. Because these optional events are not tied to a TrackSpense account identifier, we may be unable to locate or delete a single person's analytics or crash records by account email.</p>
+<h2>3. Why we use information</h2>
+<p>We use the information above to provide accounts and the expense tracking service; calculate totals, splits, budgets, and insights; process receipts; answer questions you choose to ask; send requested notifications; respond to support requests; secure and troubleshoot the service; and comply with legal obligations. Where a legal basis is required, our basis for core account and financial processing is providing the service you request. We rely on your choice for optional analytics, crash reporting, and AI features, and on our legitimate interests in security, abuse prevention, and responding to requests where applicable. We do not sell your personal information or share your financial records with advertisers.</p>
+<h2>4. AI features</h2>
+<p>TrackSpense asks before using optional AI features. The AI Analyst may send your question and relevant financial context, including expenses, merchants, budgets, and group information where needed, to the model provider selected for that request. The service supports Google Gemini and, when configured, OpenAI or a locally hosted model. The model can return inaccurate or incomplete answers; review them before relying on them.</p>
+<p>Receipt parsing first uses text recognition and rules. The mobile app reads receipt text on the device before sending that text to our service. If a receipt read is uncertain and you have allowed AI features, a receipt image or PDF may be sent to Google Gemini for another attempt. Category suggestions may send an expense description to Gemini when built-in rules are insufficient and you have allowed AI features. If you decline, the app can still use its non-AI receipt and category methods.</p>
+<p>We do not intentionally send passwords, sign-in tokens, or payment card numbers to the AI provider. TrackSpense does not save AI Analyst chat history as a separate account record; the conversation remains in app memory while you are signed in. A provider may process or retain submitted prompts, files, and responses under its own terms and the configuration used for that request. We have not verified a single retention or model-training rule that covers every provider and configuration, so please avoid putting information in a prompt that is not needed for your request. You can stop future AI requests by withdrawing the app's AI choice or not using the feature. This does not recall a request already sent.</p>
+<h2>5. Sharing and connected services</h2>
+<p>We share information needed to operate TrackSpense with hosting and security providers, currently Google Cloud and Cloudflare; Gmail for support and transactional email; Google for optional sign-in, analytics, crash reporting, and Gemini processing when those features are used; an OpenAI model service if selected and configured; and Expo, Apple, or Google for push delivery when enabled. Those providers may process technical information needed to deliver their services. We may also disclose information where required by law or necessary to protect users and the service.</p>
+<p>If you join a shared group, other members can see that group's records and balances, including expenses, splits, settlements, and any names or details entered into those records. If you choose to connect an external assistant such as Claude or ChatGPT, the assistant receives the personal-expense data you authorize in its permissions. Its provider handles that data under its own policy. Group expenses are excluded from this connection. Preparing an expense through an assistant does not save it without your separate review in TrackSpense. You can disconnect an assistant to stop future access, but doing so cannot erase data the external provider has already received.</p>
+<h2>6. Retention and account deletion</h2>
+<p>We keep account and financial records while your account is active and as needed to provide the service. When an account deletion request succeeds, the account and private expenses are removed from the active database. Shared group expenses and related records remain for other members' balances and history; your group member name is changed to “Anonymous User” and your account email is removed from the group membership. Text you entered into shared descriptions, notes, or comments may still be visible to other members. Some records may remain where required for legal obligations or dispute resolution. Backup copies age out under our provider's backup schedule; we have not confirmed a specific backup retention period.</p>
+<p>We aim to delete product support and feedback emails from our Gmail inbox within 12 months, unless a specific request, dispute, or legal obligation requires longer. Local expense drafts expire as described in Section 1. Connected-assistant drafts expire after 24 hours; detailed results are pruned after 30 days, activity after 180 days, and rate-limit windows after two days, subject to the cleanup schedule. Minimal identifiers may be kept to prevent duplicate expense creation. Analytics and AI providers apply their own retention practices as described above.</p>
+<h2>7. Your choices and rights</h2>
+<p>You can view and update profile and expense information in TrackSpense, export your expenses as CSV or download your account data as JSON, and delete your account from the Profile screen. Password-based accounts confirm deletion with a password; accounts without a usable password confirm with their email address. Account deletion cannot be undone, subject to the shared-record and backup limits above. You can change web analytics preferences, mobile analytics and crash-report choices, and AI-feature choices in the app. You can disconnect a connected assistant, sign out of other devices, or change your password where available.</p>
+<p>Depending on where you live, you may also have rights to access, correct, delete, restrict, or object to processing, and to complain to a privacy authority. For requests or questions, email <a href="mailto:cerebroos@gmail.com">cerebroos@gmail.com</a>. Include enough information to locate your account or message without sending unnecessary sensitive details. We will respond according to applicable law.</p>
+<h2>8. Security and international processing</h2>
+<p>We use measures such as encrypted connections and access controls to protect information. No service can guarantee absolute security. TrackSpense is operated from the United States, and data may be processed in the United States and other countries where our providers operate. Their data-protection rules may differ from those where you live.</p>
+<h2>9. Children, changes, and contact</h2>
+<p>TrackSpense is intended for adults aged 18 and older. We do not knowingly collect account data from children. If you believe a child has used the service, contact us at <a href="mailto:cerebroos@gmail.com">cerebroos@gmail.com</a>.</p>
+<p>We may update this policy when the product or its practices change. We will post the new version with an updated date and give additional notice when applicable law requires it. Privacy questions and requests can be sent to <a href="mailto:cerebroos@gmail.com">cerebroos@gmail.com</a>.</p>
+    </main>
 </body>
-
 </html>
