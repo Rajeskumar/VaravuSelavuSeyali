@@ -45,6 +45,15 @@ const sentBody = async () => {
 beforeEach(() => (updateGroupExpense as jest.Mock).mockClear());
 
 describe('editing a manual group expense (TS-FIX-103)', () => {
+  // parseFloat reads "1,234.50" as 1 and "12,50" as 12, and the server would shrink every share to match.
+  it.each(['1,234.50', '12,50', '12.345', '1e3'])('does not save an amount it would misread: %s', async (typed) => {
+    mount();
+    fireEvent.changeText(screen.getByTestId('groupEdit.amount'), typed);
+    fireEvent.press(screen.getByText('Save Changes'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(updateGroupExpense).not.toHaveBeenCalled();
+  });
+
   it('leaves payers and split to the server when only the amount changes', async () => {
     mount();
     fireEvent.changeText(screen.getByTestId('groupEdit.amount'), '41');

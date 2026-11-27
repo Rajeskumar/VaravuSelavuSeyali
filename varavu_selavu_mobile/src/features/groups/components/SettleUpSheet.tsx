@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -90,6 +91,7 @@ export default function SettleUpSheet({
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
+  const bodyRef = useRef<ScrollView>(null);
   const { userEmail } = useAuth();
 
   const [amount, setAmount] = useState(
@@ -227,7 +229,7 @@ export default function SettleUpSheet({
     >
       <KeyboardAvoidingView
         behavior="padding"
-        style={styles.overlay}
+        style={[styles.overlay, { paddingTop: insets.top }]}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} accessible={false} />
         <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={stage === 'settling' ? undefined : onClose}>
@@ -240,134 +242,149 @@ export default function SettleUpSheet({
               </Pressable>
             )}
           </View>
-          {listMode && (
-            <>
-              <Text style={styles.subtitle}>
-                Simplified to the fewest transfers. Recording a payment never changes anyone's spend totals.
-              </Text>
-              <View>
-                {transfers!.map((t, i) => (
-                  <View key={`${t.from_member_id}-${t.to_member_id}-${i}`} style={styles.transferRow}>
-                    <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.from_member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.from_member_id))}</Text>
-                    </View>
-                    <Ionicons name="arrow-forward" size={16} color={theme.colors.textTertiary} />
-                    <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.to_member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.to_member_id))}</Text>
-                    </View>
-                    <Text style={styles.transferText} numberOfLines={1}>
-                      {nameOf(t.from_member_id)} pays {nameOf(t.to_member_id)}
-                    </Text>
-                    <Text style={styles.transferAmount}>{formatCurrency(t.amount)}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.methodRow}>
-                {['Venmo', 'PayPal', 'Cash'].map((label) => {
-                  const active = method === label.toLowerCase();
-                  return (
-                    <Pressable
-                      key={label}
-                      style={[styles.methodChip, active && styles.methodChipActive]}
-                      onPress={() => setMethod(active ? null : label.toLowerCase())}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Text style={[styles.methodChipText, active && { color: theme.colors.primaryLight }]}>{label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <CustomButton
-                title={loading ? 'Recording…' : `Record ${formatCurrency(listTotal)} paid`}
-                onPress={handleRecordAll}
-                disabled={loading}
-              />
-            </>
-          )}
-
-          {!listMode && stage === 'review' && (
-            <Text style={styles.subtitle}>
-              Recording a payment never changes anyone's spend totals.
-            </Text>
-          )}
-
-          {!listMode && ((fromMember && toMember) || stage === 'done') ? (
-            <View style={styles.heroBlock}>
-              <Text style={styles.heroLabel}>{stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'Remaining balance'}</Text>
-              <View style={styles.heroAmountRow}>
-                {stage === 'done' && !stillOwed && (
-                  <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />
-                )}
-                <Text style={[styles.heroAmount, { color: stage === 'done' ? theme.colors.gold : theme.colors.success }]}>
-                  {formatCurrency((stage === 'done' ? (remaining === null ? parseFloat(amount) || 0 : stillOwed ? remaining : 0) : displayValue))}
+          {/* Scrolls when the keyboard or a small screen leaves too little room; title and Close stay put. */}
+          <ScrollView
+            ref={bodyRef}
+            // When space is short, keep the bottom in view: who pays whom, and the amount being typed.
+            onLayout={() => { if (!listMode) bodyRef.current?.scrollToEnd({ animated: false }); }}
+            style={styles.body}
+            contentContainerStyle={styles.bodyContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {listMode && (
+              <>
+                <Text style={styles.subtitle}>
+                  Simplified to the fewest transfers. Recording a payment never changes anyone's spend totals.
                 </Text>
-              </View>
-            </View>
-          ) : null}
-
-          {listMode ? null : stage === 'done' ? (
-            <>
-              <Text style={styles.doneSubtext}>
-                {doneMessage}
-              </Text>
-              <CustomButton title="Done" onPress={handleDone} />
-            </>
-          ) : (
-            <>
-              {fromMember && toMember ? (
-                <View style={[styles.previewRow, stage === 'settling' && styles.previewRowSettling]}>
-                  <View style={styles.previewPerson}>
-                    <View style={[styles.previewAvatar, { backgroundColor: memberColor(fromMember.member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(fromMember.display_name)}</Text>
+                <View>
+                  {transfers!.map((t, i) => (
+                    <View key={`${t.from_member_id}-${t.to_member_id}-${i}`} style={styles.transferRow}>
+                      <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.from_member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.from_member_id))}</Text>
+                      </View>
+                      <Ionicons name="arrow-forward" size={16} color={theme.colors.textTertiary} />
+                      <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.to_member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.to_member_id))}</Text>
+                      </View>
+                      <Text style={styles.transferText} numberOfLines={1}>
+                        {nameOf(t.from_member_id)} pays {nameOf(t.to_member_id)}
+                      </Text>
+                      <Text style={styles.transferAmount}>{formatCurrency(t.amount)}</Text>
                     </View>
-                    <Text style={styles.previewName} numberOfLines={1}>{fromMember.display_name}</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 12 }} />
-                  <View style={styles.previewPerson}>
-                    <View style={[styles.previewAvatar, { backgroundColor: memberColor(toMember.member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(toMember.display_name)}</Text>
-                    </View>
-                    <Text style={styles.previewName} numberOfLines={1}>{toMember.display_name}</Text>
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={styles.amountRow}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.amountInput}
-                  testID="settle.amount"
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={amount}
-                  onChangeText={noMinus(setAmount)}
-                  editable={stage === 'review'}
-                  autoFocus
-                />
-              </View>
-
-              {paymentButtons.length > 0 && (
-                <View style={styles.paymentButtonsRow}>
-                  {paymentButtons.map((b) => (
-                    <Pressable
-                      key={b.label}
-                      style={styles.paymentButton}
-                      onPress={() => Linking.openURL(b.url).catch(() => showToast({ message: `Couldn't open ${b.label}`, type: 'error' }))}
-                    >
-                      <Text style={styles.paymentButtonText}>{b.label}</Text>
-                    </Pressable>
                   ))}
                 </View>
-              )}
+                <View style={styles.methodRow}>
+                  {['Venmo', 'PayPal', 'Cash'].map((label) => {
+                    const active = method === label.toLowerCase();
+                    return (
+                      <Pressable
+                        key={label}
+                        style={[styles.methodChip, active && styles.methodChipActive]}
+                        onPress={() => setMethod(active ? null : label.toLowerCase())}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                      >
+                        <Text style={[styles.methodChipText, active && { color: theme.colors.primaryLight }]}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
-              <CustomButton
-                title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record ${formatCurrency(parsedAmountForLinks)} paid` : 'Record payment'}
-                onPress={handleSubmit}
-                disabled={loading}
-              />
-            </>
+            {!listMode && stage === 'review' && (
+              <Text style={styles.subtitle}>
+                Recording a payment never changes anyone's spend totals.
+              </Text>
+            )}
+
+            {!listMode && ((fromMember && toMember) || stage === 'done') ? (
+              <View style={styles.heroBlock}>
+                <Text style={styles.heroLabel}>{stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'Remaining balance'}</Text>
+                <View style={styles.heroAmountRow}>
+                  {stage === 'done' && !stillOwed && (
+                    <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />
+                  )}
+                  <Text style={[styles.heroAmount, { color: stage === 'done' ? theme.colors.gold : theme.colors.success }]}>
+                    {formatCurrency((stage === 'done' ? (remaining === null ? parseFloat(amount) || 0 : stillOwed ? remaining : 0) : displayValue))}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {listMode ? null : stage === 'done' ? (
+              <>
+                <Text style={styles.doneSubtext}>
+                  {doneMessage}
+                </Text>
+              </>
+            ) : (
+              <>
+                {fromMember && toMember ? (
+                  <View style={[styles.previewRow, stage === 'settling' && styles.previewRowSettling]}>
+                    <View style={styles.previewPerson}>
+                      <View style={[styles.previewAvatar, { backgroundColor: memberColor(fromMember.member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(fromMember.display_name)}</Text>
+                      </View>
+                      <Text style={styles.previewName} numberOfLines={1}>{fromMember.display_name}</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 12 }} />
+                    <View style={styles.previewPerson}>
+                      <View style={[styles.previewAvatar, { backgroundColor: memberColor(toMember.member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(toMember.display_name)}</Text>
+                      </View>
+                      <Text style={styles.previewName} numberOfLines={1}>{toMember.display_name}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.amountRow}>
+                  <Text style={styles.currencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.amountInput}
+                    testID="settle.amount"
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={theme.colors.textTertiary}
+                    value={amount}
+                    onChangeText={noMinus(setAmount)}
+                    editable={stage === 'review'}
+                    autoFocus
+                  />
+                </View>
+
+                {paymentButtons.length > 0 && (
+                  <View style={styles.paymentButtonsRow}>
+                    {paymentButtons.map((b) => (
+                      <Pressable
+                        key={b.label}
+                        style={styles.paymentButton}
+                        onPress={() => Linking.openURL(b.url).catch(() => showToast({ message: `Couldn't open ${b.label}`, type: 'error' }))}
+                      >
+                        <Text style={styles.paymentButtonText}>{b.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+          {/* Outside the scroll area so the keyboard can never cut off the action. */}
+          {listMode ? (
+            <CustomButton
+              title={loading ? 'Recording…' : `Record ${formatCurrency(listTotal)} paid`}
+              onPress={handleRecordAll}
+              disabled={loading}
+            />
+          ) : stage === 'done' ? (
+            <CustomButton title="Done" onPress={handleDone} />
+          ) : (
+            <CustomButton
+              title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record ${formatCurrency(parsedAmountForLinks)} paid` : 'Record payment'}
+              onPress={handleSubmit}
+              disabled={loading}
+            />
           )}
         </View>
       </KeyboardAvoidingView>
@@ -383,7 +400,10 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.overlay,
     },
     // V2 sheet panel: elevated surface, 26px radius, 22px gutter (see components/Sheet.tsx).
+    body: { flexGrow: 0 },
+    bodyContent: { gap: 14 },
     sheet: {
+      flexShrink: 1,
       backgroundColor: theme.colors.surfaceElevated,
       borderTopLeftRadius: 26,
       borderTopRightRadius: 26,

@@ -51,6 +51,7 @@ import { ordinal, nextRecurringOccurrence } from '../utils/expenseInsights';
 import { groupRowsByDay } from '../utils/dayGroups';
 import { matchesSpendFilters, SpendScope } from '../utils/spendFilters';
 import { logger } from '../../../core/logger';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
 
 /** Mock's `r.ran`/"Logged today" pill — derived from `last_processed_iso` (persists across
  * app restarts) rather than session-only local state. */
@@ -896,10 +897,11 @@ export default function ExpensesScreen() {
 
             {/* Move to Group Modal (TS-GRP-121) */}
             <Modal visible={moveModalVisible} animationType="fade" transparent>
-                <View style={styles.modalOverlay}>
+                <KeyboardLift style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Move to Group</Text>
 
+                        <ScrollView style={styles.moveBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
                         <Text style={styles.pickerLabel}>👥  Group</Text>
                         <ScrollView style={{ maxHeight: 160 }} showsVerticalScrollIndicator={false}>
                             {myGroups.map((g) => (
@@ -923,6 +925,8 @@ export default function ExpensesScreen() {
                             />
                         )}
 
+                        </ScrollView>
+
                         <View style={styles.modalButtons}>
                             <CustomButton
                                 title="Cancel"
@@ -940,7 +944,7 @@ export default function ExpensesScreen() {
                             />
                         </View>
                     </View>
-                </View>
+                </KeyboardLift>
             </Modal>
 
             <ExpenseItemsViewSheet
@@ -1005,7 +1009,9 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
         justifyContent: 'center',
         padding: 20,
     },
+    moveBody: { flexGrow: 0, flexShrink: 1 },
     modalContent: {
+        flexShrink: 1,
         backgroundColor: theme.colors.surfaceElevated,
         borderRadius: 24,
         padding: 28,

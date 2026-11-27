@@ -4,7 +4,7 @@
  * TS-FIX-102).
  */
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
 import { AppTheme, inkOnPastel } from '../../../core/theme/theme';
@@ -143,7 +143,19 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
 
   const [typed, setTyped] = React.useState<Record<string, string>>({});
 
+  const inputs = React.useRef<Record<string, TextInput | null>>({});
+  const pendingSelect = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cancelSelect = () => clearTimeout(pendingSelect.current);
+  React.useEffect(() => cancelSelect, []);
+  const selectOnce = (memberId: string, text: string) => {
+    if (Platform.OS !== 'android') return;
+    cancelSelect();
+    // After the tap has placed the cursor and the sheet has moved.
+    pendingSelect.current = setTimeout(() => inputs.current[memberId]?.setSelection(0, text.length), 150);
+  };
+
   const updateEntryValue = (memberId: string, valStr: string) => {
+    cancelSelect(); // typing already started: never select what is being typed
     // No minus sign, adjustments included, until the server refuses negative shares (ROADMAP).
     if (!TWO_DECIMALS.test(valStr)) return;
     setTyped((prev) => ({ ...prev, [memberId]: valStr }));
@@ -256,7 +268,12 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
                 onChangeText={(text) => updateEntryValue(member.member_id, text)}
                 placeholder="0"
                 placeholderTextColor={theme.colors.textQuaternary}
-                selectTextOnFocus
+                // Android: the native flag re-selected the text when the sheet moved for the keyboard, so the second
+                // digit replaced the first. Select once instead, so typing still replaces a pre-filled value.
+                selectTextOnFocus={Platform.OS === 'ios'}
+                ref={(node) => { inputs.current[member.member_id] = node; }}
+                onFocus={() => selectOnce(member.member_id, amountText(typed[member.member_id], entry?.value))}
+                onBlur={cancelSelect}
               />
             )}
             {!quiet && isSelected && totalAmount > 0 && (

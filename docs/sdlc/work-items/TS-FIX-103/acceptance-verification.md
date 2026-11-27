@@ -14,3 +14,12 @@
 - Web on the isolated local stack: group specs 45/45, account specs 4/4, no 429.
 - The owner approved the single-browser skip in `account-recovery.spec.ts`.
 - Not yet reviewed: the last review fixes, the rewritten web lifecycle spec, later flow changes, the keyboard fix and the login limit test.
+
+## Final update 2026-11-27 (supersedes the pending items above)
+
+- Reviews (one pass each, on 6273a20 plus the first Android typing fix): security PASS (1 P2), code PASS for P0/P1 (2 P2), UI changes requested (1 P1, 6 P2). Fixed: UI P1 (Settle up scroll), misread group-edit amount, Android split-field append, Move to group keyboard handling, stale comment. **These fixes were not re-reviewed.** The rest is in ROADMAP.
+- Failing first: four misread amounts and the uncovered Move modal (Jest). First Settle up fix put the action inside the scroll area and the iOS flow failed with it cut off; moved below the scroll area, then passed.
+- Final code: mobile Jest 682/682, tsc; `make check` passes apart from the owner-approved skip.
+- Native, final code (targeted): Android Settle up and exact split (with a temporary probe: four typed-over values all replaced), iOS Settle up. Android and iOS Move to group passed before the final Settle up change (keyboard not opened).
+- Native, full suites before the review fixes: iOS 19/19 applicable; Android regression 14/14, smoke 2/5 finished (owner skipped the rest; **not passed**). No full run on the final code on either platform.
+- Not verified: small phones, large text, real devices, screen readers.

@@ -18,6 +18,7 @@ import TagChipsDisplay from '../../tags/components/TagChipsDisplay';
 import TagPickerModal from '../../tags/components/TagPickerModal';
 import CardPickerField from '../../cards/components/CardPickerField';
 import { useCardCoachEnabled } from '../../cards/hooks/useCardCoachEnabled';
+import { TWO_DECIMALS } from '../utils/splitAmounts';
 import { showToast } from '../../../core/ui/Toast';
 import { RECEIPT_SPLIT_TYPES, fromServerLine, receiptTotals, toSaveLine } from '../../receipts/utils/receiptLines';
 
@@ -62,7 +63,7 @@ export default function EditGroupExpenseModal({
   const [loading, setLoading] = useState(false);
   // Payers and split are sent only when the user changed them; otherwise the server keeps the stored ones,
   // rescaled to a new amount (TS-FIX-103; an Equal/Shares receipt stays so, TS-FIX-102 D8), instead of
-  // saving this exact pre-fill. Web does this for receipts only so far (ROADMAP).
+  // saving this exact pre-fill. Web does the same.
   const [splitTouched, setSplitTouched] = useState(false);
 
   // Itemized expenses (receipt-scanned) get a line-item review/edit section, reusing the
@@ -139,8 +140,9 @@ export default function EditGroupExpenseModal({
   const handleSave = async () => {
     if (!expense) return;
     const amountValue = parseFloat(amount);
-    if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      showToast({ message: 'Enter an amount greater than 0', type: 'warning' });
+    // parseFloat alone reads "1,234.50" as 1, and the server would rescale every share to it.
+    if (!TWO_DECIMALS.test(amount.trim()) || !(amountValue > 0)) {
+      showToast({ message: 'Enter an amount greater than 0, like 12.50 (use a dot for cents)', type: 'warning' });
       return;
     }
     setLoading(true);

@@ -19,6 +19,23 @@ function sources(dir: string): string[] {
 
 const files = sources(SRC).map((file) => ({ name: path.relative(SRC, file), text: fs.readFileSync(file, 'utf8') }));
 
+/** The source of each outermost `<Modal …>…</Modal>`. */
+function modalBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (const m of text.matchAll(/<Modal\b|<\/Modal>/g)) {
+    if (m[0] === '</Modal>') {
+      depth -= 1;
+      if (depth === 0) blocks.push(text.slice(start, m.index));
+    } else {
+      if (depth === 0) start = m.index as number;
+      depth += 1;
+    }
+  }
+  return blocks;
+}
+
 describe('modals stay above the keyboard', () => {
   it('never switches keyboard avoidance off for Android', () => {
     const off = files
@@ -30,11 +47,13 @@ describe('modals stay above the keyboard', () => {
   it('gives every modal with a text field some keyboard avoidance', () => {
     // TypeaheadInput's own Modal is the suggestion dropdown anchored to its field, not a sheet.
     const dropdownOnly = ['core/ui/TypeaheadInput.tsx'];
+    // Per modal, not per file: one covered sheet must not hide another in the same screen.
     const bare = files
-      .filter((f) => /<Modal\b/.test(f.text) && /<(TextInput|CustomInput|TypeaheadInput|SplitEditor)\b/.test(f.text))
-      .filter((f) => !/<(KeyboardAvoidingView|KeyboardLift)\b/.test(f.text))
-      .map((f) => f.name)
-      .filter((name) => !dropdownOnly.includes(name));
+      .filter((f) => !dropdownOnly.includes(f.name))
+      .flatMap((f) => modalBlocks(f.text).map((block, i) => ({ name: `${f.name} #${i + 1}`, block })))
+      .filter(({ block }) => /<(TextInput|CustomInput|TypeaheadInput|SplitEditor)\b/.test(block))
+      .filter(({ block }) => !/<(KeyboardAvoidingView|KeyboardLift)\b/.test(block))
+      .map(({ name }) => name);
     expect(bare).toEqual([]);
   });
 });
