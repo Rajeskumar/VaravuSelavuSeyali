@@ -66,7 +66,8 @@ const GroupsListRail: React.FC<Props> = ({ groups, loading, selectedId, onSelect
           ]}
         />
       </Box>
-      <Box sx={{ flex: 1, overflowY: 'auto' }}>
+      {/* tabIndex={0} keeps the scrollable rail keyboard-reachable (axe scrollable-region-focusable). */}
+      <Box tabIndex={0} role="region" aria-label="Groups list" sx={{ flex: 1, overflowY: 'auto' }}>
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
             <CircularProgress size={22} />
