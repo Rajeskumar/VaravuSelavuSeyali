@@ -10,6 +10,7 @@ from varavu_selavu_service.core.money import (
     MAX_AMOUNT,
     MoneyAmount,
     NonNegativeMoney,
+    OptionalMoneyAmount,
     OptionalNonNegativeMoney,
 )
 from varavu_selavu_service.core.expense_dates import check_future
@@ -513,8 +514,14 @@ class DueOccurrenceDTO(BaseModel):
     suggested_cost: float
 
 
+class RecurringConfirmItem(BaseModel):
+    template_id: str
+    date_iso: str
+    cost: OptionalMoneyAmount = None  # omitted: the template's suggested amount
+
+
 class ConfirmRecurringRequest(BaseModel):
-    items: List[Dict[str, str | float]]
+    items: List[RecurringConfirmItem]
 
 
 # ---------------------- Groups (TS-GRP series) ---------------------- #

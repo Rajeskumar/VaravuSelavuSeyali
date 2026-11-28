@@ -31,7 +31,9 @@ from varavu_selavu_service.models.api_models import (
     ItemsResponse,
     ExpenseItemDTO,
 )
-from varavu_selavu_service.core.money import to_decimal, validate_money_amount
+from pydantic import TypeAdapter, ValidationError
+
+from varavu_selavu_service.core.money import MoneyAmount, to_decimal, validate_money_amount
 from varavu_selavu_service.services.expense_service import ExpenseService, NOTES_UNCHANGED
 from varavu_selavu_service.services.personal_export_service import PersonalExportService
 from varavu_selavu_service.services.receipt_service import ReceiptService
@@ -1296,7 +1298,7 @@ def confirm_recurring(
             return iso
 
     processed: list[dict] = []
-    for it in (payload.items or []):
+    for it in [item.model_dump(exclude_none=True) for item in payload.items]:
         key = f"{it.get('template_id')}__{it.get('date_iso')}"
         d = due_map.get(key)
         if not d:
@@ -1416,10 +1418,13 @@ def execute_recurring_now(
     if not template_id:
         return {"success": False, "created": False, "error": "template_id required"}
     cost = payload.get("cost")
-    try:
-        cost = float(cost) if cost is not None else None
-    except Exception:
-        cost = None
+    if cost is not None:
+        # The normal money limits. An unreadable value used to fall back to the template's amount, and NaN passed
+        # the `<= 0` check below.
+        try:
+            cost = float(TypeAdapter(MoneyAmount).validate_python(cost))
+        except ValidationError:
+            return {"success": False, "created": False, "error": "invalid cost"}
     # Find template
     tpls = svc.list_templates(user_id)
     tpl = next((t for t in tpls if t.get("id") == template_id), None)
