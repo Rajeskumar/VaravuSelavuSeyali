@@ -24,6 +24,9 @@ import os
 import sys
 import uuid
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from qa_db_guard import require_local_test_database  # noqa: E402
+
 
 def main() -> None:
     if len(sys.argv) != 3:
@@ -35,10 +38,7 @@ def main() -> None:
     if not password:
         print("QA_SESSION_PASSWORD must be set", file=sys.stderr)
         sys.exit(1)
-    database_url = os.environ.get("QA_DATABASE_URL") or os.environ.get("DATABASE_URL")
-    if not database_url:
-        print("QA_DATABASE_URL or DATABASE_URL must be set", file=sys.stderr)
-        sys.exit(1)
+    database_url = require_local_test_database()
 
     import bcrypt
     from sqlalchemy import create_engine, text

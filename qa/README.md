@@ -60,7 +60,7 @@ then `qa-all` — see "Before deploying to prod" below). `make -n <target>` show
 | `API_BASE_URL` | Backend under test | `http://localhost:8080` |
 | `PROD_BASE_URL` / `PROD_API_BASE_URL` | Read-only smoke target only | `expense.cerebroos.com` / `trackspense-api.cerebroos.com` |
 | `QA_USER_PASSWORD` | Shared password for the two QA personas | see `.env.example` |
-| `QA_DATABASE_URL` | Same Postgres the backend under test uses — marks the QA personas email-verified (see below); group tests 403 without it | unset |
+| `QA_DATABASE_URL` | Same Postgres the backend under test uses — marks the QA personas email-verified (see below); group tests 403 without it. The account scripts accept only a `trackspense_qa` (or mobile `trackspense_e2e_*`) database on this machine | unset |
 | `ALLOW_PROD_WRITES` | Hard safety gate — leave `false` | `false` |
 | `CI` | Set by GitHub Actions; affects retries/workers | unset locally |
 

@@ -23,6 +23,9 @@ Requires DATABASE_URL (or QA_DATABASE_URL) in the environment.
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from qa_db_guard import require_local_test_database  # noqa: E402
+
 
 def main() -> None:
     emails = sys.argv[1:]
@@ -30,10 +33,7 @@ def main() -> None:
         print("usage: verify_qa_users.py <email> [email...]", file=sys.stderr)
         sys.exit(1)
 
-    database_url = os.environ.get("QA_DATABASE_URL") or os.environ.get("DATABASE_URL")
-    if not database_url:
-        print("QA_DATABASE_URL or DATABASE_URL must be set", file=sys.stderr)
-        sys.exit(1)
+    database_url = require_local_test_database()
 
     from sqlalchemy import create_engine, text
 
