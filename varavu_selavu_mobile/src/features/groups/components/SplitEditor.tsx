@@ -4,14 +4,14 @@
  * TS-FIX-102).
  */
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
 import { AppTheme, inkOnPastel } from '../../../core/theme/theme';
 import { MemberDTO } from '../api/groups';
 import { memberColor } from './BalanceRow';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
-import { addsUpTo, amountText, distributeCents, TWO_DECIMALS } from '../utils/splitAmounts';
+import { acceptsAmountText, addsUpTo, amountText, distributeCents, hasUnreadableSplit, typedValue, UNREADABLE_AMOUNT } from '../utils/splitAmounts';
 
 export type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment';
 
@@ -31,6 +31,8 @@ interface Props {
   value: SplitEditorValue;
   onChange: (val: SplitEditorValue) => void;
   allowedTypes?: SplitType[];
+  /** Hides previews and checks while the stored split will be adjusted by the server. */
+  quiet?: boolean;
 }
 
 /**
@@ -80,6 +82,7 @@ export function previewAdjustmentSplit(entries: SplitEntry[], amount: number): n
  * PayerPicker/SplitEditor.tsx computeSplitValid convention of actually gating on that).
  */
 export function computeSplitValid(value: SplitEditorValue, totalAmount: number): boolean {
+  if (hasUnreadableSplit(value)) return false;
   // No minus values in any split type, including ones restored from a draft or saved settings.
   if (value.entries.some((e) => (e.value || 0) < 0)) return false;
   if (
@@ -97,7 +100,7 @@ export function computeSplitValid(value: SplitEditorValue, totalAmount: number):
   return true; // equal
 }
 
-export default function SplitEditor({ members, value, onChange, totalAmount, allowedTypes }: Props) {
+export default function SplitEditor({ members, value, onChange, totalAmount, allowedTypes, quiet = false }: Props) {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
@@ -120,8 +123,11 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
 
   const setType = (newType: SplitType) => {
     let newEntries = value.entries;
-    if (newType !== 'equal' && newEntries.length === 0) {
-      newEntries = activeMembers.map((m) => ({ member_id: m.member_id, value: newType === 'shares' ? 1 : 0 }));
+    if (newType !== 'equal') {
+      const filled = newType === 'shares' ? 1 : 0;
+      if (newEntries.length === 0) newEntries = activeMembers.map((m) => ({ member_id: m.member_id }));
+      // An equal split has no values (the server and drafts send null): left blank they were sent as "no value".
+      newEntries = newEntries.map((e) => (e.value == null ? { ...e, value: filled } : e));
     }
     onChange({ type: newType, entries: newEntries });
   };
@@ -141,14 +147,26 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
 
   const [typed, setTyped] = React.useState<Record<string, string>>({});
 
-  const updateEntryValue = (memberId: string, valStr: string) => {
+  const inputs = React.useRef<Record<string, TextInput | null>>({});
+  const pendingSelect = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cancelSelect = () => clearTimeout(pendingSelect.current);
+  React.useEffect(() => cancelSelect, []);
+  const selectOnce = (memberId: string, text: string) => {
+    if (Platform.OS !== 'android') return;
+    cancelSelect();
+    // After the tap has placed the cursor and the sheet has moved.
+    pendingSelect.current = setTimeout(() => inputs.current[memberId]?.setSelection(0, text.length), 150);
+  };
+
+  const updateEntryValue = (memberId: string, typedText: string) => {
+    cancelSelect(); // typing already started: never select what is being typed
     // No minus sign, adjustments included, until the server refuses negative shares (ROADMAP).
-    if (!TWO_DECIMALS.test(valStr)) return;
-    setTyped((prev) => ({ ...prev, [memberId]: valStr }));
-    const num = parseFloat(valStr);
+    if (!acceptsAmountText(typedText)) return;
+    setTyped((prev) => ({ ...prev, [memberId]: typedText }));
+    const num = typedValue(typedText);
     onChange({
       ...value,
-      entries: value.entries.map((e) => (e.member_id === memberId ? { ...e, value: isNaN(num) ? 0 : num } : e)),
+      entries: value.entries.map((e) => (e.member_id === memberId ? { ...e, value: num } : e)),
     });
   };
 
@@ -190,6 +208,12 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
       isValid = false;
       validationMessage = `Adjustments can't add up to more than ${formatCurrency(totalAmount)}, or be negative`;
     }
+  }
+
+  const unreadable = hasUnreadableSplit(value);
+  if (unreadable) {
+    isValid = false;
+    validationMessage = UNREADABLE_AMOUNT;
   }
 
   // Whatever the current preview doesn't account for (exact amounts still to allocate, or a
@@ -254,10 +278,15 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
                 onChangeText={(text) => updateEntryValue(member.member_id, text)}
                 placeholder="0"
                 placeholderTextColor={theme.colors.textQuaternary}
-                selectTextOnFocus
+                // Android: the native flag re-selected the text when the sheet moved for the keyboard, so the second
+                // digit replaced the first. Select once instead, so typing still replaces a pre-filled value.
+                selectTextOnFocus={Platform.OS === 'ios'}
+                ref={(node) => { inputs.current[member.member_id] = node; }}
+                onFocus={() => selectOnce(member.member_id, amountText(typed[member.member_id], entry?.value))}
+                onBlur={cancelSelect}
               />
             )}
-            {isSelected && totalAmount > 0 && (
+            {!quiet && isSelected && totalAmount > 0 && (
               <Text style={styles.shareAmount}>{formatCurrency(memberPreview)}</Text>
             )}
             <TouchableOpacity
@@ -273,7 +302,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
           </View>
         );
       })}
-      {selectedMembers.length > 0 && totalAmount > 0 && (isValid || value.type !== 'adjustment') && (
+      {!quiet && !unreadable && selectedMembers.length > 0 && totalAmount > 0 && (isValid || value.type !== 'adjustment') && (
         <View style={styles.footerRow}>
           <Text style={styles.footerText}>{typedTotals ? 'Must add up exactly' : 'Rounding cents are balanced automatically'}</Text>
           <Text style={[styles.footerLeft, { color: balanced ? theme.colors.success : theme.colors.error }]}>
@@ -281,7 +310,7 @@ export default function SplitEditor({ members, value, onChange, totalAmount, all
           </Text>
         </View>
       )}
-      {!isValid && (
+      {!quiet && !isValid && (
         <Text style={styles.warning}>{validationMessage}</Text>
       )}
       {selectedMembers.length === 0 && (

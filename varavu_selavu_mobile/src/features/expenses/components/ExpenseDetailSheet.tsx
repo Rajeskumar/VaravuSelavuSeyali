@@ -149,6 +149,8 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
       onSettled?.();
     } catch (e) {
       showToast({ message: e instanceof ApiError ? e.message : 'Failed to settle share', type: 'error' });
+      // Paid elsewhere: refresh, so the old balance doesn't get paid again through Settle up.
+      if (e instanceof ApiError && e.status === 409) onSettled?.();
     } finally {
       setSettling(false);
     }
@@ -173,7 +175,7 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessible={false} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView} onAccessibilityEscape={onClose}>
+      <KeyboardAvoidingView behavior="padding" style={styles.keyboardView} onAccessibilityEscape={onClose}>
         <View style={[styles.sheet, theme.shadows.lg, { backgroundColor: theme.colors.surfaceElevated, paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={[styles.pill, { backgroundColor: theme.colors.borderLight }]} />
           <View style={styles.header}>

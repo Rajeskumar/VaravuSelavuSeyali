@@ -60,6 +60,16 @@ export const QA_DISPOSABLE_USER = {
   password: env.QA_USER_PASSWORD,
 } as const;
 
+/**
+ * Used ONLY by account-recovery.spec.ts, which resets its password and signs it out everywhere.
+ * Created straight in the QA database like QA_DISPOSABLE_USER (no registration budget).
+ */
+export const QA_RESET_USER = {
+  name: 'QA Reset',
+  email: `qa.reset.${RUN_ID}@trackspense.qa`,
+  password: env.QA_USER_PASSWORD,
+} as const;
+
 export const QA_SESSION_USER = {
   name: 'QA Session',
   email: `qa.session.${RUN_ID}@trackspense.qa`,

@@ -4,6 +4,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import ScannedItemsCard, { ScannedItem } from './ScannedItemsCard';
 import ReceiptItemsSheet from './ReceiptItemsSheet';
 import { darkTheme } from '../../../core/theme/theme';
+import { receiptTotals } from '../utils/receiptLines';
 
 jest.mock('../../../core/theme/ThemeContext', () => ({
   useAppTheme: () => ({ theme: require('../../../core/theme/theme').darkTheme }),
@@ -40,6 +41,40 @@ describe('ScannedItemsCard (mobile)', () => {
     fireEvent.press(getByLabelText('Add original price for Milk'));
     fireEvent.changeText(getByLabelText('Original price for Milk'), '9.5');
     expect(onChange).toHaveBeenLastCalledWith([expect.objectContaining({ line_total: 8, original_price: 9.5, discount: 1.5 })]);
+  });
+
+  // The comma used to be stripped, so "15,00" became 1500 (TS-FIX-103, AC-011).
+  it.each([['Price paid for Milk', 'line_total'], ['Original price for Milk', 'original_price']])('reads a comma decimal in %s', (label, field) => {
+    const onChange = jest.fn();
+    const { getByLabelText } = render(<ScannedItemsCard theme={darkTheme} items={[milk]} onChange={onChange} currentAmount={8} />);
+    fireEvent.changeText(getByLabelText(label), '15,00');
+    fireEvent(getByLabelText(label), 'blur');
+    expect(onChange).toHaveBeenLastCalledWith([expect.objectContaining({ [field]: 15 })]);
+  });
+
+  // Typed key by key, "1,234.50" used to keep 1.23; an original price of 1.23 had no total to catch it.
+  it.each([['Price paid for Milk', 'line_total'], ['Original price for Milk', 'original_price']])('keeps an unclear amount visible in %s and blocks the receipt', (label, field) => {
+    let latest: ScannedItem[] = [milk];
+    const Host = () => {
+      const [items, setItems] = React.useState<ScannedItem[]>([milk]);
+      latest = items;
+      return <ScannedItemsCard theme={darkTheme} items={items} onChange={setItems} currentAmount={8} />;
+    };
+    const { getByLabelText, getByText } = render(<Host />);
+    // Replace the value with the first key (clearing the original price would hide its field), then type on.
+    fireEvent(getByLabelText(label), 'focus'); // as a tap does
+    fireEvent.changeText(getByLabelText(label), '1');
+    for (const key of ',234.50') fireEvent.changeText(getByLabelText(label), `${getByLabelText(label).props.value}${key}`);
+    fireEvent(getByLabelText(label), 'blur');
+    expect(getByLabelText(label).props.value).toBe('1,234.50');
+    expect(Number.isNaN((latest[0] as any)[field])).toBe(true);
+    expect(receiptTotals(latest, 0, 0, 8).reconciled).toBe(false);
+    expect(getByText(/Check the item prices/)).toBeTruthy();
+  });
+
+  it('never counts an unclear price as zero when the rest matches the total', () => {
+    const lines = [milk, { line_no: 2, item_name: 'Bag', line_total: NaN }];
+    expect(receiptTotals(lines, 0, 0, 8).reconciled).toBe(false);
   });
 
   it('drops a minus sign and lists returns for review', () => {

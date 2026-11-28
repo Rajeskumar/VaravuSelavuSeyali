@@ -1,6 +1,7 @@
 import { noMinusProps } from '../../utils/noMinus';
 import React from 'react';
 import Dialog from '@mui/material/Dialog';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
@@ -18,6 +19,7 @@ import { colorFromMemberId, initialsFromName } from './MemberAvatarStack';
 import { withAlpha, typeScale, tabularNums } from '../../theme';
 import { venmoLink, paypalMeLink, upiLink } from '../../utils/paymentDeepLinks';
 import { formatMoney, currencySymbol } from '../../utils/money';
+import { RequestError } from '../../api/request';
 
 interface SettleUpDialogProps {
   open: boolean;
@@ -29,10 +31,11 @@ interface SettleUpDialogProps {
   myMemberId?: string;
   currency?: string;
   onClose: () => void;
-  onSuccess: () => void;
+  /** Something may have changed. `alreadyRecorded`: nothing new was added, so don't announce a new settlement. */
+  onSuccess: (result?: { alreadyRecorded?: boolean }) => void;
 }
 
-type Stage = 'pick' | 'review' | 'settling' | 'done';
+type Stage = 'pick' | 'review' | 'settling' | 'done' | 'replayed';
 
 /** 900ms cubic-ease-out count-down, matching docs/design/prototypes/SettleUp.jsx's resolution moment.
  * Counts from `from` to `to` (0 for a full settlement, the remaining balance for a partial one). */
@@ -182,17 +185,25 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
     const left = owedBefore === null ? null : Math.round((owedBefore - amount) * 100) / 100;
     setRemaining(left);
     try {
-      await createSettlement(groupId, {
+      const saved = await createSettlement(groupId, {
         from_member_id: fromMemberId,
         to_member_id: toMemberId,
         amount,
         method: method || undefined,
         notes: notes || undefined,
       });
+      if (saved?.already_recorded) {
+        // Saved by an earlier, unconfirmed attempt. The id is released, so recording again would add a second payment:
+        // that has to be started afresh, never by one more click here.
+        onSuccess({ alreadyRecorded: true });
+        setStage('replayed');
+        return;
+      }
       onSuccess();
       runFrom(owedBefore ?? amount, () => setStage('done'), left === null ? amount : Math.max(left, 0));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to record settlement');
+      // A RequestError says whether the payment may have been saved ("check your records").
+      setError(e instanceof ApiError || e instanceof RequestError ? e.message : 'Failed to record settlement');
       setStage('review');
     } finally {
       settlementLock.current = false;
@@ -283,7 +294,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
           </Box>
         )}
 
-        {stage !== 'pick' && (hasPair || stage === 'done') && (
+        {stage !== 'pick' && stage !== 'replayed' && (hasPair || stage === 'done') && (
           <Box
             sx={{
               display: 'flex',
@@ -315,7 +326,16 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
           </Box>
         )}
 
-        {stage === 'done' ? (
+        {stage === 'replayed' ? (
+          <>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              This payment was already recorded earlier, so nothing new was added. If you paid again, close this and record it once more.
+            </Alert>
+            <Button variant="contained" size="large" fullWidth onClick={onClose}>
+              Done
+            </Button>
+          </>
+        ) : stage === 'done' ? (
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               {doneMessage}
@@ -438,7 +458,7 @@ const SettleUpDialog: React.FC<SettleUpDialogProps> = ({ open, groupId, members,
                 </Typography>
               )}
               {error && (
-                <Typography color="error" variant="body2">
+                <Typography color="error" variant="body2" role="alert">
                   {error}
                 </Typography>
               )}

@@ -1,5 +1,6 @@
 import { confirmed, expenseCreation, ExpenseCapture } from '../analytics/operations';
 import { fetchWithAuth } from './api';
+import { withSettlementRequestId } from './settlementRequestId';
 import { TagRefDTO } from './tags';
 import { CardRefDTO } from './cards';
 
@@ -535,6 +536,8 @@ export interface SettlementDTO {
   settled_at: string;
   notes?: string | null;
   created_by?: string | null;
+  /** The server had already recorded this request: nothing new was added. */
+  already_recorded?: boolean;
 }
 
 export interface RecordSettlementPayload {
@@ -550,14 +553,14 @@ export async function createSettlement(
   groupId: string,
   payload: RecordSettlementPayload
 ): Promise<SettlementDTO> {
-  return confirmed(async () => {
+  return confirmed(() => withSettlementRequestId(groupId, payload, async (request_id) => {
     const res = await fetchWithAuth(`/api/v1/groups/${groupId}/settlements`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, request_id }),
     });
     if (!res.ok) await throwApiError(res, 'Failed to record settlement');
     return res.json();
-  }, 'settlement_completed', {});
+  }), 'settlement_completed', {});
 }
 
 export async function listSettlements(groupId: string): Promise<SettlementDTO[]> {

@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "id": "TS-FIX-103",
+  "title": "Settle-up direction and dead end, group amount edit (mobile + web), move-to-group refresh, iPhone edit keypad",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "build",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "On mobile, opening settle-up from a balance row or the People tab takes payer, payee and amount from the suggested transfers between the viewer and that member; with no such transfer, nothing can be recorded."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "Editing only the amount (or other text) of a manual group expense on mobile saves; the server keeps and rescales the stored payers and split. A single payer's amount follows the edited total when payers or split are changed too."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "After a personal expense is moved to a group, the mobile Expenses list and other expense-derived views refresh without a manual reload."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "In the iOS personal expense edit sheet, with the number pad open, the header stays on screen and one tap on a visible Save Changes saves."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "On web, editing a group expense without changing payers or split saves without redoing the split and leaves the stored split to the server (rescaled for a new amount)."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "Mobile Settle up (button and own row) never opens a sheet without a payer and payee: outgoing transfers are listed, a single incoming one is pre-filled, several incoming ones ask who paid, none says so."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "On mobile, Settle up and group expense edit read a comma or dot as the decimal mark (12,50 is 12.50) and record nothing for text that could be read as a different amount, such as 1,234.50, 1,234 or three decimals; the button, payment links and recorded value agree."
+    },
+    {
+      "id": "AC-008",
+      "outcome": "On mobile, one settle-up opening sends each payment at most once: further taps do nothing and the sheet cannot be dismissed while sending; after a timeout, lost connection or 5xx no retry is offered, balances are refetched and the person is asked to check first; settle-up does not open from balances that are refreshing or failed to refresh; an attempt the server rejects can be retried. (The server has no duplicate protection.)"
+    },
+    {
+      "id": "AC-009",
+      "outcome": "Mobile split and payer fields read a comma as the decimal mark (2,50 is 2.50) and never turn it into a larger number."
+    },
+    {
+      "id": "AC-010",
+      "outcome": "Mobile personal expense edit uses the same amount reader as AC-007: 12,50 saves 12.50 and unclear text saves nothing."
+    },
+    {
+      "id": "AC-011",
+      "outcome": "Mobile receipt item prices (paid and original), split fields and payer fields read a comma as the decimal mark and still drop minus signs. Text that could be another amount (such as 1,234.50 or 1,000, typed or pasted) stays visible, is flagged, and blocks every save that would use it. A third decimal after a lone dot is not taken, as before."
+    },
+    {
+      "id": "AC-012",
+      "outcome": "Mobile recurring amounts (template form, inline edit, run now with a typed amount, and the due prompt) can be typed with a dot or comma decimal; unclear or zero amounts save or run nothing and say why. In the due prompt an empty or zero amount still skips that item."
+    },
+    {
+      "id": "AC-013",
+      "outcome": "Switching a mobile split to Exact, Percent or Adjust shows 0, and to Shares 1, for everyone without a value, so no blank is sent; the server refuses a blank value in those types with a clear 400 instead of failing, and stores nothing. Equal splits still ignore values."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "red-green",
+    "local-integration",
+    "native-e2e",
+    "native-device",
+    "code-review",
+    "security-review",
+    "ui-review",
+    "acceptance-verification"
+  ],
+  "implementation_approval": {
+    "actor": "Rajeshkumar Ganesan",
+    "fingerprint": "da97ca954a1fa0561429a2763bb9d5f1f427d7040f4cc63ece8a4756569ef255",
+    "reference": "User message 2026-11-27: 'Agreed and proceed on all those.', replying to a request to confirm the fix plan (then AC-001..AC-004 in implementation.md) and to also fix web group editing and the Settle up button. AC-005 and AC-006 were written after that message under that instruction; the owner has not read their text. No commit, push, production access or release authorized. Later on 2026-11-27 the owner asked to fix the Android keyboard bug ('Fix android keyboard bug'), then, after option A (shared amount reader for Settle up and group edit) was described, wrote 'create a work tree afor the branch we worked on before and fix that change and push to the branch. also do those record work as well. dont disturb observability branch'. AC-007 text was written after that message; the owner has not read the text of AC-005 to AC-007. Commit and push of qa-coverage-extend authorized; no merge, production access or release authorized. Later still, after the four older wrong-amount problems were listed with a recommendation to fix all four before release, the owner replied 'fix all four'. AC-008 to AC-011 text was written after that reply and has not been read by the owner. That reply did not mention commit or push. AC-008 was tightened after the security review of that fix found a retry after an unknown outcome (same 'fix all four' scope). On 2026-11-27, after being shown a summary of AC-005 to AC-011 and told AC-011 was overstated, the owner replied 'I confirm AC-005 to AC-010. I approve the TS-QA-106 plan. Fix the AC-011 problem in receipt, split and payer fields, and fix recurring amounts too.' This confirms AC-005 to AC-010. AC-011 was then reworded and AC-012 added as that reply instructed; the owner has not read those two texts. After the blank-split-field bug was described with a proposed app and server fix, the owner replied 'Fix it, then go' (fix, then run the device check). AC-013 text was written after that reply."
+  },
+  "links": [
+    "docs/sdlc/work-items/TS-QA-106/work-item.md"
+  ],
+  "notes": "Found by the TS-QA-106 flows. The owner asked for the first four fixes ('Yes fix those bugs'), then confirmed the plan and added AC-005/006 (see implementation_approval). The owner also approved the single-browser test.skip in account-recovery.spec.ts in the same message."
+}

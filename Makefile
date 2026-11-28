@@ -218,6 +218,7 @@ test-postgres:
 	cd varavu_selavu_app && poetry run pytest tests/test_groups_e2e_pg.py -q
 	cd varavu_selavu_app && poetry run pytest 'tests/test_ai_quota.py::test_concurrent_reserves_never_overshoot_on_postgres' -q
 	cd varavu_selavu_app && poetry run pytest tests/test_mcp_pg.py tests/test_mcp_migrations_pg.py -q
+	cd varavu_selavu_app && poetry run pytest tests/test_settlement_pg.py -q
 
 qa-account:
 	@echo 'Waiting for the dedicated account-test login window (65 seconds)'

@@ -31,6 +31,7 @@ import { findMainCategory } from '../../expenses/utils/categories';
 import { formatBudgetMoney, statusColor, STATUS_LABEL } from './BudgetProgressBar';
 import ToggleSwitch from '../../../core/ui/ToggleSwitch';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
 
 const THRESHOLD_OPTIONS = [50, 80, 90, 100, 110];
 const DEFAULT_THRESHOLDS = [80, 100];
@@ -246,7 +247,7 @@ export default function BudgetsTabContent({ period }: { period?: string }) {
 
       {/* Add/Edit Form Modal — same shell RecurringExpensesScreen.tsx uses */}
       <Modal visible={formVisible} animationType="slide" transparent onRequestClose={() => setFormVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardLift style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editing ? 'Edit Budget' : 'New Budget'}</Text>
@@ -388,7 +389,7 @@ export default function BudgetsTabContent({ period }: { period?: string }) {
               )}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardLift>
       </Modal>
     </View>
   );

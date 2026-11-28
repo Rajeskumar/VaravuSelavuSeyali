@@ -10,6 +10,7 @@ from varavu_selavu_service.core.money import (
     MAX_AMOUNT,
     MoneyAmount,
     NonNegativeMoney,
+    OptionalMoneyAmount,
     OptionalNonNegativeMoney,
 )
 from varavu_selavu_service.core.expense_dates import check_future
@@ -513,8 +514,14 @@ class DueOccurrenceDTO(BaseModel):
     suggested_cost: float
 
 
+class RecurringConfirmItem(BaseModel):
+    template_id: str
+    date_iso: str
+    cost: OptionalMoneyAmount = None  # omitted: the template's suggested amount
+
+
 class ConfirmRecurringRequest(BaseModel):
-    items: List[Dict[str, str | float]]
+    items: List[RecurringConfirmItem]
 
 
 # ---------------------- Groups (TS-GRP series) ---------------------- #
@@ -619,10 +626,14 @@ class RecordSettlementRequest(BaseModel):
     method: Optional[str] = None
     settled_at: Optional[str] = None  # ISO 8601; defaults to now() when omitted
     notes: OptionalNotesStr = None
+    # Chosen by the client for one payment: sending it again returns the stored settlement instead of a second one.
+    request_id: Optional[str] = Field(default=None, min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
 
 
 class SettlementDTO(BaseModel):
     id: str
+    # True when a `request_id` had already been recorded: nothing new was stored.
+    already_recorded: bool = False
     group_id: str
     from_member_id: str
     to_member_id: str

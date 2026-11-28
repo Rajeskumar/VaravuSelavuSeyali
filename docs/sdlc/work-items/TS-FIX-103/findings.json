@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "UI-P1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Settle up sheet could not scroll or fit above the keyboard. Fixed: scrolls, action pinned below. Small phones not checked on device.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "ui-review",
+      "waiver": null
+    },
+    {
+      "id": "SEC-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Group edit saved a misread amount (1,234.50 as 1). Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "CODE-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Android split field appended to or lost typed digits. Fixed; typing over a filled value was checked by a temporary native probe on an earlier tree.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "CODE-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Move to group had no Android keyboard avoidance. Fixed in code; keyboard-open layout not device-checked.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Settle up could record a payment twice (tap during the animation). Fixed: one send per opening.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-2",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Split and payer fields dropped a comma (2,50 became 250). Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-3",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Personal expense edit misread amounts with parseFloat. Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-4",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Receipt item prices stripped a comma. Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-5",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Accessibility and layout follow-ups: cached transfers in manual Settle up, errors as toasts possibly hidden and not announced, split note placement, tall edit footer, sheets that do not scroll as a whole, Move to group on iOS.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "SEC-4FIX-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "A settle-up with an unknown outcome (timeout, lost connection, 5xx) could be sent again. Fixed: no retry, balances refetched, alert to check first.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "CODE-4FIX-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "The check-first alert pointed at an Activity list that was not refreshed. Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-6",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Recurring template, inline edit, run-now and due-prompt amounts misread commas or dropped the dot while typing. Fixed. Budgets and card fees: see OPEN-9.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-7",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Typed 1,234.50 kept 1.23 in split, payer and receipt fields. Fixed: kept visible, flagged, blocks saving. A third decimal after a lone dot is still dropped: see OPEN-9.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-8",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Backend: settlements have no duplicate protection and cannot be undone.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "NULL-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Split editor crashed on a stored null split value (introduced during this change). Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "BLANK-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Blank split fields were sent without a value and the server failed instead of refusing. Fixed in app and server; older apps need the backend deployed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-9",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Budget and card fee amounts not checked; a third decimal after a lone dot is dropped (1.000 kept as 1.00).",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-10",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Follow-ups from the last reviews: draft loses an unclear original price; hidden fields lose typed unclear text; previews show $0.00; Add expense locks a draft after a definite 400; zeros carried into Shares. See ROADMAP.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    }
+  ]
+}

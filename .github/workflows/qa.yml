@@ -177,8 +177,8 @@ jobs:
         working-directory: qa
         run: npm run qa:api
 
-      # Real logins are limited to 5 a minute for the whole backend. This spec signs in twice, so it
-      # gets a minute of its own instead of sharing one with the regression suite.
+      # Real logins are limited to 5 a minute for the whole backend. The @account specs sign in 4 times
+      # between them, so they get a minute of their own instead of sharing one with the regression suite.
       - name: Run account security + deletion (own login window)
         working-directory: qa
         run: |

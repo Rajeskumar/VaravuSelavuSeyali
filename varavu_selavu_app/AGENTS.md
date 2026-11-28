@@ -5,6 +5,7 @@ Root `AGENTS.md` rules apply. This file holds backend decisions. Commands: `make
 `auth/`, `oauth/`, `mcp/`, `core/`, `db/`, `alembic/`, money/LLM/export services (`scripts/quality/routing.py`).
 
 ## Key Decisions
+- **Settlements are idempotent by `request_id`** (unique per group + recorder; replay = no new row, activity or push). Any new client write path for payments sends one; overpayment is allowed on purpose, so never de-duplicate by amount.
 - **Product legal pages** at `privacy_policy.html` and `terms_of_service.html` cover TrackSpense, not the CerebroOS marketing site. Current policy contact is `cerebroos@gmail.com`; the public copy does not claim an LLC exists. Keep `docs/legal/trackspense-policy-release-checks.md` current with unverified data-practice and release facts.
 - **A push token belongs to one account at a time**: `NotificationService.register_device` deletes other users' rows for the same Expo token, so a device that was signed out without a clean unregister (401, offline) stops receiving the previous account's notifications once someone registers on it. The token must match Expo's format and the route is rate limited, because registering also de-registers other accounts.
 - **Auth: an `Authorization: Bearer` header wins over the `vs_token` cookie, and Bearer requests are exempt from CSRF** (`auth/security.py`, `core/csrf.py`). Native HTTP stacks resend the login cookie, which made every mobile POST 403; mobile also sends `credentials: 'omit'` — keep both.

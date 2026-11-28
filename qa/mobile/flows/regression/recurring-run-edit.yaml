@@ -1,0 +1,47 @@
+# SCENARIO M-25 regression (TS-QA-106): run a recurring template now, then edit its amount
+# LOGINS: 1
+# Preconditions: fresh verified user; recurring-run-edit.seed.py. Assertions: UI below; stored data in recurring-run-edit.verify.py.
+# Reset/cleanup: none (own user and data, disposable DB). Platforms: iOS, Android.
+appId: com.cerebroos.trackspense
+tags:
+  - regression
+---
+- runFlow: ../../subflows/launch-clean.yaml
+- runFlow: ../../subflows/login.yaml
+- tapOn:
+    id: "tabs.Expenses"
+- tapOn: "Recurring"
+- extendedWaitUntil:
+    visible: ".*${RUN_LABEL} rent.*"
+    timeout: 20000
+- tapOn:
+    text: ".*${RUN_LABEL} rent.*Monthly.*"
+    optional: true
+- runFlow:
+    when:
+      notVisible: ".*Run now"
+    commands:
+      - tapOn:
+          text: ".*${RUN_LABEL} rent.*"
+          index: 1
+- tapOn: ".*Run now"
+- extendedWaitUntil:
+    visible: ".*Logged today.*"
+    timeout: 20000
+- tapOn: ".*Edit"
+- tapOn:
+    id: "recurring.editAmount"
+- eraseText: 10
+- inputText: "17.25"
+- waitForAnimationToEnd
+- takeScreenshot: recurring-edit-keypad-open
+# The iOS number pad has no Done key and hideKeyboard leaves it up: close it as a user does, by tapping a label.
+- tapOn: "DAY"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Save changes"
+    direction: DOWN
+- tapOn: "Save changes"
+- extendedWaitUntil:
+    visible: ".*17\\.25.*"
+    timeout: 20000

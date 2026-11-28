@@ -140,3 +140,21 @@ test('paying the full amount reads "Remaining balance" $0.00', async () => {
   await screen.findByRole('button', { name: /done/i }, { timeout: 2000 });
   expect(screen.getByText('Remaining balance')).toBeInTheDocument();
 });
+
+// TS-FIX-104: an earlier unconfirmed attempt had saved it. A real second payment must not pass as recorded.
+test('says nothing new was added when the payment was already recorded', async () => {
+  jest.spyOn(api, 'createSettlement').mockResolvedValue({
+    id: 's1', group_id: 'g1', from_member_id: 'b', to_member_id: 'a', amount: 40,
+    settled_at: '2026-01-01T00:00:00Z', already_recorded: true,
+  });
+  const onSuccess = jest.fn();
+
+  render(<SettleUpDialog open groupId="g1" members={members} onClose={jest.fn()} onSuccess={onSuccess} />);
+  fireEvent.click(screen.getByRole('button', { name: /record settlement/i }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/already recorded.*record it once more/i);
+  expect(onSuccess).toHaveBeenCalledWith({ alreadyRecorded: true });
+  // Nothing on screen records again with one more click: that has to be started afresh.
+  expect(screen.queryByRole('button', { name: /record settlement/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^done$/i })).toBeInTheDocument();
+});

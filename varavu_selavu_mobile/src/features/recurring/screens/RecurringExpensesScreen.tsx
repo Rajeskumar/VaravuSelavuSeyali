@@ -25,6 +25,8 @@ import { formatCurrency } from '../../expenses/utils/currencyMath';
 import { useQueryClient } from '@tanstack/react-query';
 import { refreshExpenseViews } from '../../expenses/utils/expenseEvents';
 import { logger } from '../../../core/logger';
+import KeyboardLift from '../../../core/ui/KeyboardLift';
+import { parseAmount } from '../../groups/utils/parseAmount';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'];
@@ -99,6 +101,8 @@ export default function RecurringExpensesScreen() {
     // Form state
     const [formVisible, setFormVisible] = useState(false);
     const [form, setForm] = useState<UpsertRecurringPayload>({ ...EMPTY_FORM });
+    // The amount as typed. Rewriting the field from a number on each key dropped the dot: "12.50" became 1250.
+    const [costText, setCostText] = useState('');
     const [saving, setSaving] = useState(false);
 
     // Execute modal
@@ -130,13 +134,18 @@ export default function RecurringExpensesScreen() {
     };
 
     const handleSave = async () => {
-        if (!form.description || !form.category || form.default_cost <= 0) {
+        if (!form.description || !form.category || !costText.trim()) {
             Alert.alert('Validation', 'Please fill in all required fields.');
+            return;
+        }
+        const cost = parseAmount(costText);
+        if (cost === null || cost <= 0) {
+            Alert.alert('Check the amount', 'Enter an amount greater than 0, like 12.50, without thousands separators.');
             return;
         }
         setSaving(true);
         try {
-            await upsertRecurringTemplate(form);
+            await upsertRecurringTemplate({ ...form, default_cost: cost });
             setFormVisible(false);
             setForm({ ...EMPTY_FORM });
             fetchTemplates();
@@ -177,9 +186,15 @@ export default function RecurringExpensesScreen() {
 
     const handleExecute = async () => {
         if (!execTemplate) return;
+        // An empty field runs the template's own amount; anything typed must be readable.
+        const amount = execAmount.trim() ? parseAmount(execAmount) : execTemplate.default_cost;
+        if (amount === null || amount <= 0) {
+            Alert.alert('Check the amount', 'Enter an amount greater than 0, like 12.50, without thousands separators.');
+            return;
+        }
         setActionLoading(execTemplate.id);
         try {
-            const resp = await executeRecurringNow(execTemplate.id, parseFloat(execAmount) || execTemplate.default_cost);
+            const resp = await executeRecurringNow(execTemplate.id, amount);
             if (resp.success === false) {
                 Alert.alert('Error', resp.error || 'Failed to execute template.');
                 return;
@@ -210,6 +225,7 @@ export default function RecurringExpensesScreen() {
             start_date_iso: template.start_date_iso,
             status: template.status || 'Active',
         });
+        setCostText(String(template.default_cost));
         setFormVisible(true);
     };
     const totalMonthly = templates.reduce((s, t) => s + t.default_cost, 0);
@@ -243,7 +259,7 @@ export default function RecurringExpensesScreen() {
                 right={(
                     <TouchableOpacity
                         style={styles.addBtn}
-                        onPress={() => { setForm({ ...EMPTY_FORM }); setFormVisible(true); }}
+                        onPress={() => { setForm({ ...EMPTY_FORM }); setCostText(''); setFormVisible(true); }}
                         activeOpacity={0.7}
                     >
                         <Text style={styles.addBtnText}>+ Add</Text>
@@ -262,7 +278,7 @@ export default function RecurringExpensesScreen() {
                             </Text>
                             <TouchableOpacity
                                 style={styles.emptyBtn}
-                                onPress={() => { setForm({ ...EMPTY_FORM }); setFormVisible(true); }}
+                                onPress={() => { setForm({ ...EMPTY_FORM }); setCostText(''); setFormVisible(true); }}
                                 activeOpacity={0.7}
                             >
                                 <Text style={styles.emptyBtnText}>Add Template</Text>
@@ -329,7 +345,7 @@ export default function RecurringExpensesScreen() {
 
             {/* Add/Edit Form Modal */}
             <Modal visible={formVisible} animationType="slide" transparent>
-                <View style={styles.modalOverlay}>
+                <KeyboardLift style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>
@@ -378,8 +394,8 @@ export default function RecurringExpensesScreen() {
                                     <Text style={styles.fieldLabel}>Default Cost *</Text>
                                     <TextInput
                                         style={styles.input}
-                                        value={form.default_cost > 0 ? String(form.default_cost) : ''}
-                                        onChangeText={noMinus((v) => setForm((f) => ({ ...f, default_cost: parseFloat(v) || 0 })))}
+                                        value={costText}
+                                        onChangeText={noMinus(setCostText)}
                                         keyboardType="decimal-pad"
                                         placeholder="0.00"
                                         placeholderTextColor={theme.colors.textTertiary}
@@ -419,13 +435,13 @@ export default function RecurringExpensesScreen() {
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
-                </View>
+                </KeyboardLift>
             </Modal>
 
             {/* Execute Now Modal */}
             <Modal visible={!!execTemplate} animationType="fade" transparent>
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { maxHeight: '40%' }]}>
+                <KeyboardLift style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}>Execute Now</Text>
                             <TouchableOpacity onPress={() => setExecTemplate(null)} activeOpacity={0.7}>
@@ -461,7 +477,7 @@ export default function RecurringExpensesScreen() {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
+                </KeyboardLift>
             </Modal>
         </ScreenWrapper>
     );

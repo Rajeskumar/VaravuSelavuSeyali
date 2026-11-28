@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "checks",
+      "status": "passed",
+      "snapshot": "ffba8f1d66b9af1c1de26ffa01def60f4ecc0b204eb249474cdb3f795d4963a6",
+      "environment": "Local macOS, worktree on qa-coverage-extend (5376f0c plus the uncommitted changes in this snapshot); isolated local data and disposable local PostgreSQL 16 only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "framework-check (279), test-backend (1182 passed, 23 skipped), web lint/typecheck/test (437), mobile typecheck/Jest (796), qa typecheck, security.sh --no-audit, and test-integrity --base origin/main with the owner-approved acknowledgement for the single-browser skip and the PostgreSQL-only skip. All passed.",
+      "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
+      "recorded_at": "2026-11-28T03:21:23.713064+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011",
+        "AC-012",
+        "AC-013"
+      ]
+    },
+    {
+      "id": "red-green",
+      "status": "passed",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Behavioral failures seen before each fix, including unclear amounts typed key by key keeping 1.23, recurring fields dropping the dot, unguarded saves, a null-value split editor crash, and blank split fields (InvalidOperation on the server). The same tests pass on this snapshot under 'checks'.",
+      "source": "acceptance-verification.md; Jest output 2026-11-27",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "acceptance_criteria": [
+        "AC-001",
+        "AC-002",
+        "AC-003",
+        "AC-005",
+        "AC-006",
+        "AC-007",
+        "AC-008",
+        "AC-009",
+        "AC-010",
+        "AC-011",
+        "AC-012",
+        "AC-013"
+      ]
+    },
+    {
+      "id": "local-integration",
+      "status": "passed",
+      "snapshot": "ffba8f1d66b9af1c1de26ffa01def60f4ecc0b204eb249474cdb3f795d4963a6",
+      "environment": "Local macOS, worktree on qa-coverage-extend (5376f0c plus the uncommitted changes in this snapshot); isolated local data and disposable local PostgreSQL 16 only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Playwright chromium on an isolated local stack: groups + expenses specs 74 passed, then account specs 4 passed. One 429, on the receipt-parse endpoint; none on login.",
+      "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
+      "recorded_at": "2026-11-28T03:21:23.713064+00:00",
+      "acceptance_criteria": [
+        "AC-005"
+      ]
+    },
+    {
+      "id": "code-review",
+      "status": "passed",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Passes over the whole change and each later delta. Last two: the split-editor crash (P1) fixed and approved; the blank-split-value fix approved. No open P0-P2 from these passes.",
+      "source": "Reviewer reports in the 2026-11-27 session",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "security-review",
+      "status": "passed",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Earlier BLOCKED results (settle-up retry after an unknown outcome; split editor crash on null) were fixed and re-checked: PASS, including the blank-split-value fix and the backend change. No open P0/P1. Secret scan lightweight only (no gitleaks).",
+      "source": "Reviewer reports in the 2026-11-27 session",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "ui-review",
+      "status": "passed",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "PASS with follow-ups on the latest typing and recurring changes; no open P0/P1. The 0/1 fill after switching split type was reviewed by code and security, not separately by UI. No device or screen-reader review.",
+      "source": "Reviewer reports in the 2026-11-27 session",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "native-e2e",
+      "status": "skipped",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Full suites not run on this version. Targeted on these app files, with temporary flow edits (reverted): Android and iOS group-split-exact and recurring-run-edit, Android receipt-ocr-native-android and iOS receipt-import all passed. Full runs on both platforms are still required.",
+      "source": "acceptance-verification.md",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "native-device",
+      "status": "skipped",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "No real-device check: comma keypad, small phone, large text, receipt price typing, recurring template/run-now/due prompt, double tap, unknown-outcome alert.",
+      "source": "test-plan.md; ROADMAP",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "acceptance_criteria": []
+    },
+    {
+      "id": "acceptance-verification",
+      "status": "skipped",
+      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
+      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "Incomplete: all criteria except AC-004 have passing automated tests on this snapshot; AC-004 needs the iOS flow in the final full run.",
+      "source": "acceptance-verification.md",
+      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "acceptance_criteria": []
+    }
+  ]
+}

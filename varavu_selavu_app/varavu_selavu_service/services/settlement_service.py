@@ -1,12 +1,15 @@
 import uuid
+from decimal import Decimal
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from varavu_selavu_service.db.models import Expense, ExpensePayer, ExpenseSplit, GroupMember, Settlement
 from varavu_selavu_service.services.group_service import GroupService
+from varavu_selavu_service.services.group_expense_service import lock_expense
 
 
 def _to_uuid(value) -> Optional[uuid.UUID]:
@@ -46,6 +49,22 @@ class SettlementService:
         if from_mid not in found or to_mid not in found:
             raise HTTPException(status_code=400, detail="Both members must belong to this group")
 
+    def _find_request(self, group_id: uuid.UUID, actor_email: str, request_id: str) -> Optional[Settlement]:
+        return (
+            self.db.query(Settlement)
+            .filter(
+                Settlement.group_id == group_id,
+                Settlement.created_by == actor_email,
+                Settlement.client_request_id == request_id,
+            )
+            .first()
+        )
+
+    def _replay(self, stored: Settlement, payment) -> Dict:
+        if (stored.from_member_id, stored.to_member_id, Decimal(str(stored.amount))) != payment:
+            raise HTTPException(status_code=409, detail="This request id was already used for a different payment")
+        return {**self._dto(stored), "replayed": True}
+
     def create_settlement(
         self,
         group_id: str,
@@ -56,7 +75,9 @@ class SettlementService:
         method: Optional[str] = None,
         settled_at: Optional[str] = None,
         notes: Optional[str] = None,
+        request_id: Optional[str] = None,
     ) -> Dict:
+        """Returns the settlement; `replayed` is True when `request_id` was already recorded."""
         # Caller must be a member of the group they're recording a settlement in.
         self.group_service.require_membership(group_id, actor_email)
 
@@ -72,6 +93,12 @@ class SettlementService:
             raise HTTPException(status_code=400, detail="Invalid member id")
 
         self._require_members_in_group(gid, from_mid, to_mid)
+        payment = (from_mid, to_mid, Decimal(str(round(float(amount), 2))))
+
+        if request_id:
+            stored = self._find_request(gid, actor_email, request_id)
+            if stored is not None:
+                return self._replay(stored, payment)
 
         if settled_at:
             try:
@@ -91,9 +118,18 @@ class SettlementService:
             settled_at=settled_at_dt,
             notes=notes,
             created_by=actor_email,
+            client_request_id=request_id,
         )
         self.db.add(settlement)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            # Two sends of one request arrived together: the unique index let the other one in.
+            self.db.rollback()
+            stored = self._find_request(gid, actor_email, request_id) if request_id else None
+            if stored is None:
+                raise
+            return self._replay(stored, payment)
         
         self.activity_svc.log(
             group_id=group_id,
@@ -147,6 +183,14 @@ class SettlementService:
                 detail="Only the member who recorded this settlement, or a group admin, can delete it",
             )
 
+        # Deleting clears the paid mark on a share, so take that expense's lock like an edit does.
+        for (expense_id,) in (
+            self.db.query(ExpenseSplit.expense_id)
+            .filter(ExpenseSplit.settled_via_settlement_id == sid)
+            .order_by(ExpenseSplit.expense_id)
+            .all()
+        ):
+            lock_expense(self.db, expense_id)
         self.db.delete(row)
         self.db.commit()
         
@@ -182,8 +226,9 @@ class SettlementService:
         if gid is None or eid is None or mid is None:
             raise HTTPException(status_code=400, detail="Invalid id")
 
-        expense = self.db.query(Expense).filter(Expense.id == eid, Expense.group_id == gid).first()
-        if expense is None:
+        # Locked until commit, so no second payment or edit can slip in while the share is checked.
+        expense = lock_expense(self.db, eid)
+        if expense is None or expense.group_id != gid:
             raise HTTPException(status_code=404, detail="Group expense not found")
 
         split = (

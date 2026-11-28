@@ -44,12 +44,15 @@ export function receiptTotals(lines: ReceiptLine[], tax: number, tip: number, am
   const subtotalCents = lines.reduce((s, l) => s + cents(l.line_total), 0);
   const computedCents = subtotalCents + cents(tax) + cents(tip);
   const deltaCents = computedCents - cents(amount);
+  // NaN is a price typed unclearly; null is one that came back from a saved draft that way. cents() would count 0.
+  const unreadable = lines.some((l) => l.line_total === null || Number.isNaN(l.line_total) || Number.isNaN(l.original_price));
   return {
+    unreadable,
     subtotal: subtotalCents / 100,
     computed: computedCents / 100,
     delta: deltaCents / 100,
     savings: lines.reduce((s, l) => s + cents(lineDiscount(l)), 0) / 100,
-    reconciled: Math.abs(deltaCents) <= cents(RECEIPT_TOLERANCE),
+    reconciled: !unreadable && Math.abs(deltaCents) <= cents(RECEIPT_TOLERANCE),
   };
 }
 
@@ -63,7 +66,7 @@ export function fromServerLine(it: any, idx: number): ReceiptLine {
     item_name: it.item_name || it.normalized_name || 'Item',
     line_total: paid,
     discount,
-    original_price: it.original_price != null ? Number(it.original_price) : discount ? paid + discount : null,
+    original_price: it.original_price != null ? Number(it.original_price) : discount ? Math.round((paid + discount) * 100) / 100 : null,
     quantity: it.quantity != null ? Number(it.quantity) : null,
     unit_price: it.unit_price != null ? Number(it.unit_price) : null,
     normalized_name: it.normalized_name || undefined,

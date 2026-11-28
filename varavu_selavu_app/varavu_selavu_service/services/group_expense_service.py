@@ -35,6 +35,12 @@ def _absorb_rounding(cents: List[int], total_cents: int) -> None:
         cents[max(range(len(cents)), key=lambda i: cents[i])] -= 1
 
 
+def lock_expense(db, expense_id) -> Optional[Expense]:
+    """Held until commit, and re-read once granted. Take it before reading shares in anything that rewrites
+    or pays them: an edit replaces the share rows, so locking those rows can't hold off a second request."""
+    return db.query(Expense).filter(Expense.id == expense_id).with_for_update().populate_existing().first()
+
+
 class GroupExpenseService:
     def __init__(self, db: Session):
         self.db = db
@@ -272,6 +278,10 @@ class GroupExpenseService:
         )
         if expense is None:
             raise HTTPException(status_code=404, detail="Group expense not found")
+        # The exchange-rate lookup can commit, which would drop the lock, so it comes first.
+        expense_currency, fx_rate = self._resolve_currency(gid, currency)
+        if lock_expense(self.db, eid) is None:
+            raise HTTPException(status_code=404, detail="Group expense not found")
 
         if self._is_receipt(expense):
             # TS-FIX-102: a receipt is split on its total (Equal/Exact/Shares). Its amount changes only
@@ -288,7 +298,6 @@ class GroupExpenseService:
             payers, split_type, split_results = self._carry_over_split(expense, amount)
         else:
             split_results = self._validate_and_resolve(gid, amount, payers, split_type, split_entries)
-        expense_currency, fx_rate = self._resolve_currency(gid, currency)
 
         # Snapshot pre-edit values so the activity log (and TS-GRP-127's edit
         # history view built on top of it) can show a real old -> new diff.
@@ -316,6 +325,9 @@ class GroupExpenseService:
 
         # Atomic rewrite: replace payers/splits (E2 — allowed even after a settlement;
         # no settlement is auto-modified).
+        # A paid share stays paid, or "Settle my share" would record it again; a changed amount
+        # shows in the balances.
+        paid_shares = self._paid_shares(expense.id)
         self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == expense.id).delete(synchronize_session=False)
         self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense.id).delete(synchronize_session=False)
 
@@ -337,6 +349,7 @@ class GroupExpenseService:
                     amount_owed=r.amount_owed,
                     basis_type=r.basis_type,
                     basis_value=r.basis_value,
+                    settled_via_settlement_id=paid_shares.get(_to_uuid(r.member_id)),
                 )
             )
         self.db.commit()
@@ -534,13 +547,22 @@ class GroupExpenseService:
 
         return self._expense_row(expense, actor_email)
 
-    def _write_payers_and_splits(self, expense_id, payers: List[dict], split_results) -> None:
+    def _paid_shares(self, expense_id) -> Dict:
+        """Member id to the settlement that paid their share; read it before replacing the rows."""
+        return dict(
+            self.db.query(ExpenseSplit.member_id, ExpenseSplit.settled_via_settlement_id)
+            .filter(ExpenseSplit.expense_id == expense_id)
+            .all()
+        )
+
+    def _write_payers_and_splits(self, expense_id, payers: List[dict], split_results, paid_shares: Optional[Dict] = None) -> None:
         for p in payers:
             self.db.add(ExpensePayer(id=uuid.uuid4(), expense_id=expense_id,
                                      member_id=_to_uuid(p["member_id"]), amount_paid=p["amount_paid"]))
         for r in split_results:
             self.db.add(ExpenseSplit(id=uuid.uuid4(), expense_id=expense_id, member_id=_to_uuid(r.member_id),
-                                     amount_owed=r.amount_owed, basis_type=r.basis_type, basis_value=r.basis_value))
+                                     amount_owed=r.amount_owed, basis_type=r.basis_type, basis_value=r.basis_value,
+                                     settled_via_settlement_id=(paid_shares or {}).get(_to_uuid(r.member_id))))
 
     @staticmethod
     def _item_fields(item: dict) -> dict:
@@ -694,6 +716,8 @@ class GroupExpenseService:
         re-split from their stored basis; Exact and old item-split receipts need `split`. Lines sent with
         an existing id are updated in place, so their old assignment rows stay (D4)."""
         expense = self._get_expense(group_id, expense_id, actor_email)
+        if lock_expense(self.db, expense.id) is None:
+            raise HTTPException(status_code=404, detail="Group expense not found")
         gid = expense.group_id
         lines = receipt_lines.checked_lines(items, amount=amount, tax=tax, tip=tip)
         new_amount = receipt_lines.money(amount)
@@ -716,9 +740,10 @@ class GroupExpenseService:
         expense.discount = receipt_lines.savings_of(lines)
         if rewrite is not None:
             payers, new_type, split_results = rewrite
+            paid_shares = self._paid_shares(expense.id)
             self.db.query(ExpensePayer).filter(ExpensePayer.expense_id == expense.id).delete(synchronize_session=False)
             self.db.query(ExpenseSplit).filter(ExpenseSplit.expense_id == expense.id).delete(synchronize_session=False)
-            self._write_payers_and_splits(expense.id, payers, split_results)
+            self._write_payers_and_splits(expense.id, payers, split_results, paid_shares)
             expense.split_type = new_type
         self.db.commit()
 

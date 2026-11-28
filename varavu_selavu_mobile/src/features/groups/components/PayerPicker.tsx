@@ -5,7 +5,7 @@ import { AppTheme } from '../../../core/theme/theme';
 import { MemberDTO, PayerSummaryItem } from '../api/groups';
 import { memberColor } from './BalanceRow';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
-import { addsUpTo, amountText, TWO_DECIMALS } from '../utils/splitAmounts';
+import { acceptsAmountText, addsUpTo, amountText, hasUnreadablePayer, typedValue, UNREADABLE_AMOUNT } from '../utils/splitAmounts';
 
 interface Props {
   amount: number;
@@ -13,6 +13,8 @@ interface Props {
   payers: PayerSummaryItem[];
   onChange: (payers: PayerSummaryItem[]) => void;
   onValidityChange?: (valid: boolean) => void;
+  /** Hides the totals check while the stored payments will be adjusted by the server. */
+  quiet?: boolean;
 }
 
 
@@ -20,6 +22,7 @@ interface Props {
  * parent gate its own Save button on the currently-staged payers before the picker is even
  * open. */
 export function computePayersValid(payers: PayerSummaryItem[], amount: number): boolean {
+  if (hasUnreadablePayer(payers)) return false;
   const totalEntered = payers.reduce((sum, p) => sum + p.amount_paid, 0);
   return addsUpTo(totalEntered, amount);
 }
@@ -30,6 +33,7 @@ export default function PayerPicker({
   payers,
   onChange,
   onValidityChange,
+  quiet = false,
 }: Props) {
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
@@ -39,7 +43,7 @@ export default function PayerPicker({
   const activeMembers = members.filter((m) => m.status !== 'left');
   const selectedIds = React.useMemo(() => new Set(payers.map((p) => p.member_id)), [payers]);
   
-  const totalEntered = payers.reduce((sum, p) => sum + p.amount_paid, 0);
+  const totalEntered = payers.reduce((sum, p) => sum + (p.amount_paid || 0), 0);
   const isValid = computePayersValid(payers, amount);
 
   React.useEffect(() => {
@@ -58,10 +62,10 @@ export default function PayerPicker({
 
   const [typed, setTyped] = React.useState<Record<string, string>>({});
 
-  const updateAmount = (memberId: string, valStr: string) => {
-    if (!TWO_DECIMALS.test(valStr)) return;
-    setTyped((prev) => ({ ...prev, [memberId]: valStr }));
-    const num = parseFloat(valStr) || 0;
+  const updateAmount = (memberId: string, typedText: string) => {
+    if (!acceptsAmountText(typedText)) return;
+    setTyped((prev) => ({ ...prev, [memberId]: typedText }));
+    const num = typedValue(typedText);
     onChange(
       payers.map((p) => (p.member_id === memberId ? { ...p, amount_paid: num } : p))
     );
@@ -111,12 +115,14 @@ export default function PayerPicker({
         );
       })}
 
-      {!isValid && (
+      {!quiet && !isValid && (
         <Text style={styles.warning}>
-          Amounts paid must equal total expense ({formatCurrency(amount)}). Currently: {formatCurrency(totalEntered)}.
+          {hasUnreadablePayer(payers)
+            ? UNREADABLE_AMOUNT
+            : `Amounts paid must equal total expense (${formatCurrency(amount)}). Currently: ${formatCurrency(totalEntered)}.`}
         </Text>
       )}
-      {isValid && (
+      {!quiet && isValid && (
         <Text style={styles.success}>
           Payments reconcile ✓
         </Text>

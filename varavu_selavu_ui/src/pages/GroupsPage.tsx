@@ -728,14 +728,15 @@ const GroupsPage: React.FC = () => {
           myMemberId={myMember?.member_id}
           currency={group?.currency}
           onClose={() => setSettleOpen(false)}
-          onSuccess={() => {
+          onSuccess={(result) => {
             queryClient.invalidateQueries({ queryKey: ['group-balances', groupId] });
             // The rail's per-group balance, the People tab and the dashboard's "owed to you" all
             // read these — without this they kept showing the pre-settlement amount until reload.
             queryClient.invalidateQueries({ queryKey: ['groups'] });
             queryClient.invalidateQueries({ queryKey: ['friend-balances'] });
             queryClient.invalidateQueries({ queryKey: ['group-expenses', groupId] });
-            setToast({ open: true, message: 'Settlement recorded', severity: 'success' });
+            // The dialog explains a repeat itself; a "recorded" toast beside it would say the opposite.
+            if (!result?.alreadyRecorded) setToast({ open: true, message: 'Settlement recorded', severity: 'success' });
           }}
         />
       )}

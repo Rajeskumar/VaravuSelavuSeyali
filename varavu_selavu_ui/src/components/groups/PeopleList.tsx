@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Avatar from '@mui/material/Avatar';
@@ -39,6 +40,13 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null);
   const [settlingKey, setSettlingKey] = React.useState<string | null>(null);
 
+  const [replayNotice, setReplayNotice] = React.useState<string | null>(null);
+  const notice = replayNotice && (
+    <Alert severity="warning" onClose={() => setReplayNotice(null)} sx={{ mb: 1.5 }}>
+      {replayNotice}
+    </Alert>
+  );
+
   const keyFor = (p: FriendBalanceDTO) => p.counterparty_email || p.counterparty_display_name;
 
   const handleSettle = async (person: FriendBalanceDTO) => {
@@ -46,6 +54,7 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
     setSettlingKey(key);
     const sharedGroups = person.groups.filter((g) => Math.abs(g.net) >= 0.005);
     let succeeded = 0;
+    let earlier = 0;
     const failedGroupNames: string[] = [];
 
     for (const g of sharedGroups) {
@@ -57,8 +66,9 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
         // net > 0 means the counterparty owes the current user (FriendBalancesWidget's
         // confirmed sign convention for this same /friends/balances payload).
         const [from_member_id, to_member_id] = g.net > 0 ? [them.member_id, me.member_id] : [me.member_id, them.member_id];
-        await createSettlement(g.group_id, { from_member_id, to_member_id, amount: Math.abs(g.net) });
+        const saved = await createSettlement(g.group_id, { from_member_id, to_member_id, amount: Math.abs(g.net) });
         succeeded += 1;
+        if (saved?.already_recorded) earlier += 1;
         queryClient.invalidateQueries({ queryKey: ['group-balances', g.group_id] });
       } catch {
         failedGroupNames.push(g.name);
@@ -69,7 +79,12 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
     queryClient.invalidateQueries({ queryKey: ['groups'] });
     setSettlingKey(null);
 
-    if (failedGroupNames.length === 0) {
+    if (earlier > 0) {
+      // Stays on screen until closed: the page's toast leaves after a few seconds.
+      setReplayNotice(
+        `${earlier} payment${earlier === 1 ? ' was' : 's were'} already recorded earlier, so nothing new was added there. Check balances; if you paid again, settle up once more.${failedGroupNames.length ? ` Failed: ${failedGroupNames.join(', ')}.` : ''}`
+      );
+    } else if (failedGroupNames.length === 0) {
       onToast?.(
         `Settled up with ${person.counterparty_display_name} across ${sharedGroups.length} group${sharedGroups.length === 1 ? '' : 's'}.`,
         'success'
@@ -92,10 +107,13 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
 
   if (!data || data.length === 0) {
     return (
-      <EmptyState
-        title="No open balances"
-        description="People show up here while one of you owes the other, netted across every group you share. Anyone you're settled up with drops off the list."
-      />
+      <>
+        {notice}
+        <EmptyState
+          title="No open balances"
+          description="People show up here while one of you owes the other, netted across every group you share. Anyone you're settled up with drops off the list."
+        />
+      </>
     );
   }
 
@@ -104,6 +122,7 @@ const PeopleList: React.FC<PeopleListProps> = ({ onToast }) => {
 
   return (
     <Box>
+      {notice}
       <Typography variant="body2" sx={{ mb: 1.5 }}>
         <Box component="span" sx={{ color: positiveColor, fontWeight: 700 }}>{formatMoney(owedTotal)}</Box>{' '}
         <Box component="span" sx={{ color: 'text.secondary' }}>owed to you</Box>

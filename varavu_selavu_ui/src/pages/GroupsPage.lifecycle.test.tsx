@@ -18,7 +18,12 @@ jest.mock('framer-motion', () => {
 // once a settlement succeeds matters, so the dialog is a button that reports success.
 jest.mock('../components/groups/SettleUpDialog', () => ({
   __esModule: true,
-  default: ({ open, onSuccess }: any) => (open ? <button onClick={onSuccess}>mock-settle-success</button> : null),
+  default: ({ open, onSuccess }: any) => (open ? (
+    <>
+      <button onClick={onSuccess}>mock-settle-success</button>
+      <button onClick={() => onSuccess({ alreadyRecorded: true })}>mock-settle-replay</button>
+    </>
+  ) : null),
 }));
 
 const GROUP = {
@@ -127,6 +132,16 @@ describe('screens agree after a successful change', () => {
     fireEvent.click(await screen.findByText('mock-settle-success'));
     const keys = invalidatedKeys(invalidate);
     expect(keys).toEqual(expect.arrayContaining(['group-balances/g1', 'groups', 'friend-balances', 'group-expenses/g1']));
+  });
+
+  // TS-FIX-104: nothing new was added, so no "Settlement recorded" beside the dialog's notice.
+  test('a payment that had already been recorded refreshes but claims no new settlement', async () => {
+    mockGroupData([ME, { ...JAMIE, status: 'active', user_email: 'jamie@x.com' }], [{ from_member_id: 'm2', to_member_id: 'm1', amount: 30 }]);
+    const { invalidate } = renderAt('/groups/g1');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Settle up' }))[0]);
+    fireEvent.click(await screen.findByText('mock-settle-replay'));
+    expect(invalidatedKeys(invalidate)).toEqual(expect.arrayContaining(['group-balances/g1', 'friend-balances']));
+    expect(screen.queryByText('Settlement recorded')).not.toBeInTheDocument();
   });
 
   test('adding a member refreshes the detail, balances and the group list', async () => {

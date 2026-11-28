@@ -1,7 +1,8 @@
 import { noMinus } from '../../expenses/utils/noMinus';
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Pressable, KeyboardAvoidingView, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Pressable, KeyboardAvoidingView, Platform, useWindowDimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { updateGroupExpense, getGroupExpenseItems, updateGroupExpenseItems, GroupExpenseRow, MemberDTO, PayerSummaryItem } from '../api/groups';
 import { applyTagsToExpense, removeTagFromExpense } from '../../tags/api/tags';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
@@ -12,11 +13,13 @@ import CustomButton from '../../../core/ui/CustomButton';
 import { MAIN_CATEGORIES, CATEGORY_GROUPS, findMainCategory } from '../../expenses/utils/categories';
 import SplitEditor, { SplitEntry as SplitEditorEntry, SplitType } from './SplitEditor';
 import PayerPicker from './PayerPicker';
+import { hasUnreadablePayer, hasUnreadableSplit, UNREADABLE_AMOUNT } from '../utils/splitAmounts';
 import ScannedItemsCard, { ScannedItem } from '../../receipts/components/ScannedItemsCard';
 import TagChipsDisplay from '../../tags/components/TagChipsDisplay';
 import TagPickerModal from '../../tags/components/TagPickerModal';
 import CardPickerField from '../../cards/components/CardPickerField';
 import { useCardCoachEnabled } from '../../cards/hooks/useCardCoachEnabled';
+import { parseAmount } from '../utils/parseAmount';
 import { showToast } from '../../../core/ui/Toast';
 import { RECEIPT_SPLIT_TYPES, fromServerLine, receiptTotals, toSaveLine } from '../../receipts/utils/receiptLines';
 
@@ -45,6 +48,7 @@ export default function EditGroupExpenseModal({
   // which made the sheet's maxHeight resolve to 0 and rendered nothing at all.
   const { height: windowHeight } = useWindowDimensions();
   const styles = useMemo(() => createStyles(theme, windowHeight), [theme, windowHeight]);
+  const insets = useSafeAreaInsets();
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -58,10 +62,10 @@ export default function EditGroupExpenseModal({
   const [splitType, setSplitType] = useState<SplitType>('equal');
   const [splitEntries, setSplitEntries] = useState<SplitEditorEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  // For a receipt, payers/split are sent only when the user changed them; otherwise the server keeps the
-  // stored split (an Equal/Shares receipt stays Equal/Shares, TS-FIX-102 D8) instead of saving this exact
-  // pre-fill. Manual expenses keep today's behavior (always sent). Same as web ExpenseDetailDialog.
-  const [pickerTouched, setSplitTouched] = useState(false);
+  // Payers and split are sent only when the user changed them; otherwise the server keeps the stored ones,
+  // rescaled to a new amount (TS-FIX-103; an Equal/Shares receipt stays so, TS-FIX-102 D8), instead of
+  // saving this exact pre-fill. Web does the same.
+  const [splitTouched, setSplitTouched] = useState(false);
 
   // Itemized expenses (receipt-scanned) get a line-item review/edit section, reusing the
   // same ScannedItemsCard the create flow uses. itemsLoaded distinguishes "no items to
@@ -73,8 +77,13 @@ export default function EditGroupExpenseModal({
   const [legacyFormat, setLegacyFormat] = useState(false);
   // TS-FIX-102: new receipts are split Equal/Exact/Shares on the total and flagged by has_items.
   const isReceipt = !!expense && (expense.split_type === 'itemized' || !!expense.has_items);
-  const splitTouched = !isReceipt || pickerTouched;
   const [itemsLoaded, setItemsLoaded] = useState(false);
+  // The editors still show the old figures; when the server will adjust them, say so instead of flagging them.
+  // An Exact or old item-split receipt can't be adjusted, so its checks stay.
+  const typedAmount = parseAmount(amount) ?? 0;
+  const amountEdited = !!expense && Math.round(typedAmount * 100) !== Math.round(expense.cost * 100);
+  const needsNewSplit = isReceipt && (expense?.split_type === 'exact' || expense?.split_type === 'itemized');
+  const adjustsStored = amountEdited && !splitTouched && !needsNewSplit;
 
   // TS-TAG-112 — group expenses have no tag_names write-through field (personal-only by
   // design), so a changed selection here is synced via the association endpoints in
@@ -124,11 +133,23 @@ export default function EditGroupExpenseModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, expense?.row_id]);
 
+  // A single payer paid the whole total, so their amount follows it (web parity).
+  const changeAmount = (text: string) => {
+    setAmount(text);
+    setPayers((prev) => (prev.length === 1 ? [{ ...prev[0], amount_paid: parseAmount(text) ?? 0 }] : prev));
+  };
+
   const handleSave = async () => {
     if (!expense) return;
-    const amountValue = parseFloat(amount);
-    if (!Number.isFinite(amountValue) || amountValue <= 0) {
-      showToast({ message: 'Enter an amount greater than 0', type: 'warning' });
+    const amountValue = parseAmount(amount);
+    // A misread amount would be saved, and the server would rescale every share to it.
+    if (amountValue === null || amountValue <= 0) {
+      // An alert, not a toast: a toast is drawn behind this sheet.
+      Alert.alert('Check the amount', 'Enter an amount greater than 0, like 12.50, without thousands separators.');
+      return;
+    }
+    if (splitTouched && (hasUnreadableSplit({ type: splitType, entries: splitEntries }) || hasUnreadablePayer(payers))) {
+      Alert.alert('Check the amounts', UNREADABLE_AMOUNT);
       return;
     }
     setLoading(true);
@@ -136,10 +157,10 @@ export default function EditGroupExpenseModal({
       if (itemsLoaded && items.length > 0) {
         // A changed amount carries the split chosen below (Equal/Exact/Shares), which the server
         // needs for Exact and old item-split receipts; ids keep edited lines in place.
-        const amountChanged = Math.round((parseFloat(amount) || 0) * 100) !== Math.round(expense.cost * 100);
+        const amountChanged = Math.round(typedAmount * 100) !== Math.round(expense.cost * 100);
         await updateGroupExpenseItems(groupId, expense.row_id, {
           items: items.map((it, idx) => toSaveLine(it, idx, true)),
-          amount: parseFloat(amount) || 0,
+          amount: typedAmount,
           tax: itemsTax,
           tip: itemsTip,
           ...(amountChanged && splitTouched
@@ -149,7 +170,7 @@ export default function EditGroupExpenseModal({
       }
       await updateGroupExpense(groupId, expense.row_id, {
         description,
-        amount: parseFloat(amount),
+        amount: amountValue,
         category: subcategory,
         date,
         merchant_name: merchantName || undefined,
@@ -184,8 +205,8 @@ export default function EditGroupExpenseModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessible={false} onAccessibilityEscape={onClose}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Pressable style={[styles.backdrop, { paddingTop: insets.top }]} onPress={onClose} accessible={false} onAccessibilityEscape={onClose}>
+        <KeyboardAvoidingView behavior="padding" style={styles.avoider}>
           <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()} accessible={false} focusable={false}>
             <View style={styles.pill} />
             <View style={styles.header}>
@@ -209,7 +230,7 @@ export default function EditGroupExpenseModal({
                 of being one more thing you have to scroll to find. */}
             <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
               <CustomInput label="Description" value={description} onChangeText={setDescription} icon="📝" />
-              <CustomInput label="Amount" value={amount} onChangeText={noMinus(setAmount)} icon="💰" keyboardType="numeric" />
+              <CustomInput testID="groupEdit.amount" label="Amount" value={amount} onChangeText={noMinus(changeAmount)} icon="💰" keyboardType="numeric" />
               <CustomInput label="Merchant / Store Name" value={merchantName} onChangeText={setMerchantName} icon="🏪" />
               <CustomInput label="Date (MM/DD/YYYY)" value={date} onChangeText={setDate} icon="📅" />
 
@@ -242,16 +263,23 @@ export default function EditGroupExpenseModal({
                 ))}
               </ScrollView>
 
+              {adjustsStored && (
+                <Text style={styles.adjustNote} accessibilityLiveRegion="polite">
+                  The saved split and payments will adjust to the new total unless you change them below.
+                </Text>
+              )}
+
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Who Paid?</Text>
-                <PayerPicker members={members} amount={parseFloat(amount) || 0} payers={payers} onChange={(next) => { setPayers(next); setSplitTouched(true); }} />
+                <PayerPicker quiet={adjustsStored} members={members} amount={typedAmount} payers={payers} onChange={(next) => { setPayers(next); setSplitTouched(true); }} />
               </View>
 
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>How to Split?</Text>
                 <SplitEditor
+                  quiet={adjustsStored}
                   members={members}
-                  totalAmount={parseFloat(amount) || 0}
+                  totalAmount={typedAmount}
                   value={{ type: splitType, entries: splitEntries }}
                   onChange={(val) => {
                     setSplitTouched(true);
@@ -271,7 +299,7 @@ export default function EditGroupExpenseModal({
                   tax={itemsTax}
                   tip={itemsTip}
                   legacyFormat={legacyFormat}
-                  currentAmount={parseFloat(amount) || 0}
+                  currentAmount={typedAmount}
                 />
               )}
 
@@ -295,7 +323,7 @@ export default function EditGroupExpenseModal({
               </View>
             </ScrollView>
             <View style={styles.footer}>
-              <CustomButton title={loading ? 'Saving...' : 'Save Changes'} onPress={handleSave} disabled={loading || (itemsLoaded && items.length > 0 && !receiptTotals(items, itemsTax, itemsTip, parseFloat(amount) || 0).reconciled)} />
+              <CustomButton title={loading ? 'Saving...' : 'Save Changes'} onPress={handleSave} disabled={loading || (itemsLoaded && items.length > 0 && !receiptTotals(items, itemsTax, itemsTip, typedAmount).reconciled)} />
             </View>
           </Pressable>
         </KeyboardAvoidingView>
@@ -317,6 +345,7 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
     backgroundColor: theme.colors.overlay,
     justifyContent: 'flex-end',
   },
+  avoider: { flexShrink: 1 },
   sheet: {
     backgroundColor: theme.colors.surfaceElevated,
     borderTopLeftRadius: 24,
@@ -395,6 +424,12 @@ const createStyles = (theme: AppTheme, windowHeight: number) => StyleSheet.creat
   },
   section: {
     marginTop: 24,
+  },
+  adjustNote: {
+    fontFamily: theme.typography.fontFamily.regular,
+    fontSize: 13,
+    color: theme.colors.textSecondary,
+    marginTop: 16,
   },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.semiBold,

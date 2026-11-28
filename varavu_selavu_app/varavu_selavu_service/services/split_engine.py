@@ -59,6 +59,10 @@ def resolve_split(amount: Decimal, split_type: str, entries: List[Dict[str, Any]
     if split_type not in ["equal", "exact", "percentage", "shares", "adjustment"]:
         raise SplitError(f"Unsupported split_type: {split_type}")
 
+    # Older mobile builds send every untouched field as null. Equal ignores values; the other types can't be calculated.
+    if split_type != "equal" and any("value" in e and e["value"] is None for e in entries or []):
+        raise SplitError("Enter a value for everyone in the split, or 0")
+
     raw_shares = []
     
     if split_type == "equal":

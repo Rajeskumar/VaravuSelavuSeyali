@@ -16,6 +16,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  Alert,
+  ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +30,8 @@ import { useAuth } from '../../../core/auth/AuthContext';
 import { memberColor, initialsFromName } from './BalanceRow';
 import { venmoLink, paypalMeLink, upiLink } from '../utils/paymentDeepLinks';
 import { formatCurrency } from '../../expenses/utils/currencyMath';
+import { parseAmount } from '../utils/parseAmount';
+import { RequestError } from '../../../core/api/request';
 
 type Stage = 'review' | 'settling' | 'done';
 
@@ -90,11 +94,17 @@ export default function SettleUpSheet({
   const { theme } = useAppTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
+  const bodyRef = useRef<ScrollView>(null);
+  // Held from the first tap until the sheet is opened again, or the server refuses the attempt, so one opening sends a
+  // payment once. A ref, because a second tap can arrive before the button has re-rendered as disabled.
+  const submitted = useRef(false);
   const { userEmail } = useAuth();
 
   const [amount, setAmount] = useState(
     suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '',
   );
+  // 0 while the text can't be read for certain, so nothing shows or records a guess.
+  const typedAmount = parseAmount(amount) ?? 0;
   const [loading, setLoading] = useState(false);
   const [stage, setStage] = useState<Stage>('review');
   const { displayValue, setDisplayValue, runFrom } = useCountDown();
@@ -113,7 +123,7 @@ export default function SettleUpSheet({
   const toIsMe = !!toMemberId && members.find((m) => m.member_id === toMemberId)?.user_email === userEmail;
   const fromName = fromIsMe ? 'You' : fromMember?.display_name ?? 'Someone';
   const toName = toIsMe ? 'you' : members.find((m) => m.member_id === toMemberId)?.display_name ?? 'someone';
-  const paidLine = `${fromName} paid ${toName} ${formatCurrency((parseFloat(amount) || 0))}.`;
+  const paidLine = `${fromName} paid ${toName} ${formatCurrency(typedAmount)}.`;
   const doneMessage =
     remaining === null
       ? `${paidLine} Balances updated.`
@@ -128,7 +138,7 @@ export default function SettleUpSheet({
   // TS-GRP-130: payment deep links — opens the user's own payment app with
   // the amount pre-filled; never auto-records the settlement.
   const paymentButtons: { label: string; url: string }[] = [];
-  const parsedAmountForLinks = parseFloat(amount) || 0;
+  const parsedAmountForLinks = typedAmount;
   if (parsedAmountForLinks > 0 && toBalance) {
     const note = 'TrackSpense settlement';
     if (toBalance.venmo_handle) paymentButtons.push({ label: 'Venmo', url: venmoLink(toBalance.venmo_handle, parsedAmountForLinks, note) });
@@ -138,6 +148,7 @@ export default function SettleUpSheet({
 
   React.useEffect(() => {
     if (visible) {
+      submitted.current = false;
       const initial = suggestedAmount > 0 ? suggestedAmount.toFixed(2) : '';
       setAmount(initial);
       setStage('review');
@@ -148,34 +159,67 @@ export default function SettleUpSheet({
   }, [visible, suggestedAmount, setDisplayValue]);
 
   React.useEffect(() => {
-    if (stage === 'review') setDisplayValue(parseFloat(amount) || 0);
-  }, [amount, stage, setDisplayValue]);
+    if (stage === 'review') setDisplayValue(typedAmount);
+  }, [typedAmount, stage, setDisplayValue]);
+
+  // No dismissal while a payment is on its way: its result must land on this opening.
+  const sending = loading || stage === 'settling';
+  const dismiss = sending ? undefined : onClose;
+
+  // A timeout, lost connection or 5xx may still have saved the payment (the app never replays such a write), so it is
+  // not offered again: balances are refetched and the person checks first.
+  const checkBeforeRetry = (recorded = 0) => {
+    onSettled();
+    onClose();
+    Alert.alert(
+      'Check before recording again',
+      `${recorded > 0 ? `${recorded} of ${transfers?.length} were recorded. ` : ''}We couldn't confirm that the ${recorded > 0 ? 'next ' : ''}payment was saved. Check this group's balances and activity before you record it again.`,
+    );
+  };
+
+  // The server found it saved by an earlier, unconfirmed attempt. If this was meant as a second payment, it isn't in.
+  const sayAlreadyRecorded = (what: string) => {
+    onSettled();
+    onClose();
+    Alert.alert('Already recorded', `${what} recorded earlier, so nothing new was added. If you paid again, record it once more.`);
+  };
 
   const handleSubmit = async () => {
-    const parsedAmount = parseFloat(amount);
+    const parsedAmount = typedAmount;
     if (!fromMemberId || !toMemberId) {
       showToast({ message: 'Please select payer and payee', type: 'warning' });
       return;
     }
     if (!parsedAmount || parsedAmount <= 0) {
-      showToast({ message: 'Please enter a valid amount', type: 'warning' });
+      showToast({ message: 'Enter an amount like 12.50, without thousands separators', type: 'warning' });
       return;
     }
+    if (submitted.current) return;
+    submitted.current = true;
     setLoading(true);
     setStage('settling');
     try {
-      await recordSettlement(groupId, {
+      const saved = await recordSettlement(groupId, {
         from_member_id: fromMemberId,
         to_member_id: toMemberId,
         amount: parsedAmount,
       });
+      if (saved?.alreadyRecorded) {
+        sayAlreadyRecorded('This payment was');
+        return;
+      }
       const owedBefore = suggestedAmount > 0 ? suggestedAmount : null;
       const left = owedBefore === null ? null : Math.round((owedBefore - parsedAmount) * 100) / 100;
       setRemaining(left);
       onSettled();
       runFrom(owedBefore ?? parsedAmount, () => setStage('done'), left === null ? parsedAmount : Math.max(left, 0));
     } catch (e: any) {
+      if (e instanceof RequestError && e.outcomeUnknown) {
+        checkBeforeRetry();
+        return;
+      }
       showToast({ message: e.message ?? 'Failed to record settlement', type: 'error' });
+      submitted.current = false;
       setStage('review');
     } finally {
       setLoading(false);
@@ -185,29 +229,42 @@ export default function SettleUpSheet({
   // List mode: record every transfer in order. Stops at the first failure so nothing is recorded
   // twice on retry — the ones already recorded drop out of the group's suggested transfers.
   const handleRecordAll = async () => {
-    if (!transfers || loading) return;
+    if (!transfers || submitted.current) return;
+    submitted.current = true;
     setLoading(true);
     let recorded = 0;
+    let earlier = 0;
     try {
       for (const t of transfers) {
-        await recordSettlement(groupId, {
+        const saved = await recordSettlement(groupId, {
           from_member_id: t.from_member_id,
           to_member_id: t.to_member_id,
           amount: t.amount,
           ...(method ? { method } : {}),
         });
         recorded += 1;
+        if (saved?.alreadyRecorded) earlier += 1;
+      }
+      if (earlier > 0) {
+        sayAlreadyRecorded(`${earlier} of these ${transfers.length} payments ${earlier === 1 ? 'was' : 'were'}`);
+        return;
       }
       showToast({ message: `Recorded ${formatCurrency(listTotal)} paid`, type: 'success' });
       onSettled();
       onClose();
     } catch (e: any) {
+      if (e instanceof RequestError && e.outcomeUnknown) {
+        checkBeforeRetry(recorded);
+        return;
+      }
       if (recorded > 0) onSettled();
       showToast({
         message: recorded > 0 ? `Recorded ${recorded} of ${transfers.length}; the rest failed` : (e.message ?? 'Failed to record settlement'),
         type: 'error',
       });
       if (recorded > 0) onClose();
+      // Only an attempt that recorded nothing can be repeated from this sheet.
+      else submitted.current = false;
     } finally {
       setLoading(false);
     }
@@ -222,151 +279,167 @@ export default function SettleUpSheet({
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={() => dismiss?.()}
       statusBarTranslucent
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+        behavior="padding"
+        style={[styles.overlay, { paddingTop: insets.top }]}
       >
-        <Pressable style={StyleSheet.absoluteFill} onPress={stage === 'settling' ? undefined : onClose} accessible={false} />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={stage === 'settling' ? undefined : onClose}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessible={false} />
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 24) }]} onAccessibilityEscape={dismiss}>
           <View style={styles.pill} />
           <View style={styles.titleRow}>
             <Text style={styles.title}>Settle up</Text>
-            {stage !== 'settling' && (
+            {!sending && (
               <Pressable onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Close">
                 <Ionicons name="close" size={16} color={theme.colors.textSecondary} />
               </Pressable>
             )}
           </View>
-          {listMode && (
-            <>
-              <Text style={styles.subtitle}>
-                Simplified to the fewest transfers. Recording a payment never changes anyone's spend totals.
-              </Text>
-              <View>
-                {transfers!.map((t, i) => (
-                  <View key={`${t.from_member_id}-${t.to_member_id}-${i}`} style={styles.transferRow}>
-                    <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.from_member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.from_member_id))}</Text>
-                    </View>
-                    <Ionicons name="arrow-forward" size={16} color={theme.colors.textTertiary} />
-                    <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.to_member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.to_member_id))}</Text>
-                    </View>
-                    <Text style={styles.transferText} numberOfLines={1}>
-                      {nameOf(t.from_member_id)} pays {nameOf(t.to_member_id)}
-                    </Text>
-                    <Text style={styles.transferAmount}>{formatCurrency(t.amount)}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.methodRow}>
-                {['Venmo', 'PayPal', 'Cash'].map((label) => {
-                  const active = method === label.toLowerCase();
-                  return (
-                    <Pressable
-                      key={label}
-                      style={[styles.methodChip, active && styles.methodChipActive]}
-                      onPress={() => setMethod(active ? null : label.toLowerCase())}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Text style={[styles.methodChipText, active && { color: theme.colors.primaryLight }]}>{label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <CustomButton
-                title={loading ? 'Recording…' : `Record ${formatCurrency(listTotal)} paid`}
-                onPress={handleRecordAll}
-                disabled={loading}
-              />
-            </>
-          )}
-
-          {!listMode && stage === 'review' && (
-            <Text style={styles.subtitle}>
-              Recording a payment never changes anyone's spend totals.
-            </Text>
-          )}
-
-          {!listMode && ((fromMember && toMember) || stage === 'done') ? (
-            <View style={styles.heroBlock}>
-              <Text style={styles.heroLabel}>{stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'Remaining balance'}</Text>
-              <View style={styles.heroAmountRow}>
-                {stage === 'done' && !stillOwed && (
-                  <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />
-                )}
-                <Text style={[styles.heroAmount, { color: stage === 'done' ? theme.colors.gold : theme.colors.success }]}>
-                  {formatCurrency((stage === 'done' ? (remaining === null ? parseFloat(amount) || 0 : stillOwed ? remaining : 0) : displayValue))}
+          {/* Scrolls when the keyboard or a small screen leaves too little room; title and Close stay put. */}
+          <ScrollView
+            ref={bodyRef}
+            // When space is short, keep the bottom in view: who pays whom, and the amount being typed.
+            onLayout={() => { if (!listMode) bodyRef.current?.scrollToEnd({ animated: false }); }}
+            style={styles.body}
+            contentContainerStyle={styles.bodyContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {listMode && (
+              <>
+                <Text style={styles.subtitle}>
+                  Simplified to the fewest transfers. Recording a payment never changes anyone's spend totals.
                 </Text>
-              </View>
-            </View>
-          ) : null}
-
-          {listMode ? null : stage === 'done' ? (
-            <>
-              <Text style={styles.doneSubtext}>
-                {doneMessage}
-              </Text>
-              <CustomButton title="Done" onPress={handleDone} />
-            </>
-          ) : (
-            <>
-              {fromMember && toMember ? (
-                <View style={[styles.previewRow, stage === 'settling' && styles.previewRowSettling]}>
-                  <View style={styles.previewPerson}>
-                    <View style={[styles.previewAvatar, { backgroundColor: memberColor(fromMember.member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(fromMember.display_name)}</Text>
+                <View>
+                  {transfers!.map((t, i) => (
+                    <View key={`${t.from_member_id}-${t.to_member_id}-${i}`} style={styles.transferRow}>
+                      <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.from_member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.from_member_id))}</Text>
+                      </View>
+                      <Ionicons name="arrow-forward" size={16} color={theme.colors.textTertiary} />
+                      <View style={[styles.transferAvatar, { backgroundColor: memberColor(t.to_member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(nameOf(t.to_member_id))}</Text>
+                      </View>
+                      <Text style={styles.transferText} numberOfLines={1}>
+                        {nameOf(t.from_member_id)} pays {nameOf(t.to_member_id)}
+                      </Text>
+                      <Text style={styles.transferAmount}>{formatCurrency(t.amount)}</Text>
                     </View>
-                    <Text style={styles.previewName} numberOfLines={1}>{fromMember.display_name}</Text>
-                  </View>
-                  <Ionicons name="arrow-forward" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 12 }} />
-                  <View style={styles.previewPerson}>
-                    <View style={[styles.previewAvatar, { backgroundColor: memberColor(toMember.member_id) }]}>
-                      <Text style={styles.previewAvatarText}>{initialsFromName(toMember.display_name)}</Text>
-                    </View>
-                    <Text style={styles.previewName} numberOfLines={1}>{toMember.display_name}</Text>
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={styles.amountRow}>
-                <Text style={styles.currencySymbol}>$</Text>
-                <TextInput
-                  style={styles.amountInput}
-                  keyboardType="decimal-pad"
-                  placeholder="0.00"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={amount}
-                  onChangeText={noMinus(setAmount)}
-                  editable={stage === 'review'}
-                  autoFocus
-                />
-              </View>
-
-              {paymentButtons.length > 0 && (
-                <View style={styles.paymentButtonsRow}>
-                  {paymentButtons.map((b) => (
-                    <Pressable
-                      key={b.label}
-                      style={styles.paymentButton}
-                      onPress={() => Linking.openURL(b.url).catch(() => showToast({ message: `Couldn't open ${b.label}`, type: 'error' }))}
-                    >
-                      <Text style={styles.paymentButtonText}>{b.label}</Text>
-                    </Pressable>
                   ))}
                 </View>
-              )}
+                <View style={styles.methodRow}>
+                  {['Venmo', 'PayPal', 'Cash'].map((label) => {
+                    const active = method === label.toLowerCase();
+                    return (
+                      <Pressable
+                        key={label}
+                        style={[styles.methodChip, active && styles.methodChipActive]}
+                        onPress={() => setMethod(active ? null : label.toLowerCase())}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                      >
+                        <Text style={[styles.methodChipText, active && { color: theme.colors.primaryLight }]}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </>
+            )}
 
-              <CustomButton
-                title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record ${formatCurrency(parsedAmountForLinks)} paid` : 'Record payment'}
-                onPress={handleSubmit}
-                disabled={loading}
-              />
-            </>
+            {!listMode && stage === 'review' && (
+              <Text style={styles.subtitle}>
+                Recording a payment never changes anyone's spend totals.
+              </Text>
+            )}
+
+            {!listMode && ((fromMember && toMember) || stage === 'done') ? (
+              <View style={styles.heroBlock}>
+                <Text style={styles.heroLabel}>{stage !== 'done' ? 'Settling' : remaining === null ? 'Recorded' : stillOwed ? 'Still owed' : 'Remaining balance'}</Text>
+                <View style={styles.heroAmountRow}>
+                  {stage === 'done' && !stillOwed && (
+                    <Ionicons name="checkmark-circle" size={26} color={theme.colors.gold} style={{ marginRight: 6 }} />
+                  )}
+                  <Text style={[styles.heroAmount, { color: stage === 'done' ? theme.colors.gold : theme.colors.success }]}>
+                    {formatCurrency((stage === 'done' ? (remaining === null ? typedAmount : stillOwed ? remaining : 0) : displayValue))}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            {listMode ? null : stage === 'done' ? (
+              <>
+                <Text style={styles.doneSubtext}>
+                  {doneMessage}
+                </Text>
+              </>
+            ) : (
+              <>
+                {fromMember && toMember ? (
+                  <View style={[styles.previewRow, stage === 'settling' && styles.previewRowSettling]}>
+                    <View style={styles.previewPerson}>
+                      <View style={[styles.previewAvatar, { backgroundColor: memberColor(fromMember.member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(fromMember.display_name)}</Text>
+                      </View>
+                      <Text style={styles.previewName} numberOfLines={1}>{fromMember.display_name}</Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 12 }} />
+                    <View style={styles.previewPerson}>
+                      <View style={[styles.previewAvatar, { backgroundColor: memberColor(toMember.member_id) }]}>
+                        <Text style={styles.previewAvatarText}>{initialsFromName(toMember.display_name)}</Text>
+                      </View>
+                      <Text style={styles.previewName} numberOfLines={1}>{toMember.display_name}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.amountRow}>
+                  <Text style={styles.currencySymbol}>$</Text>
+                  <TextInput
+                    style={styles.amountInput}
+                    testID="settle.amount"
+                    keyboardType="decimal-pad"
+                    placeholder="0.00"
+                    placeholderTextColor={theme.colors.textTertiary}
+                    value={amount}
+                    onChangeText={noMinus(setAmount)}
+                    editable={stage === 'review'}
+                    autoFocus
+                  />
+                </View>
+
+                {paymentButtons.length > 0 && (
+                  <View style={styles.paymentButtonsRow}>
+                    {paymentButtons.map((b) => (
+                      <Pressable
+                        key={b.label}
+                        style={styles.paymentButton}
+                        onPress={() => Linking.openURL(b.url).catch(() => showToast({ message: `Couldn't open ${b.label}`, type: 'error' }))}
+                      >
+                        <Text style={styles.paymentButtonText}>{b.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+          {/* Outside the scroll area so the keyboard can never cut off the action. */}
+          {listMode ? (
+            <CustomButton
+              title={loading ? 'Recording…' : `Record ${formatCurrency(listTotal)} paid`}
+              onPress={handleRecordAll}
+              disabled={loading}
+            />
+          ) : stage === 'done' ? (
+            <CustomButton title="Done" onPress={handleDone} />
+          ) : (
+            <CustomButton
+              title={stage === 'settling' ? 'Settling…' : parsedAmountForLinks > 0 ? `Record ${formatCurrency(parsedAmountForLinks)} paid` : 'Record payment'}
+              onPress={handleSubmit}
+              disabled={loading || stage !== 'review'}
+            />
           )}
         </View>
       </KeyboardAvoidingView>
@@ -382,7 +455,10 @@ const createStyles = (theme: AppTheme) =>
       backgroundColor: theme.colors.overlay,
     },
     // V2 sheet panel: elevated surface, 26px radius, 22px gutter (see components/Sheet.tsx).
+    body: { flexGrow: 0 },
+    bodyContent: { gap: 14 },
     sheet: {
+      flexShrink: 1,
       backgroundColor: theme.colors.surfaceElevated,
       borderTopLeftRadius: 26,
       borderTopRightRadius: 26,

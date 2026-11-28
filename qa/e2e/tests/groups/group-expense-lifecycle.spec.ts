@@ -64,18 +64,42 @@ test.describe('group expense changes and settlements (UI) @regression @critical'
     await expect(reopened.getByText(/edited this expense/)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('changing the amount requires the split to be fixed, then stores the new shares', async ({ page, primaryApi }) => {
-    const group = await createTripGroup(primaryApi, 'ui_amount');
-    const description = qaLabel(`amount_${uniqueSuffix()}`);
-    await primaryApi.createGroupExpense(group.id, {
+  /** $90 split equally three ways, paid by me. */
+  async function seedEqual(api: AuthedApi, label: string) {
+    const group = await createTripGroup(api, label);
+    const description = qaLabel(`${label}_${uniqueSuffix()}`);
+    await api.createGroupExpense(group.id, {
       description,
       amount: 90,
       payers: [{ member_id: group.me.id, amount_paid: 90 }],
       split: { type: 'equal', entries: [group.me, group.asha, group.ben].map((m) => ({ member_id: m.id })) },
     });
+    return { group, description };
+  }
 
+  // TS-FIX-103: an untouched split is left to the server, which rescales it.
+  test('changing only the amount saves, and the stored equal split follows it', async ({ page, primaryApi }) => {
+    const { group, description } = await seedEqual(primaryApi, 'ui_amount_kept');
     const drawer = await openDrawer(page, group.id, description);
     await drawer.getByRole('button', { name: 'Edit expense' }).click();
+    await drawer.getByLabel('Amount').fill('120.45');
+    await expect(drawer.getByText('The saved split and payments will adjust to the new total unless you change them.')).toBeVisible();
+    await drawer.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect.poll(async () => cents((await storedExpense(primaryApi, group.id, description)).cost)).toBe(12045);
+    const after = await storedExpense(primaryApi, group.id, description);
+    expect(storedShares(after)).toEqual({ [group.me.id]: 4015, [group.asha.id]: 4015, [group.ben.id]: 4015 });
+    expect(storedPayers(after)).toEqual({ [group.me.id]: 12045 });
+    expect(after.split_type).toBe('equal');
+  });
+
+  test('a split the user set must be fixed after the amount changes, then stores the new shares', async ({ page, primaryApi }) => {
+    const { group, description } = await seedEqual(primaryApi, 'ui_amount');
+    const drawer = await openDrawer(page, group.id, description);
+    await drawer.getByRole('button', { name: 'Edit expense' }).click();
+    // Saving the picker makes the per-person amounts the user's own.
+    const own = await new GroupsPage(page).openSplitPicker(drawer, 'unequally');
+    await own.getByRole('button', { name: 'Save', exact: true }).click();
     await drawer.getByLabel('Amount').fill('120.45');
     const save = drawer.getByRole('button', { name: 'Save', exact: true });
     await expect(save).toBeDisabled(); // the old per-person amounts no longer add up

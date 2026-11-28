@@ -20,6 +20,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import CustomButton from '../../../core/ui/CustomButton';
 import SplitEditor from './SplitEditor';
+import { hasUnreadableSplit, UNREADABLE_AMOUNT } from '../utils/splitAmounts';
 import { SplitEditorValue } from './SplitEditor';
 import { showToast } from '../../../core/ui/Toast';
 import { useAppTheme } from '../../../core/theme/ThemeContext';
@@ -194,6 +195,10 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
   };
 
   const handleSave = async () => {
+    if (hasUnreadableSplit(splitValue)) {
+      Alert.alert('Check the amounts', UNREADABLE_AMOUNT);
+      return;
+    }
     setSaving(true);
     try {
       await updateGroup(group.group_id, {
@@ -218,7 +223,7 @@ export default function GroupSettingsSheet({ visible, onClose, group }: GroupSet
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessible={false} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={styles.keyboardView}
         onAccessibilityEscape={onClose}
       >

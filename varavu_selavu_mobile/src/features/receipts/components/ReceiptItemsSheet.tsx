@@ -108,7 +108,9 @@ export default function ReceiptItemsSheet({
         )}
         {!totals.reconciled && (
           <Text style={styles.mismatch} accessibilityLiveRegion="polite">
-            Items{tax > 0 || tip > 0 ? ' plus tax and tip' : ''} come to {money(totals.computed)}, not {money(amount)}. Make them match to save.
+            {totals.unreadable
+              ? 'Check the item prices: use one decimal mark and no thousands separators.'
+              : `Items${tax > 0 || tip > 0 ? ' plus tax and tip' : ''} come to ${money(totals.computed)}, not ${money(amount)}. Make them match to save.`}
           </Text>
         )}
         <View style={styles.footRow}>
