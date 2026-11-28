@@ -165,7 +165,7 @@ Legend — **Web / Mobile**: ✅ shipped · — not applicable. **Flag** is the 
 Templates store description, category, merchant, **day of month**, default cost, start date and status (`Active` / `Paused`); a template may also be **group-scoped** with a `split_config`, in which case executing it creates a split group expense.
 
 - **Due calculation** is monthly: from the template's start (or last-processed month) up to the requested date, one occurrence per elapsed month, with day 31 clamped to the month's last day. Missed months therefore come back as multiple due items.
-- `POST /recurring/confirm` bulk-creates expenses from due items; `POST /recurring/execute_now` runs one template for the current month immediately. **One occurrence per template per month:** a second *Run now* in the same month (also after the expense was renamed) adds nothing and returns `already_added`; clients show a warning. Earlier months are added by hand. A failed group add leaves the month unmarked so it can be retried.
+- `POST /recurring/confirm` bulk-creates expenses from due items; `POST /recurring/execute_now` runs one template for the current month immediately. **One occurrence per template per month:** a second *Run now* in the same month (also after the expense was renamed) adds nothing and returns `already_added`; clients show a warning. Earlier months are added by hand. A failed group add leaves the month unmarked so it can be retried. Both routes accept only a normal money amount (over 0, at most 1,000,000, two decimals); an omitted amount uses the template's. An invalid one adds nothing: *confirm* answers 422, *run now* `{success: false, error: "invalid cost"}` (TS-FIX-104).
 - **Surfaces:** a prompt on app open lists what is due (web dialog, mobile `RecurringPrompt`); web Expenses → *Recurring* tab; mobile **Spend → Recurring** with a cyan "Due in N days" card (*Confirm now* / *Skip*), per-template on/off switch, run-now and inline edit. Toggling or editing a template preserves its group, split and merchant (the upsert endpoint overwrites omitted fields with null, so clients must send them back).
 
 ### 3.4 Analytics, dashboard & insights
@@ -513,7 +513,7 @@ All tables live in the PostgreSQL schema **`trackspense`** (not `public`); Alemb
 | | `expense_payers` | Who paid: (`expense_id`, `member_id`, `amount_paid`) — unique per pair |
 | | `expense_splits` | Who owes: `amount_owed`, `basis_type`, `basis_value`, `settled_via_settlement_id` |
 | | `expense_item_splits` | Legacy per-line ratios from item-split receipts (`ratio` in (0,1], `amount`); no longer written (TS-FIX-102), kept for old receipts' analytics |
-| | `settlements` | `from_member_id`, `to_member_id` (must differ), `amount`, `method`, `settled_at`, `notes`, `created_by` |
+| | `settlements` | `from_member_id`, `to_member_id` (must differ), `amount`, `method`, `settled_at`, `notes`, `created_by`, `client_request_id` (nullable; unique with group and recorder) |
 | | `group_activity` | Append-only feed: `action`, `actor_member_id`, `entity_id`, `payload_json` (`settlement_created` carries `amount`, `from_member_id`, `to_member_id`; `member_added` carries `display_name`, `user_email`); indexed by (group, created) |
 | | `expense_comments` | Flat comments: `member_id`, `body`, `edited_at` |
 | | `group_notification_preferences` | Per (user, group): `muted`, `muted_events` |
@@ -927,7 +927,7 @@ Item-by-item splitting (`item_split_engine.py`, `member_ratios`) was removed. A 
 
 ### 10.4 Settlements and FX
 
-- **Settlements** (`from` ≠ `to`) are records only; they never touch `expenses` (R6). *Settle-by-expense* records the payment and marks that expense's split as settled (`settled_via_settlement_id`).
+- **Settlements** (`from` ≠ `to`) are records only; they never touch `expenses` (R6). *Settle-by-expense* records the payment and marks that expense's split as settled (`settled_via_settlement_id`); the expense row is locked while the share is checked (the same lock every edit and settlement delete takes), so concurrent requests record one payment. Editing the expense, including its receipt items, keeps each member's paid mark, also when the amount changes (the difference shows in balances and is paid through *Settle up*); deleting the settlement clears it. A client told the share is already settled (409) refreshes balances. **Duplicate protection (TS-FIX-104):** a record request may carry a client-chosen `request_id`. Sending it again (same group and recorder) returns the stored settlement, marked `already_recorded`, with no new row, activity or notification, and both apps then say nothing new was added; reusing it for a different payer, payee or amount is a 409. Web and mobile send one with every payment and reuse it when the same payment is sent again within an hour after an unknown outcome while the app stays open. Requests without an id (older builds) are not de-duplicated, and overpaying stays allowed.
 - **FX** (`FxRateService`): daily granularity, DB-cached per (date, from, to); a rate is a *historical fact* snapshotted on the expense at creation (`fx_rate_to_group_currency`); the same currency is exactly `1.0`; on any provider failure it falls back to `1.0` and never blocks saving.
 
 ### 10.5 Budget math (`services/budget_service.py`)
@@ -1952,7 +1952,7 @@ Generated from `varavu_selavu_app/varavu_selavu_service/models/api_models.py` (1
 
 | Field | Type | Default |
 |:---|:---|:---|
-| `items` | `List[Dict[str, str | float]]` | required |
+| `items` | `List[RecurringConfirmItem]`: `template_id`, `date_iso`, optional `cost` (`MoneyAmount`; omitted uses the template's) | required |
 
 ### A.6 Groups — membership, invites, activity
 
@@ -2247,12 +2247,14 @@ Requests whose items carry `member_ratios` are refused before validation (400 `a
 | `method` | `str?` | optional |
 | `settled_at` | `str?` | optional |
 | `notes` | `OptionalNotesStr` | optional |
+| `request_id` | `str?` (8-64 of `A-Z a-z 0-9 _ -`) | optional |
 
 **`SettlementDTO`**
 
 | Field | Type | Default |
 |:---|:---|:---|
 | `id` | `str` | required |
+| `already_recorded` | `bool` (true when a `request_id` was replayed) | `false` |
 | `group_id` | `str` | required |
 | `from_member_id` | `str` | required |
 | `to_member_id` | `str` | required |

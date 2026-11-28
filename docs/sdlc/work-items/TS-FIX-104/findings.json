@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "findings": [
+    {
+      "id": "ID-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "A refused retry (offline, signed out, rate limited) dropped the unconfirmed request id. Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "REPLAY-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "A real second identical payment could pass as recorded; web still showed \"Settlement recorded\". Apps now say nothing new was added. Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "ITEMS-1",
+      "severity": "P1",
+      "certainty": "Confirmed",
+      "summary": "Editing receipt items dropped the paid mark, so the share could be paid again. Fixed.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "checks",
+      "waiver": null
+    },
+    {
+      "id": "RACE-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "Overlapping edits, or a payment during an items edit, could lose the paid mark or fail. Fixed with one expense lock; verified on PostgreSQL.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "fixed",
+      "verification_evidence": "migration-postgres",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-1",
+      "severity": "P2",
+      "certainty": "Confirmed",
+      "summary": "\"Settle my share\" is still offered after the share is paid; tapping it is refused.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-2",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Remove-then-re-add of a member, and delete-then-Undo of an expense, start the share unpaid.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-3",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Share settlement locks the expense by id before checking its group.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-4",
+      "severity": "P3",
+      "certainty": "Confirmed",
+      "summary": "Other review follow-ups (web recurring batch message, lost activity/notification, People balances and notices, unproven deadlock test). See ROADMAP.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    },
+    {
+      "id": "OPEN-5",
+      "severity": "P2",
+      "certainty": "Suspected",
+      "summary": "Older than this change: a share of a foreign-currency expense may be settled for the wrong amount. From reading the code; not tested.",
+      "owner": "Claude Code",
+      "source": "2026-11-27 code review",
+      "status": "open",
+      "verification_evidence": "",
+      "waiver": null
+    }
+  ]
+}

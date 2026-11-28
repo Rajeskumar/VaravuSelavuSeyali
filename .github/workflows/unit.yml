@@ -166,6 +166,7 @@ jobs:
         run: |
           poetry run pytest tests/test_analytics_e2e_pg.py -q
           poetry run pytest tests/test_groups_e2e_pg.py -q
+          poetry run pytest tests/test_settlement_pg.py -q
           poetry run pytest "tests/test_ai_quota.py::test_concurrent_reserves_never_overshoot_on_postgres" -q
 
   test-integrity:

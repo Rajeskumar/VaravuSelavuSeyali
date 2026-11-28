@@ -149,6 +149,8 @@ export default function ExpenseDetailSheet({ visible, onClose, groupId, expense,
       onSettled?.();
     } catch (e) {
       showToast({ message: e instanceof ApiError ? e.message : 'Failed to settle share', type: 'error' });
+      // Paid elsewhere: refresh, so the old balance doesn't get paid again through Settle up.
+      if (e instanceof ApiError && e.status === 409) onSettled?.();
     } finally {
       setSettling(false);
     }

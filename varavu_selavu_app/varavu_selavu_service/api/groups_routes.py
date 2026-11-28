@@ -429,7 +429,10 @@ def create_settlement(
         method=data.method,
         settled_at=data.settled_at,
         notes=data.notes,
+        request_id=data.request_id,
     )
+    if settlement.pop("replayed", False):
+        return {**settlement, "already_recorded": True}  # recorded and announced the first time
     background_tasks.add_task(
         notification_service.fan_out,
         group_id=group_id,

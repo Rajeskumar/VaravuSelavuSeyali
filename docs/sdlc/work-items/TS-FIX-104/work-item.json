@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "TS-FIX-104",
+  "title": "Recurring amount limits on the server, local-only QA account scripts, and duplicate protection for settle-up",
+  "owner": "Rajeshkumar Ganesan",
+  "risk": "high",
+  "mode": "normal",
+  "phase": "validate",
+  "status": "in_progress",
+  "acceptance_criteria": [
+    {
+      "id": "AC-001",
+      "outcome": "Recurring run-now and confirm accept only the normal money amount (over 0, at most 1,000,000, two decimals). Anything else, including NaN and Infinity, creates no expense and leaves the occurrence unprocessed; an omitted amount still uses the template's."
+    },
+    {
+      "id": "AC-002",
+      "outcome": "The QA account, verification and reset-token scripts connect only to a trackspense_qa or trackspense_e2e_* database on this machine, and refuse anything else before connecting."
+    },
+    {
+      "id": "AC-003",
+      "outcome": "A settlement sent with a request_id is stored once: sending it again returns the original, marked already_recorded, with no new row, activity or notification, also when two arrive together; the same id for a different payment is refused (409). Without an id nothing changes."
+    },
+    {
+      "id": "AC-004",
+      "outcome": "Web and mobile send a request_id with every recorded settlement and reuse it when the same payment (group, payer, payee, amount) is sent again within an hour after an unknown outcome, while the app stays open, including after a retry that fails offline, signed out or rate limited. Success or a 409 releases it, as does a refusal of a payment that was never unconfirmed. When the server answers already_recorded, the app says nothing new was added and that a second payment must be recorded again."
+    },
+    {
+      "id": "AC-005",
+      "outcome": "Settling one expense share locks the expense while the share is checked and recorded, so concurrent requests record at most one settlement."
+    },
+    {
+      "id": "AC-006",
+      "outcome": "A settled share stays marked as paid when its expense or its receipt items are edited (same or new amount), including edits that overlap a payment or each other, so it cannot be settled again; a changed amount shows in the balances. Deleting the payment makes the share settleable again."
+    },
+    {
+      "id": "AC-007",
+      "outcome": "When web or mobile is told a share was already settled (409), it says so and refreshes the balances; any other refusal leaves the expense open."
+    }
+  ],
+  "required_evidence": [
+    "checks",
+    "red-green",
+    "migration-postgres",
+    "local-integration",
+    "code-review",
+    "security-review",
+    "native-e2e",
+    "acceptance-verification"
+  ],
+  "implementation_approval": {
+    "actor": "Rajeshkumar Ganesan",
+    "fingerprint": "829cf35a0c2dcd66a9b09c0abef2254828ce82d6aeaf0a505a3da4bac49bb35e",
+    "reference": "User message 2026-11-27: 'Fix 1 , 3, 5', replying to the numbered list of open risks (item 5 described as a separate server and app fix). The settle-up design (request id, a migration) was then stated in chat before building; the owner had not replied to it. The owner has not read these criteria. No commit, push, production access, migration of a non-local database or release authorized. AC-003 and AC-004 were tightened after review findings, within the same 'Fix 5' request. Re-recorded for AC-006 and AC-007 on the user message: 'fix the existing bug settle my share duplicate payments. for postgres test we can do locally. spin localhost frontend and backend and use hte browser to validate it'. The owner has not read these criteria; the keep-the-paid-mark-when-the-amount-changes choice was made by the agent and is to be reported. This message did not approve the test skip, a commit or a push. AC-005 and AC-006 wording and design tightened after the code and security reviews found the receipt-items path and overlapping edits; same request."
+  },
+  "links": [
+    "docs/sdlc/work-items/TS-FIX-103/work-item.json"
+  ],
+  "notes": "Test-change approval, owner message 2026-11-27: 'I approve the PostgreSQL test skip. Record the evidence, then commit and push.' Covers the skipif in varavu_selavu_app/tests/test_settlement_pg.py (skipped without E2E_DATABASE_URL; CI's PostgreSQL job runs it). The same message authorizes the commit and push, not a merge, release or production access."
+}

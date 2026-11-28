@@ -328,6 +328,8 @@ class Settlement(Base):
     __tablename__ = "settlements"
     __table_args__ = (
         CheckConstraint("from_member_id <> to_member_id", name="chk_settlements_from_neq_to"),
+        # One row per client request; NULLs (older clients) never collide.
+        Index("uq_settlements_client_request", "group_id", "created_by", "client_request_id", unique=True),
         {"schema": "trackspense"}
     )
 
@@ -341,6 +343,7 @@ class Settlement(Base):
     notes = Column(Text)
     created_by = Column(String(255), ForeignKey("trackspense.users.email", ondelete="SET NULL"))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    client_request_id = Column(String(64))
 
 class GroupActivity(Base):
     __tablename__ = "group_activity"

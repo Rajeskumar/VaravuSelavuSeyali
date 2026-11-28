@@ -64,6 +64,23 @@ describe('recording a settle-up payment once (TS-FIX-103)', () => {
     alert.mockRestore();
   });
 
+  // The server found this payment saved by an earlier, unconfirmed attempt: a second real payment must not pass as recorded.
+  it.each(['single', 'list'])('says nothing new was added when the payment was already recorded (%s)', async (mode) => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (recordSettlement as jest.Mock).mockResolvedValueOnce({ alreadyRecorded: true });
+    const onClose = jest.fn();
+    const onSettled = jest.fn();
+    const transfers = mode === 'list' ? [{ from_member_id: 'me', to_member_id: 'bob', amount: 20 }] : undefined;
+    render(<SettleUpSheet visible groupId="g1" members={members} balances={[]} fromMemberId="bob" toMemberId="me" suggestedAmount={20}
+      transfers={transfers} onClose={onClose} onSettled={onSettled} />);
+    fireEvent.press(screen.getByText('Record $20.00 paid'));
+    await settle();
+    expect(alert).toHaveBeenCalledWith('Already recorded', expect.stringContaining('record it once more'));
+    expect(onSettled).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
   it.each(['single', 'list'])('cannot be dismissed while the payment is being sent (%s)', async (mode) => {
     let finish = () => {};
     (recordSettlement as jest.Mock).mockImplementationOnce(() => new Promise<void>((r) => { finish = r; }));

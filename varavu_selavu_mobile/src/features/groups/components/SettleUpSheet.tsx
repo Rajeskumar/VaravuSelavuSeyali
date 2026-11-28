@@ -177,6 +177,13 @@ export default function SettleUpSheet({
     );
   };
 
+  // The server found it saved by an earlier, unconfirmed attempt. If this was meant as a second payment, it isn't in.
+  const sayAlreadyRecorded = (what: string) => {
+    onSettled();
+    onClose();
+    Alert.alert('Already recorded', `${what} recorded earlier, so nothing new was added. If you paid again, record it once more.`);
+  };
+
   const handleSubmit = async () => {
     const parsedAmount = typedAmount;
     if (!fromMemberId || !toMemberId) {
@@ -192,11 +199,15 @@ export default function SettleUpSheet({
     setLoading(true);
     setStage('settling');
     try {
-      await recordSettlement(groupId, {
+      const saved = await recordSettlement(groupId, {
         from_member_id: fromMemberId,
         to_member_id: toMemberId,
         amount: parsedAmount,
       });
+      if (saved?.alreadyRecorded) {
+        sayAlreadyRecorded('This payment was');
+        return;
+      }
       const owedBefore = suggestedAmount > 0 ? suggestedAmount : null;
       const left = owedBefore === null ? null : Math.round((owedBefore - parsedAmount) * 100) / 100;
       setRemaining(left);
@@ -222,15 +233,21 @@ export default function SettleUpSheet({
     submitted.current = true;
     setLoading(true);
     let recorded = 0;
+    let earlier = 0;
     try {
       for (const t of transfers) {
-        await recordSettlement(groupId, {
+        const saved = await recordSettlement(groupId, {
           from_member_id: t.from_member_id,
           to_member_id: t.to_member_id,
           amount: t.amount,
           ...(method ? { method } : {}),
         });
         recorded += 1;
+        if (saved?.alreadyRecorded) earlier += 1;
+      }
+      if (earlier > 0) {
+        sayAlreadyRecorded(`${earlier} of these ${transfers.length} payments ${earlier === 1 ? 'was' : 'were'}`);
+        return;
       }
       showToast({ message: `Recorded ${formatCurrency(listTotal)} paid`, type: 'success' });
       onSettled();

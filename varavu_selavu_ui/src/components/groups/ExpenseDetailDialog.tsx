@@ -332,6 +332,8 @@ const ExpenseDetailDialog: React.FC<Props> = ({
       onSettled?.();
     } catch (e) {
       setToast({ open: true, message: e instanceof ApiError ? e.message : 'Failed to settle share', severity: 'error' });
+      // Paid elsewhere: refresh, so the old balance doesn't get paid again through Settle up.
+      if (e instanceof ApiError && e.status === 409) onSettled?.();
     } finally {
       setSettling(false);
     }

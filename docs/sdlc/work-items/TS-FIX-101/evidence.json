@@ -94,11 +94,11 @@
     {
       "id": "n4-regression",
       "status": "passed",
-      "snapshot": "b76154c63890bfcb1f4b1ea0fd8fc7d9b35672e3db11e0667340a91d19524173",
-      "environment": "Local macOS, worktree on qa-coverage-extend (07023ec plus the uncommitted changes in this snapshot); isolated local data only; synthetic accounts. Not GitHub Actions.",
-      "command_or_method": "pytest -q tests/test_receipt_split_by_total.py: 35 passed, including test_receipt_items_must_match_amount.",
+      "snapshot": "ffba8f1d66b9af1c1de26ffa01def60f4ecc0b204eb249474cdb3f795d4963a6",
+      "environment": "Local macOS, worktree on qa-coverage-extend (5376f0c plus the uncommitted changes in this snapshot); isolated local data and disposable local PostgreSQL 16 only; synthetic accounts. Not GitHub Actions.",
+      "command_or_method": "pytest -q tests/test_receipt_split_by_total.py: 35 passed.",
       "source": "Local run 2026-11-27 (step logs in the session scratchpad, not retained in the repository)",
-      "recorded_at": "2026-11-27T23:02:45.124874+00:00",
+      "recorded_at": "2026-11-28T03:21:23.713064+00:00",
       "acceptance_criteria": []
     }
   ]

@@ -6,6 +6,7 @@
  * - Throws `ApiError` on non-2xx responses so callers can check `err.status`.
  */
 import { apiFetch } from '../../../core/api/apiFetch';
+import { withSettlementRequestId } from './settlementRequestId';
 import { getConfig } from '../../shared/featureFlags';
 import { confirmed, expenseCreation, ExpenseCapture } from '../../shared/analytics/operations';
 import { TagRefDTO } from '../../tags/api/tags';
@@ -544,16 +545,17 @@ export async function getGroupBalances(groupId: string): Promise<BalanceResponse
 export function recordSettlement(
   groupId: string,
   payload: RecordSettlementPayload,
-): Promise<void> {
+): Promise<{ alreadyRecorded: boolean }> {
   // A recorded settlement, not proof that money moved through a payment provider.
-  return confirmed(async () => {
+  return confirmed(() => withSettlementRequestId(groupId, payload, async (request_id) => {
     const res = await apiFetch(`/api/v1/groups/${groupId}/settlements`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, request_id }),
     });
-    await handleResponse<unknown>(res);
-  }, 'settlement_completed', {});
+    const saved = await handleResponse<{ already_recorded?: boolean } | undefined>(res);
+    return { alreadyRecorded: !!saved?.already_recorded };
+  }), 'settlement_completed', {});
 }
 
 export function settleExpenseShare(
